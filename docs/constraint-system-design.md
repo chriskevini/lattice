@@ -1,5 +1,9 @@
 # Resource Constraint System Design
 
+> **NOTE**: This document describes an earlier architectural approach where AI explicitly requests resources and the system reports violations. This has been **superseded by the Context Archetype System** (see `context-archetype-system.md`), which uses semantic classification to automatically determine optimal context configuration without requiring AI to make explicit resource requests.
+>
+> This document is preserved for historical context and design rationale. The core philosophy (hardware constraints enforced by system, not AI) remains valid.
+
 ## Problem Statement
 
 In an AI system with hardware constraints (2GB RAM / 1vCPU), how do we balance:
