@@ -88,12 +88,27 @@ async def search_similar_facts(
 
     Args:
         query: Query text to search for
-        limit: Maximum number of results to return
+        limit: Maximum number of results to return (1-100)
         similarity_threshold: Minimum cosine similarity (0.0-1.0)
 
     Returns:
         List of similar facts, ordered by similarity (most similar first)
+
+    Raises:
+        ValueError: If limit or similarity_threshold are out of valid ranges
     """
+    # Validate inputs
+    if limit < 1 or limit > 100:
+        msg = f"limit must be between 1 and 100, got {limit}"
+        raise ValueError(msg)
+    if not 0.0 <= similarity_threshold <= 1.0:
+        msg = f"similarity_threshold must be between 0.0 and 1.0, got {similarity_threshold}"
+        raise ValueError(msg)
+
+    if not query.strip():
+        logger.warning("Empty query provided to semantic search")
+        return []
+
     # Generate query embedding
     query_embedding = embedding_model.encode_single(query)
 

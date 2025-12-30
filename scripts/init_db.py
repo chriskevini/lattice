@@ -21,6 +21,14 @@ async def init_database() -> None:
     """Initialize the database schema."""
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
+        print("ERROR: DATABASE_URL environment variable not set", file=sys.stderr)
+        sys.exit(1)
+
+    print("Connecting to database...")
+    try:
+        conn = await asyncpg.connect(database_url)
+    except Exception as e:
+        print(f"ERROR: Failed to connect to database: {e}", file=sys.stderr)
         sys.exit(1)
 
     try:
@@ -204,7 +212,6 @@ User message: {user_message}
 
 Respond naturally and helpfully, referring to relevant context when appropriate.""",
         )
-
 
     except Exception:
         raise
