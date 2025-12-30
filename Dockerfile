@@ -35,6 +35,7 @@ WORKDIR /app
 
 # Copy application code
 COPY lattice/ ./lattice/
+COPY scripts/ ./scripts/
 COPY pyproject.toml ./
 
 # Create directories for logs and models

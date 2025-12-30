@@ -12,7 +12,6 @@ import sys
 import asyncpg
 from dotenv import load_dotenv
 
-
 # Load environment variables
 load_dotenv()
 
@@ -27,18 +26,18 @@ async def init_database() -> None:
     print("Connecting to database...")
     try:
         conn = await asyncpg.connect(database_url)
+        print("Connected to database successfully")
     except Exception as e:
         print(f"ERROR: Failed to connect to database: {e}", file=sys.stderr)
         sys.exit(1)
 
     try:
-        conn = await asyncpg.connect(database_url)
-    except Exception:
-        sys.exit(1)
-
-    try:
+        # Create vector extension
+        print("Creating vector extension...")
         await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
+        # Create prompt_registry table
+        print("Creating prompt_registry table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS prompt_registry (
@@ -54,6 +53,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create raw_messages table
+        print("Creating raw_messages table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS raw_messages (
@@ -68,6 +69,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create stable_facts table
+        print("Creating stable_facts table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS stable_facts (
@@ -81,6 +84,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create HNSW index for vector search
+        print("Creating vector index...")
         await conn.execute(
             """
             CREATE INDEX IF NOT EXISTS stable_facts_embedding_idx
@@ -89,6 +94,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create semantic_triples table
+        print("Creating semantic_triples table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS semantic_triples (
@@ -102,6 +109,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create objectives table
+        print("Creating objectives table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS objectives (
@@ -115,6 +124,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create user_feedback table
+        print("Creating user_feedback table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS user_feedback (
@@ -127,6 +138,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create system_health table
+        print("Creating system_health table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS system_health (
@@ -137,6 +150,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create context_archetypes table
+        print("Creating context_archetypes table...")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS context_archetypes (
@@ -160,6 +175,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create index for active archetypes
+        print("Creating archetype index...")
         await conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_active_archetypes
@@ -167,6 +184,8 @@ async def init_database() -> None:
         """
         )
 
+        # Create trigger function for invalidating centroids
+        print("Creating centroid invalidation trigger...")
         await conn.execute(
             """
             CREATE OR REPLACE FUNCTION invalidate_centroid()
@@ -190,17 +209,9 @@ async def init_database() -> None:
         """
         )
 
-        await conn.execute(
-            """
-            INSERT INTO prompt_registry (prompt_key, template, temperature)
-            VALUES (
-                'BASIC_RESPONSE',
-                $1,
-                0.7
-            )
-            ON CONFLICT (prompt_key) DO NOTHING;
-        """,
-            """You are a helpful AI companion in a Discord server.
+        # Insert default BASIC_RESPONSE prompt
+        print("Inserting default prompt template...")
+        template_text = """You are a helpful AI companion in a Discord server.
 
 Recent conversation history:
 {episodic_context}
@@ -210,13 +221,31 @@ Relevant facts from past conversations:
 
 User message: {user_message}
 
-Respond naturally and helpfully, referring to relevant context when appropriate.""",
+Respond naturally and helpfully, referring to relevant context when appropriate."""
+
+        result = await conn.execute(
+            """
+            INSERT INTO prompt_registry (prompt_key, template, temperature)
+            VALUES ($1, $2, 0.7)
+            ON CONFLICT (prompt_key) DO UPDATE
+            SET template = EXCLUDED.template, updated_at = now();
+            """,
+            "BASIC_RESPONSE",
+            template_text,
+        )
+        print(f"Prompt template result: {result}")
+
+        print("Database initialization complete!")
+        print(
+            "Tables created: prompt_registry, raw_messages, stable_facts, semantic_triples, objectives, user_feedback, system_health, context_archetypes"
         )
 
-    except Exception:
+    except Exception as e:
+        print(f"ERROR: Database initialization failed: {e}", file=sys.stderr)
         raise
     finally:
         await conn.close()
+        print("Database connection closed.")
 
 
 if __name__ == "__main__":

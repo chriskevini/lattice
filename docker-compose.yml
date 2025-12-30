@@ -42,6 +42,7 @@ services:
     volumes:
       # Mount source code for development (hot reload)
       - ./lattice:/app/lattice
+      - ./scripts:/app/scripts
       - ./tests:/app/tests
       # Persist model cache
       - model_cache:/app/models
