@@ -6,11 +6,11 @@ authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.14"  # Constrained due to torch/triton availability
+python = ">=3.11,<3.15"  # Constrained due to torch/triton availability
 # Discord
 discord-py = "^2.3.2"
 # Database
-asyncpg = "^0.29.0"
+asyncpg = "^0.30.0"
 pgvector = "^0.2.4"
 # AI/ML - Lightweight for 2GB RAM
 sentence-transformers = "^2.2.2"
@@ -121,6 +121,20 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "S101",    # Allow assert in tests
     "ANN",     # Don't require annotations in tests
     "PLR2004", # Allow magic values in tests
+    "E402",    # Imports after env setup are intentional for test isolation
+]
+"scripts/init_db.py" = [
+    "T201",    # CLI script output is appropriate
+    "PLR0915", # Initialization script has many statements by design
+]
+"lattice/memory/procedural.py" = [
+    "PLR0913", # Data class with 5 fields is reasonable
+]
+"lattice/memory/semantic.py" = [
+    "PLR0913", # Data class with 5 fields is reasonable
+]
+"lattice/memory/episodic.py" = [
+    "PLR0913", # Data class with 7 fields is reasonable for message model
 ]
 
 [tool.ruff.lint.isort]
@@ -165,8 +179,14 @@ module = [
     "discord.*",
     "sentence_transformers.*",
     "pgvector.*",
+    "pytest.*",
+    "pytest_asyncio.*",
 ]
 ignore_missing_imports = true
+
+[tool.bandit]
+targets = ["lattice", "scripts"]
+skips = ["B101"]  # assert_used is appropriate in tests
 
 # ============================================================================
 # PYTEST CONFIGURATION
@@ -176,6 +196,8 @@ minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+
+
 addopts = [
     "--strict-markers",
     "--strict-config",

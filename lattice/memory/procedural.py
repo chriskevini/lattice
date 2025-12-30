@@ -3,7 +3,6 @@
 Stores evolving templates and strategies for bot behavior.
 """
 
-
 import structlog
 
 from lattice.utils.database import db_pool

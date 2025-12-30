@@ -12,6 +12,7 @@ import sys
 import asyncpg
 from dotenv import load_dotenv
 
+
 # Load environment variables
 load_dotenv()
 
@@ -117,7 +118,8 @@ async def init_database() -> None:
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 description TEXT NOT NULL,
                 saliency_score FLOAT DEFAULT 0.5,
-                status TEXT CHECK (status IN ('pending', 'completed', 'archived')) DEFAULT 'pending',
+                status TEXT CHECK (status IN ('pending', 'completed', 'archived'))
+                    DEFAULT 'pending',
                 origin_id UUID REFERENCES raw_messages(id),
                 last_updated TIMESTAMPTZ DEFAULT now()
             );
@@ -162,7 +164,8 @@ async def init_database() -> None:
                 centroid_embedding VECTOR(384),
                 context_turns INT NOT NULL CHECK (context_turns BETWEEN 1 AND 20),
                 context_vectors INT NOT NULL CHECK (context_vectors BETWEEN 0 AND 15),
-                similarity_threshold FLOAT NOT NULL CHECK (similarity_threshold BETWEEN 0.5 AND 0.9),
+                similarity_threshold FLOAT NOT NULL CHECK (
+                    similarity_threshold BETWEEN 0.5 AND 0.9),
                 triple_depth INT NOT NULL CHECK (triple_depth BETWEEN 0 AND 3),
                 active BOOLEAN DEFAULT true,
                 created_by TEXT,
@@ -237,7 +240,9 @@ Respond naturally and helpfully, referring to relevant context when appropriate.
 
         print("Database initialization complete!")
         print(
-            "Tables created: prompt_registry, raw_messages, stable_facts, semantic_triples, objectives, user_feedback, system_health, context_archetypes"
+            "Tables created: prompt_registry, raw_messages, stable_facts, "
+            "semantic_triples, objectives, user_feedback, system_health, "
+            "context_archetypes"
         )
 
     except Exception as e:

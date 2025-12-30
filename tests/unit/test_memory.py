@@ -1,13 +1,15 @@
 """Unit tests for Lattice memory modules."""
 
+from lattice.memory.episodic import EpisodicMessage
+from lattice.memory.procedural import PromptTemplate
+from lattice.memory.semantic import StableFact
+
 
 class TestEpisodicMemory:
     """Tests for episodic memory module."""
 
     def test_episodic_message_creation(self) -> None:
         """Test that we can create an EpisodicMessage object."""
-        from lattice.memory.episodic import EpisodicMessage
-
         message = EpisodicMessage(
             content="Hello world",
             discord_message_id=123456789,
@@ -26,8 +28,6 @@ class TestSemanticMemory:
 
     def test_stable_fact_creation(self) -> None:
         """Test that we can create a StableFact object."""
-        from lattice.memory.semantic import StableFact
-
         fact = StableFact(
             content="User prefers dark mode",
             entity_type="preference",
@@ -42,8 +42,6 @@ class TestProceduralMemory:
 
     def test_prompt_template_creation(self) -> None:
         """Test that we can create a PromptTemplate object."""
-        from lattice.memory.procedural import PromptTemplate
-
         template = PromptTemplate(
             prompt_key="TEST_PROMPT",
             template="Hello {name}",

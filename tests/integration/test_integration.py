@@ -4,119 +4,68 @@ import os
 from datetime import UTC
 from uuid import UUID
 
-import asyncpg
 import pytest
 
 
 # Set test database URL before importing modules
 os.environ["DATABASE_URL"] = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql://lattice:lattice_dev_password@localhost:5432/lattice_test",
+    "postgresql://lattice:lattice_dev_password@postgres:5432/lattice",
 )
 
+# Import modules after DATABASE_URL is set
 from lattice.memory import episodic, procedural, semantic
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
 
 
-@pytest.fixture(scope="session")
-async def test_db():
-    """Set up test database with schema."""
-    database_url = os.environ["DATABASE_URL"]
-
-    # Create test database if it doesn't exist
-    try:
-        # Connect to default postgres database
-        conn = await asyncpg.connect(database_url.replace("/lattice_test", "/postgres"))
-        try:
-            await conn.execute("CREATE DATABASE lattice_test")
-        except asyncpg.DuplicateDatabaseError:
-            pass  # Database already exists
-        finally:
-            await conn.close()
-    except Exception:
-        pass  # Ignore if we can't create (might already exist)
-
-    # Initialize database pool
-    await db_pool.initialize()
-
-    # Create schema
-    async with db_pool.pool.acquire() as conn:
-        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS prompt_registry (
-                prompt_key TEXT PRIMARY KEY,
-                template TEXT NOT NULL,
-                version INT DEFAULT 1,
-                temperature FLOAT DEFAULT 0.2,
-                updated_at TIMESTAMPTZ DEFAULT now(),
-                active BOOLEAN DEFAULT true,
-                pending_approval BOOLEAN DEFAULT false,
-                proposed_template TEXT
-            )
-        """
-        )
-
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS raw_messages (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                discord_message_id BIGINT UNIQUE NOT NULL,
-                channel_id BIGINT NOT NULL,
-                content TEXT NOT NULL,
-                is_bot BOOLEAN DEFAULT false,
-                prev_turn_id UUID REFERENCES raw_messages(id),
-                timestamp TIMESTAMPTZ DEFAULT now()
-            )
-        """
-        )
-
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS stable_facts (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                content TEXT NOT NULL,
-                embedding VECTOR(384),
-                origin_id UUID REFERENCES raw_messages(id),
-                entity_type TEXT,
-                created_at TIMESTAMPTZ DEFAULT now()
-            )
-        """
-        )
-
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS stable_facts_embedding_idx
-            ON stable_facts USING hnsw (embedding vector_cosine_ops)
-            WITH (m = 16, ef_construction = 64)
-        """
-        )
-
-    # Load embedding model
+@pytest.fixture(scope="session", autouse=True)
+async def _setup_db():
+    """Set up test database with schema and initialize pool."""
+    # Load embedding model once per session
     embedding_model.load()
 
     yield
 
     # Cleanup
+    if db_pool.is_initialized():
+        await db_pool.close()
+
+
+@pytest.fixture(autouse=True)
+async def _init_db_pool():
+    """Initialize database pool before each test."""
+    # Close existing pool if any
+    if db_pool.is_initialized():
+        await db_pool.close()
+
+    # Initialize fresh pool
+    await db_pool.initialize()
+
+    yield
+
+    # Close pool after test
     await db_pool.close()
 
 
 @pytest.fixture()
-async def clean_db(test_db):
+async def _clean_db():
     """Clean database before each test."""
     async with db_pool.pool.acquire() as conn:
         await conn.execute("TRUNCATE raw_messages CASCADE")
         await conn.execute("TRUNCATE stable_facts CASCADE")
         await conn.execute("TRUNCATE prompt_registry CASCADE")
+        await conn.execute("TRUNCATE semantic_triples CASCADE")
+        await conn.execute("TRUNCATE objectives CASCADE")
+        await conn.execute("TRUNCATE user_feedback CASCADE")
 
 
 @pytest.mark.asyncio()
+@pytest.mark.usefixtures("_clean_db")
 class TestEpisodicMemoryIntegration:
     """Integration tests for episodic memory."""
 
-    async def test_store_and_retrieve_message(self, clean_db):
+    async def test_store_and_retrieve_message(self):
         """Test storing and retrieving a message."""
         message = episodic.EpisodicMessage(
             content="Test message",
@@ -135,7 +84,7 @@ class TestEpisodicMemoryIntegration:
         assert messages[0].content == "Test message"
         assert messages[0].discord_message_id == 123456789
 
-    async def test_temporal_chaining(self, clean_db):
+    async def test_temporal_chaining(self):
         """Test that messages are chained with prev_turn_id."""
         # Store first message
         msg1 = episodic.EpisodicMessage(
@@ -166,7 +115,7 @@ class TestEpisodicMemoryIntegration:
         assert messages[1].content == "Second message"
         assert messages[1].prev_turn_id == msg1_id
 
-    async def test_timezone_aware_timestamps(self, clean_db):
+    async def test_timezone_aware_timestamps(self):
         """Test that timestamps are timezone-aware."""
         message = episodic.EpisodicMessage(
             content="Timestamp test",
@@ -180,10 +129,11 @@ class TestEpisodicMemoryIntegration:
 
 
 @pytest.mark.asyncio()
+@pytest.mark.usefixtures("_clean_db")
 class TestSemanticMemoryIntegration:
     """Integration tests for semantic memory."""
 
-    async def test_store_and_search_facts(self, clean_db):
+    async def test_store_and_search_facts(self):
         """Test storing facts and searching with vector similarity."""
         # Store a fact
         fact = semantic.StableFact(
@@ -203,7 +153,7 @@ class TestSemanticMemoryIntegration:
         assert len(results) >= 1
         assert any("dark mode" in r.content.lower() for r in results)
 
-    async def test_vector_similarity_ordering(self, clean_db):
+    async def test_vector_similarity_ordering(self):
         """Test that results are ordered by similarity."""
         # Store multiple facts
         facts = [
@@ -238,7 +188,7 @@ class TestSemanticMemoryIntegration:
         ]
         assert len(programming_facts) >= 2
 
-    async def test_search_input_validation(self, clean_db):
+    async def test_search_input_validation(self):
         """Test that search validates inputs correctly."""
         # Test invalid limit
         with pytest.raises(ValueError, match="limit must be between"):
@@ -254,17 +204,18 @@ class TestSemanticMemoryIntegration:
         with pytest.raises(ValueError, match="similarity_threshold must be"):
             await semantic.search_similar_facts("query", similarity_threshold=1.5)
 
-    async def test_empty_query_returns_empty_list(self, clean_db):
+    async def test_empty_query_returns_empty_list(self):
         """Test that empty query returns empty list."""
         results = await semantic.search_similar_facts("   ", limit=5)
         assert results == []
 
 
 @pytest.mark.asyncio()
+@pytest.mark.usefixtures("_clean_db")
 class TestProceduralMemoryIntegration:
     """Integration tests for procedural memory."""
 
-    async def test_store_and_retrieve_prompt(self, clean_db):
+    async def test_store_and_retrieve_prompt(self):
         """Test storing and retrieving prompt templates."""
         template = procedural.PromptTemplate(
             prompt_key="TEST_PROMPT",
@@ -281,7 +232,7 @@ class TestProceduralMemoryIntegration:
         assert retrieved.template == "Hello {name}, how are you?"
         assert retrieved.temperature == 0.8
 
-    async def test_prompt_versioning(self, clean_db):
+    async def test_prompt_versioning(self):
         """Test that updating a prompt increments version."""
         # Store initial version
         template_v1 = procedural.PromptTemplate(
@@ -305,13 +256,14 @@ class TestProceduralMemoryIntegration:
         assert retrieved.template == "Version 2"
         assert retrieved.version >= 2
 
-    async def test_nonexistent_prompt_returns_none(self, clean_db):
+    async def test_nonexistent_prompt_returns_none(self):
         """Test that getting non-existent prompt returns None."""
         result = await procedural.get_prompt("NONEXISTENT_PROMPT")
         assert result is None
 
 
 @pytest.mark.asyncio()
+@pytest.mark.usefixtures("_clean_db")
 class TestUtilModules:
     """Integration tests for utility modules."""
 
@@ -332,9 +284,9 @@ class TestUtilModules:
 
         assert embeddings.shape == (3, 384)
 
-    async def test_database_pool_operations(self, test_db):
+    async def test_database_pool_operations(self):
         """Test basic database pool operations."""
-        # Pool should be initialized by test_db fixture
+        # Pool should be initialized by init_db_pool fixture
         assert db_pool.pool is not None
 
         # Test a simple query
