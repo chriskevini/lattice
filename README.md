@@ -103,6 +103,53 @@ CREATE TABLE system_health (
     recorded_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- [Procedural] Context archetypes for semantic classification
+CREATE TABLE context_archetypes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    archetype_name TEXT UNIQUE NOT NULL,
+    description TEXT,                          -- Human-readable explanation
+    
+    -- Example messages that define this archetype
+    example_messages TEXT[] NOT NULL,
+    
+    -- Pre-computed centroid embedding (cached for performance)
+    centroid_embedding VECTOR(384),
+    
+    -- Context configuration when this archetype matches
+    context_turns INT NOT NULL CHECK (context_turns BETWEEN 1 AND 20),
+    context_vectors INT NOT NULL CHECK (context_vectors BETWEEN 0 AND 15),
+    similarity_threshold FLOAT NOT NULL CHECK (similarity_threshold BETWEEN 0.5 AND 0.9),
+    triple_depth INT NOT NULL CHECK (triple_depth BETWEEN 0 AND 3),
+    
+    -- Metadata
+    active BOOLEAN DEFAULT true,
+    created_by TEXT,                           -- 'human' or 'ai_dream_cycle'
+    approved_by TEXT,                          -- Human approver username
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    
+    -- Performance tracking
+    match_count INT DEFAULT 0,                 -- How many times matched
+    avg_similarity FLOAT                       -- Average similarity when matched
+);
+
+CREATE INDEX idx_active_archetypes ON context_archetypes(active) WHERE active = true;
+
+-- Trigger to invalidate centroid when examples change
+CREATE OR REPLACE FUNCTION invalidate_centroid()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.example_messages IS DISTINCT FROM NEW.example_messages THEN
+        NEW.centroid_embedding = NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER invalidate_centroid_on_update
+BEFORE UPDATE ON context_archetypes
+FOR EACH ROW EXECUTE FUNCTION invalidate_centroid();
+
 ```
 
 ---
@@ -121,17 +168,18 @@ All behavior (Reactive User Input + Proactive Synthetic Ghosts) flows through a 
 
 
 3. **Episodic Logging:** Insert canonical messages into `raw_messages` with `prev_turn_id` for temporal chaining.
-4. **Hybrid Retrieval:**
+4. **Context Analysis:** Semantic archetype matching using existing embedding model to determine optimal context configuration (CONTEXT_TURNS, VECTOR_LIMIT, SIMILARITY_THRESHOLD, TRIPLE_DEPTH).
+5. **Hybrid Retrieval:**
 * **Vector:** Semantic search on `stable_facts`.
 * **Graph:** Traverse `semantic_triples` for relational depth.
 * **Episodic:** Fetch recent N turns for short-term context.
 
 
-5. **Generation:** Route to appropriate `prompt_registry` template.
+6. **Generation:** Route to appropriate `prompt_registry` template.
 * If Proactive: Extract `NEXT_PROACTIVE_IN_MINUTES` to update `system_health`.
 
 
-6. **Async Consolidation (The ENGRAM Fork):** * De-contextualize turns (pronoun resolution).
+7. **Async Consolidation (The ENGRAM Fork):** * De-contextualize turns (pronoun resolution).
 * Extract/Update `stable_facts`, `semantic_triples`, and `objectives`.
 
 ---

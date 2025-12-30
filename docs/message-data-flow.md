@@ -165,32 +165,90 @@ This creates a linked list for efficient context window retrieval.
 
 ### [4] Context Analysis
 
-**Purpose**: AI determines what context it needs for this specific conversation
+**Purpose**: Classify message to determine optimal context configuration
 
-**AI analyzes**:
-- Conversation type (debugging, preference recall, simple reply, etc.)
-- Topic continuity (is this continuing previous thread or new topic?)
-- Knowledge requirements (need historical facts or just recent context?)
-- Relationship complexity (need to traverse connections?)
+**Implementation**: Semantic archetype matching using existing embedding model
 
-**AI outputs structured request**:
+#### 4a. Message Embedding
+
+```python
+# Generate embedding for incoming message (~20ms on CPU)
+msg_embedding = model.encode(["I love working with Python for AI projects"])
+# Result: [0.123, -0.456, 0.789, ..., 0.234]  (384 dimensions)
 ```
-CONTEXT_ANALYSIS:
-Type: Technical discussion continuation
-Topic: Python for AI (mentioned previously in turn N-5)
-Strategy: Need recent thread + related facts about user's Python experience
 
-CONTEXT_TURNS: 8
-VECTOR_LIMIT: 5
-SIMILARITY_THRESHOLD: 0.75
+#### 4b. Archetype Matching
+
+**Query**: Find closest archetype by cosine similarity
+```sql
+-- Archetypes stored in database with pre-computed centroids
+SELECT 
+    id,
+    archetype_name,
+    centroid_embedding,
+    context_turns,
+    context_vectors,
+    similarity_threshold,
+    triple_depth
+FROM context_archetypes
+WHERE active = true;
+```
+
+**Example archetypes**:
+```
+1. "technical_debugging"
+   Examples: ["Why isn't this working?", "I'm getting an error", ...]
+   Config: TURNS:12, VECTORS:3, SIMILARITY:0.85, DEPTH:1
+   
+2. "preference_exploration"
+   Examples: ["What are my favorite hobbies?", "What do I like?", ...]
+   Config: TURNS:5, VECTORS:12, SIMILARITY:0.6, DEPTH:2
+   
+3. "simple_continuation"
+   Examples: ["Thanks!", "Got it", "Cool", ...]
+   Config: TURNS:2, VECTORS:0, SIMILARITY:0.7, DEPTH:0
+   
+4. "memory_recall"
+   Examples: ["Remember when...", "You mentioned earlier...", ...]
+   Config: TURNS:15, VECTORS:6, SIMILARITY:0.75, DEPTH:2
+```
+
+**Matching process**:
+```python
+best_match = None
+best_similarity = -1
+
+for archetype in archetypes:
+    similarity = cosine_similarity(msg_embedding, archetype.centroid)
+    if similarity > best_similarity:
+        best_similarity = similarity
+        best_match = archetype
+
+# Best match: "technical_debugging" (similarity: 0.72)
+```
+
+**Output**: Context configuration from matched archetype
+```
+CONTEXT_TURNS: 12
+VECTOR_LIMIT: 3
+SIMILARITY_THRESHOLD: 0.85
 TRIPLE_DEPTH: 1
 ```
 
 **Why these values?**:
-- `CONTEXT_TURNS: 8` - Need recent conversation thread about Python
-- `VECTOR_LIMIT: 5` - Moderate semantic search for related preferences
-- `SIMILARITY_THRESHOLD: 0.75` - Relatively tight matching (avoid noise)
-- `TRIPLE_DEPTH: 1` - One hop for related interests (Python → AI → Projects)
+- `CONTEXT_TURNS: 12` - Technical discussions need thread context
+- `VECTOR_LIMIT: 3` - Tight semantic focus (avoid noise)
+- `SIMILARITY_THRESHOLD: 0.85` - Precise matching for technical facts
+- `TRIPLE_DEPTH: 1` - Minimal graph traversal needed
+
+**Latency**: ~20-30ms (embedding generation + similarity computation)
+
+**Evolvability**: 
+- Archetypes stored in `context_archetypes` table
+- AI can propose new archetypes via Dream Channel
+- Human approves → auto-inserted into database
+- Background task reloads every 60s
+- No code changes or redeployment needed
 
 ---
 

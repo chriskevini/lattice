@@ -118,12 +118,16 @@ See `README.md` lines 29-105 for complete DDL. Key tables:
    - Invisible feedback (reply to bot) → insert `user_feedback` → 🫡 → exit
    - Feedback undo (🗑️ on 🫡) → delete feedback → exit
 3. **Episodic Logging**: Insert to `raw_messages` with temporal chaining
-4. **Hybrid Retrieval**:
+4. **Context Analysis**: Semantic archetype matching determines optimal context configuration
+   - Embedding-based classification using `context_archetypes` table
+   - Outputs: `CONTEXT_TURNS`, `VECTOR_LIMIT`, `SIMILARITY_THRESHOLD`, `TRIPLE_DEPTH`
+   - Evolvable: AI can propose new archetypes via Dream Channel
+5. **Hybrid Retrieval**:
    - Vector: Cosine similarity on `stable_facts.embedding`
    - Graph: Traverse `semantic_triples` for relational context
    - Episodic: Recent N turns via `prev_turn_id` chain
-5. **Generation**: Route to `prompt_registry` template
-6. **Async Consolidation**: Extract facts/triples/objectives (background)
+6. **Generation**: Route to `prompt_registry` template
+7. **Async Consolidation**: Extract facts/triples/objectives (background)
 
 ### Resource Constraint System
 
@@ -234,6 +238,109 @@ MAX_PROACTIVE_INTERVAL_MINUTES=1440
 REPORT_CONSTRAINT_VIOLATIONS=true
 INCLUDE_EXECUTION_REPORT=true
 ```
+
+### Context Archetype System
+
+**Purpose**: Automatically determine optimal context configuration based on message type
+
+**How It Works**:
+
+1. **Message arrives** → Generate embedding (~20ms)
+2. **Match to archetype** → Compare with pre-computed centroids in `context_archetypes` table
+3. **Apply configuration** → Use archetype's context settings for retrieval
+
+**Example Archetypes**:
+
+```sql
+-- Technical debugging conversations
+INSERT INTO context_archetypes (
+    archetype_name, description, example_messages,
+    context_turns, context_vectors, similarity_threshold, triple_depth
+) VALUES (
+    'technical_debugging',
+    'User needs help debugging code or solving technical issues',
+    ARRAY[
+        'Why isn''t this function working?',
+        'I''m getting an error in my code',
+        'Can you help me debug this?',
+        'This keeps throwing an exception'
+    ],
+    12, 3, 0.85, 1  -- Deep thread context, tight semantic focus
+);
+
+-- Preference exploration
+INSERT INTO context_archetypes (
+    archetype_name, description, example_messages,
+    context_turns, context_vectors, similarity_threshold, triple_depth
+) VALUES (
+    'preference_exploration',
+    'User asking about their preferences, likes, or interests',
+    ARRAY[
+        'What are my favorite hobbies?',
+        'What do I like to do?',
+        'Tell me about my interests',
+        'What foods do I enjoy?'
+    ],
+    5, 12, 0.6, 2  -- Recent context, wide semantic search, relationship traversal
+);
+
+-- Simple continuations
+INSERT INTO context_archetypes (
+    archetype_name, description, example_messages,
+    context_turns, context_vectors, similarity_threshold, triple_depth
+) VALUES (
+    'simple_continuation',
+    'Simple acknowledgments or short responses',
+    ARRAY['Thanks!', 'Got it', 'Ok cool', 'Nice', 'Awesome'],
+    2, 0, 0.7, 0  -- Minimal resources
+);
+
+-- Memory recall
+INSERT INTO context_archetypes (
+    archetype_name, description, example_messages,
+    context_turns, context_vectors, similarity_threshold, triple_depth
+) VALUES (
+    'memory_recall',
+    'User asking about past conversations or information',
+    ARRAY[
+        'Remember when we talked about...?',
+        'You mentioned earlier that...',
+        'What did I say about...?',
+        'Do you recall our discussion on...?'
+    ],
+    15, 6, 0.75, 2  -- Deep history, moderate semantic, relationship context
+);
+```
+
+**Evolvability** (No code changes needed):
+
+```
+AI analyzes performance in Dream Channel:
+"I notice 23 conversations about project planning are being classified 
+as 'general_question' (avg similarity 0.52). These conversations would 
+benefit from moderate context + relationship traversal."
+
+ARCHETYPE_PROPOSAL:
+Name: "project_planning"
+Examples:
+  - "Let's plan out this project"
+  - "What are the steps we need to take?"
+  - "How should we approach building this?"
+Context: TURNS:8, VECTORS:7, SIMILARITY:0.7, DEPTH:2
+Rationale: 15 recent conversations involved planning, current archetypes
+           don't match well, users asked follow-up questions suggesting
+           missing context.
+
+Human reacts with ✅ in Dream Channel
+→ System auto-inserts into context_archetypes table
+→ Background task reloads archetypes within 60 seconds
+→ New archetype immediately active, no deployment needed
+```
+
+**Performance**:
+- Latency: ~20-30ms (embedding + similarity computation)
+- Memory: Reuses existing sentence-transformers model (~80MB)
+- Updates: Hot-reloadable every 60 seconds
 
 ### Memory Optimization Patterns
 
