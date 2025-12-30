@@ -253,6 +253,157 @@ poetry install
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 ```
 
+### High Memory Usage
+- Check connection pool size (should be 2-5)
+- Verify vector search limits (max 15 results)
+- Profile with `memory_profiler` or `tracemalloc`
+- Consider reducing embedding batch size
+
+### Slow Vector Search
+- Check HNSW index exists: `\d stable_facts` in psql
+- Verify index parameters: m=16, ef_construction=64
+- Analyze query plan: `EXPLAIN ANALYZE SELECT ...`
+- Consider increasing `effective_cache_size` in PostgreSQL
+
+### Discord Rate Limiting
+- Implement exponential backoff (see Discord patterns below)
+- Add request queuing with `asyncio.Queue`
+- Monitor rate limit headers in responses
+- Cache frequently accessed data
+
+### Type Errors After Dependency Update
+```bash
+make type-check  # Run mypy
+# Fix or add type: ignore comments judiciously
+# Update stubs if needed: poetry add types-xxx
+```
+
+## Discord-Specific Patterns
+
+```python
+# ✅ Invisible feedback detection
+if message.reference and message.reference.resolved.author.bot:
+    await handle_invisible_feedback(message)
+    await message.add_reaction("🫡")
+    return  # Don't log to raw_messages
+
+# ✅ Rate limiting with exponential backoff
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=60))
+async def send_message(content: str) -> None:
+    await channel.send(content)
+
+# ✅ North Star detection
+if is_north_star_declaration(message.content):
+    await upsert_north_star_fact(message)
+    await message.reply("Noted 🌟")
+    return
+```
+
+## Testing Patterns
+
+### Unit Tests
+
+Test isolated components without external dependencies:
+
+```python
+# tests/unit/test_memory.py
+async def test_extract_semantic_triple():
+    triple = extract_triple("User prefers dark mode")
+    assert triple.predicate == "prefers"
+    assert "dark mode" in triple.object_text
+```
+
+### Integration Tests
+
+Test full pipeline with test database:
+
+```python
+# tests/integration/test_pipeline.py
+async def test_full_ingestion_pipeline(test_db):
+    message = create_test_message("I love Python")
+    await ingest_message(message)
+    
+    facts = await query_facts_by_embedding("Python programming")
+    assert len(facts) > 0
+```
+
+### Performance Tests
+
+Validate memory/CPU constraints:
+
+```python
+@pytest.mark.performance
+async def test_memory_usage_under_2gb():
+    with memory_profiler():
+        await process_large_batch(1000)
+        assert peak_memory_mb < 2000
+```
+
+## Debugging Queries
+
+### Vector Search Debugging
+
+```sql
+-- Check embedding quality
+SELECT content, embedding <=> $1::vector AS distance
+FROM stable_facts
+ORDER BY distance
+LIMIT 5;
+
+-- Analyze index stats
+SELECT * FROM pg_indexes WHERE tablename = 'stable_facts';
+```
+
+### Temporal Chain Debugging
+
+```sql
+-- Traverse conversation chain
+WITH RECURSIVE conversation_chain AS (
+    SELECT id, content, is_bot, prev_turn_id, timestamp, 0 as depth
+    FROM raw_messages
+    WHERE id = $1  -- Current message
+    
+    UNION ALL
+    
+    SELECT rm.id, rm.content, rm.is_bot, rm.prev_turn_id, rm.timestamp, cc.depth + 1
+    FROM raw_messages rm
+    INNER JOIN conversation_chain cc ON rm.id = cc.prev_turn_id
+    WHERE cc.depth < 10
+)
+SELECT * FROM conversation_chain ORDER BY depth DESC;
+```
+
+## Deployment
+
+### Environment Setup
+
+- **Platform**: 2GB RAM / 1vCPU VPS (Oracle Cloud, DigitalOcean, Hetzner, etc.)
+- **PostgreSQL**: Version 16+ with pgvector extension
+- **Process Manager**: systemd or supervisord (handle crashes gracefully)
+- **Logging**: Structured logs (structlog) to file + stdout
+- **Monitoring**: Track memory usage, response times, error rates
+- **Backups**: Daily database dumps before dreaming cycle
+
+### Systemd Service Example
+
+```ini
+[Unit]
+Description=Lattice Discord Bot
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=lattice
+WorkingDirectory=/home/lattice/app
+Environment="PATH=/home/lattice/.local/bin:/usr/bin"
+ExecStart=/home/lattice/.local/bin/poetry run python -m lattice
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ## Resources
 
 - [Ruff Documentation](https://docs.astral.sh/ruff/)
