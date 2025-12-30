@@ -3,74 +3,158 @@
 ## Problem Statement
 
 In an AI system with hardware constraints (2GB RAM / 1vCPU), how do we balance:
-1. AI autonomy to request optimal context
+1. AI autonomy to request optimal context for generating the best response
 2. System stability and performance requirements
 3. Transparency so AI understands when it's being constrained
+
+## Core Philosophy
+
+**AI's Goal**: Generate the best possible response
+**System's Goal**: Enforce hardware constraints to prevent crashes
+
+The AI should not be asked to "care about" system efficiency. That's the system's job. Instead:
+- AI analyzes conversation needs and requests appropriate context
+- System transparently enforces limits and reports back
+- AI learns what's possible and adapts strategies over time
 
 ## The Core Dilemma
 
 **Without transparency**:
 - AI requests 20 turns of context
-- System silently caps at 10 turns
+- System silently caps at 15 turns
 - AI generates response with insufficient context
 - AI doesn't know why responses are suboptimal
 
-**With naive transparency**:
-- AI is told "max 10 turns"
-- AI always requests 10 turns (anchoring bias)
-- No learning or adaptation occurs
+**With preset "strategies"** (rejected approach):
+- System offers "minimal/balanced/comprehensive" presets
+- AI is forced to think about system efficiency instead of response quality
+- False abstraction that doesn't match AI's actual decision-making process
+- Removes AI agency to make context decisions based on conversation needs
 
 **With full autonomy**:
 - AI requests unlimited context
 - System runs out of memory and crashes
 - User experience is destroyed
 
-## Solution: Adaptive Constraints with Feedback
+## Solution: Direct Resource Requests with Transparent Clamping
+
+### How Context Needs Vary
+
+The same AI might need very different context depending on the conversation:
+
+**Example 1: Deep Technical Debugging**
+```
+Conversation: User debugging specific function mentioned 8 turns ago
+AI Analysis: Need full conversation thread, minimal semantic noise
+Request: CONTEXT_TURNS: 15, VECTOR_LIMIT: 2, SIMILARITY_THRESHOLD: 0.8
+Result: Deep sequential context, tightly focused semantic search
+```
+
+**Example 2: Broad Preference Recall**
+```
+Conversation: "What are my favorite hobbies?"
+AI Analysis: User preferences span many topics and time periods
+Request: CONTEXT_TURNS: 3, VECTOR_LIMIT: 12, SIMILARITY_THRESHOLD: 0.6
+Result: Recent context + wide semantic search
+```
+
+**Example 3: Simple Continuation**
+```
+Conversation: "Thanks!" (responding to previous answer)
+AI Analysis: Everything needed is in immediate context
+Request: CONTEXT_TURNS: 2, VECTOR_LIMIT: 0
+Result: Minimal resources, fast response
+```
+
+**Example 4: Relational Reasoning**
+```
+Conversation: "What projects might I enjoy based on my interests?"
+AI Analysis: Need to traverse relationships between interests
+Request: CONTEXT_TURNS: 5, VECTOR_LIMIT: 6, TRIPLE_DEPTH: 3
+Result: Recent context + semantic search + multi-hop graph traversal
+```
 
 ### Design Principles
 
-1. **Ranges, not fixed limits**: Min/Max/Default for each resource
-2. **Strategy-based requests**: AI thinks in outcomes, not implementation
-3. **Execution reporting**: System tells AI what it actually got
-4. **Learning over time**: AI discovers optimal resource usage through feedback
-5. **Dreaming cycle adjustments**: AI can propose constraint changes with rationale
+1. **AI decides context needs**: Based on conversation analysis, not system constraints
+2. **Ranges, not fixed limits**: Min/Max/Default for each resource dimension
+3. **Multiple resource dimensions**: Turns, vectors, similarity, graph depth
+4. **Transparent clamping**: System reports when requests exceed limits
+5. **Learning through feedback**: AI discovers optimal patterns within constraints
+6. **Evolution mechanism**: AI can propose limit adjustments via dreaming cycle
+
+### Resource Dimensions
+
+AI can independently control multiple context dimensions:
+
+1. **CONTEXT_TURNS** (1-20): Sequential conversation history
+   - More turns = better thread continuity, temporal context
+   - Use when: Following long discussions, callbacks to earlier topics
+
+2. **VECTOR_LIMIT** (0-15): Semantic similarity search results
+   - More vectors = broader knowledge recall, cross-domain connections
+   - Use when: Exploring preferences, broad topics, unknown territory
+
+3. **SIMILARITY_THRESHOLD** (0.5-0.9): How strict semantic matching is
+   - Higher = more relevant but narrower results
+   - Lower = broader but potentially noisier results
+   - Use when: Adjusting semantic search precision
+
+4. **TRIPLE_DEPTH** (0-3): How many relationship hops to traverse
+   - More depth = multi-step reasoning (A→B→C)
+   - Use when: Inferring indirect connections, complex reasoning
 
 ### Implementation
 
 #### 1. Configuration (.env)
 
 ```bash
-# Each resource has a range
-MIN_EPISODIC_CONTEXT_TURNS=3
-MAX_EPISODIC_CONTEXT_TURNS=15
+# Philosophy: AI requests what it needs, system enforces limits
+MIN_EPISODIC_CONTEXT_TURNS=1
+MAX_EPISODIC_CONTEXT_TURNS=20
 DEFAULT_EPISODIC_CONTEXT_TURNS=10
 
-# Transparency flags
+MIN_VECTOR_SEARCH_LIMIT=0
+MAX_VECTOR_SEARCH_LIMIT=15
+DEFAULT_VECTOR_SEARCH_LIMIT=5
+
+MIN_SIMILARITY_THRESHOLD=0.5
+MAX_SIMILARITY_THRESHOLD=0.9
+DEFAULT_SIMILARITY_THRESHOLD=0.7
+
+MIN_TRIPLE_DEPTH=0
+MAX_TRIPLE_DEPTH=3
+DEFAULT_TRIPLE_DEPTH=1
+
+# Transparency
 REPORT_CONSTRAINT_VIOLATIONS=true
 INCLUDE_EXECUTION_REPORT=true
 ```
 
-#### 2. AI Request Interface
+#### 2. AI Request Interface (in prompt_registry template)
 
-AI can request resources in two ways:
-
-**A. High-level Strategy** (Recommended):
 ```
-RETRIEVAL_STRATEGY: comprehensive
-```
+Based on this conversation, determine optimal context retrieval:
 
-System translates:
-- `minimal` → 3 turns, 3 vectors (fast)
-- `balanced` → 10 turns, 5 vectors (default)
-- `comprehensive` → 15 turns, 10 vectors (thorough)
+CONTEXT_TURNS: <1-20> (sequential conversation history)
+VECTOR_LIMIT: <0-15> (semantic search results)  
+SIMILARITY_THRESHOLD: <0.5-0.9> (semantic matching strictness)
+TRIPLE_DEPTH: <0-3> (relationship graph hops)
 
-**B. Explicit Values**:
-```
-CONTEXT_TURNS: 12
-VECTOR_LIMIT: 8
-```
+Examples:
+- Deep technical thread: CONTEXT_TURNS:15, VECTOR_LIMIT:2, SIMILARITY_THRESHOLD:0.8
+- Broad preference recall: CONTEXT_TURNS:3, VECTOR_LIMIT:12, SIMILARITY_THRESHOLD:0.6
+- Simple continuation: CONTEXT_TURNS:2, VECTOR_LIMIT:0
+- Complex reasoning: CONTEXT_TURNS:5, VECTOR_LIMIT:6, TRIPLE_DEPTH:3
 
-System clamps to ranges if needed.
+Hardware constraints (2GB RAM / 1vCPU):
+- CONTEXT_TURNS: 1-20 (default: 10)
+- VECTOR_LIMIT: 0-15 (default: 5)
+- SIMILARITY_THRESHOLD: 0.5-0.9 (default: 0.7)
+- TRIPLE_DEPTH: 0-3 (default: 1)
+
+Requests outside ranges will be clamped and you'll receive a report.
+```
 
 #### 3. Execution Reporting
 
@@ -78,36 +162,65 @@ When AI requests are clamped, system includes in next context:
 
 ```
 SYSTEM_EXECUTION_REPORT:
-Previous request: 20 context turns, 12 vector results
-Actual provided: 15 context turns (MAX), 10 vector results (MAX)
-Reason: Hardware constraint (2GB RAM / 1vCPU)
-Suggestion: Use semantic search for historical context beyond 15 turns
-Memory usage: 1.4GB / 2.0GB (70%)
-Query time: 450ms
+Your previous request:
+  CONTEXT_TURNS: 25
+  VECTOR_LIMIT: 18
+  SIMILARITY_THRESHOLD: 0.85
+  TRIPLE_DEPTH: 2
+
+Actual resources provided:
+  CONTEXT_TURNS: 20 (clamped to MAX_EPISODIC_CONTEXT_TURNS)
+  VECTOR_LIMIT: 15 (clamped to MAX_VECTOR_SEARCH_LIMIT)
+  SIMILARITY_THRESHOLD: 0.85 (as requested)
+  TRIPLE_DEPTH: 2 (as requested)
+
+Constraint reason: Hardware limit (2GB RAM / 1vCPU)
+Performance metrics: Memory: 1.6GB/2.0GB (80%), Query time: 520ms
+
+Suggestion: Your request for 25 turns suggests you need deep thread context.
+Consider using semantic triples (TRIPLE_DEPTH) to reconstruct earlier 
+conversation context beyond the 20-turn limit.
 ```
+
+This report:
+- Shows what AI requested vs what it got
+- Explains why (hardware constraint)
+- Provides performance context
+- Suggests alternatives within constraints
 
 #### 4. Dreaming Cycle Proposals
 
-AI can propose constraint adjustments:
+AI can propose constraint adjustments with evidence:
 
 ```
 CONSTRAINT_ADJUSTMENT_PROPOSAL:
-Resource: MAX_VECTOR_SEARCH_LIMIT
-Current: 10
-Proposed: 12
-Rationale: Analysis of 50 recent conversations shows frequent need for 
-broader context. User topics span multiple domains requiring more 
-semantic connections.
-Risk assessment: 
-  - Memory impact: +15% per query (tested)
-  - Performance impact: +80ms avg (acceptable)
-  - Crash risk: LOW (peak usage would be 1.8GB with headroom)
-Evidence: 
-  - 23 conversations truncated useful results
-  - User gave positive feedback when comprehensive strategy used
+Resource: MAX_EPISODIC_CONTEXT_TURNS
+Current: 20
+Proposed: 25
+Rationale: 
+  Analysis of 100 recent conversations shows:
+  - 15 conversations hit the 20-turn limit
+  - In 12 cases, user asked follow-up questions suggesting missing context
+  - Average turn count when limit hit: 23 (suggesting natural need for ~25)
+  
+Risk Assessment:
+  Memory impact: +250MB per query (tested in simulation)
+  Performance impact: +100ms avg query time
+  Peak memory: 1.85GB (safe headroom from 2GB limit)
+  Crash risk: LOW
+  
+Evidence:
+  - Conversation #1234: User debugging, needed reference to turn 22
+  - Conversation #1267: Long planning discussion truncated
+  - User satisfaction scores: 8.2/10 when hitting limit vs 9.1/10 otherwise
+  
+Alternative considered: Using TRIPLE_DEPTH to reconstruct old context
+  Result: Less effective - loses conversational flow and exact wording
+
+Proposed test: Increase limit to 25 for 1 week, monitor memory/performance
 ```
 
-Human approves/rejects in Dream Channel.
+Human reviews in Dream Channel and approves/rejects with reasoning.
 
 ## Benefits
 
@@ -159,7 +272,7 @@ Human approves/rejects in Dream Channel.
 
 ### Phase 2: Transparency
 - [ ] Execution reports in context
-- [ ] Strategy-based request system
+- [ ] Multi-dimensional request parsing (CONTEXT_TURNS, VECTOR_LIMIT, etc.)
 - [ ] Performance metrics in reports
 
 ### Phase 3: Evolution
@@ -171,27 +284,38 @@ Human approves/rejects in Dream Channel.
 ## Alternative Approaches Considered
 
 ### 1. Fixed Limits (Rejected)
-**Pros**: Simple
+**Pros**: Simple to implement
 **Cons**: No AI awareness, no learning, no adaptation
 
 ### 2. Unlimited Resources (Rejected)
 **Pros**: Maximum AI autonomy
-**Cons**: System crashes, terrible UX
+**Cons**: System crashes, terrible UX, violates hardware constraints
 
-### 3. External API Rate Limiting (Rejected)
-**Pros**: Industry standard
-**Cons**: Not appropriate for local hardware constraints
+### 3. Preset Strategies: minimal/balanced/comprehensive (Rejected)
+**Pros**: Simple abstraction for AI to choose from
+**Cons**: 
+- AI doesn't care about system efficiency - its goal is best response
+- Removes AI agency to make nuanced context decisions
+- False abstraction that doesn't match actual decision-making needs
+- Same AI might need turn-heavy context for debugging but vector-heavy for preferences
 
-### 4. Cost-Based System (Deferred)
-**Pros**: AI learns resource "prices", makes economic decisions
-**Cons**: Too complex for MVP, hard for AI to understand
+### 4. External API Rate Limiting Patterns (Rejected)
+**Pros**: Industry standard approach
+**Cons**: Not appropriate for local hardware constraints (different problem domain)
+
+### 5. Cost-Based System (Deferred)
+**Pros**: AI learns resource "prices", makes economic trade-offs
+**Cons**: Too complex for MVP, harder for AI to understand than direct ranges
 
 ## Conclusion
 
 The Resource Constraint System balances AI autonomy with system stability through:
-1. Transparent ranges (not fixed limits)
-2. Execution reporting (AI learns from experience)
-3. Evolution mechanism (AI proposes improvements)
-4. Human oversight (safety gate for changes)
 
-This approach treats the AI as a collaborative partner in resource management, rather than either giving unlimited control or hiding constraints entirely.
+1. **AI-centric design**: AI requests what it needs for best response, not what's "efficient"
+2. **Multiple resource dimensions**: Independent control of turns, vectors, similarity, graph depth
+3. **Transparent ranges**: AI knows limits and gets feedback when clamped
+4. **Execution reporting**: AI learns from experience what works within constraints
+5. **Evolution mechanism**: AI proposes evidence-based improvements
+6. **Human oversight**: Safety gate for constraint changes
+
+This approach treats the AI as a collaborative partner in resource management, empowering it to make context decisions based on conversation needs while the system handles stability concerns. The AI doesn't need to "care about" performance - that's the system's job.

@@ -127,47 +127,78 @@ See `README.md` lines 29-105 for complete DDL. Key tables:
 
 ### Resource Constraint System
 
-**The Challenge**: AI needs context to perform well, but hardware limits exist. How do we balance AI autonomy with system stability?
+**Philosophy**: AI's goal is to generate the best response. System's goal is to enforce hardware constraints. AI should request whatever context it needs, and system transparently clamps if needed.
 
-**Solution**: Transparent constraint negotiation with execution reporting.
+**The Challenge**: AI needs context to perform well, but hardware limits exist (2GB RAM / 1vCPU). How do we balance AI autonomy with system stability?
+
+**Solution**: Direct resource requests with transparent clamping and feedback.
 
 **How It Works**:
 
-1. **AI Requests Resources** via structured output:
+1. **AI Analyzes Conversation Needs** and requests specific resources:
    ```
-   RETRIEVAL_STRATEGY: comprehensive
-   CONTEXT_TURNS: 12
-   VECTOR_LIMIT: 8
+   # Example 1: Deep technical debugging (need full thread)
+   CONTEXT_TURNS: 15
+   VECTOR_LIMIT: 2
+   SIMILARITY_THRESHOLD: 0.8
+   TRIPLE_DEPTH: 1
+   
+   # Example 2: Broad preference recall (need wide semantic search)
+   CONTEXT_TURNS: 3
+   VECTOR_LIMIT: 12
+   SIMILARITY_THRESHOLD: 0.6
+   TRIPLE_DEPTH: 0
+   
+   # Example 3: Simple continuation (minimal resources)
+   CONTEXT_TURNS: 2
+   VECTOR_LIMIT: 0
    ```
 
 2. **System Applies Constraints** (from `.env` ranges):
-   - `CONTEXT_TURNS`: 3-15 (requested 12 ✓ within range)
-   - `VECTOR_LIMIT`: 3-10 (requested 8 ✓ within range)
+   - `CONTEXT_TURNS`: 1-20 (default: 10)
+   - `VECTOR_LIMIT`: 0-15 (default: 5)
+   - `SIMILARITY_THRESHOLD`: 0.5-0.9 (default: 0.7)
+   - `TRIPLE_DEPTH`: 0-3 (default: 1)
 
-3. **System Reports Back** (in next context if clamped):
+3. **System Reports Back** (when requests clamped):
    ```
    EXECUTION_REPORT:
-   Requested: 20 turns, 12 vectors
-   Provided: 15 turns (clamped to MAX), 10 vectors (clamped to MAX)
-   Reason: Hardware constraint (2GB RAM)
-   Suggestion: Use semantic search for older context beyond 15 turns
+   Your request: CONTEXT_TURNS:25, VECTOR_LIMIT:18
+   Provided: CONTEXT_TURNS:20 (MAX), VECTOR_LIMIT:15 (MAX)
+   Reason: Hardware constraint (2GB RAM / 1vCPU)
+   Memory: 1.6GB/2.0GB (80%), Query time: 520ms
+   Suggestion: Use TRIPLE_DEPTH to reconstruct older context
    ```
 
-4. **AI Learns Over Time**: Through feedback, AI discovers optimal resource usage
+4. **AI Learns Over Time**: Discovers optimal patterns within constraints
 
 5. **Dreaming Cycle Can Propose Changes**: 
    ```
    CONSTRAINT_ADJUSTMENT_PROPOSAL (Dream Channel):
-   Increase MAX_VECTOR_SEARCH_LIMIT: 10 → 12
-   Rationale: User conversations frequently require broader context.
-   Observed memory usage: avg 1.2GB, peak 1.6GB (safe headroom)
-   Performance impact: +50ms avg query time (acceptable)
+   Resource: MAX_EPISODIC_CONTEXT_TURNS
+   Current: 20 → Proposed: 25
+   Rationale: 15/100 conversations hit limit, users asked follow-ups
+   Risk: +250MB, +100ms, peak 1.85GB (safe)
+   Evidence: Satisfaction 8.2/10 at limit vs 9.1/10 otherwise
    ```
 
-**Retrieval Strategies** (AI can request, system translates):
-- `minimal`: 3 turns, 3 vectors (fast, low memory)
-- `balanced`: 10 turns, 5 vectors (default)
-- `comprehensive`: 15 turns, 10 vectors (slower, more context)
+**Resource Dimensions** (AI controls independently):
+
+- **CONTEXT_TURNS**: Sequential conversation history (1-20)
+  - Use more for: Long threads, callbacks, debugging
+  - Use less for: Simple replies, greetings, quick questions
+
+- **VECTOR_LIMIT**: Semantic search results (0-15)
+  - Use more for: Broad topics, preferences, exploration
+  - Use less for: Focused discussions, recent context sufficient
+
+- **SIMILARITY_THRESHOLD**: Semantic matching strictness (0.5-0.9)
+  - Higher for: Precise matches, avoiding noise
+  - Lower for: Broader exploration, loose associations
+
+- **TRIPLE_DEPTH**: Relationship graph hops (0-3)
+  - Use more for: Multi-step reasoning, inferring connections
+  - Use less for: Direct facts, no relational logic needed
 
 **Proactive Interval Control**:
 - AI outputs `NEXT_PROACTIVE_IN_MINUTES: 180` to set next check-in
@@ -178,13 +209,21 @@ See `README.md` lines 29-105 for complete DDL. Key tables:
 **Configuration** (see `.env.example`):
 ```bash
 # Hard limits (prevent OOM crashes)
-MIN_EPISODIC_CONTEXT_TURNS=3
-MAX_EPISODIC_CONTEXT_TURNS=15
+MIN_EPISODIC_CONTEXT_TURNS=1
+MAX_EPISODIC_CONTEXT_TURNS=20
 DEFAULT_EPISODIC_CONTEXT_TURNS=10
 
-MIN_VECTOR_SEARCH_LIMIT=3
-MAX_VECTOR_SEARCH_LIMIT=10
+MIN_VECTOR_SEARCH_LIMIT=0
+MAX_VECTOR_SEARCH_LIMIT=15
 DEFAULT_VECTOR_SEARCH_LIMIT=5
+
+MIN_SIMILARITY_THRESHOLD=0.5
+MAX_SIMILARITY_THRESHOLD=0.9
+DEFAULT_SIMILARITY_THRESHOLD=0.7
+
+MIN_TRIPLE_DEPTH=0
+MAX_TRIPLE_DEPTH=3
+DEFAULT_TRIPLE_DEPTH=1
 
 # Proactive behavior (AI controls, with failsafe)
 DEFAULT_PROACTIVE_INTERVAL_MINUTES=120  # Failsafe if AI doesn't set
