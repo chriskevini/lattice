@@ -1,0 +1,95 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: lattice
+          POSTGRES_PASSWORD: lattice_dev_password
+          POSTGRES_DB: lattice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lattice"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Initialize database
+        run: poetry run python scripts/init_db.py
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: lattice
+          POSTGRES_PASSWORD: lattice_dev_password
+          POSTGRES_DB: lattice
+
+      - name: Run tests with coverage
+        run: poetry run pytest --cov=lattice --cov-report=term-missing --cov-report=xml
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: lattice
+          POSTGRES_PASSWORD: lattice_dev_password
+          POSTGRES_DB: lattice
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Run linting
+        run: poetry run ruff check .
+
+      - name: Run type checking
+        run: poetry run mypy lattice
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install poetry && poetry install
+      - run: poetry run ruff check .
+
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install poetry && poetry install
+      - run: poetry run mypy lattice
