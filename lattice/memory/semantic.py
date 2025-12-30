@@ -3,6 +3,7 @@
 Stores extracted facts with embeddings for semantic similarity search.
 """
 
+from typing import cast
 from uuid import UUID
 
 import structlog
@@ -71,7 +72,7 @@ async def store_fact(fact: StableFact) -> UUID:
             fact.entity_type,
         )
 
-        fact_id = row["id"]  # type: ignore[index]
+        fact_id = cast(UUID, row["id"])
 
         logger.info(
             "Stored semantic fact",

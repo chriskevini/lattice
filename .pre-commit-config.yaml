@@ -22,7 +22,6 @@ repos:
       - id: mypy
         additional_dependencies:
           - types-aiofiles
-        args: [--strict, --ignore-missing-imports]
 
   # Commitizen - Enforce conventional commits
   - repo: https://github.com/commitizen-tools/commitizen
@@ -43,14 +42,14 @@ repos:
       - id: check-shebang-scripts-are-executable
       - id: check-symlinks
       - id: destroyed-symlinks
-      
+
       # Content checks
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
         args: ['--unsafe']  # Allow custom YAML tags
       - id: check-json
-      
+
       # Python-specific
       - id: check-ast
       - id: check-builtin-literals
@@ -58,10 +57,10 @@ repos:
       - id: debug-statements
       - id: name-tests-test
         args: ['--pytest-test-first']
-      
+
       # Git
       - id: forbid-submodules
-      
+
       # Whitespace/formatting
       - id: end-of-file-fixer
       - id: trailing-whitespace

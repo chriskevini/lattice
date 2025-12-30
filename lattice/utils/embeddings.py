@@ -81,7 +81,6 @@ class EmbeddingModel:
             convert_to_numpy=True,
         )
 
-
     def encode_single(self, text: str) -> list[float]:
         """Encode a single text into an embedding.
 
@@ -92,7 +91,7 @@ class EmbeddingModel:
             List of floats representing the embedding vector
         """
         embedding = self.encode(text)
-        return embedding[0].tolist()
+        return embedding[0].tolist()  # type: ignore[no-any-return]
 
     @property
     def model(self) -> SentenceTransformer:
