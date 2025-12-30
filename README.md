@@ -219,9 +219,58 @@ To leverage improved LLM capabilities without losing history:
 ---
 
 ## 6. IMPLEMENTATION ROADMAP
-1. Persistence & prompt swapping  
-2. Unified pipeline + North Star + invisible feedback (🫡 + 🗑️ undo)  
-3. Lightweight proactive scheduler + ghost message injection  
-4. Embeddings & vector recall  
-5. Async memory extraction  
-6. Dreaming Cycle with control-channel approval
+
+### Phase 1: Basic Memory-Enabled Conversation (MVP)
+1. **Discord connectivity + basic response**
+   - Connect to Discord, echo responses
+   - Validate hardware constraints (2GB RAM / 1vCPU)
+   - **Proves:** Bot is alive and responsive
+
+2. **Episodic logging (raw_messages)**
+   - Store conversation history with temporal chaining
+   - **Proves:** "The bot remembers what we talked about"
+
+3. **Embeddings + vector recall (stable_facts)**
+   - Extract simple facts from conversation
+   - Semantic search working
+   - **Proves:** "The bot recalls relevant context from past conversations"
+
+4. **Prompt registry (basic)**
+   - Single template that uses episodic + semantic context
+   - Demonstrates templated behavior
+   - **Proves:** "The bot's behavior is evolvable via data"
+
+### Phase 2: Invisible Alignment
+5. **North Star + invisible feedback**
+   - 🫡 reaction for out-of-band feedback
+   - 🗑️ undo mechanism
+   - North Star goal storage
+   - **Proves:** "The bot learns my goals and preferences silently"
+
+### Phase 3: Proactive Intelligence
+6. **Semantic triples + graph traversal**
+   - Extract Subject-Predicate-Object relationships
+   - Graph-based reasoning
+   - **Proves:** "The bot understands relationships, not just facts"
+
+7. **Proactive scheduler + ghost messages**
+   - Lightweight background loop
+   - AI-controlled check-in cadence
+   - **Proves:** "The bot initiates helpful check-ins"
+
+### Phase 4: Self-Evolution
+8. **Context archetype system**
+   - Semantic classification for optimal context configuration
+   - Evolvable archetypes
+   - **Proves:** "The bot adapts its context retrieval to conversation type"
+
+9. **Async memory extraction pipeline**
+   - Background consolidation
+   - De-contextualization
+   - **Proves:** "Memory extraction doesn't block responses"
+
+10. **Dreaming Cycle**
+    - Daily self-analysis
+    - Prompt evolution proposals
+    - Human approval gateway
+    - **Proves:** "The bot improves itself over time"
