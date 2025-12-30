@@ -1,11 +1,49 @@
 # Development Guide
 
-## Setup
+## Quick Start with Docker (Recommended)
+
+The fastest way to get started is using Docker Compose:
+
+```bash
+# 1. Copy environment template
+cp .env.example .env
+
+# 2. Edit .env with your credentials
+# - Add your OPENROUTER_API_KEY
+# - Add your DISCORD_TOKEN
+# - Add your DISCORD_MAIN_CHANNEL_ID and DISCORD_DREAM_CHANNEL_ID
+
+# 3. Start all services (PostgreSQL + Bot)
+make docker-up
+
+# 4. View logs
+make docker-logs
+
+# 5. Stop services
+make docker-down
+```
+
+### Docker Commands
+
+```bash
+make docker-up          # Start all services
+make docker-down        # Stop all services
+make docker-logs        # Show all logs
+make docker-logs-bot    # Show bot logs only
+make docker-logs-db     # Show database logs only
+make docker-rebuild     # Rebuild and restart
+make docker-shell       # Open shell in bot container
+make docker-db-shell    # Open PostgreSQL shell
+make docker-clean       # Remove all containers and volumes
+```
+
+## Local Development Setup
 
 ### Prerequisites
 - Python 3.11+
 - Poetry (recommended) or pip
-- PostgreSQL 16+ with pgvector extension
+- PostgreSQL 16+ with pgvector extension (or use Docker)
+- Docker & Docker Compose (for containerized development)
 
 ### Installation
 

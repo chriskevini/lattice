@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: lattice-postgres
+    environment:
+      POSTGRES_USER: lattice
+      POSTGRES_PASSWORD: lattice_dev_password
+      POSTGRES_DB: lattice
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lattice"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Lattice bot application
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lattice-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Override DATABASE_URL to use docker service name
+      DATABASE_URL: postgresql://lattice:lattice_dev_password@postgres:5432/lattice
+    volumes:
+      # Mount source code for development (hot reload)
+      - ./lattice:/app/lattice
+      - ./tests:/app/tests
+      # Persist model cache
+      - model_cache:/app/models
+      # Persist logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    # Resource limits matching target environment (2GB RAM / 1vCPU)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  postgres_data:
+    driver: local
+  model_cache:
+    driver: local

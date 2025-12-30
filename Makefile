@@ -1,4 +1,4 @@
-.PHONY: help install test lint format type-check security clean run
+.PHONY: help install test lint format type-check security clean run docker-up docker-down docker-logs docker-rebuild
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -6,10 +6,52 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
+# ============================================================================
+# Docker Commands
+# ============================================================================
+
+docker-up: ## Start all services with Docker Compose
+	docker compose up -d
+
+docker-down: ## Stop all services
+	docker compose down
+
+docker-logs: ## Show logs from all services
+	docker compose logs -f
+
+docker-logs-bot: ## Show logs from bot service only
+	docker compose logs -f bot
+
+docker-logs-db: ## Show logs from database service only
+	docker compose logs -f postgres
+
+docker-rebuild: ## Rebuild and restart services
+	docker compose down
+	docker compose build --no-cache
+	docker compose up -d
+
+docker-shell: ## Open shell in bot container
+	docker compose exec bot /bin/bash
+
+docker-db-shell: ## Open PostgreSQL shell
+	docker compose exec postgres psql -U lattice -d lattice
+
+docker-clean: ## Remove all containers, volumes, and images
+	docker compose down -v
+	docker system prune -f
+
+# ============================================================================
+# Development Commands
+# ============================================================================
+
 install: ## Install dependencies and setup pre-commit hooks
 	poetry install
 	poetry run pre-commit install
 	poetry run pre-commit install --hook-type commit-msg
+
+# ============================================================================
+# Testing & Quality
+# ============================================================================
 
 test: ## Run all tests with coverage
 	poetry run pytest --cov --cov-report=term-missing
@@ -40,6 +82,13 @@ pre-commit: ## Run all pre-commit hooks on all files
 
 check-all: lint type-check security test ## Run all quality checks
 
+# ============================================================================
+# Application Commands
+# ============================================================================
+
+run: ## Run the Discord bot (local development)
+	poetry run python -m lattice
+
 clean: ## Clean up cache and build files
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
@@ -48,14 +97,19 @@ clean: ## Clean up cache and build files
 	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf dist/ build/ htmlcov/ .coverage
 
-run: ## Run the Discord bot
-	poetry run python -m lattice
+# ============================================================================
+# Git Helpers
+# ============================================================================
 
 commit: ## Interactive conventional commit helper
 	poetry run cz commit
 
 bump-version: ## Bump version using commitizen
 	poetry run cz bump
+
+# ============================================================================
+# Database Management
+# ============================================================================
 
 init-db: ## Initialize database schema
 	poetry run python scripts/init_db.py
