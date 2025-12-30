@@ -15,10 +15,8 @@ asyncpg = "^0.29.0"
 pgvector = "^0.2.4"
 # AI/ML - Lightweight for 2GB RAM
 sentence-transformers = "^2.2.2"
-# Async utilities
-aiohttp = "^3.9.1"
+# Environment & logging
 python-dotenv = "^1.0.0"
-# Logging
 structlog = "^24.1.0"
 
 [tool.poetry.group.dev.dependencies]
