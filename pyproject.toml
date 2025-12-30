@@ -4,10 +4,9 @@ version = "0.1.0"
 description = "Adaptive Memory Orchestrator - A self-evolving Discord companion with ENGRAM neuro-symbolic memory"
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
-python = "^3.11"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.14"  # Constrained due to torch/triton availability
 # Discord
 discord-py = "^2.3.2"
 # Database
