@@ -3,7 +3,7 @@
 Stores immutable conversation history with temporal chaining.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
@@ -44,7 +44,7 @@ class EpisodicMessage:
         self.is_bot = is_bot
         self.message_id = message_id
         self.prev_turn_id = prev_turn_id
-        self.timestamp = timestamp or datetime.now()
+        self.timestamp = timestamp or datetime.now(UTC)
 
 
 async def store_message(message: EpisodicMessage) -> UUID:
@@ -127,7 +127,6 @@ async def get_recent_messages(
             )
             for row in reversed(rows)
         ]
-
 
 
 async def get_last_message_id(channel_id: int) -> UUID | None:

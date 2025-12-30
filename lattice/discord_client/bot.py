@@ -4,7 +4,6 @@ Phase 1: Basic connectivity, episodic logging, semantic recall, and prompt regis
 """
 
 import os
-from typing import Optional
 
 import discord
 import structlog
@@ -134,6 +133,35 @@ class LatticeBot(commands.Bot):
             logger.exception("Error processing message", error=str(e))
             await message.channel.send("Sorry, I encountered an error processing your message.")
 
+    async def _generate_response(
+        self,
+        user_message: str,
+        semantic_facts: list[semantic.StableFact],
+        recent_messages: list[episodic.EpisodicMessage],
+    ) -> str:
+        """Generate a response using the prompt template.
+
+        Args:
+            user_message: The user's message
+            semantic_facts: Relevant facts from semantic memory
+            recent_messages: Recent conversation history
+
+        Returns:
+            Generated response text
+        """
+        # Phase 1.4: Get prompt template
+        prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
+        if not prompt_template:
+            return "I'm still initializing. Please try again in a moment."
+
+        # Format episodic context
+        episodic_context = "\n".join(
+            [
+                f"{'Bot' if msg.is_bot else 'User'}: {msg.content}"
+                for msg in recent_messages[-5:]  # Last 5 messages
+            ]
+        )
+
         # Format semantic context
         semantic_context = (
             "\n".join([f"- {fact.content}" for fact in semantic_facts])
@@ -149,9 +177,7 @@ class LatticeBot(commands.Bot):
 
         # For Phase 1, use a simple response
         # In Phase 2+, this will call an LLM API
-        response = await self._simple_generate(filled_prompt, user_message)
-
-        return response
+        return await self._simple_generate(filled_prompt, user_message)
 
     async def _simple_generate(self, _prompt: str, user_message: str) -> str:
         """Simple response generator for Phase 1 (no LLM yet).
