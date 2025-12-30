@@ -4,6 +4,7 @@ Stores immutable conversation history with temporal chaining.
 """
 
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID
 
 import structlog
@@ -75,7 +76,7 @@ async def store_message(message: EpisodicMessage) -> UUID:
             message.prev_turn_id,
         )
 
-        message_id = row["id"]  # type: ignore[index]
+        message_id = cast(UUID, row["id"])
 
         logger.info(
             "Stored episodic message",
@@ -150,4 +151,4 @@ async def get_last_message_id(channel_id: int) -> UUID | None:
             channel_id,
         )
 
-        return row["id"] if row else None  # type: ignore[return-value]
+        return cast(UUID, row["id"]) if row else None
