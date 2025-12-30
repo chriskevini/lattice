@@ -209,7 +209,7 @@ async def init_database() -> None:
         """
         )
 
-        # Insert default BASIC_RESPONSE prompt
+        # Insert default BASIC_RESPONSE prompt (idempotent)
         print("Inserting default prompt template...")
         template_text = """You are a helpful AI companion in a Discord server.
 
@@ -223,17 +223,25 @@ User message: {user_message}
 
 Respond naturally and helpfully, referring to relevant context when appropriate."""
 
-        result = await conn.execute(
-            """
-            INSERT INTO prompt_registry (prompt_key, template, temperature)
-            VALUES ($1, $2, 0.7)
-            ON CONFLICT (prompt_key) DO UPDATE
-            SET template = EXCLUDED.template, updated_at = now();
-            """,
+        # Check if prompt already exists
+        existing = await conn.fetchval(
+            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
             "BASIC_RESPONSE",
-            template_text,
         )
-        print(f"Prompt template result: {result}")
+
+        if existing:
+            print("Prompt template already exists, skipping insert")
+        else:
+            async with conn.transaction():
+                result = await conn.execute(
+                    """
+                    INSERT INTO prompt_registry (prompt_key, template, temperature)
+                    VALUES ($1, $2, 0.7)
+                    """,
+                    "BASIC_RESPONSE",
+                    template_text,
+                )
+                print(f"Prompt template result: {result}")
 
         print("Database initialization complete!")
         print(
