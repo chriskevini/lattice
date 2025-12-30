@@ -1,42 +1,40 @@
-[tool.poetry]
+[project]
 name = "lattice"
 version = "0.1.0"
 description = "Adaptive Memory Orchestrator - A self-evolving Discord companion with ENGRAM neuro-symbolic memory"
-authors = ["Your Name <your.email@example.com>"]
+authors = [{name = "Your Name", email = "your.email@example.com"}]
 readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "discord-py>=2.3.2,<3.0.0",
+    "asyncpg>=0.30.0,<1.0.0",
+    "pgvector>=0.2.4,<1.0.0",
+    "sentence-transformers>=2.2.2,<3.0.0",
+    "aiohttp>=3.9.1,<4.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "structlog>=24.1.0,<25.0.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.11,<3.15"  # Constrained due to torch/triton availability
-# Discord
-discord-py = "^2.3.2"
-# Database
-asyncpg = "^0.30.0"
-pgvector = "^0.2.4"
-# AI/ML - Lightweight for 2GB RAM
-sentence-transformers = "^2.2.2"
-# Async utilities
-aiohttp = "^3.9.1"
-python-dotenv = "^1.0.0"
-# Logging
-structlog = "^24.1.0"
-
-[tool.poetry.group.dev.dependencies]
-# Linting & Formatting (Ruff replaces flake8, black, isort, etc.)
-ruff = "^0.1.9"
-# Type checking
-mypy = "^1.8.0"
-# Testing
-pytest = "^7.4.3"
-pytest-asyncio = "^0.23.2"
-pytest-cov = "^4.1.0"
-# Git hooks
-pre-commit = "^3.6.0"
-# Conventional commits
-commitizen = "^3.13.0"
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.9,<1.0.0",
+    "mypy>=1.8.0,<2.0.0",
+    "pytest>=7.4.3,<8.0.0",
+    "pytest-asyncio>=0.23.2,<1.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pre-commit>=3.6.0,<4.0.0",
+    "commitizen>=3.13.0,<4.0.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{include = "lattice"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.15"
 
 # ============================================================================
 # RUFF CONFIGURATION - Ultra-fast linter & formatter
@@ -46,7 +44,6 @@ target-version = "py311"
 line-length = 100
 indent-width = 4
 
-# Exclude common directories
 exclude = [
     ".git",
     ".mypy_cache",
@@ -59,82 +56,65 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-# Enable comprehensive rule sets
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "N",      # pep8-naming
-    "UP",     # pyupgrade
-    "ANN",    # flake8-annotations
-    "ASYNC",  # flake8-async
-    "S",      # flake8-bandit (security)
-    "B",      # flake8-bugbear
-    "A",      # flake8-builtins
-    "COM",    # flake8-commas
-    "C4",     # flake8-comprehensions
-    "DTZ",    # flake8-datetimez
-    "T10",    # flake8-debugger
-    "EM",     # flake8-errmsg
-    "EXE",    # flake8-executable
-    "ISC",    # flake8-implicit-str-concat
-    "ICN",    # flake8-import-conventions
-    "G",      # flake8-logging-format
-    "INP",    # flake8-no-pep420
-    "PIE",    # flake8-pie
-    "T20",    # flake8-print
-    "PT",     # flake8-pytest-style
-    "Q",      # flake8-quotes
-    "RSE",    # flake8-raise
-    "RET",    # flake8-return
-    "SLF",    # flake8-self
-    "SIM",    # flake8-simplify
-    "TID",    # flake8-tidy-imports
-    "TCH",    # flake8-type-checking
-    "ARG",    # flake8-unused-arguments
-    "PTH",    # flake8-use-pathlib
-    "ERA",    # eradicate (commented-out code)
-    "PL",     # pylint
-    "TRY",    # tryceratops
-    "FLY",    # flynt
-    "PERF",   # perflint
-    "RUF",    # ruff-specific rules
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "ANN",
+    "ASYNC",
+    "S",
+    "B",
+    "A",
+    "COM",
+    "C4",
+    "DTZ",
+    "T10",
+    "EM",
+    "EXE",
+    "ISC",
+    "ICN",
+    "G",
+    "INP",
+    "PIE",
+    "T20",
+    "PT",
+    "Q",
+    "RSE",
+    "RET",
+    "SLF",
+    "SIM",
+    "TID",
+    "TCH",
+    "ARG",
+    "PTH",
+    "ERA",
+    "PL",
+    "TRY",
+    "FLY",
+    "PERF",
+    "RUF",
 ]
 
 ignore = [
-    "ANN101",  # Missing type annotation for self
-    "ANN102",  # Missing type annotation for cls
-    "COM812",  # Trailing comma missing (conflicts with formatter)
-    "ISC001",  # Implicit string concatenation (conflicts with formatter)
+    "ANN101",
+    "ANN102",
+    "COM812",
+    "ISC001",
 ]
 
-# Allow autofix for all enabled rules
 fixable = ["ALL"]
 unfixable = []
 
-# Allow unused variables when underscore-prefixed
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
-    "S101",    # Allow assert in tests
-    "ANN",     # Don't require annotations in tests
-    "PLR2004", # Allow magic values in tests
-    "E402",    # Imports after env setup are intentional for test isolation
-]
-"scripts/init_db.py" = [
-    "T201",    # CLI script output is appropriate
-    "PLR0915", # Initialization script has many statements by design
-]
-"lattice/memory/procedural.py" = [
-    "PLR0913", # Data class with 5 fields is reasonable
-]
-"lattice/memory/semantic.py" = [
-    "PLR0913", # Data class with 5 fields is reasonable
-]
-"lattice/memory/episodic.py" = [
-    "PLR0913", # Data class with 7 fields is reasonable for message model
+    "S101",
+    "ANN",
+    "PLR2004",
 ]
 
 [tool.ruff.lint.isort]
@@ -173,20 +153,13 @@ warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = false
 
-# Allow gradual typing for third-party libraries
 [[tool.mypy.overrides]]
 module = [
     "discord.*",
     "sentence_transformers.*",
     "pgvector.*",
-    "pytest.*",
-    "pytest_asyncio.*",
 ]
 ignore_missing_imports = true
-
-[tool.bandit]
-targets = ["lattice", "scripts"]
-skips = ["B101"]  # assert_used is appropriate in tests
 
 # ============================================================================
 # PYTEST CONFIGURATION
@@ -196,8 +169,6 @@ minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
-
-
 addopts = [
     "--strict-markers",
     "--strict-config",
