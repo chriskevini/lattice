@@ -30,6 +30,12 @@
 3. **Invisible Alignment**: Feedback via 🫡 emoji reactions, North Star goals stored silently
 4. **Total Evolvability**: All logic stored as data, not hardcoded
 5. **Resource Constraints**: Optimize for 2GB RAM / 1vCPU throughout
+6. **Transparent Constraints**: AI is aware of system limits and receives feedback when requests are clamped
+
+### Discord Channels
+
+- **Main Channel**: Primary user interaction, conversation, proactive check-ins
+- **Dream Channel**: Meta activities, prompt optimization proposals, self-reflection, human approval gateway
 
 ## Project Structure
 
@@ -119,6 +125,77 @@ See `README.md` lines 29-105 for complete DDL. Key tables:
 5. **Generation**: Route to `prompt_registry` template
 6. **Async Consolidation**: Extract facts/triples/objectives (background)
 
+### Resource Constraint System
+
+**The Challenge**: AI needs context to perform well, but hardware limits exist. How do we balance AI autonomy with system stability?
+
+**Solution**: Transparent constraint negotiation with execution reporting.
+
+**How It Works**:
+
+1. **AI Requests Resources** via structured output:
+   ```
+   RETRIEVAL_STRATEGY: comprehensive
+   CONTEXT_TURNS: 12
+   VECTOR_LIMIT: 8
+   ```
+
+2. **System Applies Constraints** (from `.env` ranges):
+   - `CONTEXT_TURNS`: 3-15 (requested 12 ✓ within range)
+   - `VECTOR_LIMIT`: 3-10 (requested 8 ✓ within range)
+
+3. **System Reports Back** (in next context if clamped):
+   ```
+   EXECUTION_REPORT:
+   Requested: 20 turns, 12 vectors
+   Provided: 15 turns (clamped to MAX), 10 vectors (clamped to MAX)
+   Reason: Hardware constraint (2GB RAM)
+   Suggestion: Use semantic search for older context beyond 15 turns
+   ```
+
+4. **AI Learns Over Time**: Through feedback, AI discovers optimal resource usage
+
+5. **Dreaming Cycle Can Propose Changes**: 
+   ```
+   CONSTRAINT_ADJUSTMENT_PROPOSAL (Dream Channel):
+   Increase MAX_VECTOR_SEARCH_LIMIT: 10 → 12
+   Rationale: User conversations frequently require broader context.
+   Observed memory usage: avg 1.2GB, peak 1.6GB (safe headroom)
+   Performance impact: +50ms avg query time (acceptable)
+   ```
+
+**Retrieval Strategies** (AI can request, system translates):
+- `minimal`: 3 turns, 3 vectors (fast, low memory)
+- `balanced`: 10 turns, 5 vectors (default)
+- `comprehensive`: 15 turns, 10 vectors (slower, more context)
+
+**Proactive Interval Control**:
+- AI outputs `NEXT_PROACTIVE_IN_MINUTES: 180` to set next check-in
+- System clamps to range: 30-1440 minutes (30min to 24h)
+- If AI never sets it, falls back to `DEFAULT_PROACTIVE_INTERVAL_MINUTES: 120`
+- This is a **failsafe**, not a constraint - AI has full autonomy within safe bounds
+
+**Configuration** (see `.env.example`):
+```bash
+# Hard limits (prevent OOM crashes)
+MIN_EPISODIC_CONTEXT_TURNS=3
+MAX_EPISODIC_CONTEXT_TURNS=15
+DEFAULT_EPISODIC_CONTEXT_TURNS=10
+
+MIN_VECTOR_SEARCH_LIMIT=3
+MAX_VECTOR_SEARCH_LIMIT=10
+DEFAULT_VECTOR_SEARCH_LIMIT=5
+
+# Proactive behavior (AI controls, with failsafe)
+DEFAULT_PROACTIVE_INTERVAL_MINUTES=120  # Failsafe if AI doesn't set
+MIN_PROACTIVE_INTERVAL_MINUTES=30
+MAX_PROACTIVE_INTERVAL_MINUTES=1440
+
+# Transparency
+REPORT_CONSTRAINT_VIOLATIONS=true
+INCLUDE_EXECUTION_REPORT=true
+```
+
 ### Memory Optimization Patterns
 
 **Critical for 2GB RAM:**
@@ -170,7 +247,7 @@ await process_message("<PROACTIVE_EVAL>", is_ghost=True)
 **Dreaming Cycle** (3:00 AM daily):
 1. Analyze `user_feedback` and implicit signals
 2. Generate improved templates/strategies
-3. Post to control channel for human approval
+3. Post to **Dream Channel** for human approval
 4. On approval, update `prompt_registry`
 
 ### Discord-Specific Patterns
