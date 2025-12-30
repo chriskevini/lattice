@@ -5,17 +5,20 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: lattice-postgres
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: lattice
-      POSTGRES_PASSWORD: lattice_dev_password
-      POSTGRES_DB: lattice
+      # These come from .env file
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lattice"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -32,8 +35,10 @@ services:
     env_file:
       - .env
     environment:
-      # Override DATABASE_URL to use docker service name
-      DATABASE_URL: postgresql://lattice:lattice_dev_password@postgres:5432/lattice
+      # Override POSTGRES_HOST to use docker service name
+      POSTGRES_HOST: postgres
+      # DATABASE_URL will be auto-constructed from individual vars in .env
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
       # Mount source code for development (hot reload)
       - ./lattice:/app/lattice
