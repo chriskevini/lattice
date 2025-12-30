@@ -7,17 +7,16 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
 # Copy dependency files
 COPY pyproject.toml poetry.lock* ./
 
-# Install poetry and dependencies
+# Install poetry globally, then install dependencies to /opt/venv
 RUN pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false && \
+    python -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
     poetry install --no-interaction --no-ansi --no-root --only main
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Production stage
 FROM python:3.11-slim
