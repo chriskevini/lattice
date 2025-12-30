@@ -74,6 +74,16 @@ async def main() -> None:
 
     logger.info("Starting Lattice bot", version="0.1.0")
 
+    # Initialize database schema if needed
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from scripts import init_db
+
+    try:
+        await init_db.init_database()
+        logger.info("Database initialization check complete")
+    except Exception as e:
+        logger.warning("Database initialization failed (may already exist)", error=str(e))
+
     # Initialize and run the bot
     bot = LatticeBot()
     try:
