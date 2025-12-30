@@ -6,6 +6,7 @@ Provides connection pooling and common database operations.
 import os
 
 import asyncpg
+import pgvector.asyncpg
 import structlog
 
 
@@ -40,6 +41,7 @@ class DatabasePool:
             min_size=min_size,
             max_size=max_size,
             command_timeout=30,
+            setup=setup_connection,
         )
 
         logger.info("Database pool initialized")
@@ -48,7 +50,16 @@ class DatabasePool:
         """Close the connection pool."""
         if self._pool:
             await self._pool.close()
+            self._pool = None
             logger.info("Database pool closed")
+
+    def is_initialized(self) -> bool:
+        """Check if the pool is initialized.
+
+        Returns:
+            True if pool is initialized, False otherwise
+        """
+        return self._pool is not None
 
     @property
     def pool(self) -> asyncpg.Pool:
@@ -64,6 +75,15 @@ class DatabasePool:
             msg = "Database pool not initialized. Call initialize() first."
             raise RuntimeError(msg)
         return self._pool
+
+
+async def setup_connection(conn: asyncpg.Connection) -> None:
+    """Set up a database connection with pgvector type support.
+
+    Args:
+        conn: The asyncpg connection to set up
+    """
+    await pgvector.asyncpg.register_vector(conn)
 
 
 # Global database pool instance

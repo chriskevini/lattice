@@ -13,6 +13,10 @@ from lattice.utils.embeddings import embedding_model
 
 logger = structlog.get_logger(__name__)
 
+MAX_SEARCH_LIMIT = 100
+MIN_SIMILARITY_THRESHOLD = 0.0
+MAX_SIMILARITY_THRESHOLD = 1.0
+
 
 class StableFact:
     """Represents a fact in semantic memory."""
@@ -58,7 +62,7 @@ async def store_fact(fact: StableFact) -> UUID:
         row = await conn.fetchrow(
             """
             INSERT INTO stable_facts (content, embedding, origin_id, entity_type)
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2::vector, $3, $4)
             RETURNING id
             """,
             fact.content,
@@ -98,10 +102,10 @@ async def search_similar_facts(
         ValueError: If limit or similarity_threshold are out of valid ranges
     """
     # Validate inputs
-    if limit < 1 or limit > 100:
-        msg = f"limit must be between 1 and 100, got {limit}"
+    if limit < 1 or limit > MAX_SEARCH_LIMIT:
+        msg = f"limit must be between 1 and {MAX_SEARCH_LIMIT}, got {limit}"
         raise ValueError(msg)
-    if not 0.0 <= similarity_threshold <= 1.0:
+    if not (MIN_SIMILARITY_THRESHOLD <= similarity_threshold <= MAX_SIMILARITY_THRESHOLD):
         msg = f"similarity_threshold must be between 0.0 and 1.0, got {similarity_threshold}"
         raise ValueError(msg)
 
