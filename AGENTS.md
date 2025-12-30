@@ -134,24 +134,21 @@ See `README.md` lines 29-150 for complete DDL. Key tables:
 
 ### Resource Constraint System
 
-**Philosophy**: AI's goal is to generate the best response. System's goal is to enforce hardware constraints. AI should request whatever context it needs, and system transparently clamps if needed.
+**Philosophy**: AI's goal is to generate the best response. System's goal is to enforce hardware constraints.
 
-**How It Works**:
+The system uses **Context Archetype Classification** to automatically determine optimal context configuration:
+1. Incoming message → Generate embedding (~20ms)
+2. Match against archetype centroids in `context_archetypes` table
+3. Apply archetype's context settings (pre-validated against hardware limits)
 
-1. **AI Analyzes Conversation Needs** and requests specific resources
-2. **System Applies Constraints** (from `.env` ranges)
-3. **System Reports Back** when requests are clamped
-4. **AI Learns Over Time** optimal patterns within constraints
-5. **Dreaming Cycle** can propose constraint adjustments with evidence
-
-**Resource Dimensions** (AI controls independently):
+**Resource Dimensions** (configured per archetype):
 
 - **CONTEXT_TURNS** (1-20): Sequential conversation history
 - **VECTOR_LIMIT** (0-15): Semantic search results
 - **SIMILARITY_THRESHOLD** (0.5-0.9): Semantic matching strictness
 - **TRIPLE_DEPTH** (0-3): Relationship graph hops
 
-**Details**: See `docs/constraint-system-design.md` for complete design rationale
+All archetype configurations (human or AI-proposed) are validated against MIN/MAX limits via database CHECK constraints, preventing configurations that would exceed hardware capacity.
 
 ### Context Archetype System
 
@@ -229,7 +226,6 @@ async def should_short_circuit(message: Message) -> bool:
 - **README.md**: Complete system design specification
 - **DEVELOPMENT.md**: Setup, code quality, workflow, troubleshooting
 - **docs/message-data-flow.md**: Detailed message processing walkthrough
-- **docs/constraint-system-design.md**: Resource constraint system design
 - **docs/context-archetype-system.md**: Context classification implementation
 
 ### Key Reference Points

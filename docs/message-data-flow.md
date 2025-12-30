@@ -15,7 +15,7 @@ Discord Message
       ↓ (if not short-circuit)
 [3] Episodic Logging
       ↓
-[4] Context Analysis (AI determines needs)
+[4] Context Analysis (Archetype Classification)
       ↓
 [5] Hybrid Retrieval
       ├─→ Episodic (temporal chain)
@@ -360,66 +360,25 @@ JOIN stable_facts sf_object ON tt.object_id = sf_object.id;
 
 ---
 
-### [6] Context Assembly + Constraint Application
+### [6] Context Assembly
 
-**Purpose**: Combine retrieved context and apply hardware constraints
-
-#### 6a. Check if requests exceed limits
-
-```python
-requested = {
-    "CONTEXT_TURNS": 8,
-    "VECTOR_LIMIT": 5,
-    "SIMILARITY_THRESHOLD": 0.75,
-    "TRIPLE_DEPTH": 1
-}
-
-constraints = {
-    "MAX_EPISODIC_CONTEXT_TURNS": 20,
-    "MAX_VECTOR_SEARCH_LIMIT": 15,
-    "MAX_SIMILARITY_THRESHOLD": 0.9,
-    "MAX_TRIPLE_DEPTH": 3
-}
-
-# All within limits - no clamping needed
-actual = requested  # ✓
-```
-
-#### 6b. Assemble final context
+**Purpose**: Combine retrieved context from all memory tiers
 
 ```python
 context = {
     "episodic": [
-        # 8 turns from temporal chain
+        # 12 turns from temporal chain (per archetype config)
     ],
     "semantic": [
-        # 5 related facts from vector search
+        # 3 related facts from vector search (per archetype config)
     ],
     "graph": [
-        # Relationship triples
-    ],
-    "execution_report": None  # No clamping occurred
+        # Relationship triples (per archetype config: TRIPLE_DEPTH=1)
+    ]
 }
 ```
 
-**Example of clamping scenario**:
-```python
-# If AI had requested:
-requested = {"CONTEXT_TURNS": 25, "VECTOR_LIMIT": 18}
-
-# After clamping:
-actual = {"CONTEXT_TURNS": 20, "VECTOR_LIMIT": 15}
-
-# Execution report generated:
-execution_report = """
-EXECUTION_REPORT:
-Your request: CONTEXT_TURNS:25, VECTOR_LIMIT:18
-Provided: CONTEXT_TURNS:20 (MAX), VECTOR_LIMIT:15 (MAX)
-Reason: Hardware constraint (2GB RAM / 1vCPU)
-Memory: 1.6GB/2.0GB (80%), Query time: 520ms
-Suggestion: Use TRIPLE_DEPTH to reconstruct older context beyond 20 turns
-"""
-```
+**Note**: The archetype configuration already respects hardware constraints through CHECK constraints in the `context_archetypes` table. All archetype values (whether human or AI-proposed) are validated against MIN/MAX limits during insertion.
 
 ---
 
@@ -443,16 +402,7 @@ prompt = template.format(
     episodic_context=format_episodic(context["episodic"]),
     semantic_facts=format_semantic(context["semantic"]),
     relationship_graph=format_triples(context["graph"]),
-    execution_report=context["execution_report"] or "",
-    current_message=message["content"],
-    
-    # Include constraint ranges so AI knows what's possible
-    constraint_ranges="""
-    CONTEXT_TURNS: 1-20 (default: 10)
-    VECTOR_LIMIT: 0-15 (default: 5)
-    SIMILARITY_THRESHOLD: 0.5-0.9 (default: 0.7)
-    TRIPLE_DEPTH: 0-3 (default: 1)
-    """
+    current_message=message["content"]
 )
 ```
 
@@ -714,9 +664,10 @@ After processing this single message:
 T+0ms:    Discord message received
 T+5ms:    Short-circuit check (not applicable)
 T+10ms:   Episodic logging complete
-T+15ms:   Context analysis by AI
+T+15ms:   Message embedding generated
+T+20ms:   Archetype classification complete
 T+50ms:   Hybrid retrieval (episodic + semantic + graph)
-T+60ms:   Context assembly + constraint check
+T+60ms:   Context assembly
 T+500ms:  LLM generation complete
 T+520ms:  Response sent to Discord
 T+525ms:  Bot response logged to raw_messages
@@ -743,9 +694,9 @@ T+1.8s:   ✓ Consolidation complete
 1. **Canonical Integrity**: Feedback messages never enter raw_messages
 2. **Temporal Chaining**: Linked list enables efficient context window traversal
 3. **Hybrid Retrieval**: Combines recency (episodic), similarity (semantic), and structure (graph)
-4. **Transparent Constraints**: AI gets execution reports when clamped
+4. **Semantic Classification**: Archetype matching determines optimal context configuration (~20ms)
 5. **Async Consolidation**: Memory extraction doesn't block response
-6. **Evolvable Logic**: Prompt templates in database, not hardcoded
+6. **Evolvable Logic**: Prompt templates and archetypes in database, not hardcoded
 7. **Performance Budget**: All queries optimized for 2GB RAM / 1vCPU
 
 This design ensures fast responses (~500ms) while building rich, queryable memory over time.
