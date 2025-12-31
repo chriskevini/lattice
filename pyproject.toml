@@ -19,7 +19,7 @@ dependencies = [
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 
-[tool.uv.package]
+[tool.uv.sources]
 torch = { index = "pytorch-cpu" }
 
 [project.optional-dependencies]
