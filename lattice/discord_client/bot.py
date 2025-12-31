@@ -101,26 +101,29 @@ class LatticeBot(commands.Bot):
         try:
             north_star_result = feedback_detection.is_north_star(message)
             if north_star_result.detected:
+                goal_content = north_star_result.content or ""
                 logger.info(
                     "North Star detected, short-circuiting",
-                    goal_preview=north_star_result.content[:50],
+                    goal_preview=goal_content[:50],
                 )
                 await handlers.handle_north_star(
                     channel=message.channel,
                     message=message,
-                    goal_content=north_star_result.content,
+                    goal_content=goal_content,
                 )
                 return
 
             feedback_result = feedback_detection.is_invisible_feedback(message)
             if feedback_result.detected:
+                feedback_content = feedback_result.content or ""
                 logger.info(
                     "Invisible feedback detected, short-circuiting",
-                    feedback_preview=feedback_result.content[:50],
+                    feedback_preview=feedback_content[:50],
                 )
                 await handlers.handle_invisible_feedback(
+                    channel=message.channel,
                     message=message,
-                    feedback_content=feedback_result.content,
+                    feedback_content=feedback_content,
                 )
                 return
 
@@ -260,7 +263,6 @@ class LatticeBot(commands.Bot):
                 message_id=message.id,
             )
             await handlers.handle_feedback_undo(
-                channel=message.channel,
                 user_message=message,
                 emoji=WASTEBASKET_EMOJI,
             )

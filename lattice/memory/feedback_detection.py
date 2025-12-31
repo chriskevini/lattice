@@ -20,6 +20,9 @@ NORTH_STAR_PATTERNS = [
     re.compile(r"(?i)^ns[:\s]+(.+)$"),
 ]
 
+MIN_GOAL_LENGTH = 10
+MAX_GOAL_LENGTH = 500
+
 
 @dataclass
 class DetectionResult:
@@ -30,7 +33,7 @@ class DetectionResult:
     confidence: float = 0.0
 
 
-def is_quote_or_reply(message: Any) -> bool:
+def is_quote_or_reply(message: Any) -> bool:  # noqa: ANN401
     """Check if a message is a quote or reply to another message.
 
     Args:
@@ -42,7 +45,7 @@ def is_quote_or_reply(message: Any) -> bool:
     return getattr(message, "reference", None) is not None
 
 
-def get_referenced_message_id(message: Any) -> int | None:
+def get_referenced_message_id(message: Any) -> int | None:  # noqa: ANN401
     """Get the ID of the message being quoted/replied to.
 
     Args:
@@ -57,7 +60,7 @@ def get_referenced_message_id(message: Any) -> int | None:
     return getattr(reference, "message_id", None)
 
 
-def is_invisible_feedback(message: Any) -> DetectionResult:
+def is_invisible_feedback(message: Any) -> DetectionResult:  # noqa: ANN401
     """Check if a message is invisible feedback (quote/reply to bot).
 
     Args:
@@ -85,7 +88,7 @@ def is_invisible_feedback(message: Any) -> DetectionResult:
     return DetectionResult(detected=True, content=content, confidence=1.0)
 
 
-def is_north_star(message: Any) -> DetectionResult:
+def is_north_star(message: Any) -> DetectionResult:  # noqa: ANN401
     """Check if a message is a North Star declaration.
 
     Args:
@@ -99,7 +102,7 @@ def is_north_star(message: Any) -> DetectionResult:
 
     content = getattr(message, "content", "").strip()
 
-    if len(content) < 10 or len(content) > 500:
+    if len(content) < MIN_GOAL_LENGTH or len(content) > MAX_GOAL_LENGTH:
         return DetectionResult(detected=False)
 
     best_match = None
