@@ -6,6 +6,33 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+PREDICATE_SYNONYMS: dict[str, list[str]] = {
+    "likes": ["likes", "enjoys", "loves", "fond_of", "appreciates"],
+    "works_at": ["works_at", "employed_at", "job_at", "position_at", "works_for"],
+    "created": ["created", "built", "made", "constructed", "developed", "authored"],
+    "located_in": ["located_in", "based_in", "situated_in", "in"],
+    "knows": ["knows", "acquainted_with", "friend_of", "familiar_with"],
+    "member_of": ["member_of", "part_of", "belongs_to", "affiliated_with"],
+}
+
+
+def normalize_predicate(predicate: str) -> str:
+    """Normalize predicate to canonical form.
+
+    Maps synonym predicates to their canonical form for consistency.
+
+    Args:
+        predicate: Raw predicate string from triple
+
+    Returns:
+        Normalized predicate string
+    """
+    normalized = predicate.lower().strip()
+    for canonical, synonyms in PREDICATE_SYNONYMS.items():
+        if normalized in synonyms:
+            return canonical
+    return normalized
+
 
 def parse_triples(raw_output: str) -> list[dict[str, str]]:
     """Parse LLM output into structured triples.
@@ -44,7 +71,7 @@ def parse_triples(raw_output: str) -> list[dict[str, str]]:
                 validated.append(
                     {
                         "subject": item["subject"].strip(),
-                        "predicate": item["predicate"].strip().lower(),
+                        "predicate": normalize_predicate(item["predicate"]),
                         "object": item["object"].strip(),
                     }
                 )
