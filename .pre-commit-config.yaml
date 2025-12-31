@@ -83,7 +83,7 @@ repos:
     rev: v3.15.0
     hooks:
       - id: pyupgrade
-        args: [--py311-plus]
+        args: [--py312-plus]
 
   # Documentation checks
   - repo: https://github.com/pycqa/pydocstyle
@@ -95,7 +95,7 @@ repos:
 
 # Configure which files to check
 default_language_version:
-  python: python3.11
+  python: python3.12
 
 # Global file exclusions
 exclude: |
