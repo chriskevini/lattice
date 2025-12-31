@@ -43,13 +43,13 @@ def mock_embedding_model() -> MagicMock:
 class TestBotIntegration:
     """Integration tests for the Lattice bot."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_bot_initialization(self) -> None:
         """Test that the bot can be initialized."""
         bot = LatticeBot()
         assert bot is not None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_episodic_memory_operations(self) -> None:
         """Test episodic memory CRUD operations."""
         mock_message = EpisodicMessage(
@@ -68,7 +68,7 @@ class TestBotIntegration:
             result = await store_message(mock_message)
             assert result is not None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_semantic_memory_operations(self) -> None:
         """Test semantic memory search operations."""
         with (
@@ -86,7 +86,7 @@ class TestBotIntegration:
             )
             assert isinstance(results, list)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_procedural_memory_operations(self) -> None:
         """Test procedural memory retrieval operations."""
         with patch("lattice.memory.procedural.db_pool") as mock_pool:
@@ -110,7 +110,7 @@ class TestBotIntegration:
 class TestDatabaseIntegration:
     """Integration tests for database operations."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_database_pool_initialization(self) -> None:
         """Test database pool can be initialized."""
 
