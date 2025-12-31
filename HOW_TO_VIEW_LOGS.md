@@ -35,14 +35,12 @@ docker compose logs -f bot
 
 ### Initialize database
 ```bash
-export PATH="/home/chris/.local/bin:$PATH"
-eval "$(mise activate bash)"
-poetry run python scripts/init_db.py
+uv run python scripts/init_db.py
 ```
 
 ### Run bot with logs to console
 ```bash
-poetry run python -m lattice
+uv run python -m lattice
 ```
 
 Logs will appear in stdout/stderr
@@ -52,7 +50,7 @@ The bot automatically writes to `logs/lattice.log` (configured in .env)
 
 ```bash
 # Run bot in background
-nohup poetry run python -m lattice > logs/bot-stdout.log 2>&1 &
+nohup uv run python -m lattice > logs/bot-stdout.log 2>&1 &
 
 # View logs
 tail -f logs/lattice.log

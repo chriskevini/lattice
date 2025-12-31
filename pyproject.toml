@@ -31,12 +31,6 @@ dev = [
 requires = ["hatchling>=1.21.0,<2.0.0"]
 build-backend = "hatchling.build"
 
-[tool.poetry]
-packages = [{include = "lattice"}]
-
-[tool.poetry.dependencies]
-python = "^3.11"
-
 # ============================================================================
 # RUFF CONFIGURATION - Ultra-fast linter & formatter
 # ============================================================================
