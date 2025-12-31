@@ -132,24 +132,3 @@ def is_north_star(message: Any) -> DetectionResult:  # noqa: ANN401
             return DetectionResult(detected=True, content=extracted_goal, confidence=confidence)
 
     return DetectionResult(detected=False)
-
-
-def extract_goal_from_content(content: str) -> str | None:
-    """Extract goal content from a message.
-
-    Args:
-        content: The message content
-
-    Returns:
-        Extracted goal text or None if no goal found
-    """
-    content = content.strip()
-
-    for pattern in NORTH_STAR_PATTERNS:
-        match = pattern.match(content)
-        if match:
-            goal = match.group(1).strip()
-            if goal:
-                return goal
-
-    return None
