@@ -15,6 +15,13 @@ dependencies = [
     "openai>=1.0.0,<2.0.0",
 ]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+
+[tool.uv.package]
+torch = { index = "pytorch-cpu" }
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.1.9,<1.0.0",

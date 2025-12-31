@@ -15,7 +15,8 @@ COPY scripts/ ./scripts/
 # Install UV, sync dependencies and install project
 RUN pip install --no-cache-dir uv && \
     python -m venv /opt/venv && \
-    uv sync --no-dev
+    uv sync --no-dev && \
+    rm -rf /root/.cache/uv
 
 ENV PATH="/opt/venv/bin:$PATH"
 
