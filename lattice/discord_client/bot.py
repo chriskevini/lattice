@@ -1,6 +1,7 @@
 """Discord bot implementation for Lattice.
 
 Phase 1: Basic connectivity, episodic logging, semantic recall, and prompt registry.
+Phase 2: Invisible alignment (feedback, North Star goals).
 """
 
 import os
@@ -9,12 +10,18 @@ import discord
 import structlog
 from discord.ext import commands
 
+from lattice.core import handlers
 from lattice.memory import episodic, procedural, semantic
+from lattice.memory import feedback_detection
+from lattice.memory import user_feedback
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
 
 
 logger = structlog.get_logger(__name__)
+
+SALUTE_EMOJI = "🫡"
+WASTEBASKET_EMOJI = "🗑️"
 
 
 class LatticeBot(commands.Bot):
@@ -94,6 +101,32 @@ class LatticeBot(commands.Bot):
         )
 
         try:
+            north_star_result = feedback_detection.is_north_star(message)
+            if north_star_result.detected:
+                logger.info(
+                    "North Star detected, short-circuiting",
+                    goal_preview=north_star_result.content[:50],
+                )
+                await handlers.handle_north_star(
+                    channel=message.channel,
+                    message=message,
+                    goal_content=north_star_result.content,
+                )
+                return
+
+            feedback_result = feedback_detection.is_invisible_feedback(message)
+            if feedback_result.detected:
+                logger.info(
+                    "Invisible feedback detected, short-circuiting",
+                    feedback_preview=feedback_result.content[:50],
+                )
+                await handlers.handle_invisible_feedback(
+                    channel=message.channel,
+                    message=message,
+                    feedback_content=feedback_result.content,
+                )
+                return
+
             prev_turn_id = await episodic.get_last_message_id(message.channel.id)
             user_message_id = await episodic.store_message(
                 episodic.EpisodicMessage(
@@ -205,6 +238,35 @@ class LatticeBot(commands.Bot):
             f"I received your message: '{user_message}'. "
             "(Phase 1: Memory system operational, LLM integration coming in Phase 2)"
         )
+
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
+        """Handle reaction add events.
+
+        Args:
+            reaction: The reaction that was added
+            user: The user who added the reaction
+        """
+        if user == self.user:
+            return
+
+        if reaction.emoji not in (SALUTE_EMOJI, WASTEBASKET_EMOJI):
+            return
+
+        message = reaction.message
+        if message.author != self.user:
+            return
+
+        if reaction.emoji == WASTEBASKET_EMOJI:
+            logger.info(
+                "Feedback undo requested",
+                user=user.name,
+                message_id=message.id,
+            )
+            await handlers.handle_feedback_undo(
+                channel=message.channel,
+                user_message=message,
+                emoji=WASTEBASKET_EMOJI,
+            )
 
     async def close(self) -> None:
         """Clean up resources when shutting down."""
