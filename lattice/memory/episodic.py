@@ -194,8 +194,8 @@ async def consolidate_message(
 
     async with db_pool.pool.acquire() as conn, conn.transaction():
         for triple in triples:
-            subject_id = await _ensure_fact(triple["subject"], message_id, conn)
-            object_id = await _ensure_fact(triple["object"], message_id, conn)
+            subject_id = await _ensure_fact(triple["subject"], message_id, conn, embedding_model)
+            object_id = await _ensure_fact(triple["object"], message_id, conn, embedding_model)
 
             await conn.execute(
                 """
@@ -214,6 +214,7 @@ async def _ensure_fact(
     content: str,
     origin_id: UUID,
     conn: Any,
+    embedding_model: Any,
 ) -> UUID:
     """Ensure fact exists, return its ID.
 
@@ -221,6 +222,7 @@ async def _ensure_fact(
         content: Fact content
         origin_id: Origin message ID
         conn: Database connection
+        embedding_model: Embedding model for vector generation
 
     Returns:
         UUID of existing or new fact
