@@ -15,6 +15,7 @@ from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
+from lattice.utils.llm import get_llm_client
 
 
 logger = structlog.get_logger(__name__)
@@ -222,19 +223,17 @@ class LatticeBot(commands.Bot):
         return await self._simple_generate(filled_prompt, user_message)
 
     async def _simple_generate(self, prompt: str, user_message: str) -> str:  # noqa: ARG002
-        """Simple response generator for Phase 1 (no LLM yet).
+        """Generate response using LLM client.
 
         Args:
-            prompt: The formatted prompt template (used in Phase 2)
+            prompt: The formatted prompt template
             user_message: The user's message
 
         Returns:
-            A simple response (Phase 1 placeholder until LLM integration)
+            Generated response text
         """
-        return (
-            f"I received your message: '{user_message}'. "
-            "(Phase 1: Memory system operational, LLM integration coming in Phase 2)"
-        )
+        client = get_llm_client()
+        return await client.complete(prompt, temperature=0.7)
 
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
         """Handle reaction add events.

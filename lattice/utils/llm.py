@@ -1,41 +1,24 @@
 """LLM client utilities for triple extraction and other AI tasks.
 
-This module provides a unified interface for LLM operations. Currently uses
-a placeholder implementation that can be extended with actual LLM providers
-like OpenAI, Anthropic, or local models.
+This module provides a unified interface for LLM operations via OpenRouter.
 """
 
 import logging
-from dataclasses import dataclass
+import os
 from typing import Any
 
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class LLMResponse:
-    """Response from LLM completion."""
-
-    content: str
-    model: str
-    usage: dict[str, int]
-
-
 class LLMClient:
-    """Unified LLM client interface.
-
-    This is a placeholder implementation. To use actual LLMs:
-    1. Add provider package to dependencies (e.g., openai, anthropic)
-    2. Implement provider-specific client
-    3. Set LATTICE_LLM_PROVIDER environment variable
-    """
+    """Unified LLM client interface via OpenRouter."""
 
     def __init__(self, provider: str = "placeholder") -> None:
         """Initialize LLM client.
 
         Args:
-            provider: LLM provider to use ('placeholder', 'openai', 'anthropic')
+            provider: LLM provider to use ('placeholder', 'openrouter')
         """
         self.provider = provider
         self._client: Any = None
@@ -58,12 +41,10 @@ class LLMClient:
         """
         if self.provider == "placeholder":
             return self._placeholder_complete(prompt, temperature)
-        elif self.provider == "openai":
-            return await self._openai_complete(prompt, temperature, max_tokens)
-        elif self.provider == "anthropic":
-            return await self._anthropic_complete(prompt, temperature, max_tokens)
+        elif self.provider == "openrouter":
+            return await self._openrouter_complete(prompt, temperature, max_tokens)
         else:
-            msg = f"Unknown LLM provider: {self.provider}"
+            msg = f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
             raise ValueError(msg)
 
     def _placeholder_complete(self, prompt: str, temperature: float) -> str:
@@ -83,13 +64,13 @@ class LLMClient:
             return '[{"subject": "example", "predicate": "likes", "object": "testing"}]'
         return f"Placeholder response to: {prompt[:50]}..."
 
-    async def _openai_complete(
+    async def _openrouter_complete(
         self,
         prompt: str,
         temperature: float,
         max_tokens: int | None,
     ) -> str:
-        """Complete using OpenAI API.
+        """Complete using OpenRouter API.
 
         Args:
             prompt: The prompt to complete
@@ -105,49 +86,26 @@ class LLMClient:
             msg = "openai package not installed. Run: pip install openai"
             raise ImportError(msg) from e
 
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            msg = "OPENROUTER_API_KEY not set in environment"
+            raise ValueError(msg)
+
+        model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+
         if self._client is None:
-            self._client = openai.AsyncOpenAI()
+            self._client = openai.AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
 
         response = await self._client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=temperature,
             max_tokens=max_tokens,
         )
         return response.choices[0].message.content or ""
-
-    async def _anthropic_complete(
-        self,
-        prompt: str,
-        temperature: float,
-        max_tokens: int | None,
-    ) -> str:
-        """Complete using Anthropic API.
-
-        Args:
-            prompt: The prompt to complete
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
-
-        Returns:
-            Generated text response
-        """
-        try:
-            import anthropic
-        except ImportError as e:
-            msg = "anthropic package not installed. Run: pip install anthropic"
-            raise ImportError(msg) from e
-
-        if self._client is None:
-            self._client = anthropic.AsyncAnthropic()
-
-        response = await self._client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=max_tokens or 1024,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text
 
 
 _llm_client: LLMClient | None = None
@@ -161,8 +119,6 @@ def get_llm_client() -> LLMClient:
     """
     global _llm_client
     if _llm_client is None:
-        import os
-
-        provider = os.getenv("LATTICE_LLM_PROVIDER", "placeholder")
+        provider = os.getenv("LLM_PROVIDER", "placeholder")
         _llm_client = LLMClient(provider=provider)
     return _llm_client
