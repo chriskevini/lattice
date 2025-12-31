@@ -22,27 +22,6 @@ from lattice.utils.triple_parsing import parse_triples
 logger = structlog.get_logger(__name__)
 
 
-class Objective:
-    """Represents an objective extracted from conversation."""
-
-    def __init__(
-        self,
-        description: str,
-        saliency_score: float = 0.5,
-        status: str = "pending",
-    ) -> None:
-        """Initialize an objective.
-
-        Args:
-            description: What the user wants to achieve
-            saliency_score: Importance score 0.0-1.0
-            status: pending/completed/archived
-        """
-        self.description = description
-        self.saliency_score = saliency_score
-        self.status = status
-
-
 class EpisodicMessage:
     """Represents a message in episodic memory."""
 
@@ -360,9 +339,10 @@ async def store_objectives(
 
     async with db_pool.pool.acquire() as conn, conn.transaction():
         for objective in objectives:
-            description = objective["description"]
-            saliency = objective["saliency"]
-            status = objective["status"]
+            description = cast("str", objective["description"])
+            saliency_value = objective["saliency"]
+            saliency = float(saliency_value) if isinstance(saliency_value, (int, float)) else 0.5
+            status = cast("str", objective["status"])
 
             normalized = description.lower().strip()
 
