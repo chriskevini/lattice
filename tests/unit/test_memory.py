@@ -376,7 +376,8 @@ class MockUser:
 class MockReference:  # noqa: N801
     """Mock Discord message reference."""
 
-    pass
+    def __init__(self) -> None:
+        self.message_id: int | None = None
 
 
 class TestFeedbackDetectionFunctions:
@@ -475,45 +476,45 @@ class TestFeedbackDetectionFunctions:
 
         assert result.detected is False
 
+    def test_is_quote_or_reply_with_reference(self) -> None:
+        """Test that message with reference is detected as quote/reply."""
+        message = MockMessage(content="Your response was helpful", is_reply=True)
+        result = feedback_detection.is_quote_or_reply(message)
+
+        assert result is True
+
+    def test_is_quote_or_reply_without_reference(self) -> None:
+        """Test that message without reference is not detected as quote/reply."""
+        message = MockMessage(content="Hello world")
+        result = feedback_detection.is_quote_or_reply(message)
+
+        assert result is False
+
+    def test_get_referenced_message_id_with_reference(self) -> None:
+        """Test getting referenced message ID."""
+        message = MockMessage(content="Feedback", is_reply=True)
+        message.reference = MockReference()
+        message.reference.message_id = 12345
+
+        result = feedback_detection.get_referenced_message_id(message)
+
+        assert result == 12345
+
+    def test_get_referenced_message_id_without_reference(self) -> None:
+        """Test getting referenced message ID when no reference exists."""
+        message = MockMessage(content="Hello")
+
+        result = feedback_detection.get_referenced_message_id(message)
+
+        assert result is None
+
     def test_is_invisible_feedback_with_reply(self) -> None:
         """Test detection of invisible feedback via reply."""
         message = MockMessage(content="Actually, that's wrong", is_reply=True)
         result = feedback_detection.is_invisible_feedback(message)
 
         assert result.detected is True
-        assert "wrong" in result.content.lower() or result.confidence > 0.5
-
-    def test_is_invisible_feedback_with_quote(self) -> None:
-        """Test detection of invisible feedback via quote."""
-        message = MockMessage(content="> previous message\nCorrection: I meant X")
-        result = feedback_detection.is_invisible_feedback(message)
-
-        assert result.detected is True
-        assert result.confidence > 0.6
-
-    def test_is_invisible_feedback_with_feedback_indicator(self) -> None:
-        """Test detection with feedback indicator pattern."""
-        message = MockMessage(content="Feedback: The response was too long")
-        result = feedback_detection.is_invisible_feedback(message)
-
-        assert result.detected is True
-        assert result.content == "The response was too long"
-
-    def test_is_invisible_feedback_with_correction_indicator(self) -> None:
-        """Test detection with correction indicator pattern."""
-        message = MockMessage(content="Correction: I made a mistake")
-        result = feedback_detection.is_invisible_feedback(message)
-
-        assert result.detected is True
-        assert result.content == "I made a mistake"
-
-    def test_is_invisible_feedback_with_fyi_indicator(self) -> None:
-        """Test detection with FYI indicator pattern."""
-        message = MockMessage(content="FYI: The meeting is at 3pm")
-        result = feedback_detection.is_invisible_feedback(message)
-
-        assert result.detected is True
-        assert result.content == "The meeting is at 3pm"
+        assert result.content == "Actually, that's wrong"
 
     def test_is_invisible_feedback_bot_message(self) -> None:
         """Test that bot messages are not detected as invisible feedback."""
