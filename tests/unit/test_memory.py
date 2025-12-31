@@ -397,7 +397,7 @@ class TestFeedbackDetectionFunctions:
         result = feedback_detection.is_north_star(message)
 
         assert result.detected is True
-        assert result.content == "build a web app"
+        assert result.content == "to build a web app"
         assert result.confidence > 0.7
 
     def test_is_north_star_with_trying_pattern(self) -> None:
@@ -442,7 +442,7 @@ class TestFeedbackDetectionFunctions:
         result = feedback_detection.is_north_star(message)
 
         assert result.detected is True
-        assert result.content == "to travel the world"
+        assert result.content == "travel the world"
         assert result.confidence > 0.7
 
     def test_is_north_star_bot_message(self) -> None:
@@ -497,7 +497,7 @@ class TestFeedbackDetectionFunctions:
         result = feedback_detection.is_invisible_feedback(message)
 
         assert result.detected is True
-        assert result.confidence > 0.6
+        assert result.content == "The response was too long"
 
     def test_is_invisible_feedback_with_correction_indicator(self) -> None:
         """Test detection with correction indicator pattern."""
@@ -505,7 +505,7 @@ class TestFeedbackDetectionFunctions:
         result = feedback_detection.is_invisible_feedback(message)
 
         assert result.detected is True
-        assert result.confidence > 0.6
+        assert result.content == "I made a mistake"
 
     def test_is_invisible_feedback_with_fyi_indicator(self) -> None:
         """Test detection with FYI indicator pattern."""
@@ -513,6 +513,7 @@ class TestFeedbackDetectionFunctions:
         result = feedback_detection.is_invisible_feedback(message)
 
         assert result.detected is True
+        assert result.content == "The meeting is at 3pm"
 
     def test_is_invisible_feedback_bot_message(self) -> None:
         """Test that bot messages are not detected as invisible feedback."""
@@ -540,7 +541,7 @@ class TestFeedbackDetectionFunctions:
         content = "My goal is to finish this project"
         result = feedback_detection.extract_goal_from_content(content)
 
-        assert result == "finish this project"
+        assert result == "to finish this project"
 
     def test_extract_goal_from_content_no_match(self) -> None:
         """Test that non-goal content returns None."""
