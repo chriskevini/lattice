@@ -8,6 +8,7 @@ import pytest
 
 from lattice.utils.database import DatabasePool
 from lattice.utils.embeddings import EmbeddingModel
+from lattice.utils.objective_parsing import parse_objectives
 
 
 class TestEmbeddingModel:
@@ -111,3 +112,92 @@ class TestDatabasePool:
         pool.close()  # type: ignore[unused-coroutine]
 
         assert pool._pool is None
+
+
+class TestObjectiveParsing:
+    """Tests for objective parsing utilities."""
+
+    def test_parse_objectives_valid_json(self) -> None:
+        """Test parsing valid objective JSON array."""
+        raw = '[{"description": "Build a startup", "saliency": 0.9, "status": "pending"}]'
+
+        result = parse_objectives(raw)
+
+        assert len(result) == 1
+        assert result[0]["description"] == "Build a startup"
+        assert result[0]["saliency"] == 0.9
+        assert result[0]["status"] == "pending"
+
+    def test_parse_objectives_multiple(self) -> None:
+        """Test parsing multiple objectives."""
+        raw = (
+            '[{"description": "Learn Python", "saliency": 0.8, "status": "pending"}, '
+            '{"description": "Build a project", "saliency": 0.7, "status": "completed"}]'
+        )
+
+        result = parse_objectives(raw)
+
+        assert len(result) == 2
+
+    def test_parse_objectives_empty_array(self) -> None:
+        """Test parsing empty objective array."""
+        raw = "[]"
+
+        result = parse_objectives(raw)
+
+        assert result == []
+
+    def test_parse_objectives_with_code_block(self) -> None:
+        """Test parsing objectives wrapped in code block."""
+        raw = """```json
+[{"description": "Test goal", "saliency": 0.5, "status": "pending"}]
+```"""
+
+        result = parse_objectives(raw)
+
+        assert len(result) == 1
+        assert result[0]["description"] == "Test goal"
+
+    def test_parse_objectives_saliency_clamping(self) -> None:
+        """Test that saliency is clamped to valid range."""
+        raw = '[{"description": "Goal", "saliency": 1.5, "status": "pending"}]'
+
+        result = parse_objectives(raw)
+
+        assert result[0]["saliency"] == 1.0
+
+    def test_parse_objectives_saliency_default(self) -> None:
+        """Test that missing saliency uses default."""
+        raw = '[{"description": "Goal", "status": "pending"}]'
+
+        result = parse_objectives(raw)
+
+        assert result[0]["saliency"] == 0.5
+
+    def test_parse_objectives_invalid_status(self) -> None:
+        """Test that invalid status defaults to pending."""
+        raw = '[{"description": "Goal", "saliency": 0.5, "status": "invalid"}]'
+
+        result = parse_objectives(raw)
+
+        assert result[0]["status"] == "pending"
+
+    def test_parse_objectives_invalid_json(self) -> None:
+        """Test that invalid JSON returns empty list."""
+        raw = "not valid json"
+
+        result = parse_objectives(raw)
+
+        assert result == []
+
+    def test_parse_objectives_missing_description(self) -> None:
+        """Test that objectives without description are filtered out."""
+        raw = (
+            '[{"description": "Valid", "saliency": 0.5, "status": "pending"}, '
+            '{"saliency": 0.5, "status": "pending"}]'
+        )
+
+        result = parse_objectives(raw)
+
+        assert len(result) == 1
+        assert result[0]["description"] == "Valid"
