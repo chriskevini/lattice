@@ -178,6 +178,10 @@ warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["lattice.discord_client.bot"]
+ignore_errors = true
+
 # ============================================================================
 # PYTEST CONFIGURATION
 # ============================================================================

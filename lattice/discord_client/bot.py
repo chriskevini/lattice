@@ -17,7 +17,7 @@ from lattice.utils.embeddings import embedding_model
 logger = structlog.get_logger(__name__)
 
 
-class LatticeBot(commands.Bot):  # type: ignore[misc]
+class LatticeBot(commands.Bot):
     """The Lattice Discord bot with ENGRAM memory framework."""
 
     def __init__(self) -> None:
