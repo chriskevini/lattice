@@ -40,7 +40,7 @@ make docker-clean       # Remove all containers and volumes
 ## Local Development Setup
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.12+
 - [UV](https://docs.astral.sh/uv/) (modern Python package manager)
 - PostgreSQL 16+ with pgvector extension (or use Docker)
 - Docker & Docker Compose (for containerized development)
