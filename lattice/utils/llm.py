@@ -5,10 +5,27 @@ This module provides a unified interface for LLM operations via OpenRouter.
 
 import logging
 import os
+import time
+from dataclasses import dataclass
 from typing import Any
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GenerationResult:
+    """Result from LLM generation with metadata."""
+
+    content: str
+    model: str
+    provider: str | None
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    cost_usd: float | None
+    latency_ms: int
+    temperature: float
 
 
 class LLMClient:
@@ -28,7 +45,7 @@ class LLMClient:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int | None = None,
-    ) -> str:
+    ) -> GenerationResult:
         """Complete a prompt with the LLM.
 
         Args:
@@ -37,7 +54,7 @@ class LLMClient:
             max_tokens: Maximum tokens to generate
 
         Returns:
-            Generated text response
+            GenerationResult with content and metadata
         """
         if self.provider == "placeholder":
             return self._placeholder_complete(prompt, temperature)
@@ -47,7 +64,7 @@ class LLMClient:
             msg = f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
             raise ValueError(msg)
 
-    def _placeholder_complete(self, prompt: str, temperature: float) -> str:
+    def _placeholder_complete(self, prompt: str, temperature: float) -> GenerationResult:
         """Placeholder completion for development.
 
         Returns a JSON array of triples for triple extraction prompts,
@@ -58,18 +75,32 @@ class LLMClient:
             temperature: Sampling temperature (unused in placeholder)
 
         Returns:
-            Placeholder response
+            GenerationResult with placeholder response
         """
-        if "triple" in prompt.lower() or "extract" in prompt.lower():
-            return '[{"subject": "example", "predicate": "likes", "object": "testing"}]'
-        return f"Placeholder response to: {prompt[:50]}..."
+        content = (
+            '[{"subject": "example", "predicate": "likes", "object": "testing"}]'
+            if "triple" in prompt.lower() or "extract" in prompt.lower()
+            else f"Placeholder response to: {prompt[:50]}..."
+        )
+
+        return GenerationResult(
+            content=content,
+            model="placeholder",
+            provider=None,
+            prompt_tokens=len(prompt.split()),
+            completion_tokens=len(content.split()),
+            total_tokens=len(prompt.split()) + len(content.split()),
+            cost_usd=None,
+            latency_ms=0,
+            temperature=temperature,
+        )
 
     async def _openrouter_complete(
         self,
         prompt: str,
         temperature: float,
         max_tokens: int | None,
-    ) -> str:
+    ) -> GenerationResult:
         """Complete using OpenRouter API.
 
         Args:
@@ -78,7 +109,7 @@ class LLMClient:
             max_tokens: Maximum tokens to generate
 
         Returns:
-            Generated text response
+            GenerationResult with content and metadata
         """
         try:
             import openai
@@ -99,13 +130,29 @@ class LLMClient:
                 api_key=api_key,
             )
 
+        start_time = time.monotonic()
         response = await self._client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return response.choices[0].message.content or ""
+        latency_ms = int((time.monotonic() - start_time) * 1000)
+
+        usage = response.usage
+        cost_usd = getattr(usage, "cost", None) if usage else None
+
+        return GenerationResult(
+            content=response.choices[0].message.content or "",
+            model=response.model,
+            provider=getattr(response, "provider", None),
+            prompt_tokens=usage.prompt_tokens if usage else 0,
+            completion_tokens=usage.completion_tokens if usage else 0,
+            total_tokens=usage.total_tokens if usage else 0,
+            cost_usd=float(cost_usd) if cost_usd else None,
+            latency_ms=latency_ms,
+            temperature=temperature,
+        )
 
 
 _llm_client: LLMClient | None = None

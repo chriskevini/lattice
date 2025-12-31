@@ -3,8 +3,9 @@
 Stores immutable conversation history with temporal chaining.
 """
 
+import json
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 import asyncpg
@@ -32,6 +33,7 @@ class EpisodicMessage:
         message_id: UUID | None = None,
         prev_turn_id: UUID | None = None,
         timestamp: datetime | None = None,
+        generation_metadata: dict[str, Any] | None = None,
     ) -> None:
         """Initialize an episodic message.
 
@@ -43,6 +45,7 @@ class EpisodicMessage:
             message_id: Internal UUID (auto-generated if None)
             prev_turn_id: UUID of the previous turn in conversation chain
             timestamp: Message timestamp (defaults to now)
+            generation_metadata: LLM generation metadata (model, tokens, etc.)
         """
         self.content = content
         self.discord_message_id = discord_message_id
@@ -51,6 +54,7 @@ class EpisodicMessage:
         self.message_id = message_id
         self.prev_turn_id = prev_turn_id
         self.timestamp = timestamp or datetime.now(UTC)
+        self.generation_metadata = generation_metadata
 
 
 async def store_message(message: EpisodicMessage) -> UUID:
@@ -69,9 +73,9 @@ async def store_message(message: EpisodicMessage) -> UUID:
         row = await conn.fetchrow(
             """
             INSERT INTO raw_messages (
-                discord_message_id, channel_id, content, is_bot, prev_turn_id
+                discord_message_id, channel_id, content, is_bot, prev_turn_id, generation_metadata
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
             message.discord_message_id,
@@ -79,6 +83,7 @@ async def store_message(message: EpisodicMessage) -> UUID:
             message.content,
             message.is_bot,
             message.prev_turn_id,
+            json.dumps(message.generation_metadata) if message.generation_metadata else None,
         )
 
         message_id = cast("UUID", row["id"])

@@ -4,6 +4,7 @@ Phase 1: Basic connectivity, episodic logging, semantic recall, and prompt regis
 Phase 2: Invisible alignment (feedback, North Star goals).
 """
 
+import asyncio
 import os
 
 import discord
@@ -15,7 +16,7 @@ from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
-from lattice.utils.llm import get_llm_client
+from lattice.utils.llm import GenerationResult, get_llm_client
 
 
 logger = structlog.get_logger(__name__)
@@ -155,21 +156,48 @@ class LatticeBot(commands.Bot):
                 limit=10,
             )
 
-            response = await self._generate_response(
+            response_result = await self._generate_response(
                 user_message=message.content,
                 semantic_facts=semantic_facts,
                 recent_messages=recent_messages,
             )
 
-            bot_message = await message.channel.send(response)
+            response_messages = self._split_response(response_result.content)
+            bot_messages: list[discord.Message] = []
+            for msg in response_messages:
+                bot_msg = await message.channel.send(msg)
+                bot_messages.append(bot_msg)
 
-            await episodic.store_message(
-                episodic.EpisodicMessage(
-                    content=response,
-                    discord_message_id=bot_message.id,
-                    channel_id=bot_message.channel.id,
-                    is_bot=True,
-                    prev_turn_id=user_message_id,
+            generation_metadata = {
+                "model": response_result.model,
+                "provider": response_result.provider,
+                "temperature": response_result.temperature,
+                "prompt_tokens": response_result.prompt_tokens,
+                "completion_tokens": response_result.completion_tokens,
+                "total_tokens": response_result.total_tokens,
+                "cost_usd": response_result.cost_usd,
+                "latency_ms": response_result.latency_ms,
+            }
+
+            prev_turn_id = user_message_id
+            for bot_msg in bot_messages:
+                stored_id = await episodic.store_message(
+                    episodic.EpisodicMessage(
+                        content=bot_msg.content,
+                        discord_message_id=bot_msg.id,
+                        channel_id=bot_msg.channel.id,
+                        is_bot=True,
+                        prev_turn_id=prev_turn_id,
+                        generation_metadata=generation_metadata,
+                    )
+                )
+                prev_turn_id = stored_id
+
+            _consolidation_task = asyncio.create_task(  # noqa: RUF006
+                episodic.consolidate_message(
+                    message_id=user_message_id,
+                    _content=message.content,
+                    context=[msg.content for msg in recent_messages[-5:]],
                 )
             )
 
@@ -190,7 +218,7 @@ class LatticeBot(commands.Bot):
         user_message: str,
         semantic_facts: list[semantic.StableFact],
         recent_messages: list[episodic.EpisodicMessage],
-    ) -> str:
+    ) -> GenerationResult:
         """Generate a response using the prompt template.
 
         Args:
@@ -199,11 +227,21 @@ class LatticeBot(commands.Bot):
             recent_messages: Recent conversation history
 
         Returns:
-            Generated response text
+            GenerationResult with content and metadata
         """
         prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
         if not prompt_template:
-            return "I'm still initializing. Please try again in a moment."
+            return GenerationResult(
+                content="I'm still initializing. Please try again in a moment.",
+                model="unknown",
+                provider=None,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                cost_usd=None,
+                latency_ms=0,
+                temperature=0.0,
+            )
 
         episodic_context = "\n".join(
             [f"{'Bot' if msg.is_bot else 'User'}: {msg.content}" for msg in recent_messages[-5:]]
@@ -222,7 +260,7 @@ class LatticeBot(commands.Bot):
 
         return await self._simple_generate(filled_prompt, user_message)
 
-    async def _simple_generate(self, prompt: str, user_message: str) -> str:  # noqa: ARG002
+    async def _simple_generate(self, prompt: str, user_message: str) -> GenerationResult:  # noqa: ARG002
         """Generate response using LLM client.
 
         Args:
@@ -230,10 +268,44 @@ class LatticeBot(commands.Bot):
             user_message: The user's message
 
         Returns:
-            Generated response text
+            GenerationResult with content and metadata
         """
         client = get_llm_client()
         return await client.complete(prompt, temperature=0.7)
+
+    def _split_response(self, response: str, max_length: int = 1900) -> list[str]:
+        """Split a response at newlines to fit within Discord's 2000 char limit.
+
+        Args:
+            response: The full response to split
+            max_length: Maximum length per chunk (default 1900 for safety margin)
+
+        Returns:
+            List of response chunks split at newlines
+        """
+        if len(response) <= max_length:
+            return [response]
+
+        lines = response.split("\n")
+        chunks: list[str] = []
+        current_chunk: list[str] = []
+        current_length = 0
+
+        for line in lines:
+            line_length = len(line) + 1  # +1 for newline
+            if current_length + line_length <= max_length:
+                current_chunk.append(line)
+                current_length += line_length
+            else:
+                if current_chunk:
+                    chunks.append("\n".join(current_chunk))
+                current_chunk = [line]
+                current_length = line_length
+
+        if current_chunk:
+            chunks.append("\n".join(current_chunk))
+
+        return chunks
 
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
         """Handle reaction add events.
