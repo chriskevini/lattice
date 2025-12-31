@@ -9,19 +9,21 @@ repos:
     hooks:
       # Linter
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
         types_or: [python, pyi, jupyter]
       # Formatter
       - id: ruff-format
         types_or: [python, pyi, jupyter]
 
-  # Mypy - Static type checker
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+  # Mypy - Static type checker (use local installation)
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies:
-          - types-aiofiles
+        name: mypy
+        entry: .venv/bin/mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: [--config-file, pyproject.toml, lattice/]
 
   # Commitizen - Enforce conventional commits
   - repo: https://github.com/commitizen-tools/commitizen
@@ -81,7 +83,7 @@ repos:
     rev: v3.15.0
     hooks:
       - id: pyupgrade
-        args: [--py311-plus]
+        args: [--py312-plus]
 
   # Documentation checks
   - repo: https://github.com/pycqa/pydocstyle
@@ -93,7 +95,7 @@ repos:
 
 # Configure which files to check
 default_language_version:
-  python: python3.11
+  python: python3.12
 
 # Global file exclusions
 exclude: |

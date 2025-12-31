@@ -57,7 +57,7 @@ tests/
 
 ## Technical Stack
 
-- **Language**: Python 3.11+ (chosen for ML/AI ecosystem superiority)
+- **Language**: Python 3.12+ (chosen for ML/AI ecosystem superiority)
 - **Discord**: discord.py (async, lightweight)
 - **Database**: asyncpg + pgvector
 - **Embeddings**: sentence-transformers (all-MiniLM-L6-v2, 384-dim, ~80MB)

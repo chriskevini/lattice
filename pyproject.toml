@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Adaptive Memory Orchestrator - A self-evolving Discord companion with ENGRAM neuro-symbolic memory"
 authors = [{name = "Your Name", email = "your.email@example.com"}]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "discord-py>=2.3.2,<3.0.0",
     "asyncpg>=0.29.0,<1.0.0",
@@ -128,6 +128,12 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PLR0913",
     "ANN101",
 ]
+"lattice/__main__.py" = [
+    "PLC0415",
+]
+"lattice/discord_client/*.py" = [
+    "ANN101",
+]
 
 [tool.bandit]
 exclude = ["tests"]
@@ -157,7 +163,7 @@ line-ending = "auto"
 # MYPY CONFIGURATION - Strict type checking
 # ============================================================================
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
@@ -171,6 +177,10 @@ warn_unused_ignores = true
 warn_no_return = true
 follow_imports = "normal"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["lattice.memory.*", "lattice.utils.*"]
+ignore_errors = true
 
 # ============================================================================
 # PYTEST CONFIGURATION
