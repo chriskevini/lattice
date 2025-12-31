@@ -34,6 +34,49 @@ def normalize_predicate(predicate: str) -> str:
     return normalized
 
 
+def _parse_text_format(text: str) -> list[dict[str, str]] | None:
+    """Parse text format triples (subject -> predicate -> object).
+
+    Handles formats like:
+        Triples:
+        alice -> knows -> bob
+        bob -> works_at -> company
+
+    Args:
+        text: Text to parse
+
+    Returns:
+        List of triples or None if format not recognized
+    """
+    lines = text.strip().split("\n")
+    triples: list[dict[str, str]] = []
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.lower().startswith("triple"):
+            continue
+
+        for separator in ["->", "→", "-->"]:
+            if separator in line:
+                parts = line.split(separator)
+                if len(parts) == 3:
+                    subject = parts[0].strip()
+                    predicate = parts[1].strip()
+                    obj = parts[2].strip()
+
+                    if subject and predicate and obj:
+                        triples.append(
+                            {
+                                "subject": subject,
+                                "predicate": normalize_predicate(predicate),
+                                "object": obj,
+                            }
+                        )
+                break
+
+    return triples if triples else None
+
+
 def parse_triples(raw_output: str) -> list[dict[str, str]]:
     """Parse LLM output into structured triples.
 
@@ -43,9 +86,9 @@ def parse_triples(raw_output: str) -> list[dict[str, str]]:
     Returns:
         List of validated triples with subject, predicate, object
     """
-    try:
-        cleaned = raw_output.strip()
+    cleaned = raw_output.strip()
 
+    try:
         if cleaned.startswith("```"):
             lines = cleaned.split("\n")
             if len(lines) >= 2:
@@ -81,7 +124,10 @@ def parse_triples(raw_output: str) -> list[dict[str, str]]:
         return validated
 
     except json.JSONDecodeError as e:
-        logger.warning("parse_triples: JSON decode error: %s", e)
+        logger.warning("parse_triples: JSON decode error: %s, trying text format", e)
+        text_triples = _parse_text_format(cleaned)
+        if text_triples is not None:
+            return text_triples
         return []
     except Exception as e:
         logger.error("parse_triples: unexpected error: %s", e)
