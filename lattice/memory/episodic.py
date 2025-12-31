@@ -166,29 +166,38 @@ async def get_last_message_id(channel_id: int) -> UUID | None:
 async def consolidate_message(
     message_id: UUID,
     _content: str,
-    context: list[str],
+    context: list[str],  # noqa: ARG001 - kept for API compatibility
 ) -> None:
     """Extract semantic triples from a message asynchronously.
 
     Args:
         message_id: UUID of the stored message
-        content: Message content
-        context: Recent conversation context
+        _content: Message content to extract from
+        context: Recent conversation context (unused, kept for API compatibility)
     """
+    logger.info("Starting consolidation", message_id=str(message_id))
+
     triple_prompt = await get_prompt("TRIPLE_EXTRACTION")
     if not triple_prompt:
         logger.warning("TRIPLE_EXTRACTION prompt not found")
         return
 
-    filled_prompt = triple_prompt.template.format(CONTEXT="\n".join(context))
+    filled_prompt = triple_prompt.template.format(CONTEXT=_content)
+    logger.info("Calling LLM for triple extraction", message_id=str(message_id))
 
     llm_client = get_llm_client()
-    raw_triples = await llm_client.complete(
+    result = await llm_client.complete(
         filled_prompt,
         temperature=triple_prompt.temperature,
     )
 
-    triples = parse_triples(raw_triples)
+    logger.info(
+        "LLM response received", message_id=str(message_id), content_preview=result.content[:100]
+    )
+
+    triples = parse_triples(result.content)
+    logger.info("Parsed triples", count=len(triples) if triples else 0)
+
     if not triples:
         return
 
