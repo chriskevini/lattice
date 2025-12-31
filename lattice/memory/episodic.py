@@ -7,9 +7,12 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
+import asyncpg
 import structlog
 
 from lattice.utils.database import db_pool
+from lattice.utils.embeddings import embedding_model
+from lattice.utils.triple_parsing import parse_triples
 
 
 logger = structlog.get_logger(__name__)
@@ -151,3 +154,102 @@ async def get_last_message_id(channel_id: int) -> UUID | None:
         )
 
         return cast("UUID", row["id"]) if row else None
+
+
+async def consolidate_message(
+    message_id: UUID,
+    content: str,
+    context: list[str],
+) -> None:
+    """Extract semantic triples from a message asynchronously.
+
+    Args:
+        message_id: UUID of the stored message
+        content: Message content
+        context: Recent conversation context
+    """
+    from lattice.memory.procedural import get_prompt
+    from lattice.utils.triple_parsing import parse_triples
+
+    triple_prompt = await get_prompt("TRIPLE_EXTRACTION")
+    if not triple_prompt:
+        logger.warning("TRIPLE_EXTRACTION prompt not found")
+        return
+
+    filled_prompt = triple_prompt.template.format(CONTEXT="\n".join(context))
+
+    try:
+        from lattice.utils.llm import llm_client
+
+        raw_triples = await llm_client.complete(
+            filled_prompt,
+            temperature=triple_prompt.temperature,
+        )
+    except ImportError:
+        logger.warning("llm_client not available, skipping triple extraction")
+        return
+
+    triples = parse_triples(raw_triples)
+    if not triples:
+        return
+
+    async with db_pool.pool.acquire() as conn, conn.transaction():
+        for triple in triples:
+            subject_id = await _ensure_fact(triple["subject"], message_id, conn)
+            object_id = await _ensure_fact(triple["object"], message_id, conn)
+
+            await conn.execute(
+                """
+                    INSERT INTO semantic_triples (subject_id, predicate, object_id, origin_id)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT DO NOTHING
+                    """,
+                subject_id,
+                triple["predicate"],
+                object_id,
+                message_id,
+            )
+
+
+async def _ensure_fact(
+    content: str,
+    origin_id: UUID,
+    conn: asyncpg.Connection,
+) -> UUID:
+    """Ensure fact exists, return its ID.
+
+    Args:
+        content: Fact content
+        origin_id: Origin message ID
+        conn: Database connection
+
+    Returns:
+        UUID of existing or new fact
+    """
+    normalized = content.lower().strip()
+
+    existing = await conn.fetchval(
+        """
+        SELECT id FROM stable_facts WHERE content = $1
+        """,
+        normalized,
+    )
+
+    if existing:
+        return cast("UUID", existing)
+
+    embedding = await embedding_model.encode_single(normalized)
+
+    row = await conn.fetchrow(
+        """
+        INSERT INTO stable_facts (content, embedding, origin_id, entity_type)
+        VALUES ($1, $2::vector, $3, 'inferred')
+        RETURNING id
+        """,
+        normalized,
+        embedding,
+        origin_id,
+    )
+
+    logger.info("Created new fact from triple", content_preview=normalized[:50])
+    return cast("UUID", row["id"])
