@@ -12,6 +12,11 @@ from lattice.memory.episodic import (
     get_recent_messages,
     store_message,
 )
+from lattice.memory.feedback_detection import (
+    extract_goal_from_content,
+    is_invisible_feedback,
+    is_north_star,
+)
 from lattice.memory.procedural import PromptTemplate, get_prompt, store_prompt
 from lattice.memory.semantic import StableFact, search_similar_facts, store_fact
 
@@ -347,3 +352,203 @@ class TestProceduralMemoryFunctions:
             await store_prompt(prompt)
 
             mock_conn.execute.assert_called_once()
+
+
+class MockMessage:
+    """Mock Discord message for testing detection functions."""
+
+    def __init__(
+        self,
+        content: str = "",
+        author_bot: bool = False,
+        author_name: str = "testuser",
+        is_reply: bool = False,
+    ) -> None:
+        self.content = content
+        self.author = MockUser(bot=author_bot, name=author_name)
+        self.reference = MockReference() if is_reply else None
+
+
+class MockUser:
+    """Mock Discord user."""
+
+    def __init__(self, bot: bool = False, name: str = "testuser") -> None:
+        self.bot = bot
+        self.name = name
+
+
+class MockReference:
+    """Mock Discord message reference."""
+
+    pass
+
+
+class TestFeedbackDetectionFunctions:
+    """Tests for feedback detection functions."""
+
+    def test_is_north_star_with_north_star_pattern(self) -> None:
+        """Test detection of North Star with 'north star' pattern."""
+        message = MockMessage(content="North Star: I want to learn Rust")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is True
+        assert result.content == "I want to learn Rust"
+        assert result.confidence > 0.7
+
+    def test_is_north_star_with_goal_pattern(self) -> None:
+        """Test detection of North Star with 'goal' pattern."""
+        message = MockMessage(content="My goal is to build a web app")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is True
+        assert result.content == "build a web app"
+        assert result.confidence > 0.7
+
+    def test_is_north_star_with_trying_pattern(self) -> None:
+        """Test detection of North Star with 'trying' pattern."""
+        message = MockMessage(content="I'm trying to lose weight")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is True
+        assert result.content == "lose weight"
+        assert result.confidence > 0.7
+
+    def test_is_north_star_with_focused_pattern(self) -> None:
+        """Test detection of North Star with 'focused' pattern."""
+        message = MockMessage(content="I'm focused on improving my coding skills")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is True
+        assert result.content == "improving my coding skills"
+        assert result.confidence > 0.7
+
+    def test_is_north_star_with_building_pattern(self) -> None:
+        """Test detection of North Star with 'building' pattern."""
+        message = MockMessage(content="I'm building a startup")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is True
+        assert result.content == "a startup"
+        assert result.confidence > 0.7
+
+    def test_is_north_star_with_learning_pattern(self) -> None:
+        """Test detection of North Star with 'learning' pattern."""
+        message = MockMessage(content="I'm learning Japanese")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is True
+        assert result.content == "Japanese"
+        assert result.confidence > 0.7
+
+    def test_is_north_star_with_want_pattern(self) -> None:
+        """Test detection of North Star with 'want' pattern."""
+        message = MockMessage(content="I want to travel the world")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is True
+        assert result.content == "to travel the world"
+        assert result.confidence > 0.7
+
+    def test_is_north_star_bot_message(self) -> None:
+        """Test that bot messages are not detected as North Star."""
+        message = MockMessage(content="North Star: test", author_bot=True)
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is False
+        assert result.content is None
+
+    def test_is_north_star_regular_message(self) -> None:
+        """Test that regular messages are not detected as North Star."""
+        message = MockMessage(content="Hello, how are you?")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is False
+
+    def test_is_north_star_too_short(self) -> None:
+        """Test that too short messages are not detected as North Star."""
+        message = MockMessage(content="Hi")
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is False
+
+    def test_is_north_star_too_long(self) -> None:
+        """Test that too long messages are not detected as North Star."""
+        long_content = "a" * 600
+        message = MockMessage(content=long_content)
+        result = feedback_detection.is_north_star(message)
+
+        assert result.detected is False
+
+    def test_is_invisible_feedback_with_reply(self) -> None:
+        """Test detection of invisible feedback via reply."""
+        message = MockMessage(content="Actually, that's wrong", is_reply=True)
+        result = feedback_detection.is_invisible_feedback(message)
+
+        assert result.detected is True
+        assert "wrong" in result.content.lower() or result.confidence > 0.5
+
+    def test_is_invisible_feedback_with_quote(self) -> None:
+        """Test detection of invisible feedback via quote."""
+        message = MockMessage(content="> previous message\nCorrection: I meant X")
+        result = feedback_detection.is_invisible_feedback(message)
+
+        assert result.detected is True
+        assert result.confidence > 0.6
+
+    def test_is_invisible_feedback_with_feedback_indicator(self) -> None:
+        """Test detection with feedback indicator pattern."""
+        message = MockMessage(content="Feedback: The response was too long")
+        result = feedback_detection.is_invisible_feedback(message)
+
+        assert result.detected is True
+        assert result.confidence > 0.6
+
+    def test_is_invisible_feedback_with_correction_indicator(self) -> None:
+        """Test detection with correction indicator pattern."""
+        message = MockMessage(content="Correction: I made a mistake")
+        result = feedback_detection.is_invisible_feedback(message)
+
+        assert result.detected is True
+        assert result.confidence > 0.6
+
+    def test_is_invisible_feedback_with_fyi_indicator(self) -> None:
+        """Test detection with FYI indicator pattern."""
+        message = MockMessage(content="FYI: The meeting is at 3pm")
+        result = feedback_detection.is_invisible_feedback(message)
+
+        assert result.detected is True
+
+    def test_is_invisible_feedback_bot_message(self) -> None:
+        """Test that bot messages are not detected as invisible feedback."""
+        message = MockMessage(content="Feedback: test", author_bot=True)
+        result = feedback_detection.is_invisible_feedback(message)
+
+        assert result.detected is False
+
+    def test_is_invisible_feedback_regular_message(self) -> None:
+        """Test that regular messages without quote/reply are not detected."""
+        message = MockMessage(content="Hello, how are you?")
+        result = feedback_detection.is_invisible_feedback(message)
+
+        assert result.detected is False
+
+    def test_extract_goal_from_content_north_star(self) -> None:
+        """Test extracting goal from North Star pattern."""
+        content = "North Star: I want to learn Python"
+        result = feedback_detection.extract_goal_from_content(content)
+
+        assert result == "I want to learn Python"
+
+    def test_extract_goal_from_content_goal(self) -> None:
+        """Test extracting goal from goal pattern."""
+        content = "My goal is to finish this project"
+        result = feedback_detection.extract_goal_from_content(content)
+
+        assert result == "finish this project"
+
+    def test_extract_goal_from_content_no_match(self) -> None:
+        """Test that non-goal content returns None."""
+        content = "Hello, how are you?"
+        result = feedback_detection.extract_goal_from_content(content)
+
+        assert result is None
