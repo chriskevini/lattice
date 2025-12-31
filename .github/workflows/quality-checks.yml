@@ -1,5 +1,4 @@
 name: Quality Checks
-# CI workflow for linting and type checking
 
 on:
   push:
@@ -17,6 +16,7 @@ jobs:
           enable-cache: true
       - run: uv sync --extra dev
       - run: .venv/bin/ruff check .
+      - run: .venv/bin/ruff format --check .
 
   type-check:
     runs-on: ubuntu-latest
