@@ -149,21 +149,3 @@ async def handle_north_star(
         return False
     else:
         return True
-
-
-def create_short_circuit_result(
-    should_exit: bool, exit_reason: str | None = None
-) -> dict[str, Any]:
-    """Create a short-circuit result dictionary.
-
-    Args:
-        should_exit: Whether the pipeline should exit
-        exit_reason: Optional reason for exiting
-
-    Returns:
-        Dictionary with short-circuit decision
-    """
-    return {
-        "should_exit": should_exit,
-        "exit_reason": exit_reason,
-    }
