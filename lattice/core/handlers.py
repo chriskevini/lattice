@@ -90,9 +90,6 @@ async def handle_feedback_undo(
         deleted = await user_feedback.delete_feedback(feedback.feedback_id)
         if deleted:
             with suppress(Exception):
-                await user_message.remove_reaction(WASTEBASKET_EMOJI, user_message.author)
-
-            with suppress(Exception):
                 await user_message.remove_reaction(SALUTE_EMOJI, user_message.guild.me)
 
             logger.info(
