@@ -268,16 +268,14 @@ Extract Subject-Predicate-Object triples that represent factual relationships.
 
 ## Output Format
 Return ONLY a JSON array. No markdown formatting.
-[
-  {"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}
-]
+[{{"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}}]
 If no valid triples: []
 
 Example:
 User: "My cat Mittens loves chasing laser pointers"
 Output: [
-    {"subject": "Mittens", "predicate": "owns", "object": "User"},
-    {"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}
+    {{"subject": "Mittens", "predicate": "owns", "object": "User"}},
+    {{"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}}
 ]
 
 Begin extraction:"""
@@ -322,18 +320,72 @@ Begin extraction:"""
             "\n"
             "## Output Format\n"
             "Return ONLY a JSON array. No markdown formatting.\n"
-            '[{"description": "What the user wants to achieve", "saliency": 0.7, '
-            '"status": "pending"}]\n'
+            '[{{"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}}]\n'
+            "If no valid triples: []\n"
+            "\n"
+            "Example:\n"
+            'User: "My cat Mittens loves chasing laser pointers"\n'
+            "Output: [\n"
+            '    {{"subject": "Mittens", "predicate": "owns", "object": "User"}},\n'
+            '    {{"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}}\n'
+            "]\n"
+            "\n"
+            "Begin extraction:"
+            ""
+        )
+
+        existing = await conn.fetchval(
+            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
+            "TRIPLE_EXTRACTION",
+        )
+
+        if existing:
+            print("TRIPLE_EXTRACTION prompt already exists, skipping insert")
+        else:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO prompt_registry (prompt_key, template, temperature)
+                    VALUES ($1, $2, 0.1)
+                    """,
+                    "TRIPLE_EXTRACTION",
+                    triple_template,
+                )
+                print("TRIPLE_EXTRACTION prompt inserted")
+
+        print("Inserting OBJECTIVE_EXTRACTION prompt template...")
+        objective_template = (
+            "You are analyzing a conversation to extract user goals and intentions.\n"
+            "\n"
+            "## Input\n"
+            "Recent conversation context:\n"
+            "{CONTEXT}\n"
+            "\n"
+            "## Task\n"
+            "Extract user goals, objectives, or intentions that represent what the user\n"
+            "wants to achieve.\n"
+            "\n"
+            "## Rules\n"
+            "- Only extract goals that are explicitly stated or strongly implied\n"
+            "- Be specific about what the user wants to accomplish\n"
+            "- Saliency 0.0-1.0 based on explicitness and importance\n"
+            "- MAX 3 objectives per turn\n"
+            "- Skip if no clear goals are expressed\n"
+            "\n"
+            "## Output Format\n"
+            "Return ONLY a JSON array. No markdown formatting.\n"
+            '[{{"description": "What the user wants to achieve", "saliency": 0.7, '
+            '"status": "pending"}}]\n'
             "If no valid objectives: []\n"
             "\n"
             "Example:\n"
             'User: "I want to build a successful startup this year"\n'
-            'Output: [{"description": "Build a successful startup", '
-            '"saliency": 0.9, "status": "pending"}]\n'
+            'Output: [{{"description": "Build a successful startup", '
+            '"saliency": 0.9, "status": "pending"}}]\n'
             "\n"
             'User: "Just launched my MVP!"\n'
-            'Output: [{"description": "Build a successful startup", '
-            '"saliency": 0.9, "status": "completed"}]\n'
+            'Output: [{{"description": "Build a successful startup", '
+            '"saliency": 0.9, "status": "completed"}}]\n'
             "\n"
             "Begin extraction:"
         )
