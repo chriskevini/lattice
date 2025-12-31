@@ -92,12 +92,32 @@ async def init_database() -> None:
             """
             CREATE TABLE IF NOT EXISTS semantic_triples (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                subject_id UUID REFERENCES stable_facts(id),
+                subject_id UUID REFERENCES stable_facts(id) ON DELETE CASCADE,
                 predicate TEXT NOT NULL,
-                object_id UUID REFERENCES stable_facts(id),
+                object_id UUID REFERENCES stable_facts(id) ON DELETE CASCADE,
                 origin_id UUID REFERENCES raw_messages(id),
                 created_at TIMESTAMPTZ DEFAULT now()
             );
+        """
+        )
+
+        print("Creating semantic_triples indexes...")
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_triples_subject
+            ON semantic_triples(subject_id);
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_triples_object
+            ON semantic_triples(object_id);
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_triples_predicate
+            ON semantic_triples(predicate);
         """
         )
 
@@ -228,6 +248,58 @@ Respond naturally and helpfully, referring to relevant context when appropriate.
                     template_text,
                 )
                 print(f"Prompt template result: {result}")
+
+        print("Inserting TRIPLE_EXTRACTION prompt template...")
+        triple_template = """You are analyzing a conversation to extract explicit relationships.
+
+## Input
+Recent conversation context:
+{CONTEXT}
+
+## Task
+Extract Subject-Predicate-Object triples that represent factual relationships.
+
+## Rules
+- Only extract relationships explicitly stated or strongly implied
+- Use canonical entity names (e.g., "Alice" not "she")
+- Predicates: lowercase, present tense
+- MAX 5 triples per turn
+- Skip if entities not clearly identified
+
+## Output Format
+Return ONLY a JSON array. No markdown formatting.
+[
+  {"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}
+]
+If no valid triples: []
+
+Example:
+User: "My cat Mittens loves chasing laser pointers"
+Output: [
+    {"subject": "Mittens", "predicate": "owns", "object": "User"},
+    {"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}
+]
+
+Begin extraction:"""
+
+        existing = await conn.fetchval(
+            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
+            "TRIPLE_EXTRACTION",
+        )
+
+        if existing:
+            print("TRIPLE_EXTRACTION prompt already exists, skipping insert")
+        else:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO prompt_registry (prompt_key, template, temperature)
+                    VALUES ($1, $2, 0.1)
+                    """,
+                    "TRIPLE_EXTRACTION",
+                    triple_template,
+                )
+                print("TRIPLE_EXTRACTION prompt inserted")
 
         print("Database initialization complete!")
         print(
