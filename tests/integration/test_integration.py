@@ -23,7 +23,7 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     loop.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_db_pool() -> AsyncMock:
     """Create a mock database pool."""
     pool = AsyncMock()
@@ -31,7 +31,7 @@ def mock_db_pool() -> AsyncMock:
     return pool
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_embedding_model() -> MagicMock:
     """Create a mock embedding model."""
     model = MagicMock()
