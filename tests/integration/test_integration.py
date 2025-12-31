@@ -26,7 +26,7 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     loop.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_db_pool() -> AsyncMock:
     """Create a mock database pool."""
     pool = AsyncMock()
@@ -34,7 +34,7 @@ def mock_db_pool() -> AsyncMock:
     return pool
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_embedding_model() -> MagicMock:
     """Create a mock embedding model."""
     model = MagicMock()
@@ -46,13 +46,13 @@ def mock_embedding_model() -> MagicMock:
 class TestBotIntegration:
     """Integration tests for the Lattice bot."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_bot_initialization(self) -> None:
         """Test that the bot can be initialized."""
         bot = LatticeBot()
         assert bot is not None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_episodic_memory_operations(self) -> None:
         """Test episodic memory CRUD operations."""
         mock_message = EpisodicMessage(
@@ -71,7 +71,7 @@ class TestBotIntegration:
             result = await store_message(mock_message)
             assert result is not None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_semantic_memory_operations(self) -> None:
         """Test semantic memory search operations."""
         with (
@@ -89,7 +89,7 @@ class TestBotIntegration:
             )
             assert isinstance(results, list)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_procedural_memory_operations(self) -> None:
         """Test procedural memory retrieval operations."""
         with patch("lattice.memory.procedural.db_pool") as mock_pool:
@@ -113,7 +113,7 @@ class TestBotIntegration:
 class TestDatabaseIntegration:
     """Integration tests for database operations."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_database_pool_initialization(self) -> None:
         """Test database pool can be initialized."""
 
@@ -142,7 +142,7 @@ class TestEmbeddingIntegration:
 class TestFullPipelineIntegration:
     """Integration tests for the full memory pipeline."""
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_store_and_retrieve_fact(self) -> None:
         """Test storing and retrieving a semantic fact."""
         fact = StableFact(
@@ -162,7 +162,7 @@ class TestFullPipelineIntegration:
             fact_id = await store_fact(fact)
             assert fact_id is not None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_temporal_chaining_messages(self) -> None:
         """Test that messages are chained temporally."""
         msg1 = EpisodicMessage(
@@ -196,7 +196,7 @@ class TestFullPipelineIntegration:
             msg2_id = await store_message(msg2)
             assert msg2_id is not None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_prompt_template_crud(self) -> None:
         """Test creating and retrieving a prompt template."""
         template = PromptTemplate(
