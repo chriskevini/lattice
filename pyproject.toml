@@ -99,8 +99,6 @@ select = [
 ]
 
 ignore = [
-    "ANN101",
-    "ANN102",
     "COM812",
     "ISC001",
 ]
