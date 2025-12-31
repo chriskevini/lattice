@@ -8,13 +8,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml uv.lock* ./
 
-# Install poetry globally, then install dependencies to /opt/venv
-RUN pip install --no-cache-dir poetry && \
+# Install UV, sync dependencies to /opt/venv
+RUN pip install --no-cache-dir uv && \
     python -m venv /opt/venv && \
-    . /opt/venv/bin/activate && \
-    poetry install --no-interaction --no-ansi --no-root --only main
+    /opt/venv/bin/pip install --no-cache-dir uv && \
+    uv sync --no-dev --no-install-project
 
 ENV PATH="/opt/venv/bin:$PATH"
 
