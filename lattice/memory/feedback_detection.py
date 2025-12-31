@@ -29,13 +29,6 @@ NORTH_STAR_PATTERNS = [
     re.compile(r"(?i)^i(?:'m| am) looking (?:to |for )(.+)$"),
 ]
 
-FEEDBACK_INDICATOR_PATTERNS = [
-    re.compile(r"(?i)^(?:feedback|note|actually)[:,\s]+(.+)$"),
-    re.compile(r"(?i)^(?:correction|update)[:,\s]+(.+)$"),
-    re.compile(r"(?i)^(?:just )?(?:so you know|FYI)[:,\s]+(.+)$"),
-    re.compile(r"(?i)^(?:small |quick )?correction[:,\s]*(.+)$"),
-]
-
 
 @dataclass
 class DetectionResult:
@@ -44,6 +37,33 @@ class DetectionResult:
     detected: bool
     content: str | None = None
     confidence: float = 0.0
+
+
+def is_quote_or_reply(message: Any) -> bool:
+    """Check if a message is a quote or reply to another message.
+
+    Args:
+        message: The Discord message to check
+
+    Returns:
+        True if message is a quote or reply
+    """
+    return getattr(message, "reference", None) is not None
+
+
+def get_referenced_message_id(message: Any) -> int | None:
+    """Get the ID of the message being quoted/replied to.
+
+    Args:
+        message: The Discord message to check
+
+    Returns:
+        The message ID being referenced, or None
+    """
+    reference = getattr(message, "reference", None)
+    if reference is None:
+        return None
+    return getattr(reference, "message_id", None)
 
 
 def is_invisible_feedback(message: Any) -> DetectionResult:
@@ -58,39 +78,20 @@ def is_invisible_feedback(message: Any) -> DetectionResult:
     if getattr(message, "author", None) and getattr(message.author, "bot", False):
         return DetectionResult(detected=False)
 
+    if not is_quote_or_reply(message):
+        return DetectionResult(detected=False)
+
     content = getattr(message, "content", "")
     if not isinstance(content, str):
         content = ""
 
-    indicator_matches = [pattern.search(content) for pattern in FEEDBACK_INDICATOR_PATTERNS]
-    valid_matches = [m for m in indicator_matches if m]
+    logger.info(
+        "Detected invisible feedback",
+        author=getattr(getattr(message, "author", None), "name", "unknown"),
+        referenced_message=get_referenced_message_id(message),
+    )
 
-    is_reply = getattr(message, "reference", None) is not None
-    has_quote = content.startswith(">")
-
-    confidence = 0.5
-    if is_reply:
-        confidence += 0.3
-    if has_quote:
-        confidence += 0.2
-    if valid_matches:
-        confidence += 0.2
-        extracted_content = valid_matches[0].group(1)
-    else:
-        extracted_content = content
-
-    if confidence > 0.5:
-        author_name = getattr(getattr(message, "author", None), "name", "unknown")
-        logger.info(
-            "Detected invisible feedback",
-            author=author_name,
-            is_reply=is_reply,
-            has_quote=has_quote,
-            confidence=confidence,
-        )
-        return DetectionResult(detected=True, content=extracted_content, confidence=confidence)
-
-    return DetectionResult(detected=False)
+    return DetectionResult(detected=True, content=content, confidence=1.0)
 
 
 def is_north_star(message: Any) -> DetectionResult:
