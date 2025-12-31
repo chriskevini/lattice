@@ -45,40 +45,40 @@ docker-clean: ## Remove all containers, volumes, and images
 # ============================================================================
 
 install: ## Install dependencies and setup pre-commit hooks
-	poetry install
-	poetry run pre-commit install
-	poetry run pre-commit install --hook-type commit-msg
+	uv sync
+	uv run pre-commit install
+	uv run pre-commit install --hook-type commit-msg
 
 # ============================================================================
 # Testing & Quality
 # ============================================================================
 
 test: ## Run all tests with coverage
-	poetry run pytest --cov --cov-report=term-missing
+	uv run pytest --cov --cov-report=term-missing
 
 test-fast: ## Run tests without coverage (faster)
-	poetry run pytest -x
+	uv run pytest -x
 
 lint: ## Run linting checks
-	poetry run ruff check .
+	uv run ruff check .
 
 lint-fix: ## Run linting checks and auto-fix issues
-	poetry run ruff check --fix .
+	uv run ruff check --fix .
 
 format: ## Format code with ruff
-	poetry run ruff format .
+	uv run ruff format .
 
 format-check: ## Check if code is formatted correctly
-	poetry run ruff format --check .
+	uv run ruff format --check .
 
 type-check: ## Run type checking with mypy
-	poetry run mypy lattice
+	uv run mypy lattice
 
 security: ## Run security checks with bandit
-	poetry run bandit -r lattice
+	uv run bandit -r lattice
 
 pre-commit: ## Run all pre-commit hooks on all files
-	poetry run pre-commit run --all-files
+	uv run pre-commit run --all-files
 
 check-all: lint type-check security test ## Run all quality checks
 
@@ -87,7 +87,7 @@ check-all: lint type-check security test ## Run all quality checks
 # ============================================================================
 
 run: ## Run the Discord bot (local development)
-	poetry run python -m lattice
+	uv run python -m lattice
 
 clean: ## Clean up cache and build files
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -95,6 +95,7 @@ clean: ## Clean up cache and build files
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".uv" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf dist/ build/ htmlcov/ .coverage
 
 # ============================================================================
@@ -102,18 +103,18 @@ clean: ## Clean up cache and build files
 # ============================================================================
 
 commit: ## Interactive conventional commit helper
-	poetry run cz commit
+	uv run cz commit
 
 bump-version: ## Bump version using commitizen
-	poetry run cz bump
+	uv run cz bump
 
 # ============================================================================
 # Database Management
 # ============================================================================
 
 init-db: ## Initialize database schema
-	poetry run python scripts/init_db.py
+	uv run python scripts/init_db.py
 
 update: ## Update dependencies
-	poetry update
-	poetry run pre-commit autoupdate
+	uv update
+	uv run pre-commit autoupdate

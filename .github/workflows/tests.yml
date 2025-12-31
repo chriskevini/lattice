@@ -11,20 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.11"
-          cache: "pip"
-      - run: pip install poetry && poetry install --only main
-      - run: poetry run ruff check .
+          enable-cache: true
+      - run: uv sync --only main
+      - run: .venv/bin/ruff check .
 
   type-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.11"
-          cache: "pip"
-      - run: pip install poetry && poetry install --only main
-      - run: poetry run mypy lattice
+          enable-cache: true
+      - run: uv sync --only main
+      - run: .venv/bin/mypy lattice
