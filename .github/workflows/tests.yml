@@ -14,7 +14,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-      - run: uv sync --only main
+      - run: uv sync --no-dev
       - run: .venv/bin/ruff check .
 
   type-check:
@@ -24,5 +24,5 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-      - run: uv sync --only main
+      - run: uv sync --no-dev
       - run: .venv/bin/mypy lattice
