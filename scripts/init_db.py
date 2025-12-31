@@ -338,6 +338,11 @@ Begin extraction:"""
             "Begin extraction:"
         )
 
+        existing = await conn.fetchval(
+            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
+            "OBJECTIVE_EXTRACTION",
+        )
+
         if existing:
             print("OBJECTIVE_EXTRACTION prompt already exists, skipping insert")
         else:
