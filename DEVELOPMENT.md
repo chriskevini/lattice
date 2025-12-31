@@ -41,25 +41,22 @@ make docker-clean       # Remove all containers and volumes
 
 ### Prerequisites
 - Python 3.11+
-- Poetry (recommended) or pip
+- [UV](https://docs.astral.sh/uv/) (modern Python package manager)
 - PostgreSQL 16+ with pgvector extension (or use Docker)
 - Docker & Docker Compose (for containerized development)
 
 ### Installation
 
 ```bash
-# Install Poetry (if not already installed)
-curl -sSL https://install.python-poetry.org | python3 -
+# Install UV (if not already installed)
+pip install uv
 
-# Install dependencies
-poetry install
-
-# Or with pip
-pip install -e ".[dev]"
+# Install dependencies and dev tools
+uv sync --extra dev
 
 # Install pre-commit hooks
-poetry run pre-commit install
-poetry run pre-commit install --hook-type commit-msg
+uv run pre-commit install
+uv run pre-commit install --hook-type commit-msg
 ```
 
 ## Code Quality Standards
@@ -72,13 +69,13 @@ Ruff is an ultra-fast Python linter and formatter that replaces multiple tools (
 
 ```bash
 # Check code
-poetry run ruff check .
+uv run ruff check .
 
 # Auto-fix issues
-poetry run ruff check --fix .
+uv run ruff check --fix .
 
 # Format code
-poetry run ruff format .
+uv run ruff format .
 ```
 
 ### Type Checking (mypy)
@@ -86,7 +83,7 @@ poetry run ruff format .
 Strict type checking is enforced:
 
 ```bash
-poetry run mypy lattice
+uv run mypy lattice
 ```
 
 ### Security Checks (Bandit)
@@ -94,23 +91,23 @@ poetry run mypy lattice
 Automated security vulnerability scanning:
 
 ```bash
-poetry run bandit -r lattice
+uv run bandit -r lattice
 ```
 
 ### Testing (pytest)
 
 ```bash
 # Run all tests
-poetry run pytest
+uv run pytest
 
 # With coverage report
-poetry run pytest --cov
+uv run pytest --cov
 
 # Run specific test file
-poetry run pytest tests/unit/test_memory.py
+uv run pytest tests/unit/test_memory.py
 
 # Run with verbose output
-poetry run pytest -v
+uv run pytest -v
 ```
 
 ## Git Workflow
@@ -142,7 +139,7 @@ git commit -m "docs: update setup instructions"
 
 **Interactive commit helper:**
 ```bash
-poetry run cz commit
+uv run cz commit
 ```
 
 ### Pre-commit Hooks
@@ -156,7 +153,7 @@ Hooks automatically run on `git commit`:
 
 **Run manually on all files:**
 ```bash
-poetry run pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 **Skip hooks (not recommended):**
@@ -191,14 +188,14 @@ scripts/            # Deployment and utility scripts
 2. **Write code with type hints:**
    ```python
    from typing import List
-   
+
    def process_message(content: str, user_id: int) -> List[str]:
        """Process a Discord message.
-       
+
        Args:
            content: The message content
            user_id: The Discord user ID
-           
+
        Returns:
            List of extracted facts
        """
@@ -206,11 +203,11 @@ scripts/            # Deployment and utility scripts
    ```
 
 3. **Test locally:**
-   ```bash
-   poetry run pytest
-   poetry run mypy lattice
-   poetry run ruff check .
-   ```
+    ```bash
+    uv run pytest
+    uv run mypy lattice
+    uv run ruff check .
+    ```
 
 4. **Commit with conventional commits:**
    ```bash
@@ -266,11 +263,11 @@ LOG_LEVEL=INFO
 ### Pre-commit hooks failing
 ```bash
 # Update hooks to latest versions
-poetry run pre-commit autoupdate
+uv run pre-commit autoupdate
 
 # Clear cache and retry
-poetry run pre-commit clean
-poetry run pre-commit run --all-files
+uv run pre-commit clean
+uv run pre-commit run --all-files
 ```
 
 ### Type checking errors
@@ -285,10 +282,7 @@ my_variable = some_function()  # type: ignore[arg-type]
 ### Import errors
 ```bash
 # Ensure proper installation
-poetry install
-
-# Check PYTHONPATH
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+uv sync
 ```
 
 ### High Memory Usage
@@ -313,7 +307,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 ```bash
 make type-check  # Run mypy
 # Fix or add type: ignore comments judiciously
-# Update stubs if needed: poetry add types-xxx
+# Update stubs if needed: uv add types-xxx
 ```
 
 ## Discord-Specific Patterns
@@ -360,7 +354,7 @@ Test full pipeline with test database:
 async def test_full_ingestion_pipeline(test_db):
     message = create_test_message("I love Python")
     await ingest_message(message)
-    
+
     facts = await query_facts_by_embedding("Python programming")
     assert len(facts) > 0
 ```
@@ -400,9 +394,9 @@ WITH RECURSIVE conversation_chain AS (
     SELECT id, content, is_bot, prev_turn_id, timestamp, 0 as depth
     FROM raw_messages
     WHERE id = $1  -- Current message
-    
+
     UNION ALL
-    
+
     SELECT rm.id, rm.content, rm.is_bot, rm.prev_turn_id, rm.timestamp, cc.depth + 1
     FROM raw_messages rm
     INNER JOIN conversation_chain cc ON rm.id = cc.prev_turn_id
@@ -434,7 +428,7 @@ Type=simple
 User=lattice
 WorkingDirectory=/home/lattice/app
 Environment="PATH=/home/lattice/.local/bin:/usr/bin"
-ExecStart=/home/lattice/.local/bin/poetry run python -m lattice
+ExecStart=/home/lattice/.local/bin/uv run python -m lattice
 Restart=always
 RestartSec=10
 

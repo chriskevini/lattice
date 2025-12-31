@@ -62,6 +62,7 @@ tests/
 - **Database**: asyncpg + pgvector
 - **Embeddings**: sentence-transformers (all-MiniLM-L6-v2, 384-dim, ~80MB)
 - **Type Safety**: mypy strict mode
+- **Package Manager**: UV (10-100x faster than Poetry)
 - **Linting**: Ruff (replaces flake8, black, isort, pyupgrade)
 - **Testing**: pytest with async support
 
@@ -212,11 +213,11 @@ async def should_short_circuit(message: Message) -> bool:
     if is_north_star(message):
         await handle_north_star(message)
         return True
-    
+
     if is_invisible_feedback(message):
         await handle_feedback(message)
         return True
-    
+
     return False
 ```
 

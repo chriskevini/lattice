@@ -7,17 +7,15 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
 # Copy dependency files
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml uv.lock* ./
 
-# Install poetry and dependencies
-RUN pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi --no-root --only main
+# Install UV, sync dependencies and install project
+RUN pip install --no-cache-dir uv && \
+    python -m venv /opt/venv && \
+    uv sync --no-dev
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Production stage
 FROM python:3.11-slim
