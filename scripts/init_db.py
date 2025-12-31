@@ -301,6 +301,57 @@ Begin extraction:"""
                 )
                 print("TRIPLE_EXTRACTION prompt inserted")
 
+        print("Inserting OBJECTIVE_EXTRACTION prompt template...")
+        objective_template = (
+            "You are analyzing a conversation to extract user goals and intentions.\n"
+            "\n"
+            "## Input\n"
+            "Recent conversation context:\n"
+            "{CONTEXT}\n"
+            "\n"
+            "## Task\n"
+            "Extract user goals, objectives, or intentions that represent what the user\n"
+            "wants to achieve.\n"
+            "\n"
+            "## Rules\n"
+            "- Only extract goals that are explicitly stated or strongly implied\n"
+            "- Be specific about what the user wants to accomplish\n"
+            "- Saliency 0.0-1.0 based on explicitness and importance\n"
+            "- MAX 3 objectives per turn\n"
+            "- Skip if no clear goals are expressed\n"
+            "\n"
+            "## Output Format\n"
+            "Return ONLY a JSON array. No markdown formatting.\n"
+            '[{"description": "What the user wants to achieve", "saliency": 0.7, '
+            '"status": "pending"}]\n'
+            "If no valid objectives: []\n"
+            "\n"
+            "Example:\n"
+            'User: "I want to build a successful startup this year"\n'
+            'Output: [{"description": "Build a successful startup", '
+            '"saliency": 0.9, "status": "pending"}]\n'
+            "\n"
+            'User: "Just launched my MVP!"\n'
+            'Output: [{"description": "Build a successful startup", '
+            '"saliency": 0.9, "status": "completed"}]\n'
+            "\n"
+            "Begin extraction:"
+        )
+
+        if existing:
+            print("OBJECTIVE_EXTRACTION prompt already exists, skipping insert")
+        else:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO prompt_registry (prompt_key, template, temperature)
+                    VALUES ($1, $2, 0.1)
+                    """,
+                    "OBJECTIVE_EXTRACTION",
+                    objective_template,
+                )
+                print("OBJECTIVE_EXTRACTION prompt inserted")
+
         print("Database initialization complete!")
         print(
             "Tables created: prompt_registry, raw_messages, stable_facts, "
