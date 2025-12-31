@@ -20,19 +20,20 @@ NORTH_STAR_PATTERNS = [
     re.compile(r"(?i)^i(?:'m| am) (?:trying|aiming|working) (?:to |for )(.+)$"),
     re.compile(r"(?i)^i(?:'m| am) (?:focused|dedicated|committed) (?:on |to )(.+)$"),
     re.compile(r"(?i)^my (?:main |primary |)focus (?:is |on |)[:\s]+(.+)$"),
-    re.compile(r"(?i)^i(?:'m| am) building|making|creating (.+)$"),
+    re.compile(r"(?i)^my goal (?:is |)[:\s]*(.+)$"),
+    re.compile(r"(?i)^i(?:'m| am) (?:building|making|creating) (.+)$"),
     re.compile(r"(?i)^i(?:'m| am) learning (.+)$"),
     re.compile(r"(?i)^i(?:'m| am) interested in (.+)$"),
     re.compile(r"(?i)^my passion (?:is |for |)[:\s]+(.+)$"),
-    re.compile(r"(?i)^i want (?:to |)[:\s]+(.+)$"),
+    re.compile(r"(?i)^i want (?:to |)[:\s]*(.+)$"),
     re.compile(r"(?i)^i(?:'m| am) looking (?:to |for )(.+)$"),
 ]
 
 FEEDBACK_INDICATOR_PATTERNS = [
-    re.compile(r"(?i)^(?:feedback|note|actually)[,:]\s*(.+)$"),
-    re.compile(r"(?i)^(?:correction|update)[,:]\s*(.+)$"),
-    re.compile(r"(?i)^(?:just )?(?:so you know|FYI)[,:]\s*(.+)$"),
-    re.compile(r"(?i)^(?:small |quick )?correction[:\s]*(.+)$"),
+    re.compile(r"(?i)^(?:feedback|note|actually)[:,\s]+(.+)$"),
+    re.compile(r"(?i)^(?:correction|update)[:,\s]+(.+)$"),
+    re.compile(r"(?i)^(?:just )?(?:so you know|FYI)[:,\s]+(.+)$"),
+    re.compile(r"(?i)^(?:small |quick )?correction[:,\s]*(.+)$"),
 ]
 
 
