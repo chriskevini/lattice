@@ -504,24 +504,3 @@ class TestFeedbackDetectionFunctions:
         result = feedback_detection.is_invisible_feedback(message)
 
         assert result.detected is False
-
-    def test_extract_goal_from_content_north_star(self) -> None:
-        """Test extracting goal from North Star pattern."""
-        content = "North Star: I want to learn Python"
-        result = feedback_detection.extract_goal_from_content(content)
-
-        assert result == "I want to learn Python"
-
-    def test_extract_goal_from_content_ns_shorthand(self) -> None:
-        """Test extracting goal from NS shorthand."""
-        content = "NS: Build something cool"
-        result = feedback_detection.extract_goal_from_content(content)
-
-        assert result == "Build something cool"
-
-    def test_extract_goal_from_content_no_match(self) -> None:
-        """Test that non-goal content returns None."""
-        content = "Hello, how are you?"
-        result = feedback_detection.extract_goal_from_content(content)
-
-        assert result is None

@@ -513,7 +513,6 @@ class TestFeedbackHandlerIntegration:
             )
 
             result = await handlers.handle_invisible_feedback(
-                channel=MagicMock(),
                 message=mock_message,
                 feedback_content="This response was not helpful",
             )
@@ -606,7 +605,6 @@ class TestNorthStarHandlerIntegration:
             )
 
             result = await handlers.handle_north_star(
-                channel=MagicMock(),
                 message=mock_message,
                 goal_content="I want to learn Rust",
             )
