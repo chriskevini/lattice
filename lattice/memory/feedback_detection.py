@@ -45,12 +45,6 @@ class DetectionResult:
     confidence: float = 0.0
 
 
-class DiscordMessageMock:
-    """Mock class for type hints when discord is not available."""
-
-    pass
-
-
 def is_invisible_feedback(message: Any) -> DetectionResult:
     """Check if a message is invisible feedback (quote/reply to bot).
 
@@ -78,7 +72,6 @@ def is_invisible_feedback(message: Any) -> DetectionResult:
     if has_quote:
         confidence += 0.2
 
-    content = getattr(message, "content", "") or ""
     indicator_matches = [pattern.search(content) for pattern in FEEDBACK_INDICATOR_PATTERNS]
     valid_matches = [m for m in indicator_matches if m]
 

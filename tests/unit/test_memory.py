@@ -12,13 +12,9 @@ from lattice.memory.episodic import (
     get_recent_messages,
     store_message,
 )
-from lattice.memory.feedback_detection import (
-    extract_goal_from_content,
-    is_invisible_feedback,
-    is_north_star,
-)
 from lattice.memory.procedural import PromptTemplate, get_prompt, store_prompt
 from lattice.memory.semantic import StableFact, search_similar_facts, store_fact
+from lattice.memory import feedback_detection
 
 
 class TestEpisodicMessage:
@@ -377,7 +373,7 @@ class MockUser:
         self.name = name
 
 
-class MockReference:
+class MockReference:  # noqa: N801
     """Mock Discord message reference."""
 
     pass
