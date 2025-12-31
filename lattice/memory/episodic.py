@@ -4,7 +4,7 @@ Stores immutable conversation history with temporal chaining.
 """
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 import asyncpg
@@ -12,7 +12,6 @@ import structlog
 
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
-from lattice.utils.triple_parsing import parse_triples
 
 
 logger = structlog.get_logger(__name__)
@@ -158,7 +157,7 @@ async def get_last_message_id(channel_id: int) -> UUID | None:
 
 async def consolidate_message(
     message_id: UUID,
-    content: str,
+    _content: str,
     context: list[str],
 ) -> None:
     """Extract semantic triples from a message asynchronously.
@@ -214,7 +213,7 @@ async def consolidate_message(
 async def _ensure_fact(
     content: str,
     origin_id: UUID,
-    conn: asyncpg.Connection,
+    conn: Any,
 ) -> UUID:
     """Ensure fact exists, return its ID.
 
