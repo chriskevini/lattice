@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+import discord
 import structlog
 
 
@@ -42,7 +43,10 @@ def is_quote_or_reply(message: Any) -> bool:  # noqa: ANN401
     Returns:
         True if message is a quote or reply
     """
-    return getattr(message, "reference", None) is not None
+    return (
+        getattr(message, "reference", None) is not None
+        or getattr(message, "type", None) == discord.MessageType.reply
+    )
 
 
 def get_referenced_message_id(message: Any) -> int | None:  # noqa: ANN401
