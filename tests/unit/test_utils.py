@@ -201,3 +201,43 @@ class TestObjectiveParsing:
 
         assert len(result) == 1
         assert result[0]["description"] == "Valid"
+
+    def test_parse_objectives_negative_saliency(self) -> None:
+        """Test that negative saliency is clamped to 0.0."""
+        raw = '[{"description": "Goal", "saliency": -0.5, "status": "pending"}]'
+
+        result = parse_objectives(raw)
+
+        assert result[0]["saliency"] == 0.0
+
+    def test_parse_objectives_empty_description(self) -> None:
+        """Test that empty description is filtered out."""
+        raw = '[{"description": "", "saliency": 0.5, "status": "pending"}]'
+
+        result = parse_objectives(raw)
+
+        assert len(result) == 0
+
+    def test_parse_objectives_whitespace_description(self) -> None:
+        """Test that whitespace-only description is filtered out."""
+        raw = '[{"description": "   ", "saliency": 0.5, "status": "pending"}]'
+
+        result = parse_objectives(raw)
+
+        assert len(result) == 0
+
+    def test_parse_objectives_none_description(self) -> None:
+        """Test that None description is filtered out."""
+        raw = '[{"description": null, "saliency": 0.5, "status": "pending"}]'
+
+        result = parse_objectives(raw)
+
+        assert len(result) == 0
+
+    def test_parse_objectives_status_case_insensitive(self) -> None:
+        """Test that status is normalized to lowercase."""
+        raw = '[{"description": "Goal", "saliency": 0.5, "status": "COMPLETED"}]'
+
+        result = parse_objectives(raw)
+
+        assert result[0]["status"] == "completed"

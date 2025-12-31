@@ -15,7 +15,7 @@ from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import EmbeddingModel, embedding_model
 from lattice.utils.llm import get_llm_client
-from lattice.utils.objective_parsing import parse_objectives
+from lattice.utils.objective_parsing import MIN_SALIENCY_DELTA, parse_objectives
 from lattice.utils.triple_parsing import parse_triples
 
 
@@ -327,8 +327,8 @@ async def store_objectives(
 ) -> None:
     """Store extracted objectives in the database.
 
-    Handles upsert of existing objectives (status updates) and insertion
-    of new objectives.
+    Handles upsert of existing objectives (status and saliency updates) and
+    insertion of new objectives.
 
     Args:
         message_id: UUID of the origin message
@@ -348,13 +348,19 @@ async def store_objectives(
 
             existing = await conn.fetchrow(
                 """
-                SELECT id, status FROM objectives WHERE LOWER(description) = $1
+                SELECT id, status, saliency_score FROM objectives WHERE LOWER(description) = $1
                 """,
                 normalized,
             )
 
             if existing:
-                if existing["status"] != status:
+                current_saliency = (
+                    float(existing["saliency_score"]) if existing["saliency_score"] else 0.5
+                )
+                status_changed = existing["status"] != status
+                saliency_changed = abs(current_saliency - saliency) > MIN_SALIENCY_DELTA
+
+                if status_changed or saliency_changed:
                     await conn.execute(
                         """
                         UPDATE objectives
@@ -366,10 +372,12 @@ async def store_objectives(
                         existing["id"],
                     )
                     logger.info(
-                        "Updated objective status",
+                        "Updated objective",
                         description_preview=description[:50],
                         old_status=existing["status"],
                         new_status=status,
+                        old_saliency=current_saliency,
+                        new_saliency=saliency,
                     )
             else:
                 await conn.execute(

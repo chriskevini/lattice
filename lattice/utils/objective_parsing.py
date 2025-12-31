@@ -10,6 +10,7 @@ MIN_SALIENCY = 0.0
 MAX_SALIENCY = 1.0
 VALID_STATUSES = frozenset({"pending", "completed", "archived"})
 MIN_CODE_BLOCK_LINES = 2
+MIN_SALIENCY_DELTA = 0.01
 
 
 def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
@@ -44,7 +45,7 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
                 continue
 
             description = item.get("description")
-            if not description or not isinstance(description, str):
+            if not description or not isinstance(description, str) or not description.strip():
                 logger.warning("parse_objectives: missing or invalid description: %s", item)
                 continue
 
@@ -59,6 +60,7 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
             saliency = max(MIN_SALIENCY, min(MAX_SALIENCY, saliency))
 
             status = item.get("status", "pending")
+            status = "pending" if not isinstance(status, str) else status.lower().strip()
             if status not in VALID_STATUSES:
                 logger.warning(
                     "parse_objectives: invalid status '%s', using 'pending'",

@@ -136,6 +136,14 @@ async def init_database() -> None:
         """
         )
 
+        print("Creating objectives indexes...")
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_objectives_description
+            ON objectives (LOWER(description));
+            """
+        )
+
         print("Creating user_feedback table...")
         await conn.execute(
             """
@@ -279,60 +287,6 @@ Output: [
 ]
 
 Begin extraction:"""
-
-        existing = await conn.fetchval(
-            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
-            "TRIPLE_EXTRACTION",
-        )
-
-        if existing:
-            print("TRIPLE_EXTRACTION prompt already exists, skipping insert")
-        else:
-            async with conn.transaction():
-                await conn.execute(
-                    """
-                    INSERT INTO prompt_registry (prompt_key, template, temperature)
-                    VALUES ($1, $2, 0.1)
-                    """,
-                    "TRIPLE_EXTRACTION",
-                    triple_template,
-                )
-                print("TRIPLE_EXTRACTION prompt inserted")
-
-        print("Inserting OBJECTIVE_EXTRACTION prompt template...")
-        objective_template = (
-            "You are analyzing a conversation to extract user goals and intentions.\n"
-            "\n"
-            "## Input\n"
-            "Recent conversation context:\n"
-            "{CONTEXT}\n"
-            "\n"
-            "## Task\n"
-            "Extract user goals, objectives, or intentions that represent what the user\n"
-            "wants to achieve.\n"
-            "\n"
-            "## Rules\n"
-            "- Only extract goals that are explicitly stated or strongly implied\n"
-            "- Be specific about what the user wants to accomplish\n"
-            "- Saliency 0.0-1.0 based on explicitness and importance\n"
-            "- MAX 3 objectives per turn\n"
-            "- Skip if no clear goals are expressed\n"
-            "\n"
-            "## Output Format\n"
-            "Return ONLY a JSON array. No markdown formatting.\n"
-            '[{{"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}}]\n'
-            "If no valid triples: []\n"
-            "\n"
-            "Example:\n"
-            'User: "My cat Mittens loves chasing laser pointers"\n'
-            "Output: [\n"
-            '    {{"subject": "Mittens", "predicate": "owns", "object": "User"}},\n'
-            '    {{"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}}\n'
-            "]\n"
-            "\n"
-            "Begin extraction:"
-            ""
-        )
 
         existing = await conn.fetchval(
             "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
