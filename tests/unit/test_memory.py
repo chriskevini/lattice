@@ -6,6 +6,7 @@ from uuid import UUID
 
 import pytest
 
+from lattice.memory import feedback_detection
 from lattice.memory.episodic import (
     EpisodicMessage,
     get_last_message_id,
@@ -14,7 +15,6 @@ from lattice.memory.episodic import (
 )
 from lattice.memory.procedural import PromptTemplate, get_prompt, store_prompt
 from lattice.memory.semantic import StableFact, search_similar_facts, store_fact
-from lattice.memory import feedback_detection
 
 
 class TestEpisodicMessage:
@@ -61,7 +61,7 @@ class TestEpisodicMessage:
 class TestEpisodicMemoryFunctions:
     """Tests for episodic memory functions."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_store_message(self) -> None:
         """Test storing a message in episodic memory."""
         mock_conn = MagicMock()
@@ -85,7 +85,7 @@ class TestEpisodicMemoryFunctions:
             assert result == UUID("12345678-1234-5678-1234-567812345678")
             mock_conn.fetchrow.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_recent_messages(self) -> None:
         """Test retrieving recent messages from a channel."""
         mock_conn = MagicMock()
@@ -122,7 +122,7 @@ class TestEpisodicMemoryFunctions:
             assert messages[0].content == "First message"
             assert messages[0].timestamp < messages[1].timestamp
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_last_message_id_exists(self) -> None:
         """Test getting the last message ID when messages exist."""
         mock_conn = MagicMock()
@@ -138,7 +138,7 @@ class TestEpisodicMemoryFunctions:
 
             assert result == UUID("12345678-1234-5678-1234-567812345678")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_last_message_id_empty(self) -> None:
         """Test getting the last message ID when no messages exist."""
         mock_conn = MagicMock()
@@ -189,7 +189,7 @@ class TestStableFact:
 class TestSemanticMemoryFunctions:
     """Tests for semantic memory functions."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_store_fact_generates_embedding(self) -> None:
         """Test storing a fact generates embedding if not provided."""
         mock_conn = MagicMock()
@@ -211,7 +211,7 @@ class TestSemanticMemoryFunctions:
             assert result == UUID("12345678-1234-5678-1234-567812345678")
             mock_embed.encode_single.assert_called_once_with("Test fact")
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_store_fact_with_existing_embedding(self) -> None:
         """Test storing a fact uses existing embedding."""
         mock_conn = MagicMock()
@@ -232,7 +232,7 @@ class TestSemanticMemoryFunctions:
             assert result == UUID("12345678-1234-5678-1234-567812345678")
             mock_embed.encode_single.assert_not_called()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_similar_facts_empty_query(self) -> None:
         """Test that empty query returns empty list."""
         with patch("lattice.memory.semantic.embedding_model") as mock_embed:
@@ -241,7 +241,7 @@ class TestSemanticMemoryFunctions:
             assert result == []
             mock_embed.encode_single.assert_not_called()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_similar_facts_whitespace_query(self) -> None:
         """Test that whitespace-only query returns empty list."""
         with patch("lattice.memory.semantic.embedding_model") as mock_embed:
@@ -250,13 +250,13 @@ class TestSemanticMemoryFunctions:
             assert result == []
             mock_embed.encode_single.assert_not_called()
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_similar_facts_invalid_limit(self) -> None:
         """Test that invalid limit raises ValueError."""
         with pytest.raises(ValueError, match="limit must be between 1 and 100"):
             await search_similar_facts(query="test", limit=0)
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_search_similar_facts_invalid_threshold(self) -> None:
         """Test that invalid threshold raises ValueError."""
         with pytest.raises(ValueError, match=r"similarity_threshold must be between 0\.0 and 1\.0"):
@@ -296,7 +296,7 @@ class TestPromptTemplate:
 class TestProceduralMemoryFunctions:
     """Tests for procedural memory functions."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_prompt_found(self) -> None:
         """Test retrieving an existing prompt template."""
         mock_conn = MagicMock()
@@ -320,7 +320,7 @@ class TestProceduralMemoryFunctions:
             assert result.prompt_key == "test_key"
             assert result.template == "You are helpful."
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_get_prompt_not_found(self) -> None:
         """Test retrieving a non-existent prompt template."""
         mock_conn = MagicMock()
@@ -334,7 +334,7 @@ class TestProceduralMemoryFunctions:
 
             assert result is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio()
     async def test_store_prompt(self) -> None:
         """Test storing a prompt template."""
         mock_conn = MagicMock()
@@ -373,7 +373,7 @@ class MockUser:
         self.name = name
 
 
-class MockReference:  # noqa: N801
+class MockReference:
     """Mock Discord message reference."""
 
     def __init__(self) -> None:

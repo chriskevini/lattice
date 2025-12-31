@@ -19,8 +19,8 @@ WASTEBASKET_EMOJI = "🗑️"
 
 
 async def handle_invisible_feedback(
-    channel: Any,
-    message: Any,
+    channel: Any,  # noqa: ARG001,ANN401
+    message: Any,  # noqa: ANN401
     feedback_content: str,
 ) -> bool:
     """Handle invisible feedback from user (quote/reply to bot).
@@ -57,15 +57,15 @@ async def handle_invisible_feedback(
             feedback_preview=feedback_content[:50],
         )
 
-        return True
-
     except Exception as e:
         logger.exception("Error handling invisible feedback", error=str(e))
         return False
+    else:
+        return True
 
 
 async def handle_feedback_undo(
-    user_message: Any,
+    user_message: Any,  # noqa: ANN401
     emoji: str,
 ) -> bool:
     """Handle feedback undo via 🗑️ reaction on 🫡 message.
@@ -103,16 +103,16 @@ async def handle_feedback_undo(
                 feedback_id=str(feedback.feedback_id),
             )
 
-        return deleted
-
     except Exception as e:
         logger.exception("Error handling feedback undo", error=str(e))
         return False
+    else:
+        return deleted
 
 
 async def handle_north_star(
-    channel: Any,
-    message: Any,
+    channel: Any,  # noqa: ANN401
+    message: Any,  # noqa: ANN401
     goal_content: str,
 ) -> bool:
     """Handle North Star goal declaration.
@@ -137,9 +137,8 @@ async def handle_north_star(
 
         fact_id = await semantic.store_fact(fact_entry)
 
-        ack_message = NORTH_STAR_EMOJI
         with suppress(Exception):
-            await channel.send(ack_message)
+            await channel.send(NORTH_STAR_EMOJI)
 
         logger.info(
             "Handled North Star declaration",
@@ -148,14 +147,16 @@ async def handle_north_star(
             fact_id=str(fact_id),
         )
 
-        return True
-
     except Exception as e:
         logger.exception("Error handling North Star", error=str(e))
         return False
+    else:
+        return True
 
 
-def create_short_circuit_result(should_exit: bool, exit_reason: str | None = None) -> dict:
+def create_short_circuit_result(
+    should_exit: bool, exit_reason: str | None = None
+) -> dict[str, Any]:
     """Create a short-circuit result dictionary.
 
     Args:
