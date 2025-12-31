@@ -591,9 +591,7 @@ class TestNorthStarHandlerIntegration:
         """Test handling of North Star declaration."""
         mock_message = MagicMock()
         mock_message.author.name = "testuser"
-
-        mock_channel = MagicMock()
-        mock_channel.send = AsyncMock()
+        mock_message.add_reaction = AsyncMock()
 
         with (
             patch("lattice.memory.semantic.db_pool") as mock_pool,
@@ -608,12 +606,12 @@ class TestNorthStarHandlerIntegration:
             )
 
             result = await handlers.handle_north_star(
-                channel=mock_channel,
+                channel=MagicMock(),
                 message=mock_message,
                 goal_content="I want to learn Rust",
             )
             assert result is True
-            mock_channel.send.assert_called_once_with(handlers.NORTH_STAR_EMOJI)
+            mock_message.add_reaction.assert_called_once_with(handlers.NORTH_STAR_EMOJI)
 
 
 if __name__ == "__main__":

@@ -108,17 +108,17 @@ async def handle_feedback_undo(
 
 
 async def handle_north_star(
-    channel: Any,  # noqa: ANN401
+    channel: Any,  # noqa: ARG001,ANN401
     message: Any,  # noqa: ANN401
     goal_content: str,
 ) -> bool:
     """Handle North Star goal declaration.
 
     Stores the goal in stable_facts with entity_type='north_star' and
-    sends a simple acknowledgment (no elaboration).
+    adds a 🌟 reaction to acknowledge (no elaboration).
 
     Args:
-        channel: Discord channel for acknowledgment
+        channel: Discord channel (unused, for API compatibility)
         message: The user's message containing the goal
         goal_content: The extracted goal content
 
@@ -135,7 +135,7 @@ async def handle_north_star(
         fact_id = await semantic.store_fact(fact_entry)
 
         with suppress(Exception):
-            await channel.send(NORTH_STAR_EMOJI)
+            await message.add_reaction(NORTH_STAR_EMOJI)
 
         logger.info(
             "Handled North Star declaration",
