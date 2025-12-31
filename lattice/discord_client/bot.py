@@ -105,6 +105,14 @@ class LatticeBot(commands.Bot):
                 )
             )
 
+            await semantic.store_fact(
+                semantic.StableFact(
+                    content=message.content,
+                    origin_id=user_message_id,
+                    entity_type="user_message",
+                )
+            )
+
             semantic_facts = await semantic.search_similar_facts(
                 query=message.content,
                 limit=5,
@@ -183,15 +191,15 @@ class LatticeBot(commands.Bot):
 
         return await self._simple_generate(filled_prompt, user_message)
 
-    async def _simple_generate(self, _prompt: str, user_message: str) -> str:
+    async def _simple_generate(self, prompt: str, user_message: str) -> str:  # noqa: ARG002
         """Simple response generator for Phase 1 (no LLM yet).
 
         Args:
-            _prompt: The full prompt (unused in Phase 1)
+            prompt: The formatted prompt template (used in Phase 2)
             user_message: The user's message
 
         Returns:
-            A simple response
+            A simple response (Phase 1 placeholder until LLM integration)
         """
         return (
             f"I received your message: '{user_message}'. "
