@@ -237,7 +237,7 @@ async def _ensure_fact(
     if existing:
         return cast("UUID", existing)
 
-    embedding = await embedding_model.encode_single(normalized)
+    embedding = embedding_model.encode_single(normalized)
 
     row = await conn.fetchrow(
         """
@@ -249,6 +249,10 @@ async def _ensure_fact(
         embedding,
         origin_id,
     )
+
+    if not row:
+        msg = "Failed to insert fact"
+        raise RuntimeError(msg)
 
     logger.info("Created new fact from triple", content_preview=normalized[:50])
     return cast("UUID", row["id"])
