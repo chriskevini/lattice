@@ -3,12 +3,12 @@
 Handles invisible feedback, feedback undo, and North Star declarations.
 """
 
-import uuid
+from contextlib import suppress
 from typing import Any
 
 import structlog
 
-from lattice.memory import feedback_detection, semantic, user_feedback
+from lattice.memory import semantic, user_feedback
 from lattice.utils.database import db_pool
 
 
@@ -48,10 +48,8 @@ async def handle_invisible_feedback(
 
         await user_feedback.store_feedback(feedback_entry)
 
-        try:
+        with suppress(Exception):
             await message.add_reaction(SALUTE_EMOJI)
-        except Exception as e:
-            logger.warning("Failed to add salute reaction", error=str(e))
 
         logger.info(
             "Handled invisible feedback",
@@ -92,15 +90,11 @@ async def handle_feedback_undo(
 
         deleted = await user_feedback.delete_feedback(feedback.feedback_id)
         if deleted:
-            try:
+            with suppress(Exception):
                 await user_message.remove_reaction(WASTEBASKET_EMOJI, user_message.author)
-            except Exception:
-                pass
 
-            try:
+            with suppress(Exception):
                 await user_message.remove_reaction(SALUTE_EMOJI, user_message.guild.me)
-            except Exception:
-                pass
 
             logger.info(
                 "Handled feedback undo",
@@ -145,10 +139,8 @@ async def handle_north_star(
         fact_id = await semantic.store_fact(fact_entry)
 
         ack_message = "🫡"
-        try:
+        with suppress(Exception):
             await channel.send(ack_message)
-        except Exception as e:
-            logger.warning("Failed to send North Star ack", error=str(e))
 
         logger.info(
             "Handled North Star declaration",

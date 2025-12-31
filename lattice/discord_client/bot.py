@@ -11,9 +11,7 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import handlers
-from lattice.memory import episodic, procedural, semantic
-from lattice.memory import feedback_detection
-from lattice.memory import user_feedback
+from lattice.memory import episodic, feedback_detection, procedural, semantic
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
 
