@@ -10,11 +10,10 @@ RUN apt-get update && apt-get install -y \
 # Copy dependency files
 COPY pyproject.toml uv.lock* ./
 
-# Install UV, sync dependencies to /opt/venv
+# Install UV, sync dependencies and install project
 RUN pip install --no-cache-dir uv && \
     python -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir uv && \
-    uv sync --no-dev --no-install-project
+    uv sync --no-dev
 
 ENV PATH="/opt/venv/bin:$PATH"
 
