@@ -3,11 +3,11 @@
 import asyncio
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
-from lattice.memory.episodic import consolidate_message
+from lattice.memory.episodic import _ensure_fact, consolidate_message
 from lattice.memory.graph import GraphTraversal
 from lattice.utils.triple_parsing import parse_triples
 
@@ -45,7 +45,10 @@ class TestTripleExtractionIntegration:
 
             mock_client = MagicMock()
             mock_client.complete = AsyncMock(
-                return_value='[{"subject": "Alice", "predicate": "works_at", "object": "Acme Corp"}, {"subject": "Alice", "predicate": "located_in", "object": "Seattle"}]'
+                return_value="["
+                '{"subject": "Alice", "predicate": "works_at", "object": "Acme Corp"}, '
+                '{"subject": "Alice", "predicate": "located_in", "object": "Seattle"}'
+                "]"
             )
             mock_get_client.return_value = mock_client
 
@@ -281,11 +284,7 @@ class TestRaceConditionIntegration:
         alice_uuid = uuid4()
 
         mock_conn = AsyncMock()
-        mock_pool = AsyncMock()
-
         mock_conn.fetchval = AsyncMock(return_value=alice_uuid)
-
-        from lattice.memory.episodic import _ensure_fact
 
         result = await _ensure_fact("Alice", uuid4(), mock_conn, MagicMock())
 

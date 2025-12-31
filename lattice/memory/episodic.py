@@ -4,14 +4,17 @@ Stores immutable conversation history with temporal chaining.
 """
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import cast
 from uuid import UUID
 
 import asyncpg
 import structlog
 
+from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.embeddings import embedding_model
+from lattice.utils.embeddings import EmbeddingModel, embedding_model
+from lattice.utils.llm import get_llm_client
+from lattice.utils.triple_parsing import parse_triples
 
 
 logger = structlog.get_logger(__name__)
@@ -167,9 +170,6 @@ async def consolidate_message(
         content: Message content
         context: Recent conversation context
     """
-    from lattice.memory.procedural import get_prompt
-    from lattice.utils.triple_parsing import parse_triples
-
     triple_prompt = await get_prompt("TRIPLE_EXTRACTION")
     if not triple_prompt:
         logger.warning("TRIPLE_EXTRACTION prompt not found")
@@ -177,16 +177,11 @@ async def consolidate_message(
 
     filled_prompt = triple_prompt.template.format(CONTEXT="\n".join(context))
 
-    try:
-        from lattice.utils.llm import llm_client
-
-        raw_triples = await llm_client.complete(
-            filled_prompt,
-            temperature=triple_prompt.temperature,
-        )
-    except ImportError:
-        logger.warning("llm_client not available, skipping triple extraction")
-        return
+    llm_client = get_llm_client()
+    raw_triples = await llm_client.complete(
+        filled_prompt,
+        temperature=triple_prompt.temperature,
+    )
 
     triples = parse_triples(raw_triples)
     if not triples:
@@ -213,8 +208,8 @@ async def consolidate_message(
 async def _ensure_fact(
     content: str,
     origin_id: UUID,
-    conn: Any,
-    embedding_model: Any,
+    conn: asyncpg.Connection,
+    embedding_model: EmbeddingModel,
 ) -> UUID:
     """Ensure fact exists, return its ID.
 

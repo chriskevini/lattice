@@ -275,7 +275,10 @@ If no valid triples: []
 
 Example:
 User: "My cat Mittens loves chasing laser pointers"
-Output: [{"subject": "Mittens", "predicate": "owns", "object": "User"}, {"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}]
+Output: [
+    {"subject": "Mittens", "predicate": "owns", "object": "User"},
+    {"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}
+]
 
 Begin extraction:"""
 

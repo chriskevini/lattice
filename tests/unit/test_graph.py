@@ -1,6 +1,6 @@
 """Unit tests for graph traversal and triple parsing utilities."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest

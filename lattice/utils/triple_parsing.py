@@ -15,6 +15,9 @@ PREDICATE_SYNONYMS: dict[str, list[str]] = {
     "member_of": ["member_of", "part_of", "belongs_to", "affiliated_with"],
 }
 
+TRIPLE_PART_COUNT = 3
+MIN_CODE_BLOCK_LINES = 2
+
 
 def normalize_predicate(predicate: str) -> str:
     """Normalize predicate to canonical form.
@@ -51,15 +54,15 @@ def _parse_text_format(text: str) -> list[dict[str, str]] | None:
     lines = text.strip().split("\n")
     triples: list[dict[str, str]] = []
 
-    for line in lines:
-        line = line.strip()
+    for raw_line in lines:
+        line = raw_line.strip()
         if not line or line.lower().startswith("triple"):
             continue
 
         for separator in ["->", "→", "-->"]:
             if separator in line:
                 parts = line.split(separator)
-                if len(parts) == 3:
+                if len(parts) == TRIPLE_PART_COUNT:
                     subject = parts[0].strip()
                     predicate = parts[1].strip()
                     obj = parts[2].strip()
@@ -91,7 +94,7 @@ def parse_triples(raw_output: str) -> list[dict[str, str]]:
     try:
         if cleaned.startswith("```"):
             lines = cleaned.split("\n")
-            if len(lines) >= 2:
+            if len(lines) >= MIN_CODE_BLOCK_LINES:
                 cleaned = "\n".join(lines[1:-1])
                 if cleaned.lower().startswith("json"):
                     cleaned = cleaned[4:].strip()
@@ -129,6 +132,6 @@ def parse_triples(raw_output: str) -> list[dict[str, str]]:
         if text_triples is not None:
             return text_triples
         return []
-    except Exception as e:
-        logger.error("parse_triples: unexpected error: %s", e)
+    except Exception:
+        logger.exception("parse_triples: unexpected error")
         return []
