@@ -36,6 +36,10 @@ class LatticeBot(commands.Bot):
         if not self.main_channel_id:
             logger.warning("DISCORD_MAIN_CHANNEL_ID not set")
 
+        self._memory_healthy = False
+        self._consecutive_failures = 0
+        self._max_consecutive_failures = 5
+
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
         logger.info("Bot setup starting")
@@ -44,6 +48,7 @@ class LatticeBot(commands.Bot):
 
         embedding_model.load()
 
+        self._memory_healthy = True
         logger.info("Bot setup complete")
 
     async def on_ready(self) -> None:
@@ -68,6 +73,19 @@ class LatticeBot(commands.Bot):
 
         if message.channel.id != self.main_channel_id:
             return
+
+        if not self._memory_healthy:
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._max_consecutive_failures:
+                logger.error(
+                    "Memory system unhealthy, circuit breaker activated",
+                    consecutive_failures=self._consecutive_failures,
+                )
+                return
+            logger.warning(
+                "Memory system unhealthy, attempt recovery",
+                consecutive_failures=self._consecutive_failures,
+            )
 
         logger.info(
             "Received message",
@@ -116,10 +134,16 @@ class LatticeBot(commands.Bot):
                 )
             )
 
+            self._consecutive_failures = 0
             logger.info("Response sent successfully")
 
         except Exception as e:
-            logger.exception("Error processing message", error=str(e))
+            self._consecutive_failures += 1
+            logger.exception(
+                "Error processing message",
+                error=str(e),
+                consecutive_failures=self._consecutive_failures,
+            )
             await message.channel.send("Sorry, I encountered an error processing your message.")
 
     async def _generate_response(

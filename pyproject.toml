@@ -179,7 +179,7 @@ follow_imports = "normal"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["lattice.discord_client.bot"]
+module = ["lattice.memory.*", "lattice.utils.*"]
 ignore_errors = true
 
 # ============================================================================
