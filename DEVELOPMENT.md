@@ -86,12 +86,12 @@ Strict type checking is enforced:
 uv run mypy lattice
 ```
 
-### Security Checks (Bandit)
+### Security Checks (Ruff)
 
-Automated security vulnerability scanning:
+Security checks are integrated into Ruff with the `S` rule set:
 
 ```bash
-uv run bandit -r lattice
+uv run ruff check --select S .
 ```
 
 ### Testing (pytest)

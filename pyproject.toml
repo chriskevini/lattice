@@ -24,7 +24,6 @@ dev = [
     "pytest-xdist>=3.5.0,<4.0.0",
     "pre-commit>=3.6.0,<4.0.0",
     "commitizen>=3.13.0,<4.0.0",
-    "bandit>=1.7.0,<2.0.0",
 ]
 
 [build-system]
@@ -134,13 +133,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "lattice/discord_client/*.py" = [
     "ANN101",
 ]
-
-[tool.bandit]
-exclude = ["tests"]
-
-[tool.bandit.skips]
-B101 = ["tests/**/*.py"]
-B108 = ["tests/**/*.py"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["lattice"]

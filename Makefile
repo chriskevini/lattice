@@ -74,8 +74,8 @@ format-check: ## Check if code is formatted correctly
 type-check: ## Run type checking with mypy
 	uv run mypy lattice
 
-security: ## Run security checks with bandit
-	uv run bandit -r lattice
+security: ## Run security checks with ruff
+	uv run ruff check --select S .
 
 pre-commit: ## Run all pre-commit hooks on all files
 	uv run pre-commit run --all-files
