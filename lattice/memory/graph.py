@@ -59,7 +59,7 @@ class GraphTraversal:
                     JOIN stable_facts s ON t.subject_id = s.id
                     JOIN stable_facts o ON t.object_id = o.id
                     WHERE t.subject_id = $1
-                      AND ($2::text[] IS NULL OR t.predicate = ANY($2))
+                      AND ($2 IS NULL OR t.predicate = ANY($2))
 
                     UNION ALL
 
@@ -78,7 +78,7 @@ class GraphTraversal:
                     JOIN traversal ON t.subject_id = traversal.object_id
                     WHERE traversal.depth < $3
                       AND NOT t.object_id = ANY(traversal.visited)
-                      AND ($4::text[] IS NULL OR t.predicate = ANY($4))
+                      AND ($4 IS NULL OR t.predicate = ANY($4))
                 )
                 SELECT * FROM traversal
                 """,
