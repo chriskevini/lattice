@@ -12,9 +12,9 @@ COPY pyproject.toml uv.lock* README.md ./
 COPY lattice/ ./lattice/
 COPY scripts/ ./scripts/
 
-# Install UV, sync dependencies and install project
+# Install UV and sync dependencies
 RUN pip install --no-cache-dir uv && \
-    python -m venv /opt/venv && \
+    uv venv /opt/venv && \
     uv sync --no-dev && \
     rm -rf /root/.cache/uv
 
