@@ -11,15 +11,13 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import handlers
+from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
 
 
 logger = structlog.get_logger(__name__)
-
-SALUTE_EMOJI = "🫡"
-WASTEBASKET_EMOJI = "🗑️"
 
 
 class LatticeBot(commands.Bot):

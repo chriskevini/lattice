@@ -12,9 +12,6 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-SALUTE_EMOJI = "🫡"
-WASTEBASKET_EMOJI = "🗑️"
-
 NORTH_STAR_PATTERNS = [
     re.compile(r"(?i)^north\s*star[:\s]+(.+)$"),
     re.compile(r"(?i)^ns[:\s]+(.+)$"),
