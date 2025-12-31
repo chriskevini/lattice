@@ -108,7 +108,6 @@ class LatticeBot(commands.Bot):
                     goal_preview=goal_content[:50],
                 )
                 await handlers.handle_north_star(
-                    channel=message.channel,
                     message=message,
                     goal_content=goal_content,
                 )
@@ -122,7 +121,6 @@ class LatticeBot(commands.Bot):
                     feedback_preview=feedback_content[:50],
                 )
                 await handlers.handle_invisible_feedback(
-                    channel=message.channel,
                     message=message,
                     feedback_content=feedback_content,
                 )

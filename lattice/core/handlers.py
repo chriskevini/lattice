@@ -19,7 +19,6 @@ WASTEBASKET_EMOJI = "🗑️"
 
 
 async def handle_invisible_feedback(
-    channel: Any,  # noqa: ARG001,ANN401
     message: Any,  # noqa: ANN401
     feedback_content: str,
 ) -> bool:
@@ -28,7 +27,6 @@ async def handle_invisible_feedback(
     Stores the feedback in user_feedback table and adds 🫡 reaction.
 
     Args:
-        channel: Discord channel to send reaction in
         message: The user's message containing feedback
         feedback_content: The extracted feedback content
 
@@ -108,7 +106,6 @@ async def handle_feedback_undo(
 
 
 async def handle_north_star(
-    channel: Any,  # noqa: ARG001,ANN401
     message: Any,  # noqa: ANN401
     goal_content: str,
 ) -> bool:
@@ -118,7 +115,6 @@ async def handle_north_star(
     adds a 🌟 reaction to acknowledge (no elaboration).
 
     Args:
-        channel: Discord channel (unused, for API compatibility)
         message: The user's message containing the goal
         goal_content: The extracted goal content
 
