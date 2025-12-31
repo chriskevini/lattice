@@ -30,6 +30,7 @@ class LatticeBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.messages = True
+        intents.reactions = True
 
         super().__init__(
             command_prefix="!",
@@ -246,6 +247,35 @@ class LatticeBot(commands.Bot):
             reaction: The reaction that was added
             user: The user who added the reaction
         """
+        logger.info(
+            "Reaction received",
+            emoji=str(reaction.emoji),
+            user=user.name,
+            message_author=str(reaction.message.author) if reaction.message.author else None,
+            message_id=reaction.message.id,
+        )
+
+        if user == self.user:
+            return
+
+        if reaction.emoji != WASTEBASKET_EMOJI:
+            return
+
+        message = reaction.message
+        if message.author == self.user:
+            return
+
+        if reaction.emoji == WASTEBASKET_EMOJI:
+            logger.info(
+                "Feedback undo requested",
+                user=user.name,
+                message_id=message.id,
+            )
+            await handlers.handle_feedback_undo(
+                user_message=message,
+                emoji=WASTEBASKET_EMOJI,
+            )
+
         if user == self.user:
             return
 
@@ -254,6 +284,7 @@ class LatticeBot(commands.Bot):
 
         message = reaction.message
         if message.author != self.user:
+            logger.info("Reaction not on bot message, ignoring")
             return
 
         if reaction.emoji == WASTEBASKET_EMOJI:
