@@ -119,7 +119,6 @@ class LatticeBot(commands.Bot):
                     feedback_preview=feedback_result.content[:50],
                 )
                 await handlers.handle_invisible_feedback(
-                    channel=message.channel,
                     message=message,
                     feedback_content=feedback_result.content,
                 )

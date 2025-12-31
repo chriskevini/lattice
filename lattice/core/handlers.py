@@ -9,7 +9,6 @@ from typing import Any
 import structlog
 
 from lattice.memory import semantic, user_feedback
-from lattice.utils.database import db_pool
 
 
 logger = structlog.get_logger(__name__)
@@ -65,7 +64,98 @@ async def handle_invisible_feedback(
 
 
 async def handle_feedback_undo(
+    channel: Any,  # noqa: ARG002
+    user_message: Any,
+    emoji: str,
+) -> bool:
+    """Handle feedback undo via 🗑️ reaction on 🫡 message.
+
+    Args:
+        channel: Discord channel
+        user_message: The message with the 🫡 reaction
+        emoji: The emoji that was reacted with
+
+    Returns:
+        True if undo was handled, False otherwise
+    """
+    if emoji != WASTEBASKET_EMOJI:
+        return False
+
+    try:
+        feedback = await user_feedback.get_feedback_by_user_message(user_message.id)
+        if not feedback:
+            logger.info("No feedback found to undo", message_id=user_message.id)
+            return False
+
+        deleted = await user_feedback.delete_feedback(feedback.feedback_id)
+        if deleted:
+            with suppress(Exception):
+                await user_message.remove_reaction(WASTEBASKET_EMOJI, user_message.author)
+
+            with suppress(Exception):
+                await user_message.remove_reaction(SALUTE_EMOJI, user_message.guild.me)
+
+            logger.info(
+                "Handled feedback undo",
+                user=user_message.author.name
+                if hasattr(user_message.author, "name")
+                else "unknown",
+                feedback_id=str(feedback.feedback_id),
+            )
+
+        return deleted
+
+    except Exception as e:
+        logger.exception("Error handling feedback undo", error=str(e))
+        return False
+
+
+async def handle_north_star(
     channel: Any,
+    message: Any,
+    goal_content: str,
+) -> bool:
+    """Handle North Star goal declaration.
+
+    Stores the goal in stable_facts with entity_type='north_star' and
+    sends a simple acknowledgment (no elaboration).
+
+    Args:
+        channel: Discord channel for acknowledgment
+        message: The user's message containing the goal
+        goal_content: The extracted goal content
+
+    Returns:
+        True if handled successfully, False otherwise
+    """
+    try:
+        fact_entry = semantic.StableFact(
+            content=f"User North Star: {goal_content}",
+            origin_id=None,
+            entity_type="north_star",
+        )
+
+        fact_id = await semantic.store_fact(fact_entry)
+
+        ack_message = "🫡"
+        with suppress(Exception):
+            await channel.send(ack_message)
+
+        logger.info(
+            "Handled North Star declaration",
+            user=message.author.name if hasattr(message.author, "name") else "unknown",
+            goal_preview=goal_content[:50],
+            fact_id=str(fact_id),
+        )
+
+        return True
+
+    except Exception as e:
+        logger.exception("Error handling North Star", error=str(e))
+        return False
+
+
+async def handle_feedback_undo(
     user_message: Any,
     emoji: str,
 ) -> bool:
