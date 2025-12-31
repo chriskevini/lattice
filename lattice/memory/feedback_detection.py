@@ -17,10 +17,10 @@ WASTEBASKET_EMOJI = "🗑️"
 
 NORTH_STAR_PATTERNS = [
     re.compile(r"(?i)^(?:my\s+)?(?:north\s*star|goal|objective|purpose|mission)[:\s]+(.+)$"),
+    re.compile(r"(?i)^my goal (?:is |to )[:\s]*(.+)$"),
     re.compile(r"(?i)^i(?:'m| am) (?:trying|aiming|working) (?:to |for )(.+)$"),
     re.compile(r"(?i)^i(?:'m| am) (?:focused|dedicated|committed) (?:on |to )(.+)$"),
     re.compile(r"(?i)^my (?:main |primary |)focus (?:is |on |)[:\s]+(.+)$"),
-    re.compile(r"(?i)^my goal (?:is |)[:\s]*(.+)$"),
     re.compile(r"(?i)^i(?:'m| am) (?:building|making|creating) (.+)$"),
     re.compile(r"(?i)^i(?:'m| am) learning (.+)$"),
     re.compile(r"(?i)^i(?:'m| am) interested in (.+)$"),
