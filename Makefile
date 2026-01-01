@@ -25,9 +25,9 @@ docker-logs-bot: ## Show logs from bot service only
 docker-logs-db: ## Show logs from database service only
 	docker compose logs -f postgres
 
-docker-rebuild: ## Rebuild and restart services
+docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
 	docker compose down
-	docker compose build --no-cache
+	docker compose build
 	docker compose up -d
 
 docker-shell: ## Open shell in bot container

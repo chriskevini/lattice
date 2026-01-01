@@ -7,13 +7,16 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml uv.lock* ./
+# Copy dependency files and source code
+COPY pyproject.toml uv.lock* README.md ./
+COPY lattice/ ./lattice/
+COPY scripts/ ./scripts/
 
-# Install UV, sync dependencies and install project
+# Install UV and sync dependencies
 RUN pip install --no-cache-dir uv && \
-    python -m venv /opt/venv && \
-    uv sync --no-dev
+    uv sync --no-dev && \
+    cp -r .venv /opt/venv && \
+    rm -rf .venv /root/.cache/uv
 
 ENV PATH="/opt/venv/bin:$PATH"
 

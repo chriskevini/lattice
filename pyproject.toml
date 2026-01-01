@@ -12,7 +12,16 @@ dependencies = [
     "sentence-transformers>=2.2.2,<3.0.0",
     "python-dotenv>=1.0.0,<2.0.0",
     "structlog>=24.1.0,<25.0.0",
+    "openai>=1.0.0,<2.0.0",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
 
 [project.optional-dependencies]
 dev = [

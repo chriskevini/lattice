@@ -15,6 +15,7 @@ from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import EmbeddingModel, embedding_model
 from lattice.utils.llm import get_llm_client
+from lattice.utils.objective_parsing import MIN_SALIENCY_DELTA, parse_objectives
 from lattice.utils.triple_parsing import parse_triples
 
 
@@ -165,15 +166,15 @@ async def get_last_message_id(channel_id: int) -> UUID | None:
 
 async def consolidate_message(
     message_id: UUID,
-    _content: str,
-    context: list[str],  # noqa: ARG001 - kept for API compatibility
+    content: str,
+    context: list[str],
 ) -> None:
-    """Extract semantic triples from a message asynchronously.
+    """Extract semantic triples and objectives from a message asynchronously.
 
     Args:
         message_id: UUID of the stored message
-        _content: Message content to extract from
-        context: Recent conversation context (unused, kept for API compatibility)
+        content: Message content to extract from
+        context: Recent conversation context for extraction
     """
     logger.info("Starting consolidation", message_id=str(message_id))
 
@@ -182,7 +183,7 @@ async def consolidate_message(
         logger.warning("TRIPLE_EXTRACTION prompt not found")
         return
 
-    filled_prompt = triple_prompt.template.format(CONTEXT=_content)
+    filled_prompt = triple_prompt.template.format(CONTEXT=content)
     logger.info("Calling LLM for triple extraction", message_id=str(message_id))
 
     llm_client = get_llm_client()
@@ -198,25 +199,29 @@ async def consolidate_message(
     triples = parse_triples(result.content)
     logger.info("Parsed triples", count=len(triples) if triples else 0)
 
-    if not triples:
-        return
+    if triples:
+        async with db_pool.pool.acquire() as conn, conn.transaction():
+            for triple in triples:
+                subject_id = await _ensure_fact(
+                    triple["subject"], message_id, conn, embedding_model
+                )
+                object_id = await _ensure_fact(triple["object"], message_id, conn, embedding_model)
 
-    async with db_pool.pool.acquire() as conn, conn.transaction():
-        for triple in triples:
-            subject_id = await _ensure_fact(triple["subject"], message_id, conn, embedding_model)
-            object_id = await _ensure_fact(triple["object"], message_id, conn, embedding_model)
+                await conn.execute(
+                    """
+                        INSERT INTO semantic_triples (subject_id, predicate, object_id, origin_id)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT DO NOTHING
+                        """,
+                    subject_id,
+                    triple["predicate"],
+                    object_id,
+                    message_id,
+                )
 
-            await conn.execute(
-                """
-                    INSERT INTO semantic_triples (subject_id, predicate, object_id, origin_id)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT DO NOTHING
-                    """,
-                subject_id,
-                triple["predicate"],
-                object_id,
-                message_id,
-            )
+    objectives = await extract_objectives(message_id, content, context)
+    if objectives:
+        await store_objectives(message_id, objectives)
 
 
 async def _ensure_fact(
@@ -267,3 +272,126 @@ async def _ensure_fact(
 
     logger.info("Created new fact from triple", content_preview=normalized[:50])
     return cast("UUID", row["id"])
+
+
+async def extract_objectives(
+    message_id: UUID,
+    content: str,
+    context: list[str] | None = None,
+) -> list[dict[str, str | float]]:
+    """Extract objectives from a message asynchronously.
+
+    Args:
+        message_id: UUID of the stored message
+        content: Message content to extract from
+        context: Recent conversation context for additional context
+
+    Returns:
+        List of extracted objectives with description, saliency, and status
+    """
+    logger.info("Starting objective extraction", message_id=str(message_id))
+
+    objective_prompt = await get_prompt("OBJECTIVE_EXTRACTION")
+    if not objective_prompt:
+        logger.warning("OBJECTIVE_EXTRACTION prompt not found")
+        return []
+
+    context_text = content
+    if context:
+        context_text = "\n".join(context[-5:]) + "\n\nCurrent message:\n" + content
+
+    filled_prompt = objective_prompt.template.format(CONTEXT=context_text)
+    logger.info("Calling LLM for objective extraction", message_id=str(message_id))
+
+    llm_client = get_llm_client()
+    result = await llm_client.complete(
+        filled_prompt,
+        temperature=objective_prompt.temperature,
+    )
+
+    logger.info(
+        "LLM response received",
+        message_id=str(message_id),
+        content_preview=result.content[:100],
+    )
+
+    objectives = parse_objectives(result.content)
+    logger.info("Parsed objectives", count=len(objectives) if objectives else 0)
+
+    return objectives
+
+
+async def store_objectives(
+    message_id: UUID,
+    objectives: list[dict[str, str | float]],
+) -> None:
+    """Store extracted objectives in the database.
+
+    Handles upsert of existing objectives (status and saliency updates) and
+    insertion of new objectives.
+
+    Args:
+        message_id: UUID of the origin message
+        objectives: List of extracted objectives
+    """
+    if not objectives:
+        return
+
+    async with db_pool.pool.acquire() as conn, conn.transaction():
+        for objective in objectives:
+            description = cast("str", objective["description"])
+            saliency_value = objective["saliency"]
+            saliency = float(saliency_value) if isinstance(saliency_value, (int, float)) else 0.5
+            status = cast("str", objective["status"])
+
+            normalized = description.lower().strip()
+
+            existing = await conn.fetchrow(
+                """
+                SELECT id, status, saliency_score FROM objectives WHERE LOWER(description) = $1
+                """,
+                normalized,
+            )
+
+            if existing:
+                current_saliency = (
+                    float(existing["saliency_score"]) if existing["saliency_score"] else 0.5
+                )
+                status_changed = existing["status"] != status
+                saliency_changed = abs(current_saliency - saliency) > MIN_SALIENCY_DELTA
+
+                if status_changed or saliency_changed:
+                    await conn.execute(
+                        """
+                        UPDATE objectives
+                        SET status = $1, saliency_score = $2, last_updated = now()
+                        WHERE id = $3
+                        """,
+                        status,
+                        saliency,
+                        existing["id"],
+                    )
+                    logger.info(
+                        "Updated objective",
+                        description_preview=description[:50],
+                        old_status=existing["status"],
+                        new_status=status,
+                        old_saliency=current_saliency,
+                        new_saliency=saliency,
+                    )
+            else:
+                await conn.execute(
+                    """
+                    INSERT INTO objectives (description, saliency_score, status, origin_id)
+                    VALUES ($1, $2, $3, $4)
+                    """,
+                    description,
+                    saliency,
+                    status,
+                    message_id,
+                )
+                logger.info(
+                    "Created new objective",
+                    description_preview=description[:50],
+                    saliency=saliency,
+                )

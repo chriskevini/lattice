@@ -196,7 +196,7 @@ class LatticeBot(commands.Bot):
             _consolidation_task = asyncio.create_task(  # noqa: RUF006
                 episodic.consolidate_message(
                     message_id=user_message_id,
-                    _content=message.content,
+                    content=message.content,
                     context=[msg.content for msg in recent_messages[-5:]],
                 )
             )
