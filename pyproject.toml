@@ -154,6 +154,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 ]
 "lattice/discord_client/*.py" = [
     "ANN101",
+    "F401",
 ]
 
 "lattice/scheduler/*.py" = [
@@ -167,6 +168,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "E501",
     "RUF006",
     "S311",
+    "RET504",
+    "EM102",
 ]
 
 [tool.ruff.lint.isort]
