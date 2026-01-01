@@ -163,6 +163,10 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "ARG002",
     "TRY300",
     "TRY003",
+    "S608",
+    "E501",
+    "RUF006",
+    "S311",
 ]
 
 [tool.ruff.lint.isort]
