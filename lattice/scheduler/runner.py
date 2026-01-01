@@ -4,7 +4,7 @@ import random
 from datetime import datetime, timedelta
 from typing import Any
 
-import pytz
+import pytz  # type: ignore[import-untyped]
 
 
 logger = logging.getLogger(__name__)

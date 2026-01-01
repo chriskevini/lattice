@@ -72,7 +72,7 @@ class UnifiedPipeline:
     ) -> Any:
         channel = self.bot.get_channel(channel_id)
         if not channel:
-            logger.warning("Channel not found", channel_id=channel_id)
+            logger.warning(f"Channel not found: {channel_id}")
             return None
 
         return await channel.send(content)

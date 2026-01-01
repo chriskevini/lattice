@@ -1,17 +1,14 @@
 """Unit tests for scheduler components."""
 
-import asyncio
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
+from unittest.mock import MagicMock
 
 from lattice.core.types import GhostContext, GhostTriggerReason, PipelineSourceType
+from lattice.scheduler.adaptive import AdaptiveScheduler, ScheduleConfig
+from lattice.scheduler.engagement import EngagementScorer
 from lattice.scheduler.recursion_guard import RecursionGuard
 from lattice.scheduler.safety_filter import GhostContentSafetyFilter
-from lattice.scheduler.engagement import EngagementScorer
-from lattice.scheduler.adaptive import AdaptiveScheduler, ScheduleConfig
-from lattice.scheduler.triggers import TriggerDetector, TriggerType
+from lattice.scheduler.triggers import TriggerDetector
 
 
 class TestRecursionGuard:
