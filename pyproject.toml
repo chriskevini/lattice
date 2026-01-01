@@ -119,6 +119,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PLR2004",
     "SLF001",
     "S108",
+    "PERF401",
+    "I001",
 ]
 "scripts/__init__.py" = [
     "D104",
@@ -126,7 +128,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "scripts/init_db.py" = [
     "T201",
     "PLR0915",
+    "PLR0912",
     "E501",
+    "DTZ003",
 ]
 "lattice/utils/database.py" = [
     "ANN101",
@@ -150,6 +154,15 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 ]
 "lattice/discord_client/*.py" = [
     "ANN101",
+]
+
+"lattice/scheduler/*.py" = [
+    "ANN401",
+    "DTZ003",
+    "RUF012",
+    "ARG002",
+    "TRY300",
+    "TRY003",
 ]
 
 [tool.ruff.lint.isort]

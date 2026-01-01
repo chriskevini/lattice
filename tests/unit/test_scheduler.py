@@ -45,9 +45,7 @@ class TestRecursionGuard:
     @pytest.mark.asyncio
     async def test_multiple_ghosts_allowable(self) -> None:
         guard = RecursionGuard()
-        results = []
-        for _ in range(guard.MAX_GHOST_DEPTH):
-            results.append(await guard.enter_ghost())
+        results = [await guard.enter_ghost() for _ in range(guard.MAX_GHOST_DEPTH)]
         assert all(results)
         assert guard._depth == guard.MAX_GHOST_DEPTH
 
