@@ -14,6 +14,13 @@ from discord.ext import commands
 from lattice.core import handlers
 from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
+from lattice.scheduler import ProactiveScheduler, AdaptiveScheduler, EngagementScorer
+from lattice.scheduler.recursion_guard import RecursionGuard
+from lattice.scheduler.safety_filter import GhostContentSafetyFilter
+from lattice.scheduler.opt_out_manager import UserOptOutManager
+from lattice.scheduler.response_handler import GhostResponseHandler
+from lattice.scheduler.triggers import TriggerDetector
+from lattice.core.pipeline import UnifiedPipeline
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
 from lattice.utils.llm import GenerationResult, get_llm_client
@@ -45,6 +52,8 @@ class LatticeBot(commands.Bot):
         self._memory_healthy = False
         self._consecutive_failures = 0
         self._max_consecutive_failures = 5
+
+        self._scheduler: ProactiveScheduler | None = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""

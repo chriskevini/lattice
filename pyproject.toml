@@ -13,6 +13,7 @@ dependencies = [
     "python-dotenv>=1.0.0,<2.0.0",
     "structlog>=24.1.0,<25.0.0",
     "openai>=1.0.0,<2.0.0",
+    "pytz>=2024.1,<2025.0",
 ]
 
 [[tool.uv.index]]
@@ -197,7 +198,6 @@ ignore_errors = true
 minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["."]
-asyncio_mode = "auto"
 addopts = [
     "--strict-markers",
     "--strict-config",
