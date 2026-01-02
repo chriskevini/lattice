@@ -1,5 +1,7 @@
 # Context Archetype System Design
 
+> **⚠️ FUTURE WORK**: This document describes a planned feature that is NOT YET IMPLEMENTED. The system currently uses default context configuration values for all messages. This document is kept for reference and future development.
+
 ## Problem Statement
 
 **Challenge**: Determine optimal context configuration (CONTEXT_TURNS, VECTOR_LIMIT, SIMILARITY_THRESHOLD, TRIPLE_DEPTH) for each message without:

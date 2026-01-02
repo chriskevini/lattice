@@ -85,38 +85,51 @@ class ProactiveScheduler:
         if decision.action == "message" and decision.content:
             if not decision.channel_id:
                 logger.warning("No valid channel for proactive message, skipping")
-                return
+                # Treat as "wait" - exponential backoff
+                current_interval = await get_current_interval()
+                max_interval = int(await get_system_health("scheduler_max_interval") or 1440)
+                new_interval = min(current_interval * 2, max_interval)
+                await set_current_interval(new_interval)
+                next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
+            else:
+                pipeline = UnifiedPipeline(db_pool=self.bot.db_pool, bot=self.bot)
 
-            pipeline = UnifiedPipeline(db_pool=self.bot.db_pool, bot=self.bot)
-
-            channel_id = decision.channel_id
-            result = await pipeline.send_proactive_message(
-                content=decision.content,
-                channel_id=channel_id,
-            )
-
-            if result:
-                logger.info(
-                    "Sent proactive message",
-                    content_preview=decision.content[:50],
+                channel_id = decision.channel_id
+                result = await pipeline.send_proactive_message(
+                    content=decision.content,
                     channel_id=channel_id,
                 )
 
-                await episodic.store_message(
-                    episodic.EpisodicMessage(
-                        content=result.content,
-                        discord_message_id=result.id,
-                        channel_id=result.channel.id,
-                        is_bot=True,
-                        is_proactive=True,
+                if result:
+                    logger.info(
+                        "Sent proactive message",
+                        content_preview=decision.content[:50],
+                        channel_id=channel_id,
                     )
-                )
 
-                await set_current_interval(
-                    int(await get_system_health("scheduler_base_interval") or 15)
-                )
-                next_check = datetime.now(UTC) + timedelta(minutes=await get_current_interval())
+                    await episodic.store_message(
+                        episodic.EpisodicMessage(
+                            content=result.content,
+                            discord_message_id=result.id,
+                            channel_id=result.channel.id,
+                            is_bot=True,
+                            is_proactive=True,
+                        )
+                    )
+
+                    # Reset to base interval after successful message
+                    base_interval = int(await get_system_health("scheduler_base_interval") or 15)
+                    await set_current_interval(base_interval)
+                    next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
+                else:
+                    # Message send failed - treat as "wait" with exponential backoff
+                    current_interval = await get_current_interval()
+                    max_interval = int(await get_system_health("scheduler_max_interval") or 1440)
+                    new_interval = min(current_interval * 2, max_interval)
+                    await set_current_interval(new_interval)
+                    next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
         else:
+            # AI decided to wait - exponential backoff
             current_interval = await get_current_interval()
             max_interval = int(await get_system_health("scheduler_max_interval") or 1440)
             new_interval = min(current_interval * 2, max_interval)

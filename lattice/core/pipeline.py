@@ -6,6 +6,14 @@ logger = logging.getLogger(__name__)
 
 
 class UnifiedPipeline:
+    """Message sending utility for Discord interactions.
+
+    Note: This is a simplified message sender, not a full unified processing pipeline.
+    Both reactive (user-initiated) and proactive (bot-initiated) messages use these
+    methods, but they don't share a unified processing pipeline - they have separate
+    handlers in the bot for context retrieval, LLM generation, etc.
+    """
+
     def __init__(
         self,
         db_pool: Any,

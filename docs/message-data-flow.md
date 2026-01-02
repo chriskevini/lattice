@@ -18,9 +18,9 @@ Discord Message
 [4] Context Analysis (Archetype Classification)
       ↓
 [5] Hybrid Retrieval
-      ├─→ Episodic (temporal chain)
-      ├─→ Semantic (vector search)
-      └─→ Graph (triple traversal)
+       ├─→ Episodic (timestamp-ordered)
+       ├─→ Semantic (vector search)
+       └─→ Graph (triple traversal)
       ↓
 [6] Context Assembly + Constraint Application
       ↓
@@ -131,7 +131,7 @@ if message.reference and message.reference.resolved.author.bot:
 
 ### [3] Episodic Logging
 
-**Purpose**: Create immutable record in `raw_messages` with temporal chaining
+**Purpose**: Create immutable record in `raw_messages` ordered by timestamp
 
 ```sql
 -- Insert user message
@@ -140,26 +140,20 @@ INSERT INTO raw_messages (
     channel_id,
     content,
     is_bot,
-    prev_turn_id,  -- Links to previous message in conversation
+    is_proactive,  -- Marks bot-initiated check-ins vs reactive responses
     timestamp
 ) VALUES (
     1234567890,
     987654321,
     'I love working with Python for AI projects',
     false,
-    '550e8400-e29b-41d4-a716-446655440000',  -- UUID of previous turn
+    false,  -- User-initiated message
     '2025-01-15T10:30:00Z'
 ) RETURNING id;  -- e.g., '660e8400-e29b-41d4-a716-446655440001'
 ```
 
-**Temporal chaining**:
-```
-[Turn N-2] ← [Turn N-1] ← [Turn N (current)] ← [Turn N+1 (future)]
-   ↑              ↑              ↑
-prev_turn_id  prev_turn_id  prev_turn_id
-```
-
-This creates a linked list for efficient context window retrieval.
+**Timestamp ordering**:
+Messages are retrieved by timestamp to reconstruct conversation order. The `is_proactive` flag distinguishes bot-initiated check-ins from reactive responses.
 
 ---
 
@@ -167,88 +161,15 @@ This creates a linked list for efficient context window retrieval.
 
 **Purpose**: Classify message to determine optimal context configuration
 
-**Implementation**: Semantic archetype matching using existing embedding model
+**Note**: Context archetype classification is **planned for future implementation**. Currently, the system uses default context configuration values.
 
-#### 4a. Message Embedding
+**Planned Implementation**: Semantic archetype matching using existing embedding model
 
-```python
-# Generate embedding for incoming message (~20ms on CPU)
-msg_embedding = model.encode(["I love working with Python for AI projects"])
-# Result: [0.123, -0.456, 0.789, ..., 0.234]  (384 dimensions)
-```
+#### Future: Message Embedding & Archetype Matching
 
-#### 4b. Archetype Matching
+The system will eventually generate embeddings for incoming messages and match them against pre-defined archetypes to determine optimal context retrieval parameters (CONTEXT_TURNS, VECTOR_LIMIT, SIMILARITY_THRESHOLD, TRIPLE_DEPTH).
 
-**Query**: Find closest archetype by cosine similarity
-```sql
--- Archetypes stored in database with pre-computed centroids
-SELECT 
-    id,
-    archetype_name,
-    centroid_embedding,
-    context_turns,
-    context_vectors,
-    similarity_threshold,
-    triple_depth
-FROM context_archetypes
-WHERE active = true;
-```
-
-**Example archetypes**:
-```
-1. "technical_debugging"
-   Examples: ["Why isn't this working?", "I'm getting an error", ...]
-   Config: TURNS:12, VECTORS:3, SIMILARITY:0.85, DEPTH:1
-   
-2. "preference_exploration"
-   Examples: ["What are my favorite hobbies?", "What do I like?", ...]
-   Config: TURNS:5, VECTORS:12, SIMILARITY:0.6, DEPTH:2
-   
-3. "simple_continuation"
-   Examples: ["Thanks!", "Got it", "Cool", ...]
-   Config: TURNS:2, VECTORS:0, SIMILARITY:0.7, DEPTH:0
-   
-4. "memory_recall"
-   Examples: ["Remember when...", "You mentioned earlier...", ...]
-   Config: TURNS:15, VECTORS:6, SIMILARITY:0.75, DEPTH:2
-```
-
-**Matching process**:
-```python
-best_match = None
-best_similarity = -1
-
-for archetype in archetypes:
-    similarity = cosine_similarity(msg_embedding, archetype.centroid)
-    if similarity > best_similarity:
-        best_similarity = similarity
-        best_match = archetype
-
-# Best match: "technical_debugging" (similarity: 0.72)
-```
-
-**Output**: Context configuration from matched archetype
-```
-CONTEXT_TURNS: 12
-VECTOR_LIMIT: 3
-SIMILARITY_THRESHOLD: 0.85
-TRIPLE_DEPTH: 1
-```
-
-**Why these values?**:
-- `CONTEXT_TURNS: 12` - Technical discussions need thread context
-- `VECTOR_LIMIT: 3` - Tight semantic focus (avoid noise)
-- `SIMILARITY_THRESHOLD: 0.85` - Precise matching for technical facts
-- `TRIPLE_DEPTH: 1` - Minimal graph traversal needed
-
-**Latency**: ~20-30ms (embedding generation + similarity computation)
-
-**Evolvability**: 
-- Archetypes stored in `context_archetypes` table
-- AI can propose new archetypes via Dream Channel
-- Human approves → auto-inserted into database
-- Background task reloads every 60s
-- No code changes or redeployment needed
+For now, default values are used for all messages.
 
 ---
 
@@ -258,27 +179,17 @@ TRIPLE_DEPTH: 1
 
 #### 5a. Episodic Retrieval
 
-**Query**: Follow `prev_turn_id` chain backwards
+**Query**: Retrieve recent messages by timestamp
 ```sql
--- Recursive CTE to traverse temporal chain
-WITH RECURSIVE conversation_chain AS (
-    -- Start with current message
-    SELECT id, content, is_bot, prev_turn_id, timestamp, 0 as depth
-    FROM raw_messages
-    WHERE id = '660e8400-e29b-41d4-a716-446655440001'
-    
-    UNION ALL
-    
-    -- Recursively follow prev_turn_id
-    SELECT rm.id, rm.content, rm.is_bot, rm.prev_turn_id, rm.timestamp, cc.depth + 1
-    FROM raw_messages rm
-    INNER JOIN conversation_chain cc ON rm.id = cc.prev_turn_id
-    WHERE cc.depth < 8  -- CONTEXT_TURNS limit
-)
-SELECT * FROM conversation_chain ORDER BY depth DESC;
+-- Get recent conversation messages
+SELECT id, content, is_bot, is_proactive, timestamp
+FROM raw_messages
+WHERE channel_id = $1
+ORDER BY timestamp DESC
+LIMIT $2;  -- CONTEXT_TURNS limit
 ```
 
-**Result**: Last 8 turns of conversation
+**Result**: Last N turns of conversation (ordered chronologically)
 ```
 [Turn N-7]: "What's your experience with programming languages?"
 [Turn N-6]: "I've used JavaScript and Go, but Python is my favorite"
@@ -367,18 +278,18 @@ JOIN stable_facts sf_object ON tt.object_id = sf_object.id;
 ```python
 context = {
     "episodic": [
-        # 12 turns from temporal chain (per archetype config)
+        # N recent turns ordered by timestamp (per configuration)
     ],
     "semantic": [
-        # 3 related facts from vector search (per archetype config)
+        # N related facts from vector search (per configuration)
     ],
     "graph": [
-        # Relationship triples (per archetype config: TRIPLE_DEPTH=1)
+        # Relationship triples (per configuration)
     ]
 }
 ```
 
-**Note**: The archetype configuration already respects hardware constraints through CHECK constraints in the `context_archetypes` table. All archetype values (whether human or AI-proposed) are validated against MIN/MAX limits during insertion.
+**Note**: Context limits are currently using default values. Future implementation will use archetype-based configuration that respects hardware constraints through CHECK constraints in the `context_archetypes` table.
 
 ---
 
@@ -465,24 +376,20 @@ INSERT INTO raw_messages (
     channel_id,
     content,
     is_bot,
-    prev_turn_id,  -- Links to user's message
+    is_proactive,  -- false for reactive responses
     timestamp
 ) VALUES (
     1234567899,  -- Bot's message ID
     987654321,
     'That''s great! Building AI projects with Python...',
     true,
-    '660e8400-e29b-41d4-a716-446655440001',  -- User's message UUID
+    false,  -- Reactive response to user message
     now()
 );
 ```
 
-**Temporal chain updated**:
-```
-[Turn N-1: User] ← [Turn N: Bot]
-     ↑                  ↑
-  prev_turn_id     prev_turn_id (will point here for next message)
-```
+**Message ordering**:
+Messages are ordered by timestamp for chronological conversation reconstruction.
 
 ---
 
@@ -692,11 +599,12 @@ T+1.8s:   ✓ Consolidation complete
 ## Key Design Insights
 
 1. **Canonical Integrity**: Feedback messages never enter raw_messages
-2. **Temporal Chaining**: Linked list enables efficient context window traversal
+2. **Timestamp Ordering**: Messages ordered by timestamp for efficient chronological retrieval
 3. **Hybrid Retrieval**: Combines recency (episodic), similarity (semantic), and structure (graph)
-4. **Semantic Classification**: Archetype matching determines optimal context configuration (~20ms)
+4. **Context Configuration**: Currently uses default values; archetype classification planned for future
 5. **Async Consolidation**: Memory extraction doesn't block response
-6. **Evolvable Logic**: Prompt templates and archetypes in database, not hardcoded
+6. **Evolvable Logic**: Prompt templates in database, not hardcoded
 7. **Performance Budget**: All queries optimized for 2GB RAM / 1vCPU
+8. **Proactive Messaging**: `is_proactive` flag distinguishes bot-initiated check-ins from reactive responses
 
 This design ensures fast responses (~500ms) while building rich, queryable memory over time.
