@@ -70,6 +70,8 @@ class LatticeBot(commands.Bot):
                 bot_username=self.user.name,
                 bot_id=self.user.id,
             )
+            self._scheduler = ProactiveScheduler(bot=self)
+            await self._scheduler.start()
         else:
             logger.warning("Bot connected but user is None")
 
