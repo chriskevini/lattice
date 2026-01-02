@@ -67,7 +67,7 @@ class ProactiveScheduler:
 
                 if next_check and datetime.utcnow() < next_check:
                     sleep_seconds = (next_check - datetime.utcnow()).total_seconds()
-                    await asyncio.sleep(min(sleep_seconds, 60))
+                    await asyncio.sleep(sleep_seconds)
                     continue
 
                 await self._run_proactive_check()

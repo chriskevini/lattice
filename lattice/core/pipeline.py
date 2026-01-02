@@ -1,8 +1,5 @@
 import logging
-from datetime import datetime
 from typing import Any
-
-from lattice.core.types import PipelineContext
 
 
 logger = logging.getLogger(__name__)
@@ -16,34 +13,6 @@ class UnifiedPipeline:
     ) -> None:
         self.db_pool = db_pool
         self.bot = bot
-
-    async def process_message(
-        self,
-        content: str,
-        channel_id: int,
-    ) -> dict[str, Any]:
-        pipeline_context = PipelineContext(
-            channel_id=channel_id,
-            user_id=None,
-            timestamp=datetime.utcnow(),
-        )
-
-        return {
-            "success": True,
-            "pipeline_context": pipeline_context,
-            "content": content,
-        }
-
-    async def process_user_message(
-        self,
-        content: str,
-        channel_id: int,
-        user_id: int,
-    ) -> dict[str, Any]:
-        return await self.process_message(
-            content=content,
-            channel_id=channel_id,
-        )
 
     async def send_response(
         self,

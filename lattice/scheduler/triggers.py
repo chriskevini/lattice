@@ -112,20 +112,53 @@ async def decide_proactive() -> ProactiveDecision:
     )
 
     llm_client = get_llm_client()
-    result = await llm_client.complete(
-        prompt,
-        temperature=prompt_template.temperature,
-    )
+    try:
+        result = await llm_client.complete(
+            prompt,
+            temperature=prompt_template.temperature,
+        )
+    except Exception as e:
+        logger.exception("LLM call failed")
+        return ProactiveDecision(
+            action="wait",
+            content=None,
+            next_check_at=(datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            reason=f"LLM call failed: {e}",
+            channel_id=channel_id,
+        )
 
     try:
         decision = json.loads(result.content)
+        action = decision.get("action", "wait")
+        if action not in ("message", "wait"):
+            logger.warning("Invalid action from LLM: %s, defaulting to wait", action)
+            action = "wait"
+
+        content = decision.get("content")
+        if action == "message" and content:
+            content = str(content).strip()
+            if len(content) == 0:
+                logger.warning("Empty content from LLM, skipping message")
+                action = "wait"
+                content = None
+
+        next_check_raw = decision.get("next_check_at")
+        next_check_at = None
+        if next_check_raw:
+            try:
+                parsed = datetime.fromisoformat(str(next_check_raw))
+                if parsed > datetime.utcnow():
+                    next_check_at = parsed.isoformat()
+            except (ValueError, TypeError):
+                logger.warning("Invalid next_check_at format: %s", next_check_raw)
+
+        if not next_check_at:
+            next_check_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
 
         return ProactiveDecision(
-            action=decision.get("action", "wait"),
-            content=decision.get("content"),
-            next_check_at=decision.get(
-                "next_check_at", (datetime.utcnow() + timedelta(hours=1)).isoformat()
-            ),
+            action=action,
+            content=content,
+            next_check_at=next_check_at,
             reason=decision.get("reason", "No reason provided"),
             channel_id=channel_id,
         )
