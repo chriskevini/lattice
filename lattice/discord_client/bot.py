@@ -240,8 +240,8 @@ class LatticeBot(commands.Bot):
                     context_config=context_info,
                 )
 
-                # Mirror to dream channel
-                dream_msg = await self._mirror_to_dream_channel(
+                # Mirror to dream channel (dream message update handled internally)
+                await self._mirror_to_dream_channel(
                     bot_message=bot_msg,
                     rendered_prompt=rendered_prompt,
                     context_info=context_info,
@@ -254,8 +254,6 @@ class LatticeBot(commands.Bot):
                         "cost_usd": response_result.cost_usd or 0,
                     },
                 )
-
-                # Dream message update is handled in _mirror_to_dream_channel
 
             _consolidation_task = asyncio.create_task(  # noqa: RUF006
                 episodic.consolidate_message(
