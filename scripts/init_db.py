@@ -1,6 +1,7 @@
 """Initialize the database schema for Lattice.
 
 Creates all necessary tables, indexes, and extensions as defined in the ENGRAM framework.
+Prompt templates are now managed via migrations (see scripts/migrations/).
 """
 
 import asyncio
@@ -179,202 +180,13 @@ async def init_database() -> None:
             """
         )
 
-        print("Inserting PROACTIVE_DECISION prompt template...")
-        proactive_decision_template = """You are a warm, curious, and gently proactive AI companion. Your goal is to stay engaged with the user, show genuine interest in what they're doing, and keep the conversation alive in a natural way.
-
-## Task
-Decide ONE action:
-1. Send a short proactive message to the user
-2. Wait {current_interval} minutes before checking again
-
-## Inputs
-- **Current Time:** {current_time} (Consider whether it's an appropriate time to message - avoid late night/early morning unless there's strong recent activity)
-- **Conversation Context:** {conversation_context}
-- **Active Goals:** {objectives_context}
-
-## Guidelines
-- **Time Sensitivity:** Check the current time - avoid messaging during typical sleep hours (11 PM - 7 AM local time) unless recent conversation suggests the user is active
-- **Variety:** Do not repeat the style of previous check-ins. Rotate between:
-    - **Progress Pull:** "How's the [Task] treating you?"
-    - **Vibe Check:** "How are you holding up today?"
-    - **Low-Friction Presence:** "Just checking in—I'm here if you need a thought partner."
-    - **Curious Spark:** "What's the latest with [Task/Goal]? Any fun breakthroughs?"
-    - **Gentle Encouragement:** "Rooting for you on [Task]—how's it feeling?"
-    - **Thinking of You:** "Hey, you popped into my mind—how's your day going?"
-    - **Light Support Offer:** "Still grinding on [Task]? Hit me up if you want to bounce ideas."
-- **Tone:** Concise (1-2 sentences max), warm, and peer-level—like chatting with a good friend. Avoid formal assistant language (no "As an AI..." or overly polished phrases).
-- Adapt the message naturally to the conversation context or active goals, but keep it light and non-pushy.
-
-## Output Format
-Return ONLY valid JSON:
-{{
-  "action": "message" | "wait",
-  "content": "Message text" | null,
-  "reason": "Justify the decision briefly, including which style you chose and why it fits now."
-}}"""
-
-        existing = await conn.fetchval(
-            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
-            "PROACTIVE_DECISION",
-        )
-
-        if existing:
-            print("PROACTIVE_DECISION prompt already exists, skipping insert")
-        else:
-            async with conn.transaction():
-                await conn.execute(
-                    """
-                    INSERT INTO prompt_registry (prompt_key, template, temperature)
-                    VALUES ($1, $2, 0.7)
-                    """,
-                    "PROACTIVE_DECISION",
-                    proactive_decision_template,
-                )
-                print("PROACTIVE_DECISION prompt inserted")
-
-        print("Inserting default prompt template...")
-        template_text = """You are a helpful AI companion in a Discord server.
-
-Recent conversation history:
-{episodic_context}
-
-Relevant facts from past conversations:
-{semantic_context}
-
-User message: {user_message}
-
-Respond naturally and helpfully, referring to relevant context when appropriate."""
-
-        existing = await conn.fetchval(
-            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
-            "BASIC_RESPONSE",
-        )
-
-        if existing:
-            print("Prompt template already exists, skipping insert")
-        else:
-            async with conn.transaction():
-                result = await conn.execute(
-                    """
-                    INSERT INTO prompt_registry (prompt_key, template, temperature)
-                    VALUES ($1, $2, 0.7)
-                    """,
-                    "BASIC_RESPONSE",
-                    template_text,
-                )
-                print(f"Prompt template result: {result}")
-
-        print("Inserting TRIPLE_EXTRACTION prompt template...")
-        triple_template = """You are analyzing a conversation to extract explicit relationships.
-
-## Input
-Recent conversation context:
-{CONTEXT}
-
-## Task
-Extract Subject-Predicate-Object triples that represent factual relationships.
-
-## Rules
-- Only extract relationships explicitly stated or strongly implied
-- Use canonical entity names (e.g., "Alice" not "she")
-- Predicates: lowercase, present tense
-- MAX 5 triples per turn
-- Skip if entities not clearly identified
-
-## Output Format
-Return ONLY a JSON array. No markdown formatting.
-[{{"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}}]
-If no valid triples: []
-
-Example:
-User: "My cat Mittens loves chasing laser pointers"
-Output: [
-    {{"subject": "Mittens", "predicate": "owns", "object": "User"}},
-    {{"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}}
-]
-
-Begin extraction:"""
-
-        existing = await conn.fetchval(
-            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
-            "TRIPLE_EXTRACTION",
-        )
-
-        if existing:
-            print("TRIPLE_EXTRACTION prompt already exists, skipping insert")
-        else:
-            async with conn.transaction():
-                await conn.execute(
-                    """
-                    INSERT INTO prompt_registry (prompt_key, template, temperature)
-                    VALUES ($1, $2, 0.1)
-                    """,
-                    "TRIPLE_EXTRACTION",
-                    triple_template,
-                )
-                print("TRIPLE_EXTRACTION prompt inserted")
-
-        print("Inserting OBJECTIVE_EXTRACTION prompt template...")
-        objective_template = (
-            "You are analyzing a conversation to extract user goals and intentions.\n"
-            "\n"
-            "## Input\n"
-            "Recent conversation context:\n"
-            "{CONTEXT}\n"
-            "\n"
-            "## Task\n"
-            "Extract user goals, objectives, or intentions that represent what the user\n"
-            "wants to achieve.\n"
-            "\n"
-            "## Rules\n"
-            "- Only extract goals that are explicitly stated or strongly implied\n"
-            "- Be specific about what the user wants to accomplish\n"
-            "- Saliency 0.0-1.0 based on explicitness and importance\n"
-            "- MAX 3 objectives per turn\n"
-            "- Skip if no clear goals are expressed\n"
-            "\n"
-            "## Output Format\n"
-            "Return ONLY a JSON array. No markdown formatting.\n"
-            '[{{"description": "What the user wants to achieve", "saliency": 0.7, '
-            '"status": "pending"}}]\n'
-            "If no valid objectives: []\n"
-            "\n"
-            "Example:\n"
-            'User: "I want to build a successful startup this year"\n'
-            'Output: [{{"description": "Build a successful startup", '
-            '"saliency": 0.9, "status": "pending"}}]\n'
-            "\n"
-            'User: "Just launched my MVP!"\n'
-            'Output: [{{"description": "Build a successful startup", '
-            '"saliency": 0.9, "status": "completed"}}]\n'
-            "\n"
-            "Begin extraction:"
-        )
-
-        existing = await conn.fetchval(
-            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
-            "OBJECTIVE_EXTRACTION",
-        )
-
-        if existing:
-            print("OBJECTIVE_EXTRACTION prompt already exists, skipping insert")
-        else:
-            async with conn.transaction():
-                await conn.execute(
-                    """
-                    INSERT INTO prompt_registry (prompt_key, template, temperature)
-                    VALUES ($1, $2, 0.1)
-                    """,
-                    "OBJECTIVE_EXTRACTION",
-                    objective_template,
-                )
-                print("OBJECTIVE_EXTRACTION prompt inserted")
-
-        print("Database initialization complete!")
+        print("Database schema initialization complete!")
         print(
             "Tables created: prompt_registry, raw_messages, stable_facts, "
             "semantic_triples, objectives, user_feedback, system_health"
         )
+        print("\nNOTE: Prompt templates should be inserted via migrations.")
+        print("Run: python scripts/migrate.py")
 
     except Exception as e:
         print(f"ERROR: Database initialization failed: {e}", file=sys.stderr)
