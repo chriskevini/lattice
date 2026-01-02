@@ -64,17 +64,27 @@ def get_referenced_message_id(message: Any) -> int | None:  # noqa: ANN401
     return getattr(reference, "message_id", None)
 
 
-def is_invisible_feedback(message: Any) -> DetectionResult:  # noqa: ANN401
-    """Check if a message is invisible feedback (quote/reply to bot).
+def is_invisible_feedback(
+    message: Any,  # noqa: ANN401
+    dream_channel_id: int | None = None,
+) -> DetectionResult:
+    """Check if a message is invisible feedback (quote/reply to bot in dream channel).
 
     Args:
         message: The Discord message to check
+        dream_channel_id: ID of the dream channel (feedback only accepted here)
 
     Returns:
         DetectionResult with detected status and content
     """
     if getattr(message, "author", None) and getattr(message.author, "bot", False):
         return DetectionResult(detected=False)
+
+    # Feedback must be in dream channel
+    if dream_channel_id is not None:
+        channel_id = getattr(getattr(message, "channel", None), "id", None)
+        if channel_id != dream_channel_id:
+            return DetectionResult(detected=False)
 
     if not is_quote_or_reply(message):
         return DetectionResult(detected=False)
@@ -83,10 +93,11 @@ def is_invisible_feedback(message: Any) -> DetectionResult:  # noqa: ANN401
     if not isinstance(content, str):
         content = ""
 
-    logger.info(
+    logger.debug(
         "Detected invisible feedback",
         author=getattr(getattr(message, "author", None), "name", "unknown"),
         referenced_message=get_referenced_message_id(message),
+        channel_id=getattr(getattr(message, "channel", None), "id", None),
     )
 
     return DetectionResult(detected=True, content=content, confidence=1.0)

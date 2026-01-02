@@ -327,10 +327,12 @@ class MockMessage:
         author_bot: bool = False,
         author_name: str = "testuser",
         is_reply: bool = False,
+        channel_id: int = 12345,
     ) -> None:
         self.content = content
         self.author = MockUser(bot=author_bot, name=author_name)
         self.reference = MockReference() if is_reply else None
+        self.channel = MockChannel(channel_id=channel_id)
 
 
 class MockUser:
@@ -346,6 +348,13 @@ class MockReference:
 
     def __init__(self) -> None:
         self.message_id: int | None = None
+
+
+class MockChannel:
+    """Mock Discord channel."""
+
+    def __init__(self, channel_id: int = 12345) -> None:
+        self.id = channel_id
 
 
 class TestFeedbackDetectionFunctions:
@@ -472,3 +481,41 @@ class TestFeedbackDetectionFunctions:
         result = feedback_detection.is_invisible_feedback(message)
 
         assert result.detected is False
+
+    def test_is_invisible_feedback_with_dream_channel(self) -> None:
+        """Test detection of invisible feedback in dream channel."""
+        dream_channel_id = 999
+        message = MockMessage(
+            content="Good explanation!",
+            is_reply=True,
+            channel_id=dream_channel_id,
+        )
+        result = feedback_detection.is_invisible_feedback(
+            message, dream_channel_id=dream_channel_id
+        )
+
+        assert result.detected is True
+        assert result.content == "Good explanation!"
+
+    def test_is_invisible_feedback_wrong_channel(self) -> None:
+        """Test that feedback in non-dream channel is not detected."""
+        dream_channel_id = 999
+        main_channel_id = 123
+        message = MockMessage(
+            content="This is feedback",
+            is_reply=True,
+            channel_id=main_channel_id,
+        )
+        result = feedback_detection.is_invisible_feedback(
+            message, dream_channel_id=dream_channel_id
+        )
+
+        assert result.detected is False
+
+    def test_is_invisible_feedback_no_dream_channel_configured(self) -> None:
+        """Test that feedback works without dream channel configured (backward compat)."""
+        message = MockMessage(content="Feedback", is_reply=True)
+        result = feedback_detection.is_invisible_feedback(message, dream_channel_id=None)
+
+        assert result.detected is True
+        assert result.content == "Feedback"

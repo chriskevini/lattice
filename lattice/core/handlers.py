@@ -8,7 +8,7 @@ from typing import Any
 
 import structlog
 
-from lattice.memory import semantic, user_feedback
+from lattice.memory import prompt_audits, semantic, user_feedback
 
 
 logger = structlog.get_logger(__name__)
@@ -22,9 +22,10 @@ async def handle_invisible_feedback(
     message: Any,  # noqa: ANN401
     feedback_content: str,
 ) -> bool:
-    """Handle invisible feedback from user (quote/reply to bot).
+    """Handle invisible feedback from user (quote/reply to bot in dream channel).
 
-    Stores the feedback in user_feedback table and adds 🫡 reaction.
+    Stores the feedback in user_feedback table, links it to prompt audit,
+    and adds 🫡 reaction.
 
     Args:
         message: The user's message containing feedback
@@ -44,7 +45,20 @@ async def handle_invisible_feedback(
             user_discord_message_id=message.id,
         )
 
-        await user_feedback.store_feedback(feedback_entry)
+        feedback_id = await user_feedback.store_feedback(feedback_entry)
+
+        # Link feedback to prompt audit via dream message ID
+        if referenced_message_id:
+            linked = await prompt_audits.link_feedback_to_audit(
+                dream_discord_message_id=referenced_message_id,
+                feedback_id=feedback_id,
+            )
+            if linked:
+                logger.info(
+                    "Linked feedback to prompt audit",
+                    feedback_id=str(feedback_id),
+                    dream_message_id=referenced_message_id,
+                )
 
         with suppress(Exception):
             await message.add_reaction(SALUTE_EMOJI)

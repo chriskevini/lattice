@@ -8,6 +8,7 @@ Phase 3: Proactive scheduling.
 import asyncio
 from datetime import UTC, datetime, timedelta
 import os
+from uuid import UUID
 
 import discord
 import structlog
@@ -15,7 +16,7 @@ from discord.ext import commands
 
 from lattice.core import handlers
 from lattice.core.handlers import WASTEBASKET_EMOJI
-from lattice.memory import episodic, feedback_detection, procedural, semantic
+from lattice.memory import episodic, feedback_detection, procedural, prompt_audits, semantic
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
@@ -24,6 +25,10 @@ from lattice.utils.llm import GenerationResult, get_llm_client
 
 
 logger = structlog.get_logger(__name__)
+
+# Constants
+MAX_DISCORD_MESSAGE_LENGTH = 2000
+MAX_PROMPT_DISPLAY_LENGTH = 1500
 
 
 class LatticeBot(commands.Bot):
@@ -45,6 +50,10 @@ class LatticeBot(commands.Bot):
         self.main_channel_id = int(os.getenv("DISCORD_MAIN_CHANNEL_ID", "0"))
         if not self.main_channel_id:
             logger.warning("DISCORD_MAIN_CHANNEL_ID not set")
+
+        self.dream_channel_id = int(os.getenv("DISCORD_DREAM_CHANNEL_ID", "0"))
+        if not self.dream_channel_id:
+            logger.warning("DISCORD_DREAM_CHANNEL_ID not set - dream mirroring disabled")
 
         self._memory_healthy = False
         self._consecutive_failures = 0
@@ -85,7 +94,8 @@ class LatticeBot(commands.Bot):
         if message.author == self.user:
             return
 
-        if message.channel.id != self.main_channel_id:
+        # Allow messages from both main channel (conversation) and dream channel (feedback)
+        if message.channel.id not in (self.main_channel_id, self.dream_channel_id):
             return
 
         if not self._memory_healthy:
@@ -121,7 +131,9 @@ class LatticeBot(commands.Bot):
                 )
                 return
 
-            feedback_result = feedback_detection.is_invisible_feedback(message)
+            feedback_result = feedback_detection.is_invisible_feedback(
+                message, dream_channel_id=self.dream_channel_id
+            )
             if feedback_result.detected:
                 feedback_content = feedback_result.content or ""
                 logger.info(
@@ -131,6 +143,14 @@ class LatticeBot(commands.Bot):
                 await handlers.handle_invisible_feedback(
                     message=message,
                     feedback_content=feedback_content,
+                )
+                return
+
+            # If message is in dream channel but NOT feedback, ignore it
+            if message.channel.id == self.dream_channel_id:
+                logger.debug(
+                    "Message in dream channel is not feedback, ignoring",
+                    author=message.author.name,
                 )
                 return
 
@@ -167,7 +187,7 @@ class LatticeBot(commands.Bot):
                 limit=10,
             )
 
-            response_result = await self._generate_response(
+            response_result, rendered_prompt, context_info = await self._generate_response(
                 user_message=message.content,
                 semantic_facts=semantic_facts,
                 recent_messages=recent_messages,
@@ -190,8 +210,9 @@ class LatticeBot(commands.Bot):
                 "latency_ms": response_result.latency_ms,
             }
 
+            # Store episodic messages and prompt audits
             for bot_msg in bot_messages:
-                await episodic.store_message(
+                message_id = await episodic.store_message(
                     episodic.EpisodicMessage(
                         content=bot_msg.content,
                         discord_message_id=bot_msg.id,
@@ -200,6 +221,38 @@ class LatticeBot(commands.Bot):
                         is_proactive=False,
                         generation_metadata=generation_metadata,
                     )
+                )
+
+                # Store prompt audit for each bot message
+                audit_id = await prompt_audits.store_prompt_audit(
+                    prompt_key="BASIC_RESPONSE",
+                    rendered_prompt=rendered_prompt,
+                    response_content=bot_msg.content,
+                    main_discord_message_id=bot_msg.id,
+                    template_version=1,  # TODO: Get from prompt_registry
+                    message_id=message_id,
+                    model=response_result.model,
+                    provider=response_result.provider,
+                    prompt_tokens=response_result.prompt_tokens,
+                    completion_tokens=response_result.completion_tokens,
+                    cost_usd=response_result.cost_usd,
+                    latency_ms=response_result.latency_ms,
+                    context_config=context_info,
+                )
+
+                # Mirror to dream channel (dream message update handled internally)
+                await self._mirror_to_dream_channel(
+                    bot_message=bot_msg,
+                    rendered_prompt=rendered_prompt,
+                    context_info=context_info,
+                    audit_id=audit_id,
+                    performance={
+                        "prompt_key": "BASIC_RESPONSE",
+                        "version": 1,
+                        "model": response_result.model,
+                        "latency_ms": response_result.latency_ms,
+                        "cost_usd": response_result.cost_usd or 0,
+                    },
                 )
 
             _consolidation_task = asyncio.create_task(  # noqa: RUF006
@@ -227,7 +280,7 @@ class LatticeBot(commands.Bot):
         user_message: str,
         semantic_facts: list[semantic.StableFact],
         recent_messages: list[episodic.EpisodicMessage],
-    ) -> GenerationResult:
+    ) -> tuple[GenerationResult, str, dict]:
         """Generate a response using the prompt template.
 
         Args:
@@ -236,20 +289,24 @@ class LatticeBot(commands.Bot):
             recent_messages: Recent conversation history
 
         Returns:
-            GenerationResult with content and metadata
+            Tuple of (GenerationResult, rendered_prompt, context_info)
         """
         prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
         if not prompt_template:
-            return GenerationResult(
-                content="I'm still initializing. Please try again in a moment.",
-                model="unknown",
-                provider=None,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-                cost_usd=None,
-                latency_ms=0,
-                temperature=0.0,
+            return (
+                GenerationResult(
+                    content="I'm still initializing. Please try again in a moment.",
+                    model="unknown",
+                    provider=None,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    cost_usd=None,
+                    latency_ms=0,
+                    temperature=0.0,
+                ),
+                "",
+                {},
             )
 
         def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
@@ -281,7 +338,15 @@ class LatticeBot(commands.Bot):
             prompt_preview=filled_prompt[:500],
         )
 
-        return await self._simple_generate(filled_prompt, user_message)
+        # Build context info for audit
+        context_info = {
+            "episodic": len(recent_messages[-5:]),
+            "semantic": len(semantic_facts),
+            "graph": 0,  # Not yet implemented
+        }
+
+        result = await self._simple_generate(filled_prompt, user_message)
+        return result, filled_prompt, context_info
 
     async def _simple_generate(self, prompt: str, user_message: str) -> GenerationResult:  # noqa: ARG002
         """Generate response using LLM client.
@@ -329,6 +394,96 @@ class LatticeBot(commands.Bot):
             chunks.append("\n".join(current_chunk))
 
         return chunks
+
+    async def _mirror_to_dream_channel(
+        self,
+        bot_message: discord.Message,
+        rendered_prompt: str,
+        context_info: dict,
+        audit_id: UUID,
+        performance: dict,
+    ) -> discord.Message | None:
+        """Mirror bot response to dream channel with metadata.
+
+        Args:
+            bot_message: The bot message sent in main channel
+            rendered_prompt: The full rendered prompt
+            context_info: Context configuration (episodic, semantic, graph counts)
+            audit_id: UUID of the prompt audit entry
+            performance: Performance metrics (model, tokens, latency, cost)
+
+        Returns:
+            Dream channel message if successful, None otherwise
+        """
+        if not self.dream_channel_id:
+            logger.debug("Dream channel not configured, skipping mirror")
+            return None
+
+        dream_channel = self.get_channel(self.dream_channel_id)
+        if not dream_channel:
+            logger.warning(
+                "Dream channel not found",
+                dream_channel_id=self.dream_channel_id,
+            )
+            return None
+
+        # Type check - must be a text channel
+        if not isinstance(dream_channel, discord.TextChannel):
+            logger.warning(
+                "Dream channel is not a text channel",
+                dream_channel_type=type(dream_channel).__name__,
+            )
+            return None
+
+        # Truncate prompt if too long
+        if len(rendered_prompt) > MAX_PROMPT_DISPLAY_LENGTH:
+            prompt_display = (
+                f"{rendered_prompt[:MAX_PROMPT_DISPLAY_LENGTH]}...\n\n"
+                f"[Full prompt: {len(rendered_prompt)} chars, see prompt_audits table]"
+            )
+        else:
+            prompt_display = rendered_prompt
+
+        # Build dream channel message
+        separator = "─" * 40
+        prompt_version = performance.get("version", 1)
+        dream_content = (
+            f"🔗 Main: {bot_message.jump_url}\n\n"
+            f"{separator}\n"
+            f"{bot_message.content}\n"
+            f"{separator}\n\n"
+            f"📊 {performance.get('prompt_key', 'BASIC_RESPONSE')} "
+            f"v{prompt_version} | "
+            f"{context_info.get('episodic', 0)}E, {context_info.get('semantic', 0)}S, "
+            f"{context_info.get('graph', 0)}G | "
+            f"⚡{performance.get('latency_ms', 0)}ms | "
+            f"${performance.get('cost_usd', 0):.4f}\n\n"
+            f"💬 Reply or quote this message for feedback\n\n"
+            f"{separator}\n"
+            f"||📋 FULL RENDERED PROMPT\n\n{prompt_display}||"
+        )
+
+        try:
+            dream_msg = await dream_channel.send(dream_content)
+            logger.info(
+                "Mirrored to dream channel",
+                audit_id=audit_id,
+                main_message_id=bot_message.id,
+                dream_message_id=dream_msg.id,
+            )
+
+            # Update audit with dream message ID
+            await prompt_audits.update_audit_dream_message(
+                audit_id=audit_id,
+                dream_discord_message_id=dream_msg.id,
+            )
+            return dream_msg  # noqa: TRY300
+        except Exception:
+            logger.exception(
+                "Failed to mirror to dream channel",
+                audit_id=audit_id,
+            )
+            return None
 
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
         """Handle reaction add events.
