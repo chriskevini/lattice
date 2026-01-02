@@ -2,6 +2,7 @@
 
 Phase 1: Basic connectivity, episodic logging, semantic recall, and prompt registry.
 Phase 2: Invisible alignment (feedback, North Star goals).
+Phase 3: Proactive scheduling.
 """
 
 import asyncio
@@ -14,12 +15,7 @@ from discord.ext import commands
 from lattice.core import handlers
 from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
-from lattice.scheduler import ProactiveScheduler, AdaptiveScheduler, EngagementScorer
-from lattice.scheduler.recursion_guard import RecursionGuard
-from lattice.scheduler.safety_filter import GhostContentSafetyFilter
-from lattice.scheduler.opt_out_manager import UserOptOutManager
-from lattice.scheduler.response_handler import GhostResponseHandler
-from lattice.scheduler.triggers import TriggerDetector
+from lattice.scheduler import ProactiveScheduler
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.utils.database import db_pool
 from lattice.utils.embeddings import embedding_model
