@@ -100,44 +100,57 @@ async def store_message(message: EpisodicMessage) -> UUID:
 
 
 async def get_recent_messages(
-    channel_id: int,
+    channel_id: int | None = None,
     limit: int = 10,
 ) -> list[EpisodicMessage]:
-    """Get recent messages from a channel.
+    """Get recent messages from a channel or all channels.
 
     Args:
-        channel_id: Discord channel ID
+        channel_id: Discord channel ID (None for all channels)
         limit: Maximum number of messages to return
 
     Returns:
         List of recent messages, ordered by timestamp (oldest first)
     """
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, discord_message_id, channel_id, content, is_bot,
-                   prev_turn_id, timestamp
-            FROM raw_messages
-            WHERE channel_id = $1
-            ORDER BY timestamp DESC
-            LIMIT $2
-            """,
-            channel_id,
-            limit,
-        )
-
-        return [
-            EpisodicMessage(
-                message_id=row["id"],
-                discord_message_id=row["discord_message_id"],
-                channel_id=row["channel_id"],
-                content=row["content"],
-                is_bot=row["is_bot"],
-                prev_turn_id=row["prev_turn_id"],
-                timestamp=row["timestamp"],
+    if channel_id:
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, discord_message_id, channel_id, content, is_bot,
+                       prev_turn_id, timestamp
+                FROM raw_messages
+                WHERE channel_id = $1
+                ORDER BY timestamp DESC
+                LIMIT $2
+                """,
+                channel_id,
+                limit,
             )
-            for row in reversed(rows)
-        ]
+    else:
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, discord_message_id, channel_id, content, is_bot,
+                       prev_turn_id, timestamp
+                FROM raw_messages
+                ORDER BY timestamp DESC
+                LIMIT $1
+                """,
+                limit,
+            )
+
+    return [
+        EpisodicMessage(
+            message_id=row["id"],
+            discord_message_id=row["discord_message_id"],
+            channel_id=row["channel_id"],
+            content=row["content"],
+            is_bot=row["is_bot"],
+            prev_turn_id=row["prev_turn_id"],
+            timestamp=row["timestamp"],
+        )
+        for row in reversed(rows)
+    ]
 
 
 async def get_last_message_id(channel_id: int) -> UUID | None:

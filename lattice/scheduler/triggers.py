@@ -1,114 +1,141 @@
+"""Proactive trigger detection using AI decisions.
+
+Uses LLM to decide whether to initiate contact based on conversation context.
+"""
+
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any
+
+from lattice.memory.episodic import EpisodicMessage, get_recent_messages
+from lattice.memory.procedural import get_prompt
+from lattice.utils.database import db_pool
+from lattice.utils.llm import get_llm_client
 
 
 logger = logging.getLogger(__name__)
 
 
-class TriggerType(Enum):
-    MILESTONE = "milestone"
-    ENGAGEMENT_LAPSE = "engagement_lapse"
-    CONTEXT_SWITCH = "context_switch"
-    MANUAL = "manual"
-
-
 @dataclass
-class TriggerEvent:
-    trigger_type: TriggerType
-    user_id: int
-    channel_id: int
-    timestamp: datetime
-    metadata: dict[str, Any]
+class ProactiveDecision:
+    """Result of AI decision on proactive contact."""
+
+    action: str
+    content: str | None
+    next_check_at: str
+    reason: str
+    channel_id: int | None = None
 
 
-class TriggerDetector:
-    ENGAGEMENT_LAPSE_HOURS: int = 72
-    MILESTONE_KEYWORDS: list[str] = [
-        "completed",
-        "achieved",
-        "finished",
-        "done",
-        "reached",
-        "goal",
-        "milestone",
-    ]
+def format_message(msg: EpisodicMessage) -> str:
+    """Format a message for the conversation context."""
+    role = "ASSISTANT" if msg.is_bot else "USER"
+    content = msg.content[:500]
+    return f"{role}: {content}"
 
-    def __init__(self, db_pool: Any) -> None:
-        self.db_pool = db_pool
 
-    async def check_engagement_lapse(self, user_id: int) -> bool:
-        async with self.db_pool.acquire() as conn:
-            last_activity = await conn.fetchval(
-                """
-                SELECT MAX(timestamp) FROM raw_messages
-                WHERE user_id = $1 AND is_bot = false
-                """,
-                user_id,
-            )
+async def get_conversation_context(limit: int = 20) -> str:
+    """Build conversation context in USER/ASSISTANT format.
 
-        if not last_activity:
-            return False
+    Args:
+        limit: Maximum number of recent messages to include
 
-        lapse_threshold = datetime.utcnow() - timedelta(hours=self.ENGAGEMENT_LAPSE_HOURS)
-        return last_activity < lapse_threshold
+    Returns:
+        Formatted conversation string
+    """
+    messages = await get_recent_messages(limit=limit)
 
-    async def check_milestone(self, content: str) -> bool:
-        content_lower = content.lower()
-        return any(keyword in content_lower for keyword in self.MILESTONE_KEYWORDS)
+    if not messages:
+        return "No recent conversation history."
 
-    async def detect_triggers(
-        self,
-        user_id: int,
-        channel_id: int,
-        recent_messages: list[dict[str, Any]],
-    ) -> list[TriggerEvent]:
-        triggers: list[TriggerEvent] = []
+    lines: list[str] = [format_message(msg) for msg in messages]
+    return "\n".join(lines)
 
-        if await self.check_engagement_lapse(user_id):
-            triggers.append(
-                TriggerEvent(
-                    trigger_type=TriggerType.ENGAGEMENT_LAPSE,
-                    user_id=user_id,
-                    channel_id=channel_id,
-                    timestamp=datetime.utcnow(),
-                    metadata={"reason": "No activity for 72+ hours"},
-                )
-            )
 
-        for msg in recent_messages:
-            if await self.check_milestone(msg.get("content", "")):
-                triggers.append(
-                    TriggerEvent(
-                        trigger_type=TriggerType.MILESTONE,
-                        user_id=user_id,
-                        channel_id=channel_id,
-                        timestamp=datetime.utcnow(),
-                        metadata={"message_id": msg.get("id")},
-                    )
-                )
-                break
+async def get_objectives_context() -> str:
+    """Get user's goals and objectives.
 
-        return triggers
+    Returns:
+        Formatted objectives string
+    """
+    async with db_pool.pool.acquire() as conn:
+        objectives = await conn.fetch(
+            "SELECT description, status FROM objectives WHERE status = 'pending' ORDER BY saliency_score DESC LIMIT 5"
+        )
 
-    async def should_trigger_proactive(
-        self,
-        user_id: int,
-        channel_id: int,
-        last_ghost_at: datetime | None,
-    ) -> tuple[bool, TriggerEvent | None]:
-        if last_ghost_at is None:
-            return True, None
+    if not objectives:
+        return "No active objectives."
 
-        async with self.db_pool.acquire() as conn:
-            next_scheduled = await conn.fetchval(
-                "SELECT next_scheduled_at FROM proactive_schedule_config WHERE user_id = $1",
-                user_id,
-            )
+    lines: list[str] = [f"- {obj['description']} ({obj['status']})" for obj in objectives]
+    return "User goals:\n" + "\n".join(lines)
 
-        if not next_scheduled:
-            return True, None
 
-        return datetime.utcnow() >= next_scheduled, None
+async def get_default_channel_id() -> int | None:
+    """Get the default channel for proactive messages.
+
+    For single-user setup, returns the first text channel.
+
+    Returns:
+        Channel ID or None if no suitable channel found
+    """
+    async with db_pool.pool.acquire() as conn:
+        channel_id = await conn.fetchval(
+            "SELECT channel_id FROM raw_messages ORDER BY timestamp DESC LIMIT 1"
+        )
+    return channel_id
+
+
+async def decide_proactive() -> ProactiveDecision:
+    """Ask AI whether to send a proactive message.
+
+    Returns:
+        ProactiveDecision with action, content, next_check_at, and reason
+    """
+    conversation = await get_conversation_context()
+    objectives = await get_objectives_context()
+    channel_id = await get_default_channel_id()
+
+    prompt_template = await get_prompt("PROACTIVE_DECISION")
+    if not prompt_template:
+        logger.error("PROACTIVE_DECISION prompt not found in database")
+        return ProactiveDecision(
+            action="wait",
+            content=None,
+            next_check_at=(datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            reason="PROACTIVE_DECISION prompt not found, defaulting to wait",
+        )
+
+    prompt = prompt_template.template.format(
+        conversation_context=conversation,
+        objectives_context=objectives,
+    )
+
+    llm_client = get_llm_client()
+    result = await llm_client.complete(
+        prompt,
+        temperature=prompt_template.temperature,
+    )
+
+    try:
+        decision = json.loads(result.content)
+
+        return ProactiveDecision(
+            action=decision.get("action", "wait"),
+            content=decision.get("content"),
+            next_check_at=decision.get(
+                "next_check_at", (datetime.utcnow() + timedelta(hours=1)).isoformat()
+            ),
+            reason=decision.get("reason", "No reason provided"),
+            channel_id=channel_id,
+        )
+
+    except json.JSONDecodeError:
+        logger.exception("Failed to parse AI response as JSON")
+        return ProactiveDecision(
+            action="wait",
+            content=None,
+            next_check_at=(datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            reason="Failed to parse AI response",
+            channel_id=channel_id,
+        )

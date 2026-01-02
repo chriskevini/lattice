@@ -225,6 +225,64 @@ async def init_database() -> None:
         """
         )
 
+        print("Inserting PROACTIVE_DECISION prompt template...")
+        proactive_decision_template = """You are a thoughtful AI companion deciding whether to initiate contact with the user.
+
+## Recent Conversation
+{conversation_context}
+
+## User Goals
+{objectives_context}
+
+## Task
+Decide whether to send a proactive message to check in with the user.
+
+## Guidelines
+- If the user is actively engaged in conversation, wait longer
+- If it's been a while since last contact, consider reaching out
+- If the user has active goals, ask about progress on ONE goal
+- Keep messages warm, brief, and natural (1-2 sentences)
+- Don't be pushy - respect their space
+
+## Output Format
+Return ONLY valid JSON (no markdown formatting):
+{{"action": "message" | "wait", "content": "Your message here (if action=message)", "next_check_at": "ISO-8601 timestamp", "reason": "Brief explanation"}}
+
+## Examples
+{{"action": "message", "content": "Hey! How's that Python project coming along?", "next_check_at": "2026-01-02T09:00:00Z", "reason": "User mentioned a project, check on progress"}}
+{{"action": "wait", "next_check_at": "2026-01-02T18:00:00Z", "reason": "User just responded, give space"}}
+{{"action": "message", "content": "Just wanted to check in - hope you're having a great day!", "next_check_at": "2026-01-03T09:00:00Z", "reason: It's been a few days, gentle check-in"}}
+
+Your decision:"""
+
+        existing = await conn.fetchval(
+            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
+            "PROACTIVE_DECISION",
+        )
+
+        if existing:
+            print("PROACTIVE_DECISION prompt already exists, skipping insert")
+        else:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO prompt_registry (prompt_key, template, temperature)
+                    VALUES ($1, $2, 0.7)
+                    """,
+                    "PROACTIVE_DECISION",
+                    proactive_decision_template,
+                )
+                print("PROACTIVE_DECISION prompt inserted")
+
+        await conn.execute(
+            """
+            DROP TRIGGER IF EXISTS invalidate_centroid_on_update ON context_archetypes;
+            CREATE TRIGGER invalidate_centroid_on_update
+            BEFORE UPDATE ON context_archetypes
+            FOR EACH ROW EXECUTE FUNCTION invalidate_centroid();
+        """
+        )
+
         print("Inserting default prompt template...")
         template_text = """You are a helpful AI companion in a Discord server.
 
@@ -519,102 +577,11 @@ Generate your re-engagement message now:"""
                 )
                 print("PROACTIVE_REENGAGE prompt inserted")
 
-        print("Creating ghost_message_log table...")
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ghost_message_log (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                channel_id BIGINT NOT NULL,
-                user_id BIGINT NOT NULL,
-                scheduled_for TIMESTAMPTZ NOT NULL,
-                triggered_at TIMESTAMPTZ DEFAULT now(),
-                trigger_reason TEXT NOT NULL CHECK (trigger_reason IN ('scheduled', 'milestone', 'engagement_lapse', 'context_switch', 'manual')),
-                content_hash VARCHAR(64) CHECK (LENGTH(content_hash) = 64),
-                response_message_id BIGINT,
-                response_within_minutes INT,
-                user_reaction_count INT DEFAULT 0 CHECK (user_reaction_count >= 0),
-                user_reply_count INT DEFAULT 0 CHECK (user_reply_count >= 0),
-                engagement_score FLOAT CHECK (engagement_score >= 0 AND engagement_score <= 1),
-                was_appropriate BOOLEAN,
-                context_used JSONB DEFAULT '{}' CHECK (jsonb_typeof(context_used) = 'object'),
-                response_preview TEXT CHECK (LENGTH(response_preview) <= 200),
-                metadata JSONB DEFAULT '{}' CHECK (jsonb_typeof(metadata) = 'object'),
-                created_at TIMESTAMPTZ DEFAULT now()
-            );
-        """
-        )
-
-        print("Creating ghost_message_log indexes...")
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ghost_log_channel_time ON ghost_message_log(channel_id, triggered_at DESC);"
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ghost_log_user ON ghost_message_log(user_id, triggered_at DESC);"
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ghost_log_hash ON ghost_message_log(content_hash) WHERE content_hash IS NOT NULL;"
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ghost_log_success ON ghost_message_log(was_appropriate) WHERE was_appropriate = true;"
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ghost_log_triggered_at ON ghost_message_log(triggered_at DESC);"
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_ghost_log_reason ON ghost_message_log(trigger_reason, triggered_at DESC);"
-        )
-
-        print("Creating proactive_schedule_config table...")
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS proactive_schedule_config (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                user_id BIGINT NOT NULL UNIQUE,
-                channel_id BIGINT NOT NULL,
-                base_interval_minutes INT NOT NULL DEFAULT 60 CHECK (base_interval_minutes >= 15 AND base_interval_minutes <= 10080),
-                current_interval_minutes INT NOT NULL DEFAULT 60 CHECK (current_interval_minutes >= 15 AND current_interval_minutes <= 10080),
-                min_interval_minutes INT NOT NULL DEFAULT 15 CHECK (min_interval_minutes >= 5 AND min_interval_minutes <= 10080),
-                max_interval_minutes INT NOT NULL DEFAULT 10080 CHECK (max_interval_minutes <= 604800),
-                CHECK (current_interval_minutes >= min_interval_minutes),
-                CHECK (current_interval_minutes <= max_interval_minutes),
-                last_engagement_score FLOAT,
-                engagement_count INT DEFAULT 0,
-                is_paused BOOLEAN DEFAULT false,
-                paused_reason TEXT,
-                opt_out BOOLEAN DEFAULT false,
-                opt_out_at TIMESTAMPTZ,
-                user_timezone TEXT DEFAULT 'UTC',
-                active_triggers TEXT[] DEFAULT ARRAY['scheduled']::TEXT[],
-                last_ghost_at TIMESTAMPTZ,
-                next_scheduled_at TIMESTAMPTZ,
-                created_at TIMESTAMPTZ DEFAULT now(),
-                updated_at TIMESTAMPTZ DEFAULT now()
-            );
-        """
-        )
-
-        print("Creating proactive_schedule_config indexes...")
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_schedule_config_user ON proactive_schedule_config(user_id);"
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_schedule_config_opt_out ON proactive_schedule_config(opt_out) WHERE opt_out = false;"
-        )
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_schedule_config_due ON proactive_schedule_config(next_scheduled_at)
-            WHERE is_paused = false AND opt_out = false;
-            """
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_schedule_config_paused ON proactive_schedule_config(is_paused, opt_out, next_scheduled_at);"
-        )
-
         print("Database initialization complete!")
         print(
             "Tables created: prompt_registry, raw_messages, stable_facts, "
             "semantic_triples, objectives, user_feedback, system_health, "
-            "context_archetypes, ghost_message_log, proactive_schedule_config"
+            "context_archetypes"
         )
 
     except Exception as e:

@@ -1,141 +1,119 @@
+"""Proactive scheduler for initiating contact with users.
+
+A simple scheduler that wakes up at scheduled times and uses AI to decide
+whether to send a proactive message.
+"""
+
 import asyncio
 import logging
-import random
 from datetime import datetime, timedelta
-from typing import Any
 
-import pytz  # type: ignore[import-untyped]
+from lattice.core.pipeline import UnifiedPipeline
+from lattice.scheduler.triggers import decide_proactive
+from lattice.utils.database import get_next_check_at, set_next_check_at
 
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_CHECK_INTERVAL_MINUTES = 15
+
 
 class ProactiveScheduler:
-    MAX_CONSECUTIVE_FAILURES: int = 5
-    FAILURE_BACKOFF_SECONDS: int = 300
-    ACTIVE_HOURS_START: int = 9
-    ACTIVE_HOURS_END: int = 21
-    JITTER_RANGE: float = 0.1
+    """Simple scheduler that triggers proactive check-ins based on AI decisions."""
 
     def __init__(
         self,
-        bot: Any,
-        db_pool: Any,
-        check_interval: int = 60,
-        initial_delay: int = 300,
+        bot: any,
+        check_interval: int = DEFAULT_CHECK_INTERVAL_MINUTES,
     ) -> None:
+        """Initialize the proactive scheduler.
+
+        Args:
+            bot: Discord bot instance for sending messages
+            check_interval: How often to check if it's time for proactive contact (minutes)
+        """
         self.bot = bot
-        self.db_pool = db_pool
         self.check_interval = check_interval
-        self.initial_delay = initial_delay
         self._running: bool = False
-        self._consecutive_failures: int = 0
-        self._last_failure_time: datetime | None = None
 
     async def start(self) -> None:
+        """Start the scheduler loop."""
         self._running = True
         logger.info("Starting proactive scheduler")
-        await asyncio.sleep(self.initial_delay)
+
+        initial_check = await get_next_check_at()
+        if not initial_check:
+            initial_check = datetime.utcnow() + timedelta(minutes=self.check_interval)
+            await set_next_check_at(initial_check)
+
         asyncio.create_task(self._scheduler_loop())
 
     async def stop(self) -> None:
+        """Stop the scheduler."""
         self._running = False
         logger.info("Stopping proactive scheduler")
 
     async def _scheduler_loop(self) -> None:
+        """Main scheduler loop."""
         while self._running:
             try:
-                if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
-                    backoff_time = min(
-                        self.FAILURE_BACKOFF_SECONDS
-                        * (2 ** (self._consecutive_failures - self.MAX_CONSECUTIVE_FAILURES)),
-                        3600,
-                    )
-                    logger.warning("Scheduler circuit breaker activated")
-                    await asyncio.sleep(backoff_time)
-                    self._consecutive_failures = 0
+                next_check = await get_next_check_at()
 
-                now = datetime.utcnow()
-                due_ghosts = await self._get_due_ghosts(now)
+                if next_check and datetime.utcnow() < next_check:
+                    sleep_seconds = (next_check - datetime.utcnow()).total_seconds()
+                    await asyncio.sleep(min(sleep_seconds, 60))
+                    continue
 
-                for ghost_config in due_ghosts:
-                    if not self._running:
-                        break
-
-                    if ghost_config.get("opt_out") or ghost_config.get("is_paused"):
-                        continue
-
-                    if not self._is_local_time_active(ghost_config.get("user_timezone", "UTC")):
-                        continue
-
-                    if not await self._has_send_permission(ghost_config.get("channel_id", 0)):
-                        logger.warning("Missing send permission")
-                        continue
-
-                    jitter = random.uniform(-self.JITTER_RANGE, self.JITTER_RANGE)
-                    next_interval = int(
-                        ghost_config.get("current_interval_minutes", 60) * (1 + jitter)
-                    )
-
-                    success = await self._execute_ghost(ghost_config)
-
-                    if success:
-                        self._consecutive_failures = 0
-                        next_at = now + timedelta(minutes=next_interval)
-                        await self._update_next_scheduled(ghost_config.get("user_id", 0), next_at)
-                    else:
-                        self._consecutive_failures += 1
-                        self._last_failure_time = now
+                await self._run_proactive_check()
 
             except Exception:
-                self._consecutive_failures += 1
-                logger.exception("Scheduler loop error")
+                logger.exception("Error in scheduler loop")
+                await asyncio.sleep(self.check_interval * 60)
 
-            await asyncio.sleep(self.check_interval)
+    async def _run_proactive_check(self) -> None:
+        """Run a proactive check using AI decision."""
+        logger.info("Running proactive check")
 
-    async def _get_due_ghosts(self, now: datetime) -> list[dict[str, Any]]:
-        async with self.db_pool.acquire() as conn:
-            return await conn.fetch(
-                """
-                SELECT * FROM proactive_schedule_config
-                WHERE opt_out = false
-                AND is_paused = false
-                AND (next_scheduled_at IS NULL OR next_scheduled_at <= $1)
-                ORDER BY next_scheduled_at ASC NULLS FIRST
-                LIMIT 50
-                FOR UPDATE SKIP LOCKED
-                """,
-                now,
+        decision = await decide_proactive()
+
+        if decision.action == "message" and decision.content:
+            pipeline = UnifiedPipeline(db_pool=self.bot.db_pool, bot=self.bot)
+
+            channel_id = decision.channel_id if decision.channel_id else 0
+            result = await pipeline.send_proactive_message(
+                content=decision.content,
+                channel_id=channel_id,
             )
 
-    def _is_local_time_active(self, timezone_str: str) -> bool:
-        try:
-            tz = pytz.timezone(timezone_str)
-            local_now = datetime.now(tz)
-            local_hour = local_now.hour
-            return self.ACTIVE_HOURS_START <= local_hour <= self.ACTIVE_HOURS_END
-        except pytz.UnknownTimeZoneError:
-            return True
+            if result:
+                logger.info(
+                    "Sent proactive message",
+                    content_preview=decision.content[:50],
+                    channel_id=channel_id,
+                )
 
-    async def _has_send_permission(self, channel_id: int) -> bool:
-        channel = self.bot.get_channel(channel_id)
-        if not channel:
-            return False
+        next_check = datetime.fromisoformat(decision.next_check_at)
+        await set_next_check_at(next_check)
 
-        permissions = channel.permissions_for(channel.guild.me)
-        return permissions.send_messages
+        logger.info(
+            "Next proactive check scheduled",
+            next_check=decision.next_check_at,
+            reason=decision.reason,
+        )
 
-    async def _execute_ghost(self, config: dict[str, Any]) -> bool:
-        return False
 
-    async def _update_next_scheduled(self, user_id: int, next_at: datetime) -> None:
-        async with self.db_pool.acquire() as conn:
-            await conn.execute(
-                """
-                UPDATE proactive_schedule_config
-                SET next_scheduled_at = $2, updated_at = now()
-                WHERE user_id = $1
-                """,
-                user_id,
-                next_at,
-            )
+async def get_default_channel_id(bot: any) -> int | None:
+    """Get the default channel for proactive messages.
+
+    For single-user setup, returns the first text channel the bot can access.
+
+    Args:
+        bot: Discord bot instance
+
+    Returns:
+        Channel ID or None if no suitable channel found
+    """
+    for channel in bot.get_all_channels():
+        if hasattr(channel, "send"):
+            return channel.id
+    return None

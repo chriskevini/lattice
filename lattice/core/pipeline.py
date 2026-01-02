@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from lattice.core.types import GhostContext, PipelineContext, PipelineSourceType
+from lattice.core.types import PipelineContext, PipelineSourceType
 
 
 logger = logging.getLogger(__name__)
@@ -21,16 +21,14 @@ class UnifiedPipeline:
         self,
         content: str,
         channel_id: int,
-        is_ghost: bool = False,
-        ghost_context: GhostContext | None = None,
+        is_proactive: bool = False,
     ) -> dict[str, Any]:
-        source_type = PipelineSourceType.GHOST if is_ghost else PipelineSourceType.USER
+        source_type = PipelineSourceType.GHOST if is_proactive else PipelineSourceType.USER
 
         pipeline_context = PipelineContext(
             source_type=source_type,
             channel_id=channel_id,
-            user_id=ghost_context.user_id if ghost_context else None,
-            ghost_context=ghost_context,
+            user_id=None,
             timestamp=datetime.utcnow(),
         )
 
@@ -49,20 +47,7 @@ class UnifiedPipeline:
         return await self.process_message(
             content=content,
             channel_id=channel_id,
-            is_ghost=False,
-            ghost_context=None,
-        )
-
-    async def process_ghost_message(
-        self,
-        content: str,
-        ghost_context: GhostContext,
-    ) -> dict[str, Any]:
-        return await self.process_message(
-            content=content,
-            channel_id=ghost_context.channel_id,
-            is_ghost=True,
-            ghost_context=ghost_context,
+            is_proactive=False,
         )
 
     async def send_response(
@@ -76,3 +61,19 @@ class UnifiedPipeline:
             return None
 
         return await channel.send(content)
+
+    async def send_proactive_message(
+        self,
+        content: str,
+        channel_id: int,
+    ) -> Any:
+        """Send a proactive message to a channel.
+
+        Args:
+            content: Message content to send
+            channel_id: Discord channel ID
+
+        Returns:
+            The sent message, or None if failed
+        """
+        return await self.send_response(channel_id=channel_id, content=content)

@@ -4,6 +4,8 @@ Provides connection pooling and common database operations.
 """
 
 import os
+from datetime import datetime
+from typing import Any
 
 import asyncpg
 import pgvector.asyncpg
@@ -84,6 +86,63 @@ async def setup_connection(conn: asyncpg.Connection) -> None:
         conn: The asyncpg connection to set up
     """
     await pgvector.asyncpg.register_vector(conn)
+
+
+async def get_system_health(key: str) -> Any | None:
+    """Get a value from the system_health table.
+
+    Args:
+        key: The metric key to retrieve
+
+    Returns:
+        The metric value, or None if not found
+    """
+    async with db_pool.pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT metric_value FROM system_health WHERE metric_key = $1",
+            key,
+        )
+
+
+async def set_system_health(key: str, value: Any) -> None:
+    """Set a value in the system_health table.
+
+    Args:
+        key: The metric key to set
+        value: The value to store
+    """
+    async with db_pool.pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO system_health (metric_key, metric_value, recorded_at)
+            VALUES ($1, $2, now())
+            ON CONFLICT (metric_key)
+            DO UPDATE SET metric_value = EXCLUDED.metric_value, recorded_at = now()
+            """,
+            key,
+            str(value),
+        )
+
+
+async def get_next_check_at() -> datetime | None:
+    """Get the next proactive check timestamp.
+
+    Returns:
+        The next check datetime, or None if not set
+    """
+    value = await get_system_health("next_check_at")
+    if value:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return None
+
+
+async def set_next_check_at(dt: datetime) -> None:
+    """Set the next proactive check timestamp.
+
+    Args:
+        dt: The datetime for next check
+    """
+    await set_system_health("next_check_at", dt.isoformat())
 
 
 db_pool = DatabasePool()

@@ -1,20 +1,10 @@
-from .adaptive import AdaptiveScheduler
-from .engagement import EngagementScorer
-from .opt_out_manager import UserOptOutManager
-from .recursion_guard import RecursionGuard
-from .response_handler import GhostResponseHandler
-from .runner import ProactiveScheduler
-from .safety_filter import GhostContentSafetyFilter
-from .triggers import TriggerDetector
+from .runner import ProactiveScheduler, get_default_channel_id
+from .triggers import ProactiveDecision, decide_proactive
 
 
 __all__ = [
-    "AdaptiveScheduler",
-    "EngagementScorer",
-    "GhostContentSafetyFilter",
-    "GhostResponseHandler",
+    "ProactiveDecision",
     "ProactiveScheduler",
-    "RecursionGuard",
-    "TriggerDetector",
-    "UserOptOutManager",
+    "decide_proactive",
+    "get_default_channel_id",
 ]
