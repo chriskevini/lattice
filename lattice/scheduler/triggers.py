@@ -6,11 +6,11 @@ Uses LLM to decide whether to initiate contact based on conversation context.
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from lattice.memory.episodic import EpisodicMessage, get_recent_messages
 from lattice.memory.procedural import get_prompt
-from lattice.utils.database import db_pool
+from lattice.utils.database import db_pool, get_system_health, set_system_health
 from lattice.utils.llm import get_llm_client
 
 
@@ -23,9 +23,20 @@ class ProactiveDecision:
 
     action: str
     content: str | None
-    next_check_at: str
     reason: str
     channel_id: int | None = None
+
+
+async def get_current_interval() -> int:
+    """Get the current wait interval in minutes from system_health."""
+    base = int(await get_system_health("scheduler_base_interval") or 15)
+    current = await get_system_health("scheduler_current_interval")
+    return int(current) if current else base
+
+
+async def set_current_interval(minutes: int) -> None:
+    """Set the current wait interval in system_health."""
+    await set_system_health("scheduler_current_interval", str(minutes))
 
 
 def format_message(msg: EpisodicMessage) -> str:
@@ -90,11 +101,13 @@ async def decide_proactive() -> ProactiveDecision:
     """Ask AI whether to send a proactive message.
 
     Returns:
-        ProactiveDecision with action, content, next_check_at, and reason
+        ProactiveDecision with action, content, and reason
     """
     conversation = await get_conversation_context()
     objectives = await get_objectives_context()
     channel_id = await get_default_channel_id()
+    current_interval = await get_current_interval()
+    current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     prompt_template = await get_prompt("PROACTIVE_DECISION")
     if not prompt_template:
@@ -102,11 +115,12 @@ async def decide_proactive() -> ProactiveDecision:
         return ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason="PROACTIVE_DECISION prompt not found, defaulting to wait",
         )
 
     prompt = prompt_template.template.format(
+        current_time=current_time,
+        current_interval=current_interval,
         conversation_context=conversation,
         objectives_context=objectives,
     )
@@ -122,7 +136,6 @@ async def decide_proactive() -> ProactiveDecision:
         return ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason=f"LLM call failed: {e}",
             channel_id=channel_id,
         )
@@ -142,23 +155,9 @@ async def decide_proactive() -> ProactiveDecision:
                 action = "wait"
                 content = None
 
-        next_check_raw = decision.get("next_check_at")
-        next_check_at = None
-        if next_check_raw:
-            try:
-                parsed = datetime.fromisoformat(str(next_check_raw))
-                if parsed > datetime.now(UTC):
-                    next_check_at = parsed.isoformat()
-            except (ValueError, TypeError):
-                logger.warning("Invalid next_check_at format: %s", next_check_raw)
-
-        if not next_check_at:
-            next_check_at = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-
         return ProactiveDecision(
             action=action,
             content=content,
-            next_check_at=next_check_at,
             reason=decision.get("reason", "No reason provided"),
             channel_id=channel_id,
         )
@@ -168,7 +167,6 @@ async def decide_proactive() -> ProactiveDecision:
         return ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason="Failed to parse AI response",
             channel_id=channel_id,
         )

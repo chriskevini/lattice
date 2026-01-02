@@ -1,6 +1,5 @@
 """Unit tests for scheduler components."""
 
-from datetime import datetime, timedelta, UTC
 from unittest.mock import patch
 
 import pytest
@@ -55,7 +54,6 @@ class TestProactiveDecision:
         decision = ProactiveDecision(
             action="message",
             content="Hey! How's it going?",
-            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason="User has been active",
             channel_id=12345,
         )
@@ -67,7 +65,6 @@ class TestProactiveDecision:
         decision = ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.now(UTC) + timedelta(hours=2)).isoformat(),
             reason="User just responded",
         )
         assert decision.action == "wait"
@@ -91,6 +88,8 @@ class TestDecideProactive:
                 return_value="No active objectives.",
             ),
             patch("lattice.scheduler.triggers.get_default_channel_id", return_value=None),
+            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch("lattice.scheduler.triggers.get_system_health", return_value="15"),
         ):
             result = await decide_proactive()
             assert result.action == "wait"

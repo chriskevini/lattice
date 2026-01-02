@@ -12,8 +12,8 @@ import structlog
 
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.memory import episodic
-from lattice.scheduler.triggers import decide_proactive
-from lattice.utils.database import get_next_check_at, set_next_check_at
+from lattice.scheduler.triggers import decide_proactive, get_current_interval, set_current_interval
+from lattice.utils.database import get_next_check_at, get_system_health, set_next_check_at
 
 
 logger = structlog.get_logger(__name__)
@@ -112,11 +112,21 @@ class ProactiveScheduler:
                     )
                 )
 
-        next_check = datetime.fromisoformat(decision.next_check_at)
+                await set_current_interval(
+                    int(await get_system_health("scheduler_base_interval") or 15)
+                )
+                next_check = datetime.now(UTC) + timedelta(minutes=await get_current_interval())
+        else:
+            current_interval = await get_current_interval()
+            max_interval = int(await get_system_health("scheduler_max_interval") or 1440)
+            new_interval = min(current_interval * 2, max_interval)
+            await set_current_interval(new_interval)
+            next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
+
         await set_next_check_at(next_check)
 
         logger.info(
             "Next proactive check scheduled",
-            next_check=decision.next_check_at,
+            next_check=next_check.isoformat(),
             reason=decision.reason,
         )

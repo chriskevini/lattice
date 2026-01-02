@@ -15,9 +15,9 @@ from discord.ext import commands
 from lattice.core import handlers
 from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
-from lattice.scheduler import ProactiveScheduler
+from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.core.pipeline import UnifiedPipeline
-from lattice.utils.database import db_pool
+from lattice.utils.database import db_pool, get_system_health
 from lattice.utils.embeddings import embedding_model
 from lattice.utils.llm import GenerationResult, get_llm_client
 
@@ -141,6 +141,9 @@ class LatticeBot(commands.Bot):
                     is_bot=False,
                 )
             )
+
+            base_interval = int(await get_system_health("scheduler_base_interval") or 15)
+            await set_current_interval(base_interval)
 
             await semantic.store_fact(
                 semantic.StableFact(
