@@ -11,6 +11,7 @@ from typing import Any
 import structlog
 
 from lattice.core.pipeline import UnifiedPipeline
+from lattice.memory import episodic
 from lattice.scheduler.triggers import decide_proactive
 from lattice.utils.database import get_next_check_at, set_next_check_at
 
@@ -92,6 +93,16 @@ class ProactiveScheduler:
                     "Sent proactive message",
                     content_preview=decision.content[:50],
                     channel_id=channel_id,
+                )
+
+                await episodic.store_message(
+                    episodic.EpisodicMessage(
+                        content=result.content,
+                        discord_message_id=result.id,
+                        channel_id=result.channel.id,
+                        is_bot=True,
+                        is_proactive=True,
+                    )
                 )
 
         next_check = datetime.fromisoformat(decision.next_check_at)
