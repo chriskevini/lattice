@@ -94,7 +94,8 @@ class LatticeBot(commands.Bot):
         if message.author == self.user:
             return
 
-        if message.channel.id != self.main_channel_id:
+        # Allow messages from both main channel (conversation) and dream channel (feedback)
+        if message.channel.id not in (self.main_channel_id, self.dream_channel_id):
             return
 
         if not self._memory_healthy:
@@ -142,6 +143,14 @@ class LatticeBot(commands.Bot):
                 await handlers.handle_invisible_feedback(
                     message=message,
                     feedback_content=feedback_content,
+                )
+                return
+
+            # If message is in dream channel but NOT feedback, ignore it
+            if message.channel.id == self.dream_channel_id:
+                logger.debug(
+                    "Message in dream channel is not feedback, ignoring",
+                    author=message.author.name,
                 )
                 return
 
