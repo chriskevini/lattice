@@ -14,14 +14,12 @@ import discord
 import structlog
 from discord.ext import commands
 
-from lattice.core import handlers
+from lattice.core import handlers, memory_orchestrator, response_generator
 from lattice.core.handlers import WASTEBASKET_EMOJI
-from lattice.memory import episodic, feedback_detection, procedural, prompt_audits, semantic
+from lattice.memory import episodic, feedback_detection, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
-from lattice.core.pipeline import UnifiedPipeline
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
 from lattice.utils.embeddings import embedding_model
-from lattice.utils.llm import GenerationResult, get_llm_client
 
 
 logger = structlog.get_logger(__name__)
@@ -154,46 +152,43 @@ class LatticeBot(commands.Bot):
                 )
                 return
 
-            user_message_id = await episodic.store_message(
-                episodic.EpisodicMessage(
-                    content=message.content,
-                    discord_message_id=message.id,
-                    channel_id=message.channel.id,
-                    is_bot=False,
-                )
+            # Store user message in memory
+            user_message_id = await memory_orchestrator.store_user_message(
+                content=message.content,
+                discord_message_id=message.id,
+                channel_id=message.channel.id,
             )
 
+            # Update scheduler interval
             base_interval = int(await get_system_health("scheduler_base_interval") or 15)
             await set_current_interval(base_interval)
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
-            await semantic.store_fact(
-                semantic.StableFact(
-                    content=message.content,
-                    origin_id=user_message_id,
-                    entity_type="user_message",
-                )
-            )
-
-            semantic_facts = await semantic.search_similar_facts(
+            # Retrieve context
+            # TODO: Replace hardcoded values with Context Archetype System when implemented
+            # See: docs/context-archetype-system.md  # noqa: ERA001
+            semantic_facts, recent_messages = await memory_orchestrator.retrieve_context(
                 query=message.content,
-                limit=5,
-                similarity_threshold=0.7,
-            )
-
-            recent_messages = await episodic.get_recent_messages(
                 channel_id=message.channel.id,
-                limit=10,
+                semantic_limit=5,
+                semantic_threshold=0.7,
+                episodic_limit=10,
             )
 
-            response_result, rendered_prompt, context_info = await self._generate_response(
+            # Generate response
+            (
+                response_result,
+                rendered_prompt,
+                context_info,
+            ) = await response_generator.generate_response(
                 user_message=message.content,
                 semantic_facts=semantic_facts,
                 recent_messages=recent_messages,
             )
 
-            response_messages = self._split_response(response_result.content)
+            # Split response for Discord length limits
+            response_messages = response_generator.split_response(response_result.content)
             bot_messages: list[discord.Message] = []
             for msg in response_messages:
                 bot_msg = await message.channel.send(msg)
@@ -212,15 +207,12 @@ class LatticeBot(commands.Bot):
 
             # Store episodic messages and prompt audits
             for bot_msg in bot_messages:
-                message_id = await episodic.store_message(
-                    episodic.EpisodicMessage(
-                        content=bot_msg.content,
-                        discord_message_id=bot_msg.id,
-                        channel_id=bot_msg.channel.id,
-                        is_bot=True,
-                        is_proactive=False,
-                        generation_metadata=generation_metadata,
-                    )
+                message_id = await memory_orchestrator.store_bot_message(
+                    content=bot_msg.content,
+                    discord_message_id=bot_msg.id,
+                    channel_id=bot_msg.channel.id,
+                    is_proactive=False,
+                    generation_metadata=generation_metadata,
                 )
 
                 # Store prompt audit for each bot message
@@ -255,12 +247,11 @@ class LatticeBot(commands.Bot):
                     },
                 )
 
-            _consolidation_task = asyncio.create_task(  # noqa: RUF006
-                episodic.consolidate_message(
-                    message_id=user_message_id,
-                    content=message.content,
-                    context=[msg.content for msg in recent_messages[-5:]],
-                )
+            # Start async consolidation
+            await memory_orchestrator.consolidate_message_async(
+                message_id=user_message_id,
+                content=message.content,
+                context=[msg.content for msg in recent_messages[-5:]],
             )
 
             self._consecutive_failures = 0
@@ -274,126 +265,6 @@ class LatticeBot(commands.Bot):
                 consecutive_failures=self._consecutive_failures,
             )
             await message.channel.send("Sorry, I encountered an error processing your message.")
-
-    async def _generate_response(
-        self,
-        user_message: str,
-        semantic_facts: list[semantic.StableFact],
-        recent_messages: list[episodic.EpisodicMessage],
-    ) -> tuple[GenerationResult, str, dict]:
-        """Generate a response using the prompt template.
-
-        Args:
-            user_message: The user's message
-            semantic_facts: Relevant facts from semantic memory
-            recent_messages: Recent conversation history
-
-        Returns:
-            Tuple of (GenerationResult, rendered_prompt, context_info)
-        """
-        prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
-        if not prompt_template:
-            return (
-                GenerationResult(
-                    content="I'm still initializing. Please try again in a moment.",
-                    model="unknown",
-                    provider=None,
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    total_tokens=0,
-                    cost_usd=None,
-                    latency_ms=0,
-                    temperature=0.0,
-                ),
-                "",
-                {},
-            )
-
-        def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
-            ts = msg.timestamp.strftime("%Y-%m-%d %H:%M")
-            return f"[{ts}] {msg.role}: {msg.content}"
-
-        episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages[-5:])
-
-        semantic_context = (
-            "\n".join([f"- {fact.content}" for fact in semantic_facts])
-            or "No relevant facts found."
-        )
-
-        logger.debug(
-            "Context built for generation",
-            episodic_context_preview=episodic_context[:200],
-            semantic_context_preview=semantic_context[:200],
-            user_message=user_message[:100],
-        )
-
-        filled_prompt = prompt_template.template.format(
-            episodic_context=episodic_context or "No recent conversation.",
-            semantic_context=semantic_context,
-            user_message=user_message,
-        )
-
-        logger.debug(
-            "Filled prompt for generation",
-            prompt_preview=filled_prompt[:500],
-        )
-
-        # Build context info for audit
-        context_info = {
-            "episodic": len(recent_messages[-5:]),
-            "semantic": len(semantic_facts),
-            "graph": 0,  # Not yet implemented
-        }
-
-        result = await self._simple_generate(filled_prompt, user_message)
-        return result, filled_prompt, context_info
-
-    async def _simple_generate(self, prompt: str, user_message: str) -> GenerationResult:  # noqa: ARG002
-        """Generate response using LLM client.
-
-        Args:
-            prompt: The formatted prompt template
-            user_message: The user's message
-
-        Returns:
-            GenerationResult with content and metadata
-        """
-        client = get_llm_client()
-        return await client.complete(prompt, temperature=0.7)
-
-    def _split_response(self, response: str, max_length: int = 1900) -> list[str]:
-        """Split a response at newlines to fit within Discord's 2000 char limit.
-
-        Args:
-            response: The full response to split
-            max_length: Maximum length per chunk (default 1900 for safety margin)
-
-        Returns:
-            List of response chunks split at newlines
-        """
-        if len(response) <= max_length:
-            return [response]
-
-        lines = response.split("\n")
-        chunks: list[str] = []
-        current_chunk: list[str] = []
-        current_length = 0
-
-        for line in lines:
-            line_length = len(line) + 1  # +1 for newline
-            if current_length + line_length <= max_length:
-                current_chunk.append(line)
-                current_length += line_length
-            else:
-                if current_chunk:
-                    chunks.append("\n".join(current_chunk))
-                current_chunk = [line]
-                current_length = line_length
-
-        if current_chunk:
-            chunks.append("\n".join(current_chunk))
-
-        return chunks
 
     async def _mirror_to_dream_channel(
         self,
