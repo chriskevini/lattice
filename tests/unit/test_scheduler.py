@@ -1,5 +1,6 @@
 """Unit tests for scheduler components."""
 
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -21,9 +22,10 @@ class TestFormatMessage:
             discord_message_id=12345,
             channel_id=67890,
             is_bot=False,
+            timestamp=datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
         )
         result = format_message(msg)
-        assert result == "USER: Hello, world!"
+        assert result == "[2024-01-01 00:00] USER: Hello, world!"
 
     def test_assistant_message(self) -> None:
         msg = EpisodicMessage(
@@ -31,9 +33,10 @@ class TestFormatMessage:
             discord_message_id=12346,
             channel_id=67890,
             is_bot=True,
+            timestamp=datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
         )
         result = format_message(msg)
-        assert result == "ASSISTANT: Hello there!"
+        assert result == "[2024-01-01 00:00] ASSISTANT: Hello there!"
 
     def test_long_content_truncated(self) -> None:
         msg = EpisodicMessage(
@@ -41,10 +44,11 @@ class TestFormatMessage:
             discord_message_id=12347,
             channel_id=67890,
             is_bot=False,
+            timestamp=datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
         )
         result = format_message(msg)
         assert len(result) < 600
-        assert result.startswith("USER: ")
+        assert result.startswith("[2024-01-01 00:00] USER: ")
 
 
 class TestProactiveDecision:
