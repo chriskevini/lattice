@@ -23,7 +23,7 @@ class UnifiedPipeline:
         channel_id: int,
         is_proactive: bool = False,
     ) -> dict[str, Any]:
-        source_type = PipelineSourceType.GHOST if is_proactive else PipelineSourceType.USER
+        source_type = PipelineSourceType.PROACTIVE if is_proactive else PipelineSourceType.USER
 
         pipeline_context = PipelineContext(
             source_type=source_type,

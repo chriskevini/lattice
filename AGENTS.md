@@ -26,7 +26,7 @@
 ### Key Design Principles
 
 1. **Canonical Integrity**: Never pollute visible conversation with internal thoughts
-2. **Unified Pipeline**: Reactive (user input) and proactive (ghost messages) flow through same pipeline
+2. **Unified Pipeline**: Reactive (user input) and proactive (check-ins) flow through same pipeline
 3. **Invisible Alignment**: Feedback via 🫡 emoji reactions, North Star goals stored silently
 4. **Total Evolvability**: All logic stored as data, not hardcoded
 5. **Resource Constraints**: Optimize for 2GB RAM / 1vCPU throughout
@@ -114,7 +114,7 @@ See `README.md` lines 29-150 for complete DDL. Key tables:
 
 ### Pipeline Flow
 
-1. **Ingestion**: Discord message or ghost signal (`<PROACTIVE_EVAL>`)
+1. **Ingestion**: Discord message or scheduled proactive check-in
 2. **Short-Circuit Logic**:
    - North Star declaration → upsert to `stable_facts` → ack → exit
    - Invisible feedback (reply to bot) → insert `user_feedback` → 🫡 → exit

@@ -5,7 +5,7 @@ from enum import Enum
 
 class PipelineSourceType(Enum):
     USER = "user"
-    GHOST = "ghost"
+    PROACTIVE = "proactive"
     SYSTEM = "system"
 
 
