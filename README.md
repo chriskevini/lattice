@@ -159,6 +159,42 @@ FOR EACH ROW EXECUTE FUNCTION invalidate_centroid();
 
 ---
 
+### 2.4 Database Migrations
+
+Schema changes are managed through a lightweight migration system in `scripts/migrations/`.
+
+**Migration Table:**
+```sql
+CREATE TABLE schema_migrations (
+    id SERIAL PRIMARY KEY,
+    migration_name TEXT UNIQUE NOT NULL,
+    applied_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+**Migration Files:**
+- Located in `scripts/migrations/`
+- Named with 3-digit prefix: `001_*.sql`, `002_*.sql`, etc.
+- Applied in alphabetical order
+
+**Commands:**
+```bash
+make init-db    # Initialize database + run migrations (first-time setup)
+make migrate    # Apply only new migrations (preserves existing data)
+```
+
+**Workflow for Schema Changes:**
+1. Create `scripts/migrations/002_description.sql`
+2. Test: `make docker-clean && make docker-up && make init-db`
+3. Deploy: `make migrate` (applies only new migrations)
+
+**Principles:**
+- All migrations must be forward-compatible (no breaking changes)
+- No manual `ALTER TABLE` on production
+- Migrations are idempotent and concurrent-safe
+
+---
+
 ## 3. PIPELINE OPERATIONS
 
 ### 3.1 Unified Ingestion Pipeline
