@@ -5,7 +5,6 @@ Provides connection pooling and common database operations.
 
 import os
 from datetime import datetime
-from typing import Any
 
 import asyncpg
 import pgvector.asyncpg
@@ -88,7 +87,7 @@ async def setup_connection(conn: asyncpg.Connection) -> None:
     await pgvector.asyncpg.register_vector(conn)
 
 
-async def get_system_health(key: str) -> Any | None:
+async def get_system_health(key: str) -> str | None:
     """Get a value from the system_health table.
 
     Args:
@@ -104,7 +103,7 @@ async def get_system_health(key: str) -> Any | None:
         )
 
 
-async def set_system_health(key: str, value: Any) -> None:
+async def set_system_health(key: str, value: str) -> None:
     """Set a value in the system_health table.
 
     Args:

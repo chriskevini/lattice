@@ -1,7 +1,6 @@
 """Unit tests for scheduler components."""
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from unittest.mock import patch
 
 import pytest
@@ -56,7 +55,7 @@ class TestProactiveDecision:
         decision = ProactiveDecision(
             action="message",
             content="Hey! How's it going?",
-            next_check_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason="User has been active",
             channel_id=12345,
         )
@@ -68,7 +67,7 @@ class TestProactiveDecision:
         decision = ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(),
+            next_check_at=(datetime.now(UTC) + timedelta(hours=2)).isoformat(),
             reason="User just responded",
         )
         assert decision.action == "wait"

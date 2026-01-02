@@ -5,15 +5,17 @@ whether to send a proactive message.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta
+from typing import Any
+
+import structlog
 
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.scheduler.triggers import decide_proactive
 from lattice.utils.database import get_next_check_at, set_next_check_at
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 DEFAULT_CHECK_INTERVAL_MINUTES = 15
 
@@ -23,7 +25,7 @@ class ProactiveScheduler:
 
     def __init__(
         self,
-        bot: any,
+        bot: Any,
         check_interval: int = DEFAULT_CHECK_INTERVAL_MINUTES,
     ) -> None:
         """Initialize the proactive scheduler.
@@ -102,7 +104,7 @@ class ProactiveScheduler:
         )
 
 
-async def get_default_channel_id(bot: any) -> int | None:
+async def get_default_channel_id(bot: Any) -> int | None:
     """Get the default channel for proactive messages.
 
     For single-user setup, returns the first text channel the bot can access.
