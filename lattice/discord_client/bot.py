@@ -133,14 +133,12 @@ class LatticeBot(commands.Bot):
                 )
                 return
 
-            prev_turn_id = await episodic.get_last_message_id(message.channel.id)
             user_message_id = await episodic.store_message(
                 episodic.EpisodicMessage(
                     content=message.content,
                     discord_message_id=message.id,
                     channel_id=message.channel.id,
                     is_bot=False,
-                    prev_turn_id=prev_turn_id,
                 )
             )
 
@@ -186,19 +184,17 @@ class LatticeBot(commands.Bot):
                 "latency_ms": response_result.latency_ms,
             }
 
-            prev_turn_id = user_message_id
             for bot_msg in bot_messages:
-                stored_id = await episodic.store_message(
+                await episodic.store_message(
                     episodic.EpisodicMessage(
                         content=bot_msg.content,
                         discord_message_id=bot_msg.id,
                         channel_id=bot_msg.channel.id,
                         is_bot=True,
-                        prev_turn_id=prev_turn_id,
+                        is_proactive=False,
                         generation_metadata=generation_metadata,
                     )
                 )
-                prev_turn_id = stored_id
 
             _consolidation_task = asyncio.create_task(  # noqa: RUF006
                 episodic.consolidate_message(

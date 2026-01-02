@@ -9,7 +9,6 @@ import pytest
 from lattice.memory import feedback_detection
 from lattice.memory.episodic import (
     EpisodicMessage,
-    get_last_message_id,
     get_recent_messages,
     store_message,
 )
@@ -34,14 +33,13 @@ class TestEpisodicMessage:
         assert message.channel_id == 67890
         assert message.is_bot is False
         assert message.message_id is None
-        assert message.prev_turn_id is None
+        assert message.is_proactive is False
         assert message.timestamp is not None
 
     def test_episodic_message_init_with_values(self) -> None:
         """Test EpisodicMessage initialization with all values."""
         custom_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
         message_id = UUID("12345678-1234-5678-1234-567812345678")
-        prev_id = UUID("87654321-4321-8765-4321-876543218765")
 
         message = EpisodicMessage(
             content="Test message",
@@ -49,12 +47,12 @@ class TestEpisodicMessage:
             channel_id=22222,
             is_bot=True,
             message_id=message_id,
-            prev_turn_id=prev_id,
+            is_proactive=True,
             timestamp=custom_time,
         )
 
         assert message.message_id == message_id
-        assert message.prev_turn_id == prev_id
+        assert message.is_proactive is True
         assert message.timestamp == custom_time
 
 
@@ -97,7 +95,7 @@ class TestEpisodicMemoryFunctions:
                     "channel_id": 67890,
                     "content": "Second message",
                     "is_bot": True,
-                    "prev_turn_id": UUID("11111111-1111-1111-1111-111111111111"),
+                    "is_proactive": False,
                     "timestamp": datetime(2024, 1, 1, 10, 5, 0, tzinfo=UTC),
                 },
                 {
@@ -106,7 +104,7 @@ class TestEpisodicMemoryFunctions:
                     "channel_id": 67890,
                     "content": "First message",
                     "is_bot": False,
-                    "prev_turn_id": None,
+                    "is_proactive": False,
                     "timestamp": datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
                 },
             ]
@@ -121,36 +119,6 @@ class TestEpisodicMemoryFunctions:
             assert len(messages) == 2
             assert messages[0].content == "First message"
             assert messages[0].timestamp < messages[1].timestamp
-
-    @pytest.mark.asyncio
-    async def test_get_last_message_id_exists(self) -> None:
-        """Test getting the last message ID when messages exist."""
-        mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
-        )
-
-        with patch("lattice.memory.episodic.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-            result = await get_last_message_id(channel_id=67890)
-
-            assert result == UUID("12345678-1234-5678-1234-567812345678")
-
-    @pytest.mark.asyncio
-    async def test_get_last_message_id_empty(self) -> None:
-        """Test getting the last message ID when no messages exist."""
-        mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(return_value=None)
-
-        with patch("lattice.memory.episodic.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-            result = await get_last_message_id(channel_id=67890)
-
-            assert result is None
 
 
 class TestStableFact:

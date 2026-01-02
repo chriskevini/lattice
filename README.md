@@ -49,7 +49,7 @@ CREATE TABLE raw_messages (
     channel_id BIGINT NOT NULL,
     content TEXT NOT NULL,
     is_bot BOOLEAN DEFAULT false,
-    prev_turn_id UUID REFERENCES raw_messages(id),  -- Temporal chaining for context reconstruction
+    is_proactive BOOLEAN DEFAULT false,  -- Bot-initiated vs user-initiated messages
     timestamp TIMESTAMPTZ DEFAULT now()
 );
 

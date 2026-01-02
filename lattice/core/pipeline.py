@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from lattice.core.types import PipelineContext, PipelineSourceType
+from lattice.core.types import PipelineContext
 
 
 logger = logging.getLogger(__name__)
@@ -21,12 +21,8 @@ class UnifiedPipeline:
         self,
         content: str,
         channel_id: int,
-        is_proactive: bool = False,
     ) -> dict[str, Any]:
-        source_type = PipelineSourceType.PROACTIVE if is_proactive else PipelineSourceType.USER
-
         pipeline_context = PipelineContext(
-            source_type=source_type,
             channel_id=channel_id,
             user_id=None,
             timestamp=datetime.utcnow(),
@@ -47,7 +43,6 @@ class UnifiedPipeline:
         return await self.process_message(
             content=content,
             channel_id=channel_id,
-            is_proactive=False,
         )
 
     async def send_response(

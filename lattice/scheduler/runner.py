@@ -102,20 +102,3 @@ class ProactiveScheduler:
             next_check=decision.next_check_at,
             reason=decision.reason,
         )
-
-
-async def get_default_channel_id(bot: Any) -> int | None:
-    """Get the default channel for proactive messages.
-
-    For single-user setup, returns the first text channel the bot can access.
-
-    Args:
-        bot: Discord bot instance
-
-    Returns:
-        Channel ID or None if no suitable channel found
-    """
-    for channel in bot.get_all_channels():
-        if hasattr(channel, "send"):
-            return channel.id
-    return None

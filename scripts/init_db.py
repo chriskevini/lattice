@@ -58,7 +58,7 @@ async def init_database() -> None:
                 channel_id BIGINT NOT NULL,
                 content TEXT NOT NULL,
                 is_bot BOOLEAN DEFAULT false,
-                prev_turn_id UUID REFERENCES raw_messages(id),
+                is_proactive BOOLEAN DEFAULT false,
                 timestamp TIMESTAMPTZ DEFAULT now()
             );
         """
