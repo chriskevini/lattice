@@ -8,6 +8,7 @@ Phase 3: Proactive scheduling.
 import asyncio
 from datetime import UTC, datetime, timedelta
 import os
+from uuid import UUID
 
 import discord
 import structlog
@@ -24,6 +25,10 @@ from lattice.utils.llm import GenerationResult, get_llm_client
 
 
 logger = structlog.get_logger(__name__)
+
+# Constants
+MAX_DISCORD_MESSAGE_LENGTH = 2000
+MAX_PROMPT_DISPLAY_LENGTH = 1500
 
 
 class LatticeBot(commands.Bot):
@@ -231,7 +236,7 @@ class LatticeBot(commands.Bot):
                     bot_message=bot_msg,
                     rendered_prompt=rendered_prompt,
                     context_info=context_info,
-                    audit_id=str(audit_id),
+                    audit_id=audit_id,
                     performance={
                         "prompt_key": "BASIC_RESPONSE",
                         "version": 1,
@@ -240,6 +245,8 @@ class LatticeBot(commands.Bot):
                         "cost_usd": response_result.cost_usd or 0,
                     },
                 )
+
+                # Dream message update is handled in _mirror_to_dream_channel
 
                 # Update audit with dream message ID
                 if dream_msg:
@@ -393,7 +400,7 @@ class LatticeBot(commands.Bot):
         bot_message: discord.Message,
         rendered_prompt: str,
         context_info: dict,
-        audit_id: str,
+        audit_id: UUID,
         performance: dict,
     ) -> discord.Message | None:
         """Mirror bot response to dream channel with metadata.
@@ -429,9 +436,9 @@ class LatticeBot(commands.Bot):
             return None
 
         # Truncate prompt if too long
-        if len(rendered_prompt) > 1500:
+        if len(rendered_prompt) > MAX_PROMPT_DISPLAY_LENGTH:
             prompt_display = (
-                f"{rendered_prompt[:1500]}...\n\n"
+                f"{rendered_prompt[:MAX_PROMPT_DISPLAY_LENGTH]}...\n\n"
                 f"[Full prompt: {len(rendered_prompt)} chars, see prompt_audits table]"
             )
         else:
@@ -439,12 +446,15 @@ class LatticeBot(commands.Bot):
 
         # Build dream channel message
         separator = "─" * 40
+        prompt_version = performance.get("version", 1)
+        prompt_version = performance.get("version", 1)
         dream_content = (
             f"🔗 Main: {bot_message.jump_url}\n\n"
             f"{separator}\n"
             f"{bot_message.content}\n"
             f"{separator}\n\n"
-            f"📊 {performance.get('prompt_key', 'BASIC_RESPONSE')} v{performance.get('version', 1)} | "
+            f"📊 {performance.get('prompt_key', 'BASIC_RESPONSE')} "
+            f"v{prompt_version} | "
             f"{context_info.get('episodic', 0)}E, {context_info.get('semantic', 0)}S, "
             f"{context_info.get('graph', 0)}G | "
             f"⚡{performance.get('latency_ms', 0)}ms | "
@@ -462,11 +472,37 @@ class LatticeBot(commands.Bot):
                 main_message_id=bot_message.id,
                 dream_message_id=dream_msg.id,
             )
-            return dream_msg
-        except Exception as e:
-            logger.error(
+
+            # Update audit with dream message ID
+            await prompt_audits.update_audit_dream_message(
+                audit_id=audit_id,
+                dream_discord_message_id=dream_msg.id,
+            )
+            return dream_msg  # noqa: TRY300
+        except Exception:
+            logger.exception(
                 "Failed to mirror to dream channel",
-                error=str(e),
+                audit_id=audit_id,
+            )
+
+        try:
+            dream_msg = await dream_channel.send(dream_content)
+            logger.info(
+                "Mirrored to dream channel",
+                audit_id=audit_id,
+                main_message_id=bot_message.id,
+                dream_message_id=dream_msg.id,
+            )
+
+            # Update audit with dream message ID
+            await prompt_audits.update_audit_dream_message(
+                audit_id=audit_id,
+                dream_discord_message_id=dream_msg.id,
+            )
+            return dream_msg  # noqa: TRY300
+        except Exception:
+            logger.exception(
+                "Failed to mirror to dream channel",
                 audit_id=audit_id,
             )
             return None

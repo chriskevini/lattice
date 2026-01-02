@@ -4,10 +4,10 @@ Stores complete audit trail for Dreaming Cycle to analyze prompt effectiveness.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import structlog
 
