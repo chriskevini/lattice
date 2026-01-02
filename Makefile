@@ -114,6 +114,10 @@ bump-version: ## Bump version using commitizen
 
 init-db: ## Initialize database schema
 	uv run python scripts/init_db.py
+	$(MAKE) migrate
+
+migrate: ## Run database migrations
+	uv run python scripts/migrate.py
 
 update: ## Update dependencies
 	uv update
