@@ -181,7 +181,7 @@ All behavior (Reactive User Input + Proactive Check-ins) flows through a single 
 
 
 6. **Generation:** Route to appropriate `prompt_registry` template.
-* If Proactive: Extract `NEXT_PROACTIVE_IN_MINUTES` to update `system_health`.
+   * If Proactive: `is_proactive=True` flag set on stored message.
 
 
 7. **Async Consolidation (The ENGRAM Fork):** * De-contextualize turns (pronoun resolution).
@@ -193,7 +193,10 @@ All behavior (Reactive User Input + Proactive Check-ins) flows through a single 
 
 ### 4.1 Proactive Check-ins
 
-A lightweight scheduler monitors `system_health.next_check_at`. When due, the AI analyzes conversation context and user goals to decide whether and when to send a proactive check-in message. The AI determines its own check-in frequency, making the proactivity cadence fully evolvable and responsive to user needs.
+A lightweight scheduler monitors `system_health.next_check_at`. When due, the AI analyzes conversation context and user goals to decide whether to send a proactive check-in message. The scheduler handles timing:
+- After "message" action: reset to base interval (15 min)
+- After "wait" action: exponential backoff
+- After reactive user message: reset to base interval
 
 ### 4.2 Dreaming Cycle (Offline Evolution)
 

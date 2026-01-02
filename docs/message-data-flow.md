@@ -329,31 +329,16 @@ response = await llm.generate(
 
 **Example response**:
 ```
-That's great! Building AI projects with Python is incredibly rewarding. 
-I remember you mentioned working with PyTorch earlier - are you planning 
-to use it for this project too? Given your interest in production ML 
-systems, you might want to consider how you'll deploy and monitor the 
+That's great! Building AI projects with Python is incredibly rewarding.
+I remember you mentioned working with PyTorch earlier - are you planning
+to use it for this project too? Given your interest in production ML
+systems, you might want to consider how you'll deploy and monitor the
 model in production.
-
-NEXT_PROACTIVE_IN_MINUTES: 180
 ```
 
-#### 7d. Parse structured outputs
-
-```python
-# Extract metadata from response
-metadata = parse_structured_output(response)
-# metadata = {"NEXT_PROACTIVE_IN_MINUTES": 180}
-
-# Update system_health if proactive interval specified
-if "NEXT_PROACTIVE_IN_MINUTES" in metadata:
-    next_check = now() + timedelta(minutes=metadata["NEXT_PROACTIVE_IN_MINUTES"])
-    await db.execute("""
-        INSERT INTO system_health (metric_key, metric_value, recorded_at)
-        VALUES ('scheduled_next_proactive', $1, now())
-        ON CONFLICT (metric_key) DO UPDATE SET metric_value = $1, recorded_at = now()
-    """, next_check.isoformat())
-```
+**Note:** The PROACTIVE_DECISION prompt returns only `action`, `content`, and `reason`. The scheduler handles timing logic:
+- If "message": reset to base_interval (15 min)
+- If "wait": exponential backoff
 
 ---
 
