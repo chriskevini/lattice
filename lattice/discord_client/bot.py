@@ -260,10 +260,22 @@ class LatticeBot(commands.Bot):
             or "No relevant facts found."
         )
 
+        logger.debug(
+            "Context built for generation",
+            episodic_context_preview=episodic_context[:200],
+            semantic_context_preview=semantic_context[:200],
+            user_message=user_message[:100],
+        )
+
         filled_prompt = prompt_template.template.format(
             episodic_context=episodic_context or "No recent conversation.",
             semantic_context=semantic_context,
             user_message=user_message,
+        )
+
+        logger.debug(
+            "Filled prompt for generation",
+            prompt_preview=filled_prompt[:500],
         )
 
         return await self._simple_generate(filled_prompt, user_message)
