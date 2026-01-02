@@ -15,7 +15,7 @@ from discord.ext import commands
 
 from lattice.core import handlers
 from lattice.core.handlers import WASTEBASKET_EMOJI
-from lattice.memory import episodic, feedback_detection, procedural, semantic
+from lattice.memory import episodic, feedback_detection, procedural, prompt_audits, semantic
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
@@ -167,7 +167,7 @@ class LatticeBot(commands.Bot):
                 limit=10,
             )
 
-            response_result = await self._generate_response(
+            response_result, rendered_prompt, context_info = await self._generate_response(
                 user_message=message.content,
                 semantic_facts=semantic_facts,
                 recent_messages=recent_messages,
@@ -190,8 +190,9 @@ class LatticeBot(commands.Bot):
                 "latency_ms": response_result.latency_ms,
             }
 
+            # Store episodic messages and prompt audits
             for bot_msg in bot_messages:
-                await episodic.store_message(
+                message_id = await episodic.store_message(
                     episodic.EpisodicMessage(
                         content=bot_msg.content,
                         discord_message_id=bot_msg.id,
@@ -200,6 +201,23 @@ class LatticeBot(commands.Bot):
                         is_proactive=False,
                         generation_metadata=generation_metadata,
                     )
+                )
+
+                # Store prompt audit for each bot message
+                await prompt_audits.store_prompt_audit(
+                    prompt_key="BASIC_RESPONSE",
+                    rendered_prompt=rendered_prompt,
+                    response_content=bot_msg.content,
+                    main_discord_message_id=bot_msg.id,
+                    template_version=1,  # TODO: Get from prompt_registry
+                    message_id=message_id,
+                    model=response_result.model,
+                    provider=response_result.provider,
+                    prompt_tokens=response_result.prompt_tokens,
+                    completion_tokens=response_result.completion_tokens,
+                    cost_usd=response_result.cost_usd,
+                    latency_ms=response_result.latency_ms,
+                    context_config=context_info,
                 )
 
             _consolidation_task = asyncio.create_task(  # noqa: RUF006
@@ -227,7 +245,7 @@ class LatticeBot(commands.Bot):
         user_message: str,
         semantic_facts: list[semantic.StableFact],
         recent_messages: list[episodic.EpisodicMessage],
-    ) -> GenerationResult:
+    ) -> tuple[GenerationResult, str, dict]:
         """Generate a response using the prompt template.
 
         Args:
@@ -236,20 +254,24 @@ class LatticeBot(commands.Bot):
             recent_messages: Recent conversation history
 
         Returns:
-            GenerationResult with content and metadata
+            Tuple of (GenerationResult, rendered_prompt, context_info)
         """
         prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
         if not prompt_template:
-            return GenerationResult(
-                content="I'm still initializing. Please try again in a moment.",
-                model="unknown",
-                provider=None,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-                cost_usd=None,
-                latency_ms=0,
-                temperature=0.0,
+            return (
+                GenerationResult(
+                    content="I'm still initializing. Please try again in a moment.",
+                    model="unknown",
+                    provider=None,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    cost_usd=None,
+                    latency_ms=0,
+                    temperature=0.0,
+                ),
+                "",
+                {},
             )
 
         def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
@@ -281,7 +303,15 @@ class LatticeBot(commands.Bot):
             prompt_preview=filled_prompt[:500],
         )
 
-        return await self._simple_generate(filled_prompt, user_message)
+        # Build context info for audit
+        context_info = {
+            "episodic": len(recent_messages[-5:]),
+            "semantic": len(semantic_facts),
+            "graph": 0,  # Not yet implemented
+        }
+
+        result = await self._simple_generate(filled_prompt, user_message)
+        return result, filled_prompt, context_info
 
     async def _simple_generate(self, prompt: str, user_message: str) -> GenerationResult:  # noqa: ARG002
         """Generate response using LLM client.
