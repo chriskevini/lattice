@@ -125,7 +125,9 @@ class LatticeBot(commands.Bot):
                 )
                 return
 
-            feedback_result = feedback_detection.is_invisible_feedback(message)
+            feedback_result = feedback_detection.is_invisible_feedback(
+                message, dream_channel_id=self.dream_channel_id
+            )
             if feedback_result.detected:
                 feedback_content = feedback_result.content or ""
                 logger.info(

@@ -500,14 +500,25 @@ class TestFeedbackHandlerIntegration:
         mock_message.reference = MockDiscordReference(message_id=12345)
 
         with (
-            patch("lattice.memory.user_feedback.db_pool") as mock_pool,
+            patch("lattice.memory.user_feedback.db_pool") as mock_feedback_pool,
+            patch("lattice.memory.prompt_audits.db_pool") as mock_audit_pool,
         ):
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+            mock_feedback_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_feedback_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
             )
+
+            # Mock audit pool
+            mock_audit_conn = AsyncMock()
+            mock_audit_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_audit_conn
+            )
+            mock_audit_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+            mock_audit_conn.execute = AsyncMock(return_value="UPDATE 1")
 
             result = await handlers.handle_invisible_feedback(
                 message=mock_message,
