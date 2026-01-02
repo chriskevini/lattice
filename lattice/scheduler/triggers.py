@@ -41,10 +41,9 @@ async def set_current_interval(minutes: int) -> None:
 
 def format_message(msg: EpisodicMessage) -> str:
     """Format a message for the conversation context."""
-    role = "ASSISTANT" if msg.is_bot else "USER"
     content = msg.content[:500]
     timestamp = msg.timestamp.strftime("%Y-%m-%d %H:%M")
-    return f"[{timestamp}] {role}: {content}"
+    return f"[{timestamp}] {msg.role}: {content}"
 
 
 async def get_conversation_context(limit: int = 20) -> str:

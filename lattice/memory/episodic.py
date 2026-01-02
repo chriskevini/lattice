@@ -57,6 +57,11 @@ class EpisodicMessage:
         self.timestamp = timestamp or datetime.now(UTC)
         self.generation_metadata = generation_metadata
 
+    @property
+    def role(self) -> str:
+        """Return the role name for this message."""
+        return "ASSISTANT" if self.is_bot else "USER"
+
 
 async def store_message(message: EpisodicMessage) -> UUID:
     """Store a message in episodic memory.
