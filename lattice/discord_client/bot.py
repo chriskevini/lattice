@@ -251,7 +251,7 @@ class LatticeBot(commands.Bot):
 
         def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
             ts = msg.timestamp.strftime("%Y-%m-%d %H:%M")
-            role = "Bot" if msg.is_bot else "User"
+            role = "ASSISTANT" if msg.is_bot else "USER"
             return f"[{ts}] {role}: {msg.content}"
 
         episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages[-5:])
