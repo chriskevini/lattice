@@ -6,6 +6,7 @@ Phase 3: Proactive scheduling.
 """
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 import os
 
 import discord
@@ -17,7 +18,7 @@ from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.core.pipeline import UnifiedPipeline
-from lattice.utils.database import db_pool, get_system_health
+from lattice.utils.database import db_pool, get_system_health, set_next_check_at
 from lattice.utils.embeddings import embedding_model
 from lattice.utils.llm import GenerationResult, get_llm_client
 
@@ -144,6 +145,8 @@ class LatticeBot(commands.Bot):
 
             base_interval = int(await get_system_health("scheduler_base_interval") or 15)
             await set_current_interval(base_interval)
+            next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
+            await set_next_check_at(next_check)
 
             await semantic.store_fact(
                 semantic.StableFact(
