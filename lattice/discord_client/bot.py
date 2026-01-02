@@ -8,6 +8,7 @@ Phase 3: Proactive scheduling.
 import asyncio
 from datetime import UTC, datetime, timedelta
 import os
+from typing import Any
 from uuid import UUID
 
 import discord
@@ -16,6 +17,7 @@ from discord.ext import commands
 
 from lattice.core import handlers, memory_orchestrator, response_generator
 from lattice.core.handlers import WASTEBASKET_EMOJI
+from lattice.discord_client.dream import DreamMirrorBuilder
 from lattice.memory import episodic, feedback_detection, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
@@ -23,10 +25,6 @@ from lattice.utils.embeddings import embedding_model
 
 
 logger = structlog.get_logger(__name__)
-
-# Constants
-MAX_DISCORD_MESSAGE_LENGTH = 2000
-MAX_PROMPT_DISPLAY_LENGTH = 1500
 
 
 class LatticeBot(commands.Bot):
@@ -232,8 +230,9 @@ class LatticeBot(commands.Bot):
                     context_config=context_info,
                 )
 
-                # Mirror to dream channel (dream message update handled internally)
+                # Mirror to dream channel with new UI
                 await self._mirror_to_dream_channel(
+                    user_message=message.content,
                     bot_message=bot_msg,
                     rendered_prompt=rendered_prompt,
                     context_info=context_info,
@@ -268,15 +267,17 @@ class LatticeBot(commands.Bot):
 
     async def _mirror_to_dream_channel(
         self,
+        user_message: str,
         bot_message: discord.Message,
         rendered_prompt: str,
-        context_info: dict,
+        context_info: dict[str, Any],
         audit_id: UUID,
-        performance: dict,
+        performance: dict[str, Any],
     ) -> discord.Message | None:
-        """Mirror bot response to dream channel with metadata.
+        """Mirror bot response to dream channel with unified UI.
 
         Args:
+            user_message: User's message content
             bot_message: The bot message sent in main channel
             rendered_prompt: The full rendered prompt
             context_info: Context configuration (episodic, semantic, graph counts)
@@ -306,36 +307,23 @@ class LatticeBot(commands.Bot):
             )
             return None
 
-        # Truncate prompt if too long
-        if len(rendered_prompt) > MAX_PROMPT_DISPLAY_LENGTH:
-            prompt_display = (
-                f"{rendered_prompt[:MAX_PROMPT_DISPLAY_LENGTH]}...\n\n"
-                f"[Full prompt: {len(rendered_prompt)} chars, see prompt_audits table]"
-            )
-        else:
-            prompt_display = rendered_prompt
-
-        # Build dream channel message
-        separator = "─" * 40
-        prompt_version = performance.get("version", 1)
-        dream_content = (
-            f"🔗 Main: {bot_message.jump_url}\n\n"
-            f"{separator}\n"
-            f"{bot_message.content}\n"
-            f"{separator}\n\n"
-            f"📊 {performance.get('prompt_key', 'BASIC_RESPONSE')} "
-            f"v{prompt_version} | "
-            f"{context_info.get('episodic', 0)}E, {context_info.get('semantic', 0)}S, "
-            f"{context_info.get('graph', 0)}G | "
-            f"⚡{performance.get('latency_ms', 0)}ms | "
-            f"${performance.get('cost_usd', 0):.4f}\n\n"
-            f"💬 Reply or quote this message for feedback\n\n"
-            f"{separator}\n"
-            f"||📋 FULL RENDERED PROMPT\n\n{prompt_display}||"
+        # Build embed and view using new UI
+        embed, view = DreamMirrorBuilder.build_reactive_mirror(
+            user_message=user_message,
+            bot_response=bot_message.content,
+            main_message_url=bot_message.jump_url,
+            prompt_key=performance.get("prompt_key", "BASIC_RESPONSE"),
+            version=performance.get("version", 1),
+            context_info=context_info,
+            performance=performance,
+            audit_id=audit_id,
+            main_message_id=bot_message.id,
+            rendered_prompt=rendered_prompt,
+            has_feedback=False,
         )
 
         try:
-            dream_msg = await dream_channel.send(dream_content)
+            dream_msg = await dream_channel.send(embed=embed, view=view)
             logger.info(
                 "Mirrored to dream channel",
                 audit_id=audit_id,
