@@ -335,5 +335,7 @@ class LatticeBot(commands.Bot):
     async def close(self) -> None:
         """Clean up resources when shutting down."""
         logger.info("Bot shutting down")
+        if self._scheduler:
+            await self._scheduler.stop()
         await db_pool.close()
         await super().close()

@@ -38,6 +38,7 @@ class ProactiveScheduler:
         self.bot = bot
         self.check_interval = check_interval
         self._running: bool = False
+        self._scheduler_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the scheduler loop."""
@@ -49,11 +50,13 @@ class ProactiveScheduler:
             initial_check = datetime.utcnow() + timedelta(minutes=self.check_interval)
             await set_next_check_at(initial_check)
 
-        asyncio.create_task(self._scheduler_loop())
+        self._scheduler_task = asyncio.create_task(self._scheduler_loop())
 
     async def stop(self) -> None:
         """Stop the scheduler."""
         self._running = False
+        if self._scheduler_task:
+            await self._scheduler_task
         logger.info("Stopping proactive scheduler")
 
     async def _scheduler_loop(self) -> None:
@@ -80,9 +83,13 @@ class ProactiveScheduler:
         decision = await decide_proactive()
 
         if decision.action == "message" and decision.content:
+            if not decision.channel_id:
+                logger.warning("No valid channel for proactive message, skipping")
+                return
+
             pipeline = UnifiedPipeline(db_pool=self.bot.db_pool, bot=self.bot)
 
-            channel_id = decision.channel_id if decision.channel_id else 0
+            channel_id = decision.channel_id
             result = await pipeline.send_proactive_message(
                 content=decision.content,
                 channel_id=channel_id,
