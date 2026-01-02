@@ -65,10 +65,13 @@ class LLMClient:
             raise ValueError(msg)
 
     def _placeholder_complete(self, prompt: str, temperature: float) -> GenerationResult:
-        """Placeholder completion for development.
+        """Placeholder completion for development/testing.
 
         Returns a JSON array of triples for triple extraction prompts,
         otherwise returns the prompt echoed back.
+
+        WARNING: This is a development/testing placeholder that returns static test data.
+        Do not use in production. Set LLM_PROVIDER=openrouter for real LLM responses.
 
         Args:
             prompt: The prompt that was sent
@@ -77,9 +80,17 @@ class LLMClient:
         Returns:
             GenerationResult with placeholder response
         """
+        is_extraction = "triple" in prompt.lower() or "extract" in prompt.lower()
+
+        if is_extraction:
+            logger.warning(
+                "Placeholder LLM used for extraction - returns static test data. "
+                "Set LLM_PROVIDER=openrouter for real responses."
+            )
+
         content = (
             '[{"subject": "example", "predicate": "likes", "object": "testing"}]'
-            if "triple" in prompt.lower() or "extract" in prompt.lower()
+            if is_extraction
             else f"Placeholder response to: {prompt[:50]}..."
         )
 
