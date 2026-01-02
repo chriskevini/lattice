@@ -4,6 +4,7 @@ Handles storing and retrieving from episodic and semantic memory.
 """
 
 import asyncio
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -56,7 +57,7 @@ async def store_bot_message(
     discord_message_id: int,
     channel_id: int,
     is_proactive: bool = False,
-    generation_metadata: dict | None = None,
+    generation_metadata: dict[str, Any] | None = None,
 ) -> UUID:
     """Store a bot message in episodic memory.
 
@@ -122,7 +123,10 @@ async def consolidate_message_async(
     content: str,
     context: list[str],
 ) -> None:
-    """Start async consolidation task for a message.
+    """Start async consolidation task for a message (fire-and-forget).
+
+    Note: This creates a background task that is not awaited. Errors in
+    consolidation will be logged but not propagated to the caller.
 
     Args:
         message_id: UUID of the stored message

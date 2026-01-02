@@ -166,6 +166,8 @@ class LatticeBot(commands.Bot):
             await set_next_check_at(next_check)
 
             # Retrieve context
+            # TODO: Replace hardcoded values with Context Archetype System when implemented
+            # See: docs/context-archetype-system.md  # noqa: ERA001
             semantic_facts, recent_messages = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,

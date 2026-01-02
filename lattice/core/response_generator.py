@@ -3,6 +3,8 @@
 Handles prompt formatting, LLM generation, and message splitting for Discord.
 """
 
+from typing import Any
+
 import structlog
 
 from lattice.memory import episodic, procedural, semantic
@@ -16,7 +18,7 @@ async def generate_response(
     user_message: str,
     semantic_facts: list[semantic.StableFact],
     recent_messages: list[episodic.EpisodicMessage],
-) -> tuple[GenerationResult, str, dict]:
+) -> tuple[GenerationResult, str, dict[str, Any]]:
     """Generate a response using the prompt template.
 
     Args:
