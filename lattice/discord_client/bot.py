@@ -2,9 +2,11 @@
 
 Phase 1: Basic connectivity, episodic logging, semantic recall, and prompt registry.
 Phase 2: Invisible alignment (feedback, North Star goals).
+Phase 3: Proactive scheduling.
 """
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 import os
 
 import discord
@@ -14,7 +16,9 @@ from discord.ext import commands
 from lattice.core import handlers
 from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.memory import episodic, feedback_detection, procedural, semantic
-from lattice.utils.database import db_pool
+from lattice.scheduler import ProactiveScheduler, set_current_interval
+from lattice.core.pipeline import UnifiedPipeline
+from lattice.utils.database import db_pool, get_system_health, set_next_check_at
 from lattice.utils.embeddings import embedding_model
 from lattice.utils.llm import GenerationResult, get_llm_client
 
@@ -46,6 +50,8 @@ class LatticeBot(commands.Bot):
         self._consecutive_failures = 0
         self._max_consecutive_failures = 5
 
+        self._scheduler: ProactiveScheduler | None = None
+
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
         logger.info("Bot setup starting")
@@ -65,6 +71,8 @@ class LatticeBot(commands.Bot):
                 bot_username=self.user.name,
                 bot_id=self.user.id,
             )
+            self._scheduler = ProactiveScheduler(bot=self)
+            await self._scheduler.start()
         else:
             logger.warning("Bot connected but user is None")
 
@@ -126,16 +134,19 @@ class LatticeBot(commands.Bot):
                 )
                 return
 
-            prev_turn_id = await episodic.get_last_message_id(message.channel.id)
             user_message_id = await episodic.store_message(
                 episodic.EpisodicMessage(
                     content=message.content,
                     discord_message_id=message.id,
                     channel_id=message.channel.id,
                     is_bot=False,
-                    prev_turn_id=prev_turn_id,
                 )
             )
+
+            base_interval = int(await get_system_health("scheduler_base_interval") or 15)
+            await set_current_interval(base_interval)
+            next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
+            await set_next_check_at(next_check)
 
             await semantic.store_fact(
                 semantic.StableFact(
@@ -179,19 +190,17 @@ class LatticeBot(commands.Bot):
                 "latency_ms": response_result.latency_ms,
             }
 
-            prev_turn_id = user_message_id
             for bot_msg in bot_messages:
-                stored_id = await episodic.store_message(
+                await episodic.store_message(
                     episodic.EpisodicMessage(
                         content=bot_msg.content,
                         discord_message_id=bot_msg.id,
                         channel_id=bot_msg.channel.id,
                         is_bot=True,
-                        prev_turn_id=prev_turn_id,
+                        is_proactive=False,
                         generation_metadata=generation_metadata,
                     )
                 )
-                prev_turn_id = stored_id
 
             _consolidation_task = asyncio.create_task(  # noqa: RUF006
                 episodic.consolidate_message(
@@ -243,19 +252,33 @@ class LatticeBot(commands.Bot):
                 temperature=0.0,
             )
 
-        episodic_context = "\n".join(
-            [f"{'Bot' if msg.is_bot else 'User'}: {msg.content}" for msg in recent_messages[-5:]]
-        )
+        def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
+            ts = msg.timestamp.strftime("%Y-%m-%d %H:%M")
+            return f"[{ts}] {msg.role}: {msg.content}"
+
+        episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages[-5:])
 
         semantic_context = (
             "\n".join([f"- {fact.content}" for fact in semantic_facts])
             or "No relevant facts found."
         )
 
+        logger.debug(
+            "Context built for generation",
+            episodic_context_preview=episodic_context[:200],
+            semantic_context_preview=semantic_context[:200],
+            user_message=user_message[:100],
+        )
+
         filled_prompt = prompt_template.template.format(
             episodic_context=episodic_context or "No recent conversation.",
             semantic_context=semantic_context,
             user_message=user_message,
+        )
+
+        logger.debug(
+            "Filled prompt for generation",
+            prompt_preview=filled_prompt[:500],
         )
 
         return await self._simple_generate(filled_prompt, user_message)
@@ -332,5 +355,7 @@ class LatticeBot(commands.Bot):
     async def close(self) -> None:
         """Clean up resources when shutting down."""
         logger.info("Bot shutting down")
+        if self._scheduler:
+            await self._scheduler.stop()
         await db_pool.close()
         await super().close()

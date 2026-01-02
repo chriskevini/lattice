@@ -120,7 +120,6 @@ class TestBotIntegration:
             discord_message_id=12345,
             channel_id=67890,
             is_bot=False,
-            prev_turn_id=None,
         )
 
         with patch("lattice.memory.episodic.db_pool") as mock_pool:
@@ -234,7 +233,6 @@ class TestFullPipelineIntegration:
             discord_message_id=1001,
             channel_id=999,
             is_bot=False,
-            prev_turn_id=None,
         )
 
         with patch("lattice.memory.episodic.db_pool") as mock_pool:
@@ -256,7 +254,6 @@ class TestFullPipelineIntegration:
                 discord_message_id=1002,
                 channel_id=999,
                 is_bot=False,
-                prev_turn_id=msg1_id,
             )
             msg2_id = await store_message(msg2)
             assert msg2_id is not None

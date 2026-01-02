@@ -9,24 +9,28 @@
 ### Three-Tier Memory System (ENGRAM Framework)
 
 1. **Episodic Memory** (`raw_messages`)
-   - Immutable conversation log
-   - Temporal chaining via `prev_turn_id`
+   - Recency: Immutable conversation log ordered by timestamp
    - Source of truth for all interactions
 
 2. **Semantic Memory** (`stable_facts` + `semantic_triples`)
-   - `stable_facts`: Vector-embedded knowledge (384-dim)
-   - `semantic_triples`: Explicit Subject-Predicate-Object relationships
+   - Relevance: Vector-embedded knowledge (384-dim)
+   - Explicit Subject-Predicate-Object relationships
    - Enables hybrid retrieval (vector + graph traversal)
 
 3. **Procedural Memory** (`prompt_registry`)
-   - Evolving templates and strategies
+   - Relationships: Evolving templates and strategies
    - Self-modifying behavior system
    - Approval-gated updates via "dreaming cycle"
+
+**Context retrieval combines three dimensions:**
+- **Recency**: `ORDER BY timestamp` on `raw_messages`
+- **Relevance**: Vector similarity search on `stable_facts`
+- **Relationships**: Graph traversal on `semantic_triples`
 
 ### Key Design Principles
 
 1. **Canonical Integrity**: Never pollute visible conversation with internal thoughts
-2. **Unified Pipeline**: Reactive (user input) and proactive (ghost messages) flow through same pipeline
+2. **Unified Pipeline**: Reactive (user input) and proactive (check-ins) flow through same pipeline
 3. **Invisible Alignment**: Feedback via 🫡 emoji reactions, North Star goals stored silently
 4. **Total Evolvability**: All logic stored as data, not hardcoded
 5. **Resource Constraints**: Optimize for 2GB RAM / 1vCPU throughout
@@ -103,7 +107,7 @@ docs: update ENGRAM architecture diagram
 
 See `README.md` lines 29-150 for complete DDL. Key tables:
 
-- `raw_messages`: Episodic log with `prev_turn_id` chaining
+- `raw_messages`: Episodic log ordered by timestamp
 - `stable_facts`: Vector-embedded facts (HNSW index: m=16, ef_construction=64)
 - `semantic_triples`: Subject-Predicate-Object relationships
 - `prompt_registry`: Evolvable templates with version control
@@ -114,20 +118,20 @@ See `README.md` lines 29-150 for complete DDL. Key tables:
 
 ### Pipeline Flow
 
-1. **Ingestion**: Discord message or ghost signal (`<PROACTIVE_EVAL>`)
+1. **Ingestion**: Discord message or scheduled proactive check-in
 2. **Short-Circuit Logic**:
    - North Star declaration → upsert to `stable_facts` → ack → exit
    - Invisible feedback (reply to bot) → insert `user_feedback` → 🫡 → exit
    - Feedback undo (🗑️ on 🫡) → delete feedback → exit
-3. **Episodic Logging**: Insert to `raw_messages` with temporal chaining
-4. **Context Analysis**: Semantic archetype matching determines optimal context configuration
-   - Embedding-based classification using `context_archetypes` table
-   - Outputs: `CONTEXT_TURNS`, `VECTOR_LIMIT`, `SIMILARITY_THRESHOLD`, `TRIPLE_DEPTH`
-   - Evolvable: AI can propose new archetypes via Dream Channel
-5. **Hybrid Retrieval**:
-   - Vector: Cosine similarity on `stable_facts.embedding`
-   - Graph: Traverse `semantic_triples` for relational context
-   - Episodic: Recent N turns via `prev_turn_id` chain
+ 3. **Episodic Logging**: Insert to `raw_messages`
+ 4. **Context Analysis**: Semantic archetype matching determines optimal context configuration
+    - Embedding-based classification using `context_archetypes` table
+    - Outputs: `CONTEXT_TURNS`, `VECTOR_LIMIT`, `SIMILARITY_THRESHOLD`, `TRIPLE_DEPTH`
+    - Evolvable: AI can propose new archetypes via Dream Channel
+ 5. **Hybrid Retrieval**:
+    - Recency: `ORDER BY timestamp` on `raw_messages`
+    - Relevance: Vector similarity on `stable_facts.embedding`
+    - Relationships: Graph traversal on `semantic_triples`
 6. **Generation**: Route to `prompt_registry` template
 7. **Async Consolidation**: Extract facts/triples/objectives (background)
 

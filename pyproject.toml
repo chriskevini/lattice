@@ -13,6 +13,7 @@ dependencies = [
     "python-dotenv>=1.0.0,<2.0.0",
     "structlog>=24.1.0,<25.0.0",
     "openai>=1.0.0,<2.0.0",
+    "pytz>=2024.1,<2025.0",
 ]
 
 [[tool.uv.index]]
@@ -118,6 +119,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PLR2004",
     "SLF001",
     "S108",
+    "PERF401",
+    "I001",
 ]
 "scripts/__init__.py" = [
     "D104",
@@ -125,6 +128,17 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "scripts/init_db.py" = [
     "T201",
     "PLR0915",
+    "PLR0912",
+    "E501",
+    "DTZ003",
+]
+"lattice/core/*.py" = [
+    "ANN101",
+    "G004",
+    "DTZ003",
+    "ARG002",
+    "ANN401",
+    "RUF100",
 ]
 "lattice/utils/database.py" = [
     "ANN101",
@@ -148,6 +162,25 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 ]
 "lattice/discord_client/*.py" = [
     "ANN101",
+    "F401",
+    "G004",
+    "I001",
+    "TC001",
+]
+
+"lattice/scheduler/*.py" = [
+    "ANN401",
+    "DTZ003",
+    "RUF012",
+    "ARG002",
+    "TRY300",
+    "TRY003",
+    "S608",
+    "E501",
+    "RUF006",
+    "S311",
+    "RET504",
+    "EM102",
 ]
 
 [tool.ruff.lint.isort]
@@ -197,7 +230,6 @@ ignore_errors = true
 minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["."]
-asyncio_mode = "auto"
 addopts = [
     "--strict-markers",
     "--strict-config",

@@ -58,7 +58,7 @@ async def init_database() -> None:
                 channel_id BIGINT NOT NULL,
                 content TEXT NOT NULL,
                 is_bot BOOLEAN DEFAULT false,
-                prev_turn_id UUID REFERENCES raw_messages(id),
+                is_proactive BOOLEAN DEFAULT false,
                 timestamp TIMESTAMPTZ DEFAULT now()
             );
         """
@@ -168,62 +168,69 @@ async def init_database() -> None:
         """
         )
 
-        print("Creating context_archetypes table...")
+        print("Initializing scheduler configuration...")
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS context_archetypes (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                archetype_name TEXT UNIQUE NOT NULL,
-                description TEXT,
-                example_messages TEXT[] NOT NULL,
-                centroid_embedding VECTOR(384),
-                context_turns INT NOT NULL CHECK (context_turns BETWEEN 1 AND 20),
-                context_vectors INT NOT NULL CHECK (context_vectors BETWEEN 0 AND 15),
-                similarity_threshold FLOAT NOT NULL CHECK (
-                    similarity_threshold BETWEEN 0.5 AND 0.9),
-                triple_depth INT NOT NULL CHECK (triple_depth BETWEEN 0 AND 3),
-                active BOOLEAN DEFAULT true,
-                created_by TEXT,
-                approved_by TEXT,
-                created_at TIMESTAMPTZ DEFAULT now(),
-                updated_at TIMESTAMPTZ DEFAULT now(),
-                match_count INT DEFAULT 0,
-                avg_similarity FLOAT
-            );
-        """
+            INSERT INTO system_health (metric_key, metric_value) VALUES
+            ('scheduler_base_interval', '15'),
+            ('scheduler_current_interval', '15'),
+            ('scheduler_max_interval', '1440')
+            ON CONFLICT (metric_key) DO NOTHING
+            """
         )
 
-        print("Creating archetype index...")
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_active_archetypes
-            ON context_archetypes(active) WHERE active = true;
-        """
+        print("Inserting PROACTIVE_DECISION prompt template...")
+        proactive_decision_template = """You are a warm, curious, and gently proactive AI companion. Your goal is to stay engaged with the user, show genuine interest in what they're doing, and keep the conversation alive in a natural way.
+
+## Task
+Decide ONE action:
+1. Send a short proactive message to the user
+2. Wait {current_interval} minutes before checking again
+
+## Inputs
+- **Current Time:** {current_time} (Consider whether it's an appropriate time to message - avoid late night/early morning unless there's strong recent activity)
+- **Conversation Context:** {conversation_context}
+- **Active Goals:** {objectives_context}
+
+## Guidelines
+- **Time Sensitivity:** Check the current time - avoid messaging during typical sleep hours (11 PM - 7 AM local time) unless recent conversation suggests the user is active
+- **Variety:** Do not repeat the style of previous check-ins. Rotate between:
+    - **Progress Pull:** "How's the [Task] treating you?"
+    - **Vibe Check:** "How are you holding up today?"
+    - **Low-Friction Presence:** "Just checking in—I'm here if you need a thought partner."
+    - **Curious Spark:** "What's the latest with [Task/Goal]? Any fun breakthroughs?"
+    - **Gentle Encouragement:** "Rooting for you on [Task]—how's it feeling?"
+    - **Thinking of You:** "Hey, you popped into my mind—how's your day going?"
+    - **Light Support Offer:** "Still grinding on [Task]? Hit me up if you want to bounce ideas."
+- **Tone:** Concise (1-2 sentences max), warm, and peer-level—like chatting with a good friend. Avoid formal assistant language (no "As an AI..." or overly polished phrases).
+- Adapt the message naturally to the conversation context or active goals, but keep it light and non-pushy.
+
+## Output Format
+Return ONLY valid JSON:
+{{
+  "action": "message" | "wait",
+  "content": "Message text" | null,
+  "reason": "Justify the decision briefly, including which style you chose and why it fits now."
+}}"""
+
+        existing = await conn.fetchval(
+            "SELECT prompt_key FROM prompt_registry WHERE prompt_key = $1",
+            "PROACTIVE_DECISION",
         )
 
-        print("Creating centroid invalidation trigger...")
-        await conn.execute(
-            """
-            CREATE OR REPLACE FUNCTION invalidate_centroid()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                IF OLD.example_messages IS DISTINCT FROM NEW.example_messages THEN
-                    NEW.centroid_embedding = NULL;
-                END IF;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-        """
-        )
-
-        await conn.execute(
-            """
-            DROP TRIGGER IF EXISTS invalidate_centroid_on_update ON context_archetypes;
-            CREATE TRIGGER invalidate_centroid_on_update
-            BEFORE UPDATE ON context_archetypes
-            FOR EACH ROW EXECUTE FUNCTION invalidate_centroid();
-        """
-        )
+        if existing:
+            print("PROACTIVE_DECISION prompt already exists, skipping insert")
+        else:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO prompt_registry (prompt_key, template, temperature)
+                    VALUES ($1, $2, 0.7)
+                    """,
+                    "PROACTIVE_DECISION",
+                    proactive_decision_template,
+                )
+                print("PROACTIVE_DECISION prompt inserted")
 
         print("Inserting default prompt template...")
         template_text = """You are a helpful AI companion in a Discord server.
@@ -366,8 +373,7 @@ Begin extraction:"""
         print("Database initialization complete!")
         print(
             "Tables created: prompt_registry, raw_messages, stable_facts, "
-            "semantic_triples, objectives, user_feedback, system_health, "
-            "context_archetypes"
+            "semantic_triples, objectives, user_feedback, system_health"
         )
 
     except Exception as e:

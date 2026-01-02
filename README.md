@@ -20,9 +20,14 @@ The **Adaptive Memory Orchestrator** is a self-evolving companion agent engineer
 
 | Tier | Table(s) | Role (ENGRAM Analogue) |
 | --- | --- | --- |
-| **Episodic** | `raw_messages` | Immutable, sequential log of canonical turns with temporal chaining. |
-| **Semantic** | `stable_facts` + `semantic_triples` | Stable facts + explicit symbolic triples (Subject-Predicate-Object) for graph-based reasoning. |
-| **Procedural** | `prompt_registry` | The evolving "Rulebook": learned strategies, personas, and workflows. |
+| **Episodic** | `raw_messages` | Recency: Immutable, sequential log of canonical turns ordered by timestamp. |
+| **Semantic** | `stable_facts` + `semantic_triples` | Relevance: Stable facts with vector embeddings + explicit Subject-Predicate-Object triples for graph-based reasoning. |
+| **Procedural** | `prompt_registry` | Relationships: The evolving "Rulebook" of learned strategies, personas, and workflows. |
+
+Context retrieval combines all three dimensions:
+- **Recency**: `ORDER BY timestamp` on `raw_messages`
+- **Relevance**: Vector similarity search on `stable_facts`
+- **Relationships**: Graph traversal on `semantic_triples`
 
 ### 2.2 Complete Schema Definition (DDL)
 
@@ -49,7 +54,7 @@ CREATE TABLE raw_messages (
     channel_id BIGINT NOT NULL,
     content TEXT NOT NULL,
     is_bot BOOLEAN DEFAULT false,
-    prev_turn_id UUID REFERENCES raw_messages(id),  -- Temporal chaining for context reconstruction
+    is_proactive BOOLEAN DEFAULT false,  -- Bot-initiated vs user-initiated messages
     timestamp TIMESTAMPTZ DEFAULT now()
 );
 
@@ -158,9 +163,9 @@ FOR EACH ROW EXECUTE FUNCTION invalidate_centroid();
 
 ### 3.1 Unified Ingestion Pipeline
 
-All behavior (Reactive User Input + Proactive Synthetic Ghosts) flows through a single pipeline:
+All behavior (Reactive User Input + Proactive Check-ins) flows through a single pipeline:
 
-1. **Ingestion:** Capture Discord message or internal ghost signal (`<PROACTIVE_EVAL>`).
+1. **Ingestion:** Capture Discord message or schedule proactive check-in.
 2. **Short-Circuit Logic:**
 * **North Star:** Detect declaration → upsert to `stable_facts` (protected) → simple ack → exit.
 * **Invisible Feedback:** Detect quote/reply to bot → insert to `user_feedback` → 🫡 reaction → exit (no log to `raw_messages`).
@@ -186,9 +191,9 @@ All behavior (Reactive User Input + Proactive Synthetic Ghosts) flows through a 
 
 ## 4. PROACTIVE SCHEDULING & EVOLUTION
 
-### 4.1 Proactive Ghosting
+### 4.1 Proactive Check-ins
 
-A lightweight background loop monitors `system_health.scheduled_next_proactive`. When due, it injects a ghost message into the unified pipeline. This allows the AI to decide its own check-in frequency, making the proactivity cadence fully evolvable and responsive to user needs.
+A lightweight scheduler monitors `system_health.next_check_at`. When due, the AI analyzes conversation context and user goals to decide whether and when to send a proactive check-in message. The AI determines its own check-in frequency, making the proactivity cadence fully evolvable and responsive to user needs.
 
 ### 4.2 Dreaming Cycle (Offline Evolution)
 
@@ -253,9 +258,9 @@ To leverage improved LLM capabilities without losing history:
    - Graph-based reasoning
    - **Proves:** "The bot understands relationships, not just facts"
 
-7. **Proactive scheduler + ghost messages**
-   - Lightweight background loop
-   - AI-controlled check-in cadence
+7. **Proactive scheduler**
+   - AI-driven check-in decisions
+   - Single PROACTIVE_DECISION prompt call
    - **Proves:** "The bot initiates helpful check-ins"
 
 ### Phase 4: Self-Evolution
