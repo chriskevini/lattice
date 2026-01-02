@@ -249,9 +249,12 @@ class LatticeBot(commands.Bot):
                 temperature=0.0,
             )
 
-        episodic_context = "\n".join(
-            [f"{'Bot' if msg.is_bot else 'User'}: {msg.content}" for msg in recent_messages[-5:]]
-        )
+        def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
+            ts = msg.timestamp.strftime("%Y-%m-%d %H:%M")
+            role = "Bot" if msg.is_bot else "User"
+            return f"[{ts}] {role}: {msg.content}"
+
+        episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages[-5:])
 
         semantic_context = (
             "\n".join([f"- {fact.content}" for fact in semantic_facts])
