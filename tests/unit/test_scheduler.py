@@ -1,8 +1,10 @@
 """Unit tests for scheduler components."""
 
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
+import pytest
 
 from lattice.scheduler.triggers import (
     ProactiveDecision,
@@ -54,7 +56,7 @@ class TestProactiveDecision:
         decision = ProactiveDecision(
             action="message",
             content="Hey! How's it going?",
-            next_check_at=(datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            next_check_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
             reason="User has been active",
             channel_id=12345,
         )
@@ -66,7 +68,7 @@ class TestProactiveDecision:
         decision = ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.utcnow() + timedelta(hours=2)).isoformat(),
+            next_check_at=(datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(),
             reason="User just responded",
         )
         assert decision.action == "wait"
