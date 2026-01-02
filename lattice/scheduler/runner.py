@@ -13,7 +13,7 @@ import structlog
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.memory import episodic
 from lattice.scheduler.triggers import decide_proactive, get_current_interval, set_current_interval
-from lattice.utils.database import get_next_check_at, get_system_health, set_next_check_at
+from lattice.utils.database import db_pool, get_next_check_at, get_system_health, set_next_check_at
 
 
 logger = structlog.get_logger(__name__)
@@ -92,7 +92,7 @@ class ProactiveScheduler:
                 await set_current_interval(new_interval)
                 next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
             else:
-                pipeline = UnifiedPipeline(db_pool=self.bot.db_pool, bot=self.bot)
+                pipeline = UnifiedPipeline(db_pool=db_pool, bot=self.bot)
 
                 channel_id = decision.channel_id
                 result = await pipeline.send_proactive_message(
