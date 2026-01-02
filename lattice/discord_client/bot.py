@@ -257,13 +257,6 @@ class LatticeBot(commands.Bot):
 
                 # Dream message update is handled in _mirror_to_dream_channel
 
-                # Update audit with dream message ID
-                if dream_msg:
-                    await prompt_audits.update_audit_dream_message(
-                        audit_id=audit_id,
-                        dream_discord_message_id=dream_msg.id,
-                    )
-
             _consolidation_task = asyncio.create_task(  # noqa: RUF006
                 episodic.consolidate_message(
                     message_id=user_message_id,
@@ -456,7 +449,6 @@ class LatticeBot(commands.Bot):
         # Build dream channel message
         separator = "─" * 40
         prompt_version = performance.get("version", 1)
-        prompt_version = performance.get("version", 1)
         dream_content = (
             f"🔗 Main: {bot_message.jump_url}\n\n"
             f"{separator}\n"
@@ -472,27 +464,6 @@ class LatticeBot(commands.Bot):
             f"{separator}\n"
             f"||📋 FULL RENDERED PROMPT\n\n{prompt_display}||"
         )
-
-        try:
-            dream_msg = await dream_channel.send(dream_content)
-            logger.info(
-                "Mirrored to dream channel",
-                audit_id=audit_id,
-                main_message_id=bot_message.id,
-                dream_message_id=dream_msg.id,
-            )
-
-            # Update audit with dream message ID
-            await prompt_audits.update_audit_dream_message(
-                audit_id=audit_id,
-                dream_discord_message_id=dream_msg.id,
-            )
-            return dream_msg  # noqa: TRY300
-        except Exception:
-            logger.exception(
-                "Failed to mirror to dream channel",
-                audit_id=audit_id,
-            )
 
         try:
             dream_msg = await dream_channel.send(dream_content)

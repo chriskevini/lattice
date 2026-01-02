@@ -93,7 +93,7 @@ def is_invisible_feedback(
     if not isinstance(content, str):
         content = ""
 
-    logger.info(
+    logger.debug(
         "Detected invisible feedback",
         author=getattr(getattr(message, "author", None), "name", "unknown"),
         referenced_message=get_referenced_message_id(message),

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS prompt_audits (
     message_id UUID REFERENCES raw_messages(id),
     
     -- Prompt & response
-    rendered_prompt TEXT NOT NULL,
+    rendered_prompt TEXT NOT NULL CHECK (length(rendered_prompt) <= 50000),
     response_content TEXT NOT NULL,
     
     -- Performance metrics
