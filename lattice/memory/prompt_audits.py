@@ -3,6 +3,7 @@
 Stores complete audit trail for Dreaming Cycle to analyze prompt effectiveness.
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -101,6 +102,10 @@ async def store_prompt_audit(
     Returns:
         UUID of the stored audit entry
     """
+    # Convert dicts to JSON strings for JSONB columns
+    context_config_json = json.dumps(context_config) if context_config else None
+    reasoning_json = json.dumps(reasoning) if reasoning else None
+
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -137,10 +142,10 @@ async def store_prompt_audit(
             completion_tokens,
             cost_usd,
             latency_ms,
-            context_config,
+            context_config_json,
             archetype_matched,
             archetype_confidence,
-            reasoning,
+            reasoning_json,
             main_discord_message_id,
             dream_discord_message_id,
         )
