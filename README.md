@@ -20,9 +20,14 @@ The **Adaptive Memory Orchestrator** is a self-evolving companion agent engineer
 
 | Tier | Table(s) | Role (ENGRAM Analogue) |
 | --- | --- | --- |
-| **Episodic** | `raw_messages` | Immutable, sequential log of canonical turns with temporal chaining. |
-| **Semantic** | `stable_facts` + `semantic_triples` | Stable facts + explicit symbolic triples (Subject-Predicate-Object) for graph-based reasoning. |
-| **Procedural** | `prompt_registry` | The evolving "Rulebook": learned strategies, personas, and workflows. |
+| **Episodic** | `raw_messages` | Recency: Immutable, sequential log of canonical turns ordered by timestamp. |
+| **Semantic** | `stable_facts` + `semantic_triples` | Relevance: Stable facts with vector embeddings + explicit Subject-Predicate-Object triples for graph-based reasoning. |
+| **Procedural** | `prompt_registry` | Relationships: The evolving "Rulebook" of learned strategies, personas, and workflows. |
+
+Context retrieval combines all three dimensions:
+- **Recency**: `ORDER BY timestamp` on `raw_messages`
+- **Relevance**: Vector similarity search on `stable_facts`
+- **Relationships**: Graph traversal on `semantic_triples`
 
 ### 2.2 Complete Schema Definition (DDL)
 
