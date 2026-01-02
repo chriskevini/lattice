@@ -6,7 +6,7 @@ Uses LLM to decide whether to initiate contact based on conversation context.
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from lattice.memory.episodic import EpisodicMessage, get_recent_messages
 from lattice.memory.procedural import get_prompt
@@ -102,7 +102,7 @@ async def decide_proactive() -> ProactiveDecision:
         return ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason="PROACTIVE_DECISION prompt not found, defaulting to wait",
         )
 
@@ -122,7 +122,7 @@ async def decide_proactive() -> ProactiveDecision:
         return ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason=f"LLM call failed: {e}",
             channel_id=channel_id,
         )
@@ -147,13 +147,13 @@ async def decide_proactive() -> ProactiveDecision:
         if next_check_raw:
             try:
                 parsed = datetime.fromisoformat(str(next_check_raw))
-                if parsed > datetime.utcnow():
+                if parsed > datetime.now(UTC):
                     next_check_at = parsed.isoformat()
             except (ValueError, TypeError):
                 logger.warning("Invalid next_check_at format: %s", next_check_raw)
 
         if not next_check_at:
-            next_check_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+            next_check_at = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
 
         return ProactiveDecision(
             action=action,
@@ -168,7 +168,7 @@ async def decide_proactive() -> ProactiveDecision:
         return ProactiveDecision(
             action="wait",
             content=None,
-            next_check_at=(datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            next_check_at=(datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             reason="Failed to parse AI response",
             channel_id=channel_id,
         )

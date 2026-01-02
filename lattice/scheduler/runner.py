@@ -5,7 +5,7 @@ whether to send a proactive message.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -47,7 +47,7 @@ class ProactiveScheduler:
 
         initial_check = await get_next_check_at()
         if not initial_check:
-            initial_check = datetime.utcnow() + timedelta(minutes=self.check_interval)
+            initial_check = datetime.now(UTC) + timedelta(minutes=self.check_interval)
             await set_next_check_at(initial_check)
 
         self._scheduler_task = asyncio.create_task(self._scheduler_loop())
@@ -65,8 +65,8 @@ class ProactiveScheduler:
             try:
                 next_check = await get_next_check_at()
 
-                if next_check and datetime.utcnow() < next_check:
-                    sleep_seconds = (next_check - datetime.utcnow()).total_seconds()
+                if next_check and datetime.now(UTC) < next_check:
+                    sleep_seconds = (next_check - datetime.now(UTC)).total_seconds()
                     await asyncio.sleep(sleep_seconds)
                     continue
 

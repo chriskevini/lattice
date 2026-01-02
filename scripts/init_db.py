@@ -194,7 +194,7 @@ Return ONLY valid JSON (no markdown formatting):
 ## Examples
 {{"action": "message", "content": "Hey! How's that Python project coming along?", "next_check_at": "2026-01-02T09:00:00Z", "reason": "User mentioned a project, check on progress"}}
 {{"action": "wait", "next_check_at": "2026-01-02T18:00:00Z", "reason": "User just responded, give space"}}
-{{"action": "message", "content": "Just wanted to check in - hope you're having a great day!", "next_check_at": "2026-01-03T09:00:00Z", "reason: It's been a few days, gentle check-in"}}
+{{"action": "message", "content": "Just wanted to check in - hope you're having a great day!", "next_check_at": "2026-01-03T09:00:00Z", "reason": "It's been a few days, gentle check-in"}}
 
 Your decision:"""
 
