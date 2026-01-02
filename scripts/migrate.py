@@ -49,6 +49,7 @@ async def apply_migration(conn: asyncpg.Connection, file_path: Path) -> None:
     print(f"Applying migration: {migration_name}")
     async with conn.transaction():
         # Check if schema_migrations table exists
+        # NOTE: First migration (001) creates this table, so we need bootstrap logic
         table_exists = await conn.fetchval(
             """
             SELECT EXISTS (
