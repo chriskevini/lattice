@@ -70,6 +70,9 @@ class LLMClient:
         Returns a JSON array of triples for triple extraction prompts,
         otherwise returns the prompt echoed back.
 
+        WARNING: This is a development placeholder that returns static test data.
+        Real LLM responses require setting LLM_PROVIDER=openrouter in environment.
+
         Args:
             prompt: The prompt that was sent
             temperature: Sampling temperature (unused in placeholder)
@@ -77,9 +80,17 @@ class LLMClient:
         Returns:
             GenerationResult with placeholder response
         """
+        is_extraction = "triple" in prompt.lower() or "extract" in prompt.lower()
+
+        if is_extraction:
+            logger.warning(
+                "Placeholder LLM used for extraction - returns static test data. "
+                "Set LLM_PROVIDER=openrouter for real responses."
+            )
+
         content = (
             '[{"subject": "example", "predicate": "likes", "object": "testing"}]'
-            if "triple" in prompt.lower() or "extract" in prompt.lower()
+            if is_extraction
             else f"Placeholder response to: {prompt[:50]}..."
         )
 
