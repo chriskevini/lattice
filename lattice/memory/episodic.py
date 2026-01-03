@@ -160,6 +160,10 @@ async def consolidate_message(
     message_id: UUID,
     content: str,
     context: list[str],
+    bot: Any | None = None,
+    dream_channel_id: int | None = None,
+    main_message_url: str | None = None,
+    main_message_id: int | None = None,
 ) -> None:
     """Extract semantic triples and objectives from a message asynchronously.
 
@@ -167,6 +171,10 @@ async def consolidate_message(
         message_id: UUID of the stored message
         content: Message content to extract from
         context: Recent conversation context for extraction
+        bot: Optional Discord bot instance for mirroring extractions
+        dream_channel_id: Optional dream channel ID for mirroring
+        main_message_url: Optional jump URL to main channel message
+        main_message_id: Optional Discord message ID for display
     """
     logger.info("Starting consolidation", message_id=str(message_id))
 
@@ -214,6 +222,18 @@ async def consolidate_message(
     objectives = await extract_objectives(message_id, content, context)
     if objectives:
         await store_objectives(message_id, objectives)
+
+    # Mirror to dream channel if configured
+    if bot and dream_channel_id and main_message_id and main_message_url:
+        await _mirror_extraction_to_dream(
+            bot=bot,
+            dream_channel_id=dream_channel_id,
+            user_message=content,
+            main_message_url=main_message_url,
+            main_message_id=main_message_id,
+            triples=triples or [],
+            objectives=objectives or [],
+        )
 
 
 async def _ensure_fact(
@@ -387,3 +407,56 @@ async def store_objectives(
                     description_preview=description[:50],
                     saliency=saliency,
                 )
+
+
+async def _mirror_extraction_to_dream(
+    bot: Any,
+    dream_channel_id: int,
+    user_message: str,
+    main_message_url: str,
+    main_message_id: int,
+    triples: list[dict[str, str]],
+    objectives: list[dict[str, Any]],
+) -> None:
+    """Mirror extraction results to dream channel.
+
+    Args:
+        bot: Discord bot instance
+        dream_channel_id: Dream channel ID
+        user_message: User's message that was analyzed
+        main_message_url: Jump URL to main channel message
+        main_message_id: Discord message ID for display
+        triples: Extracted semantic triples
+        objectives: Extracted objectives
+    """
+    # Lazy import to avoid circular dependency
+    from lattice.discord_client.dream import DreamMirrorBuilder
+
+    dream_channel = bot.get_channel(dream_channel_id)
+    if not dream_channel:
+        logger.warning(
+            "Dream channel not found for extraction mirror",
+            dream_channel_id=dream_channel_id,
+        )
+        return
+
+    try:
+        # Build embed
+        embed = DreamMirrorBuilder.build_extraction_mirror(
+            user_message=user_message,
+            main_message_url=main_message_url,
+            triples=triples,
+            objectives=objectives,
+            main_message_id=main_message_id,
+        )
+
+        # Send to dream channel
+        await dream_channel.send(embed=embed)
+        logger.info(
+            "Extraction results mirrored to dream channel",
+            triples_count=len(triples),
+            objectives_count=len(objectives),
+        )
+
+    except Exception:
+        logger.exception("Failed to mirror extraction results to dream channel")

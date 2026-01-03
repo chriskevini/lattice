@@ -143,6 +143,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "ARG002",
     "ANN401",
     "RUF100",
+    "PLR0913",
 ]
 "lattice/utils/database.py" = [
     "ANN101",
@@ -153,6 +154,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "lattice/memory/*.py" = [
     "PLR0913",
     "ANN101",
+    "ANN401",
+    "PLC0415",
 ]
 "lattice/utils/*.py" = [
     "PLC0415",

@@ -59,3 +59,100 @@ class TestDreamMirrorBuilder:
         assert embed.fields[1].value is not None
         assert len(embed.fields[0].value) <= 910  # 900 + 7 for code block + newlines
         assert len(embed.fields[1].value) <= 910
+
+    def test_build_extraction_mirror(self) -> None:
+        """Test building an extraction results mirror embed."""
+        triples = [
+            {"subject": "User", "predicate": "likes", "object": "Python"},
+            {"subject": "Python", "predicate": "is", "object": "programming_language"},
+        ]
+        objectives = [
+            {"description": "Learn advanced Python", "saliency": 0.8, "status": "pending"},
+            {"description": "Build a web app", "saliency": 0.6, "status": "active"},
+        ]
+
+        embed = DreamMirrorBuilder.build_extraction_mirror(
+            user_message="I love Python and want to learn more!",
+            main_message_url="https://discord.com/channels/123/456/789",
+            triples=triples,
+            objectives=objectives,
+            main_message_id=789,
+        )
+
+        assert isinstance(embed, discord.Embed)
+        assert embed.title == "🧠 EXTRACTION RESULTS"
+        assert embed.color == discord.Color.purple()
+        assert len(embed.fields) == 4  # Message, triples, objectives, link
+
+        # Check analyzed message field
+        assert embed.fields[0].name == "📝 ANALYZED MESSAGE"
+        assert embed.fields[0].value is not None
+        assert "I love Python" in embed.fields[0].value
+
+        # Check triples field
+        assert embed.fields[1].name is not None
+        assert "SEMANTIC TRIPLES (2)" in embed.fields[1].name
+        assert embed.fields[1].value is not None
+        assert "User → likes → Python" in embed.fields[1].value
+
+        # Check objectives field
+        assert embed.fields[2].name is not None
+        assert "OBJECTIVES (2)" in embed.fields[2].name
+        assert embed.fields[2].value is not None
+        assert "Learn advanced Python" in embed.fields[2].value
+        assert "Saliency: 0.8" in embed.fields[2].value
+
+        # Check link field
+        assert embed.fields[3].name is not None
+        assert "🔗 LINK" in embed.fields[3].name
+
+        # Check footer
+        assert embed.footer.text is not None
+        assert "Message ID: 789" in embed.footer.text
+
+    def test_build_extraction_mirror_empty(self) -> None:
+        """Test extraction mirror with no triples or objectives."""
+        embed = DreamMirrorBuilder.build_extraction_mirror(
+            user_message="Hello!",
+            main_message_url="https://discord.com/channels/123/456/789",
+            triples=[],
+            objectives=[],
+            main_message_id=789,
+        )
+
+        assert isinstance(embed, discord.Embed)
+        assert len(embed.fields) == 4
+
+        # Check that empty states are handled
+        assert embed.fields[1].value is not None
+        assert "No triples extracted" in embed.fields[1].value
+        assert embed.fields[2].value is not None
+        assert "No objectives extracted" in embed.fields[2].value
+
+    def test_build_extraction_mirror_truncates_many_items(self) -> None:
+        """Test that many triples/objectives are truncated with indicator."""
+        # Create 10 triples
+        triples = [
+            {"subject": f"Subject{i}", "predicate": "relates_to", "object": f"Object{i}"}
+            for i in range(10)
+        ]
+
+        # Create 10 objectives
+        objectives = [
+            {"description": f"Objective {i}", "saliency": 0.5, "status": "pending"}
+            for i in range(10)
+        ]
+
+        embed = DreamMirrorBuilder.build_extraction_mirror(
+            user_message="Test message",
+            main_message_url="https://discord.com/channels/123/456/789",
+            triples=triples,
+            objectives=objectives,
+            main_message_id=789,
+        )
+
+        # Check that truncation indicator is present
+        assert embed.fields[1].value is not None
+        assert "... and 5 more" in embed.fields[1].value
+        assert embed.fields[2].value is not None
+        assert "... and 5 more" in embed.fields[2].value

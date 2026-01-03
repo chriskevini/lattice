@@ -17,6 +17,7 @@ logger = structlog.get_logger(__name__)
 # Discord modal text input limit
 MODAL_TEXT_LIMIT = 4000
 MODAL_TEXT_SAFE_LIMIT = 3900  # Leave room for truncation message
+MAX_DISPLAY_ITEMS = 5  # Maximum items to display in extraction mirrors
 
 
 class PromptViewModal(discord.ui.Modal):
@@ -284,6 +285,90 @@ class DreamMirrorBuilder:
             value=f"```\n{reasoning[:900]}\n```",
             inline=False,
         )
+
+        # Jump link
+        embed.add_field(
+            name="🔗 LINK",
+            value=f"[JUMP TO MAIN]({main_message_url})",
+            inline=False,
+        )
+
+        embed.set_footer(text=f"Message ID: {main_message_id}")
+
+        return embed
+
+    @staticmethod
+    def build_extraction_mirror(
+        user_message: str,
+        main_message_url: str,
+        triples: list[dict[str, str]],
+        objectives: list[dict[str, Any]],
+        main_message_id: int,
+    ) -> discord.Embed:
+        """Build an extraction results mirror.
+
+        Args:
+            user_message: User's message that was analyzed
+            main_message_url: Jump URL to main channel message
+            triples: Extracted semantic triples (subject, predicate, object)
+            objectives: Extracted objectives (description, saliency, status)
+            main_message_id: Discord message ID in main channel
+
+        Returns:
+            Embed for the extraction mirror message
+        """
+        embed = discord.Embed(
+            title="🧠 EXTRACTION RESULTS",
+            color=discord.Color.purple(),
+        )
+
+        # User message section
+        embed.add_field(
+            name="📝 ANALYZED MESSAGE",
+            value=f"```\n{user_message[:900]}\n```",
+            inline=False,
+        )
+
+        # Semantic triples section
+        if triples:
+            triples_text = "\n".join(
+                f"• {t['subject']} → {t['predicate']} → {t['object']}"
+                for t in triples[:MAX_DISPLAY_ITEMS]
+            )
+            if len(triples) > MAX_DISPLAY_ITEMS:
+                triples_text += f"\n... and {len(triples) - MAX_DISPLAY_ITEMS} more"
+            embed.add_field(
+                name=f"🔗 SEMANTIC TRIPLES ({len(triples)})",
+                value=triples_text[:1020],  # Discord field limit
+                inline=False,
+            )
+        else:
+            embed.add_field(
+                name="🔗 SEMANTIC TRIPLES",
+                value="No triples extracted",
+                inline=False,
+            )
+
+        # Objectives section
+        if objectives:
+            objectives_text = "\n".join(
+                f"• {obj['description'][:80]} (Saliency: {obj.get('saliency', 0.5):.1f}, "
+                f"Status: {obj.get('status', 'pending')})"
+                for obj in objectives[:MAX_DISPLAY_ITEMS]
+            )
+            if len(objectives) > MAX_DISPLAY_ITEMS:
+                objectives_text += f"\n... and {len(objectives) - MAX_DISPLAY_ITEMS} more"
+            embed.add_field(
+                name=f"🎯 OBJECTIVES ({len(objectives)})",
+                value=objectives_text[:1020],  # Discord field limit
+                inline=False,
+            )
+        else:
+            embed.add_field(
+                name="🎯 OBJECTIVES",
+                value="No objectives extracted",
+                inline=False,
+            )
 
         # Jump link
         embed.add_field(

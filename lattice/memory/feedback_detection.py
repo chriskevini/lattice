@@ -30,7 +30,7 @@ class DetectionResult:
     confidence: float = 0.0
 
 
-def is_quote_or_reply(message: Any) -> bool:  # noqa: ANN401
+def is_quote_or_reply(message: Any) -> bool:
     """Check if a message is a quote or reply to another message.
 
     Args:
@@ -49,7 +49,7 @@ def is_quote_or_reply(message: Any) -> bool:  # noqa: ANN401
     return False
 
 
-def get_referenced_message_id(message: Any) -> int | None:  # noqa: ANN401
+def get_referenced_message_id(message: Any) -> int | None:
     """Get the ID of the message being quoted/replied to.
 
     Args:
@@ -65,7 +65,7 @@ def get_referenced_message_id(message: Any) -> int | None:  # noqa: ANN401
 
 
 def is_invisible_feedback(
-    message: Any,  # noqa: ANN401
+    message: Any,
     dream_channel_id: int | None = None,
 ) -> DetectionResult:
     """Check if a message is invisible feedback (quote/reply to bot in dream channel).
@@ -103,7 +103,7 @@ def is_invisible_feedback(
     return DetectionResult(detected=True, content=content, confidence=1.0)
 
 
-def is_north_star(message: Any) -> DetectionResult:  # noqa: ANN401
+def is_north_star(message: Any) -> DetectionResult:
     """Check if a message is a North Star declaration.
 
     Args:
