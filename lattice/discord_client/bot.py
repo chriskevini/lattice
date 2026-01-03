@@ -251,6 +251,10 @@ class LatticeBot(commands.Bot):
                 message_id=user_message_id,
                 content=message.content,
                 context=[msg.content for msg in recent_messages[-5:]],
+                bot=self,
+                dream_channel_id=self.dream_channel_id,
+                main_message_url=message.jump_url,
+                main_message_id=message.id,
             )
 
             self._consecutive_failures = 0

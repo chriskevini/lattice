@@ -122,6 +122,10 @@ async def consolidate_message_async(
     message_id: UUID,
     content: str,
     context: list[str],
+    bot: Any | None = None,
+    dream_channel_id: int | None = None,
+    main_message_url: str | None = None,
+    main_message_id: int | None = None,
 ) -> None:
     """Start async consolidation task for a message (fire-and-forget).
 
@@ -132,11 +136,19 @@ async def consolidate_message_async(
         message_id: UUID of the stored message
         content: Message content to extract from
         context: Recent conversation context
+        bot: Optional Discord bot instance for mirroring extractions
+        dream_channel_id: Optional dream channel ID for mirroring
+        main_message_url: Optional jump URL to main channel message
+        main_message_id: Optional Discord message ID for display
     """
     _consolidation_task = asyncio.create_task(  # noqa: RUF006
         episodic.consolidate_message(
             message_id=message_id,
             content=content,
             context=context,
+            bot=bot,
+            dream_channel_id=dream_channel_id,
+            main_message_url=main_message_url,
+            main_message_id=main_message_id,
         )
     )
