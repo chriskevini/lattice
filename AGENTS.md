@@ -51,6 +51,8 @@ lattice/
 │   ├── semantic.py     # stable_facts, semantic_triples, vector ops
 │   └── procedural.py   # prompt_registry, template management
 ├── discord_client/ # Discord bot interface, reaction handling, rate limiting
+│   ├── bot.py          # Main Discord client, event handlers
+│   └── dream.py        # Dream channel UI (embeds, modals, buttons)
 ├── prompts/        # Prompt templates and extraction strategies
 └── utils/          # Embeddings, database pooling, logging
 
