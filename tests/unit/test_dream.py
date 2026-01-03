@@ -1,7 +1,6 @@
 """Tests for dream channel UI components."""
 
 import discord
-import pytest
 
 from lattice.discord_client.dream import DreamMirrorBuilder
 
@@ -25,17 +24,21 @@ class TestDreamMirrorBuilder:
 
         # Check message field
         assert embed.fields[0].name == "🤖 MESSAGE"
+        assert embed.fields[0].value is not None
         assert "Hey! Just checking in" in embed.fields[0].value
 
         # Check reasoning field
         assert embed.fields[1].name == "🧠 REASONING"
+        assert embed.fields[1].value is not None
         assert "User mentioned project deadline" in embed.fields[1].value
 
         # Check link field
         assert embed.fields[2].name == "🔗 LINK"
+        assert embed.fields[2].value is not None
         assert "JUMP TO MAIN" in embed.fields[2].value
 
         # Check footer
+        assert embed.footer.text is not None
         assert "Message ID: 789" in embed.footer.text
 
     def test_build_proactive_mirror_truncates_long_content(self) -> None:
@@ -50,7 +53,9 @@ class TestDreamMirrorBuilder:
             main_message_id=789,
         )
 
-        # Discord embed field values have max 1024 chars, but we truncate at 900 + code block markers
-        # Code block markers add 7 chars: ```\n at start and \n``` at end
+        # Discord embed field values have max 1024 chars
+        # We truncate at 900 + code block markers (7 chars)
+        assert embed.fields[0].value is not None
+        assert embed.fields[1].value is not None
         assert len(embed.fields[0].value) <= 910  # 900 + 7 for code block + newlines
         assert len(embed.fields[1].value) <= 910
