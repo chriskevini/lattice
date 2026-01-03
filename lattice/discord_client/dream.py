@@ -247,3 +247,51 @@ class DreamMirrorBuilder:
         )
 
         return embed, view
+
+    @staticmethod
+    def build_proactive_mirror(
+        bot_message: str,
+        main_message_url: str,
+        reasoning: str,
+        main_message_id: int,
+    ) -> discord.Embed:
+        """Build a proactive message mirror.
+
+        Args:
+            bot_message: Bot's proactive message content
+            main_message_url: Jump URL to main channel message
+            reasoning: AI reasoning for sending proactive message
+            main_message_id: Discord message ID in main channel
+
+        Returns:
+            Embed for the proactive mirror message
+        """
+        embed = discord.Embed(
+            title="🌟 PROACTIVE CHECK-IN",
+            color=discord.Color.gold(),
+        )
+
+        # Bot message section
+        embed.add_field(
+            name="🤖 MESSAGE",
+            value=f"```\n{bot_message[:900]}\n```",
+            inline=False,
+        )
+
+        # AI reasoning section
+        embed.add_field(
+            name="🧠 REASONING",
+            value=f"```\n{reasoning[:900]}\n```",
+            inline=False,
+        )
+
+        # Jump link
+        embed.add_field(
+            name="🔗 LINK",
+            value=f"[JUMP TO MAIN]({main_message_url})",
+            inline=False,
+        )
+
+        embed.set_footer(text=f"Message ID: {main_message_id}")
+
+        return embed

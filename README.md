@@ -234,15 +234,26 @@ A lightweight scheduler monitors `system_health.next_check_at`. When due, the AI
 - After "wait" action: exponential backoff
 - After reactive user message: reset to base interval
 
-### 4.2 Dreaming Cycle (Offline Evolution)
+### 4.2 Dream Channel Interface
+
+The system mirrors all autonomous activities (reactive responses, proactive check-ins, extraction results, optimization proposals) to a dedicated dream channel for transparency and human oversight:
+
+* **Interactive Embeds:** Rich Discord embeds with structured sections (user message, bot response, metrics, context info)
+* **View Prompt Button:** Opens modal showing the full rendered prompt used for generation
+* **Feedback Button:** Opens modal for collecting structured feedback (positive/negative/neutral with optional comments)
+* **Approval Workflow:** Dreaming cycle proposals include approve/reject/discuss buttons for human-in-the-loop evolution
+
+All dream channel UI components are built using Discord.py's native components (Embeds, Modals, Buttons, Views) for a consistent, professional interface.
+
+### 4.3 Dreaming Cycle (Offline Evolution)
 
 Daily at 3:00 AM, the system performs a self-analysis:
 
 * **Analysis:** Reviews `user_feedback` and implicit success signals from `raw_messages`.
 * **Proposal:** Generates improved templates or extraction strategies (e.g., adding new relationship types to the triples).
-* **Safety Gate:** Proposed changes are sent to a private control channel; they are only merged into the `prompt_registry` after human approval.
+* **Safety Gate:** Proposed changes are sent to dream channel with interactive approval buttons; they are only merged into the `prompt_registry` after human approval.
 
-### 4.3 Future-Proof Re-indexing
+### 4.4 Future-Proof Re-indexing
 
 To leverage improved LLM capabilities without losing history:
 
