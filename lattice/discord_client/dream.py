@@ -42,7 +42,7 @@ class PromptViewModal(discord.ui.Modal):
         else:
             display_prompt = rendered_prompt
 
-        self.prompt_display = discord.ui.TextInput(
+        self.prompt_display: discord.ui.TextInput = discord.ui.TextInput(
             label="Rendered Template",
             style=discord.TextStyle.paragraph,
             default=display_prompt,
@@ -71,7 +71,7 @@ class FeedbackModal(discord.ui.Modal):
         self.audit_id = audit_id
         self.message_id = message_id
 
-        self.feedback_text = discord.ui.TextInput(
+        self.feedback_text: discord.ui.TextInput = discord.ui.TextInput(
             label="Comments (optional)",
             style=discord.TextStyle.paragraph,
             placeholder="Provide details about what could be improved...",
@@ -127,7 +127,7 @@ class DreamMirrorView(discord.ui.View):
             rendered_prompt: Full rendered prompt
             has_feedback: Whether feedback has already been submitted
         """
-        super().__init__(timeout=None)  # Persistent view
+        super().__init__(timeout=600)  # 10 minute timeout for dream channel monitoring
         self.audit_id = audit_id
         self.message_id = message_id
         self.prompt_key = prompt_key
@@ -135,33 +135,27 @@ class DreamMirrorView(discord.ui.View):
         self.rendered_prompt = rendered_prompt
         self.has_feedback = has_feedback
 
-        # Add buttons
-        self.view_prompt_button = discord.ui.Button(
-            label="VIEW PROMPT",
-            emoji="📋",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"view_prompt_{audit_id}",
-        )
-        self.view_prompt_button.callback = self.view_prompt_callback
-        self.add_item(self.view_prompt_button)
-
-        feedback_label = "FEEDBACK (✓)" if has_feedback else "FEEDBACK"
-        self.feedback_button = discord.ui.Button(
-            label=feedback_label,
-            emoji="💬",
-            style=discord.ButtonStyle.primary if not has_feedback else discord.ButtonStyle.success,
-            custom_id=f"feedback_{audit_id}",
-        )
-        self.feedback_button.callback = self.feedback_callback
-        self.add_item(self.feedback_button)
-
-    async def view_prompt_callback(self, interaction: discord.Interaction) -> None:
+    @discord.ui.button(
+        label="VIEW PROMPT",
+        emoji="📋",
+        style=discord.ButtonStyle.secondary,
+    )
+    async def view_prompt_button(
+        self, interaction: discord.Interaction, _button: discord.ui.Button
+    ) -> None:
         """Handle VIEW PROMPT button click."""
         modal = PromptViewModal(self.prompt_key, self.version, self.rendered_prompt)
         await interaction.response.send_modal(modal)
         logger.debug("Prompt modal shown", user=interaction.user.name, audit_id=str(self.audit_id))
 
-    async def feedback_callback(self, interaction: discord.Interaction) -> None:
+    @discord.ui.button(
+        label="FEEDBACK",
+        emoji="💬",
+        style=discord.ButtonStyle.primary,
+    )
+    async def feedback_button(
+        self, interaction: discord.Interaction, _button: discord.ui.Button
+    ) -> None:
         """Handle FEEDBACK button click."""
         modal = FeedbackModal(self.audit_id, self.message_id)
         await interaction.response.send_modal(modal)
