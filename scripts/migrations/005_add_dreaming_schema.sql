@@ -9,6 +9,10 @@ ADD COLUMN IF NOT EXISTS sentiment TEXT CHECK (sentiment IN ('positive', 'negati
 CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment
 ON user_feedback(sentiment) WHERE sentiment IS NOT NULL;
 
+-- Add index on prompt_audits.feedback_id for efficient joins
+CREATE INDEX IF NOT EXISTS idx_prompt_audits_feedback_id
+ON prompt_audits(feedback_id) WHERE feedback_id IS NOT NULL;
+
 -- Create dreaming_proposals table for tracking optimization proposals
 CREATE TABLE IF NOT EXISTS dreaming_proposals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

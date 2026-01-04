@@ -1,6 +1,7 @@
 """Approval UI components for dreaming cycle proposals.
 
-Provides Discord buttons and modals for human-in-the-loop approval workflow.
+Provides Discord buttons and modals for human-in-the-loop approval workflow with
+persistence support (buttons work after bot restart).
 """
 
 from uuid import UUID
@@ -8,44 +9,137 @@ from uuid import UUID
 import discord
 import structlog
 
-from lattice.dreaming.proposer import OptimizationProposal, approve_proposal, reject_proposal
+from lattice.dreaming.proposer import (
+    OptimizationProposal,
+    approve_proposal,
+    reject_proposal,
+)
+from lattice.utils.database import db_pool
 
 
 logger = structlog.get_logger(__name__)
 
 
-class ProposalApprovalView(discord.ui.View):
-    """Interactive view for dreaming cycle proposal approval."""
+async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
+    """Fetch a proposal from the database by ID.
 
-    def __init__(self, proposal: OptimizationProposal) -> None:
+    Args:
+        proposal_id: UUID of the proposal
+
+    Returns:
+        OptimizationProposal if found, None otherwise
+    """
+    async with db_pool.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                id,
+                prompt_key,
+                current_version,
+                proposed_version,
+                current_template,
+                proposed_template,
+                rationale,
+                expected_improvements,
+                confidence
+            FROM dreaming_proposals
+            WHERE id = $1
+            """,
+            proposal_id,
+        )
+
+        if not row:
+            return None
+
+        return OptimizationProposal(
+            proposal_id=row["id"],
+            prompt_key=row["prompt_key"],
+            current_version=row["current_version"],
+            proposed_version=row["proposed_version"],
+            current_template=row["current_template"],
+            proposed_template=row["proposed_template"],
+            rationale=row["rationale"],
+            expected_improvements=row["expected_improvements"],
+            confidence=float(row["confidence"]),
+        )
+
+
+class ProposalApprovalView(discord.ui.View):
+    """Interactive view for dreaming cycle proposal approval.
+
+    Persistent view that works across bot restarts by fetching proposals
+    from the database using stored proposal_id.
+    """
+
+    def __init__(self, proposal_id: UUID | None = None) -> None:
         """Initialize proposal approval view.
 
         Args:
-            proposal: The optimization proposal to approve/reject
+            proposal_id: UUID of the proposal (None for persistent view registration)
         """
         super().__init__(timeout=None)  # No timeout for proposals
-        self.proposal = proposal
+        self.proposal_id = proposal_id
 
     @discord.ui.button(
         label="APPROVE",
         emoji="✅",
         style=discord.ButtonStyle.success,
+        custom_id="dream_proposal:approve",
     )
     async def approve_button(
         self, interaction: discord.Interaction, _button: discord.ui.Button
     ) -> None:
         """Handle APPROVE button click."""
+        # Extract proposal_id from message embed footer
+        if not interaction.message or not interaction.message.embeds:
+            await interaction.response.send_message(
+                "❌ Error: Could not find proposal information.",
+                ephemeral=True,
+            )
+            return
+
+        embed = interaction.message.embeds[0]
+        if not embed.footer or not embed.footer.text:
+            await interaction.response.send_message(
+                "❌ Error: Proposal ID not found in message.",
+                ephemeral=True,
+            )
+            return
+
+        # Extract UUID from footer text "Proposal ID: <uuid>"
+        try:
+            proposal_id_str = embed.footer.text.split("Proposal ID: ")[1]
+            proposal_id = UUID(proposal_id_str)
+        except (IndexError, ValueError):
+            await interaction.response.send_message(
+                "❌ Error: Invalid proposal ID format.",
+                ephemeral=True,
+            )
+            logger.exception(
+                "Failed to parse proposal ID from embed footer", footer=embed.footer.text
+            )
+            return
+
+        # Fetch proposal from database
+        proposal = await get_proposal_by_id(proposal_id)
+        if not proposal:
+            await interaction.response.send_message(
+                "❌ Proposal not found. It may have been deleted.",
+                ephemeral=True,
+            )
+            return
+
         # Apply the proposal
         success = await approve_proposal(
-            proposal_id=self.proposal.proposal_id,
+            proposal_id=proposal.proposal_id,
             reviewed_by=str(interaction.user.id),
             feedback="Approved via Discord button",
         )
 
         if success:
             await interaction.response.send_message(
-                f"✅ **Proposal approved!** Template `{self.proposal.prompt_key}` "
-                f"updated to v{self.proposal.proposed_version}.",
+                f"✅ **Proposal approved!** Template `{proposal.prompt_key}` "
+                f"updated to v{proposal.proposed_version}.",
                 ephemeral=True,
             )
 
@@ -55,17 +149,15 @@ class ProposalApprovalView(discord.ui.View):
                     item.disabled = True
 
             # Update embed to show approved status
-            if interaction.message:
-                embed = interaction.message.embeds[0]
-                embed.color = discord.Color.green()
-                if embed.title:
-                    embed.title = "✅ " + embed.title.replace("🌙 ", "")
-                await interaction.message.edit(embed=embed, view=self)
+            embed.color = discord.Color.green()
+            if embed.title:
+                embed.title = "✅ " + embed.title.replace("🌙 ", "")
+            await interaction.message.edit(embed=embed, view=self)
 
             logger.info(
                 "Proposal approved via button",
-                proposal_id=str(self.proposal.proposal_id),
-                prompt_key=self.proposal.prompt_key,
+                proposal_id=str(proposal.proposal_id),
+                prompt_key=proposal.prompt_key,
                 user=interaction.user.name,
             )
         else:
@@ -78,37 +170,111 @@ class ProposalApprovalView(discord.ui.View):
         label="REJECT",
         emoji="❌",
         style=discord.ButtonStyle.danger,
+        custom_id="dream_proposal:reject",
     )
     async def reject_button(
         self, interaction: discord.Interaction, _button: discord.ui.Button
     ) -> None:
         """Handle REJECT button click - opens modal for reason."""
-        modal = ProposalRejectionModal(self.proposal.proposal_id, self.proposal.prompt_key)
+        # Extract proposal_id from message embed footer
+        if not interaction.message or not interaction.message.embeds:
+            await interaction.response.send_message(
+                "❌ Error: Could not find proposal information.",
+                ephemeral=True,
+            )
+            return
+
+        embed = interaction.message.embeds[0]
+        if not embed.footer or not embed.footer.text:
+            await interaction.response.send_message(
+                "❌ Error: Proposal ID not found in message.",
+                ephemeral=True,
+            )
+            return
+
+        # Extract UUID from footer text
+        try:
+            proposal_id_str = embed.footer.text.split("Proposal ID: ")[1]
+            proposal_id = UUID(proposal_id_str)
+        except (IndexError, ValueError):
+            await interaction.response.send_message(
+                "❌ Error: Invalid proposal ID format.",
+                ephemeral=True,
+            )
+            return
+
+        # Fetch proposal to get prompt_key for modal title
+        proposal = await get_proposal_by_id(proposal_id)
+        if not proposal:
+            await interaction.response.send_message(
+                "❌ Proposal not found. It may have been deleted.",
+                ephemeral=True,
+            )
+            return
+
+        modal = ProposalRejectionModal(proposal.proposal_id, proposal.prompt_key)
         await interaction.response.send_modal(modal)
         logger.debug(
             "Rejection modal shown",
             user=interaction.user.name,
-            proposal_id=str(self.proposal.proposal_id),
+            proposal_id=str(proposal.proposal_id),
         )
 
     @discord.ui.button(
         label="DISCUSS",
         emoji="🤔",
         style=discord.ButtonStyle.secondary,
+        custom_id="dream_proposal:discuss",
     )
     async def discuss_button(
         self, interaction: discord.Interaction, _button: discord.ui.Button
     ) -> None:
         """Handle DISCUSS button click - allows further conversation."""
+        # Extract proposal_id from message embed footer
+        if not interaction.message or not interaction.message.embeds:
+            await interaction.response.send_message(
+                "❌ Error: Could not find proposal information.",
+                ephemeral=True,
+            )
+            return
+
+        embed = interaction.message.embeds[0]
+        if not embed.footer or not embed.footer.text:
+            await interaction.response.send_message(
+                "❌ Error: Proposal ID not found in message.",
+                ephemeral=True,
+            )
+            return
+
+        # Extract UUID from footer text
+        try:
+            proposal_id_str = embed.footer.text.split("Proposal ID: ")[1]
+            proposal_id = UUID(proposal_id_str)
+        except (IndexError, ValueError):
+            await interaction.response.send_message(
+                "❌ Error: Invalid proposal ID format.",
+                ephemeral=True,
+            )
+            return
+
+        # Fetch proposal to get prompt_key for message
+        proposal = await get_proposal_by_id(proposal_id)
+        if not proposal:
+            await interaction.response.send_message(
+                "❌ Proposal not found. It may have been deleted.",
+                ephemeral=True,
+            )
+            return
+
         await interaction.response.send_message(
-            f"💬 **Discussion started for `{self.proposal.prompt_key}` optimization.**\n\n"
+            f"💬 **Discussion started for `{proposal.prompt_key}` optimization.**\n\n"
             f"Reply to this message with your thoughts. The proposal will remain pending until "
             f"you click APPROVE or REJECT on the original message.",
             ephemeral=False,  # Public discussion
         )
         logger.info(
             "Proposal discussion started",
-            proposal_id=str(self.proposal.proposal_id),
+            proposal_id=str(proposal.proposal_id),
             user=interaction.user.name,
         )
 
@@ -152,9 +318,9 @@ class ProposalRejectionModal(discord.ui.Modal):
                 ephemeral=True,
             )
 
-            # Disable all buttons on original message
+            # Disable all buttons on original message (if accessible)
             if interaction.message:
-                view = discord.ui.View.from_message(interaction.message)
+                view = ProposalApprovalView(self.proposal_id)
                 for item in view.children:
                     if isinstance(item, discord.ui.Button):
                         item.disabled = True
@@ -165,6 +331,12 @@ class ProposalRejectionModal(discord.ui.Modal):
                 if embed.title:
                     embed.title = "❌ " + embed.title.replace("🌙 ", "")
                 await interaction.message.edit(embed=embed, view=view)
+            else:
+                logger.warning(
+                    "Rejection modal submitted but interaction.message is None",
+                    proposal_id=str(self.proposal_id),
+                    user=interaction.user.name,
+                )
 
             logger.info(
                 "Proposal rejected via modal",

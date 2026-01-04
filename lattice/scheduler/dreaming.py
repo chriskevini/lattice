@@ -6,9 +6,11 @@ underperforming prompts and propose improvements via the dream channel.
 
 import asyncio
 import contextlib
+import os
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
+import asyncpg
 import discord
 import structlog
 
@@ -95,9 +97,15 @@ class DreamingScheduler:
 
             except asyncio.CancelledError:
                 break
+            except (asyncpg.PostgresError, discord.DiscordException):
+                logger.exception("Transient error in dreaming scheduler")
+                await asyncio.sleep(900)  # Wait 15 min for transient errors
             except Exception:
-                logger.exception("Error in dreaming scheduler loop")
-                await asyncio.sleep(3600)  # Wait 1 hour before retrying on error
+                logger.exception("Fatal error in dreaming scheduler loop")
+                # Fail fast in development, retry in production
+                if os.getenv("ENVIRONMENT") == "development":
+                    raise
+                await asyncio.sleep(3600)  # Wait 1 hour before retrying fatal errors
 
     def _calculate_next_run(self) -> datetime:
         """Calculate the next scheduled run time.
@@ -207,7 +215,7 @@ class DreamingScheduler:
         # Post each proposal with approval buttons
         for proposal in proposals:
             embed = self._build_proposal_embed(proposal)
-            view = ProposalApprovalView(proposal)
+            view = ProposalApprovalView(proposal_id=proposal.proposal_id)
 
             try:
                 await dream_channel.send(embed=embed, view=view)
@@ -265,13 +273,6 @@ class DreamingScheduler:
                 f"**Priority:** {priority} (confidence: {proposal.confidence:.0%})"
             ),
             color=color,
-        )
-
-        # Add rationale
-        rationale_preview = (
-            proposal.rationale[:RATIONALE_PREVIEW_LENGTH] + "..."
-            if len(proposal.rationale) > RATIONALE_PREVIEW_LENGTH
-            else proposal.rationale
         )
 
         # Add rationale

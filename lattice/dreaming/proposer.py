@@ -4,6 +4,7 @@ Uses LLM to analyze underperforming prompts and propose improvements
 based on feedback patterns and performance metrics.
 """
 
+import asyncio
 import json
 from dataclasses import dataclass
 from uuid import UUID, uuid4
@@ -17,6 +18,45 @@ from lattice.utils.llm import get_llm_client
 
 
 logger = structlog.get_logger(__name__)
+
+# Template validation constants
+MAX_TEMPLATE_LENGTH = 10000
+
+# LLM timeout for proposal generation
+LLM_PROPOSAL_TIMEOUT = 120.0  # 2 minutes
+
+
+def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]:
+    """Validate a prompt template before applying.
+
+    Args:
+        template: The template to validate
+        prompt_key: The prompt key for context-specific validation
+
+    Returns:
+        (is_valid, error_message) tuple
+    """
+    # Check length
+    if len(template) > MAX_TEMPLATE_LENGTH:
+        return False, f"Template exceeds maximum length ({MAX_TEMPLATE_LENGTH} chars)"
+
+    # Check balanced braces
+    if template.count("{") != template.count("}"):
+        return False, "Template has unbalanced braces"
+
+    # Check for required placeholders based on prompt_key
+    # This is a simple check - extend as needed for different prompt types
+    if "{" in template and prompt_key in ("BASIC_RESPONSE", "PROACTIVE_DECISION"):
+        # Basic sanity check: ensure at least some common placeholders exist
+        # for prompts that typically need them
+        # These prompts typically need some context/input placeholder
+        has_placeholder = any(
+            p in template for p in ["{context}", "{message}", "{conversation", "{objective"]
+        )
+        if not has_placeholder:
+            return False, "Template appears to be missing context/message placeholders"
+
+    return True, None
 
 
 @dataclass
@@ -34,7 +74,7 @@ class OptimizationProposal:
     confidence: float
 
 
-async def propose_optimization(
+async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     metrics: PromptMetrics,
     min_confidence: float = 0.7,
 ) -> OptimizationProposal | None:
@@ -77,27 +117,75 @@ async def propose_optimization(
         positive_samples,
     )
 
-    # Call LLM to generate proposal
+    # Call LLM to generate proposal with timeout
     llm_client = get_llm_client()
-    result = await llm_client.complete(
-        prompt=optimization_prompt,
-        temperature=0.7,
-        max_tokens=2000,
-    )
+    try:
+        result = await asyncio.wait_for(
+            llm_client.complete(
+                prompt=optimization_prompt,
+                temperature=0.7,
+                max_tokens=2000,
+            ),
+            timeout=LLM_PROPOSAL_TIMEOUT,
+        )
+    except TimeoutError:
+        logger.exception(
+            "LLM timeout during proposal generation",
+            prompt_key=metrics.prompt_key,
+            timeout_seconds=LLM_PROPOSAL_TIMEOUT,
+        )
+        return None
 
     # Parse LLM response
     try:
         proposal_data = json.loads(result.content)
-    except json.JSONDecodeError:
+
+        # Validate required fields
+        required_fields = ["proposed_template", "rationale", "expected_improvements", "confidence"]
+        missing = [f for f in required_fields if f not in proposal_data]
+        if missing:
+            logger.warning(
+                "LLM response missing required fields",
+                prompt_key=metrics.prompt_key,
+                missing_fields=missing,
+                response=result.content[:200],
+            )
+            return None
+
+        # Validate field types
+        confidence = float(proposal_data["confidence"])
+        if not isinstance(proposal_data["proposed_template"], str):
+            logger.warning(
+                "LLM response has invalid proposed_template type",
+                prompt_key=metrics.prompt_key,
+                type=type(proposal_data["proposed_template"]).__name__,
+            )
+            return None
+        if not isinstance(proposal_data["rationale"], str):
+            logger.warning(
+                "LLM response has invalid rationale type",
+                prompt_key=metrics.prompt_key,
+                type=type(proposal_data["rationale"]).__name__,
+            )
+            return None
+        if not isinstance(proposal_data["expected_improvements"], dict):
+            logger.warning(
+                "LLM response has invalid expected_improvements type",
+                prompt_key=metrics.prompt_key,
+                type=type(proposal_data["expected_improvements"]).__name__,
+            )
+            return None
+
+    except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.exception(
             "Failed to parse optimization proposal",
             prompt_key=metrics.prompt_key,
-            response=result.content,
+            error=str(e),
+            response=result.content[:200],
         )
         return None
 
-    # Extract confidence and check threshold
-    confidence = float(proposal_data.get("confidence", 0.0))
+    # Check confidence threshold
     if confidence < min_confidence:
         logger.info(
             "Optimization proposal below confidence threshold",
@@ -326,6 +414,20 @@ async def approve_proposal(
             logger.warning("Proposal not found or not pending", proposal_id=str(proposal_id))
             return False
 
+        # Validate proposed template before applying
+        is_valid, error = validate_template(
+            proposal_row["proposed_template"],
+            proposal_row["prompt_key"],
+        )
+        if not is_valid:
+            logger.error(
+                "Proposed template failed validation",
+                proposal_id=str(proposal_id),
+                prompt_key=proposal_row["prompt_key"],
+                error=error,
+            )
+            return False
+
         # Begin transaction
         async with conn.transaction():
             # Update prompt_registry with new template
@@ -343,8 +445,8 @@ async def approve_proposal(
                 proposal_row["prompt_key"],
             )
 
-            # Mark proposal as approved
-            await conn.execute(
+            # Mark proposal as approved (with optimistic locking)
+            result = await conn.execute(
                 """
                 UPDATE dreaming_proposals
                 SET
@@ -352,12 +454,20 @@ async def approve_proposal(
                     reviewed_at = now(),
                     reviewed_by = $1,
                     human_feedback = $2
-                WHERE id = $3
+                WHERE id = $3 AND status = 'pending'
                 """,
                 reviewed_by,
                 feedback,
                 proposal_id,
             )
+
+            # Check if update succeeded (race condition check)
+            if result != "UPDATE 1":
+                logger.warning(
+                    "Proposal already processed by another user",
+                    proposal_id=str(proposal_id),
+                )
+                return False
 
         logger.info(
             "Approved and applied optimization proposal",

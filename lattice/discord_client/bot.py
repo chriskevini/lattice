@@ -93,6 +93,9 @@ class LatticeBot(commands.Bot):
             )
             await self._dreaming_scheduler.start()
 
+            # Register persistent view for proposal approval (allows buttons to work after restart)
+            self.add_view(ProposalApprovalView(proposal_id=None))
+
             logger.info("Schedulers started (proactive + dreaming)")
         else:
             logger.warning("Bot connected but user is None")
