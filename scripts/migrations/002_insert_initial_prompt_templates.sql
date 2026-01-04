@@ -35,11 +35,11 @@ Decide ONE action:
 
 ## Output Format
 Return ONLY valid JSON:
-{
+{{
   "action": "message" | "wait",
   "content": "Message text" | null,
   "reason": "Justify the decision briefly, including which style you chose and why it fits now."
-}',
+}}',
     0.7,
     1
 )
@@ -103,7 +103,7 @@ Extract Subject-Predicate-Object triples that represent factual relationships.
 
 ## Output Format
 Return ONLY a JSON array. No markdown formatting, no code fences.
-[{"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}]
+[{{"subject": "Entity Name", "predicate": "relationship_type", "object": "Target Entity"}}]
 If no valid triples: []
 
 ## Examples
@@ -111,9 +111,9 @@ If no valid triples: []
 **Example 1: Clear relationships**
 User: "My cat Mittens loves chasing laser pointers"
 Output: [
-    {"subject": "User", "predicate": "owns", "object": "Mittens"},
-    {"subject": "Mittens", "predicate": "is_a", "object": "cat"},
-    {"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}
+    {{"subject": "User", "predicate": "owns", "object": "Mittens"}},
+    {{"subject": "Mittens", "predicate": "is_a", "object": "cat"}},
+    {{"subject": "Mittens", "predicate": "likes", "object": "laser pointers"}}
 ]
 
 **Example 2: Skip non-factual content**
@@ -123,9 +123,9 @@ Output: []
 **Example 3: Technical relationships**
 User: "I''m using React with TypeScript for the frontend"
 Output: [
-    {"subject": "User", "predicate": "uses", "object": "React"},
-    {"subject": "User", "predicate": "uses", "object": "TypeScript"},
-    {"subject": "React", "predicate": "used_for", "object": "frontend"}
+    {{"subject": "User", "predicate": "uses", "object": "React"}},
+    {{"subject": "User", "predicate": "uses", "object": "TypeScript"}},
+    {{"subject": "React", "predicate": "used_for", "object": "frontend"}}
 ]
 
 Begin extraction:',
@@ -160,7 +160,7 @@ Extract user goals, objectives, or intentions that represent what the user wants
 
 ## Output Format
 Return ONLY a JSON array. No markdown formatting, no code fences.
-[{"description": "What the user wants to achieve", "saliency": 0.7, "status": "pending"}]
+[{{"description": "What the user wants to achieve", "saliency": 0.7, "status": "pending"}}]
 If no valid objectives: []
 
 ## Status Guidelines
@@ -172,17 +172,17 @@ If no valid objectives: []
 
 **Example 1: New explicit goal**
 User: "I want to build a successful startup this year"
-Output: [{"description": "Build a successful startup", "saliency": 0.9, "status": "pending"}]
+Output: [{{"description": "Build a successful startup", "saliency": 0.9, "status": "pending"}}]
 
 **Example 2: Goal completion**
 User: "Just launched my MVP!"
-Output: [{"description": "Launch MVP", "saliency": 0.9, "status": "completed"}]
+Output: [{{"description": "Launch MVP", "saliency": 0.9, "status": "completed"}}]
 
 **Example 3: Multiple goals with varying saliency**
 User: "Need to fix that auth bug today, and eventually migrate to PostgreSQL"
 Output: [
-    {"description": "Fix auth bug", "saliency": 0.9, "status": "pending"},
-    {"description": "Migrate to PostgreSQL", "saliency": 0.5, "status": "pending"}
+    {{"description": "Fix auth bug", "saliency": 0.9, "status": "pending"}},
+    {{"description": "Migrate to PostgreSQL", "saliency": 0.5, "status": "pending"}}
 ]
 
 **Example 4: No goals**
