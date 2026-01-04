@@ -180,6 +180,8 @@ class ProactiveScheduler:
 
         try:
             # Build embed and view
+            # TODO: Proactive messages don't currently generate audit records
+            # Once they do, pass audit_id, prompt_key, version, and rendered_prompt here
             embed, view = DreamMirrorBuilder.build_proactive_mirror(
                 bot_message=bot_message.content,
                 main_message_url=bot_message.jump_url,

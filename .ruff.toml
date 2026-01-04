@@ -1,0 +1,7 @@
+
+# Ignore ANN202 (missing return type annotation for private methods) for callback factories
+# These methods create dynamic callbacks and are hard to type correctly
+[lint.per-file-ignores]
+"lattice/discord_client/dream.py" = ["ANN202"]
+"lattice/dreaming/approval.py" = ["ANN202"]
+"lattice/discord_client/bot.py" = ["PLR0911"]  # on_message has many early returns by design

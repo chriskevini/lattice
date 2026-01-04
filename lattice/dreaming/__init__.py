@@ -10,15 +10,14 @@ Components:
 """
 
 from lattice.dreaming.analyzer import PromptMetrics, analyze_prompt_effectiveness
-from lattice.dreaming.approval import ProposalApprovalView, ProposalRejectionModal
+from lattice.dreaming.approval import TemplateComparisonView
 from lattice.dreaming.proposer import OptimizationProposal, propose_optimization
 
 
 __all__ = [
     "OptimizationProposal",
     "PromptMetrics",
-    "ProposalApprovalView",
-    "ProposalRejectionModal",
+    "TemplateComparisonView",
     "analyze_prompt_effectiveness",
     "propose_optimization",
 ]

@@ -84,7 +84,10 @@ security: ## Run security checks with ruff
 pre-commit: ## Run all pre-commit hooks on all files
 	uv run pre-commit run --all-files
 
-check-all: lint type-check security test ## Run all quality checks
+check-discord-v2: ## Check that Discord UI components use V2 APIs
+	python scripts/check_discord_v2.py
+
+check-all: lint type-check check-discord-v2 security test ## Run all quality checks
 
 # ============================================================================
 # Application Commands

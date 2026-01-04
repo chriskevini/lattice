@@ -16,10 +16,10 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import handlers, memory_orchestrator, response_generator
-from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
-from lattice.dreaming.approval import ProposalApprovalView
-from lattice.memory import episodic, feedback_detection, prompt_audits
+
+# No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
+from lattice.memory import feedback_detection, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
@@ -51,7 +51,9 @@ class LatticeBot(commands.Bot):
 
         self.dream_channel_id = int(os.getenv("DISCORD_DREAM_CHANNEL_ID", "0"))
         if not self.dream_channel_id:
-            logger.warning("DISCORD_DREAM_CHANNEL_ID not set - dream mirroring disabled")
+            logger.warning(
+                "DISCORD_DREAM_CHANNEL_ID not set - dream mirroring disabled"
+            )
 
         self._memory_healthy = False
         self._consecutive_failures = 0
@@ -99,14 +101,18 @@ class LatticeBot(commands.Bot):
                         break
                     await asyncio.sleep(0.5)
                 else:
-                    logger.error("Database pool failed to initialize, cannot start schedulers")
+                    logger.error(
+                        "Database pool failed to initialize, cannot start schedulers"
+                    )
                     return
 
             # Setup commands
             await setup_commands(self)
 
             # Start proactive scheduler
-            self._scheduler = ProactiveScheduler(bot=self, dream_channel_id=self.dream_channel_id)
+            self._scheduler = ProactiveScheduler(
+                bot=self, dream_channel_id=self.dream_channel_id
+            )
             await self._scheduler.start()
 
             # Start dreaming cycle scheduler
@@ -116,7 +122,8 @@ class LatticeBot(commands.Bot):
             await self._dreaming_scheduler.start()
 
             # Register persistent views for bot restart resilience
-            self.add_view(ProposalApprovalView(proposal_id=None))  # Dreaming proposals
+            # Note: TemplateComparisonView (DesignerView) doesn't support persistent views
+            # Proposals are ephemeral - buttons work only while bot is running
             self.add_view(DreamMirrorView())  # Dream channel mirrors
 
             logger.info("Schedulers started (proactive + dreaming)")
@@ -132,8 +139,38 @@ class LatticeBot(commands.Bot):
         if message.author == self.user:
             return
 
-        # Allow messages from both main channel (conversation) and dream channel (feedback)
-        if message.channel.id not in (self.main_channel_id, self.dream_channel_id):
+        # CRITICAL: Dream channel is for meta discussion only
+        # Never process as conversation
+        if message.channel.id == self.dream_channel_id:
+            # Only process commands in dream channel
+            ctx: commands.Context[LatticeBot] = await self.get_context(message)
+            if ctx.valid and ctx.command is not None:
+                logger.info(
+                    "Processing command in dream channel", command=ctx.command.name
+                )
+                await self.invoke(ctx)
+            return  # Never store dream channel messages or generate responses
+
+        # Only process main channel messages beyond this point
+        if message.channel.id != self.main_channel_id:
+            return
+
+        # Process commands first and short-circuit if it's a command
+        ctx = await self.get_context(message)
+        if ctx.valid and ctx.command is not None:
+            logger.info("Processing command", command=ctx.command.name)
+            await self.invoke(ctx)
+            return  # Don't process as regular message
+
+        # If it looks like a command but wasn't valid, it might be a permission error
+        if message.content.startswith("!"):
+            logger.debug(
+                "Message looks like command but not valid",
+                content=message.content[:50],
+                ctx_valid=ctx.valid,
+                ctx_command=ctx.command,
+            )
+            # Still short-circuit to avoid processing failed commands as messages
             return
 
         if not self._memory_healthy:
@@ -169,29 +206,6 @@ class LatticeBot(commands.Bot):
                 )
                 return
 
-            feedback_result = feedback_detection.is_invisible_feedback(
-                message, dream_channel_id=self.dream_channel_id
-            )
-            if feedback_result.detected:
-                feedback_content = feedback_result.content or ""
-                logger.info(
-                    "Invisible feedback detected, short-circuiting",
-                    feedback_preview=feedback_content[:50],
-                )
-                await handlers.handle_invisible_feedback(
-                    message=message,
-                    feedback_content=feedback_content,
-                )
-                return
-
-            # If message is in dream channel but NOT feedback, ignore it
-            if message.channel.id == self.dream_channel_id:
-                logger.debug(
-                    "Message in dream channel is not feedback, ignoring",
-                    author=message.author.name,
-                )
-                return
-
             # Store user message in memory
             user_message_id = await memory_orchestrator.store_user_message(
                 content=message.content,
@@ -200,15 +214,20 @@ class LatticeBot(commands.Bot):
             )
 
             # Update scheduler interval
-            base_interval = int(await get_system_health("scheduler_base_interval") or 15)
+            base_interval = int(
+                await get_system_health("scheduler_base_interval") or 15
+            )
             await set_current_interval(base_interval)
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
             # Retrieve context
-            # TODO: Replace hardcoded values with Context Archetype System when implemented
+            # TODO: Replace hardcoded values with Context Archetype System
             # See: docs/context-archetype-system.md  # noqa: ERA001
-            semantic_facts, recent_messages = await memory_orchestrator.retrieve_context(
+            (
+                semantic_facts,
+                recent_messages,
+            ) = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,
                 semantic_limit=5,
@@ -228,7 +247,9 @@ class LatticeBot(commands.Bot):
             )
 
             # Split response for Discord length limits
-            response_messages = response_generator.split_response(response_result.content)
+            response_messages = response_generator.split_response(
+                response_result.content
+            )
             bot_messages: list[discord.Message] = []
             for msg in response_messages:
                 bot_msg = await message.channel.send(msg)
@@ -309,7 +330,9 @@ class LatticeBot(commands.Bot):
                 error=str(e),
                 consecutive_failures=self._consecutive_failures,
             )
-            await message.channel.send("Sorry, I encountered an error processing your message.")
+            await message.channel.send(
+                "Sorry, I encountered an error processing your message."
+            )
 
     async def _mirror_to_dream_channel(
         self,
@@ -390,28 +413,6 @@ class LatticeBot(commands.Bot):
             )
             return None
 
-    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
-        """Handle reaction add events.
-
-        Args:
-            reaction: The reaction that was added
-            user: The user who added the reaction
-        """
-        if user == self.user:
-            return
-
-        if reaction.emoji != WASTEBASKET_EMOJI:
-            return
-
-        message = reaction.message
-        if message.author != self.user:
-            return
-
-        await handlers.handle_feedback_undo(
-            user_message=message,
-            emoji=WASTEBASKET_EMOJI,
-        )
-
     async def close(self) -> None:
         """Clean up resources when shutting down."""
         logger.info("Bot shutting down")
@@ -443,8 +444,28 @@ async def setup_commands(bot: LatticeBot) -> None:
 
         if bot._dreaming_scheduler:  # noqa: SLF001
             try:
-                await bot._dreaming_scheduler._run_dreaming_cycle()  # noqa: SLF001
-                await ctx.send("✅ **Dreaming cycle completed!**")
+                result = await bot._dreaming_scheduler._run_dreaming_cycle()  # noqa: SLF001
+
+                # Create summary embed
+                if result["status"] == "success":
+                    embed = discord.Embed(
+                        title="🌙 DREAMING CYCLE COMPLETE",
+                        description=result["message"],
+                        color=discord.Color.purple(),
+                    )
+                    embed.add_field(
+                        name="📊 Analysis",
+                        value=f"**Prompts Analyzed:** {result['prompts_analyzed']}\n"
+                        f"**Proposals Created:** {result['proposals_created']}",
+                        inline=False,
+                    )
+                    footer_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+                    embed.set_footer(
+                        text=f"Triggered by {ctx.author.name} • {footer_time}"
+                    )
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send(f"❌ **Dreaming cycle failed:** {result['message']}")
             except Exception as e:
                 logger.exception("Manual dreaming cycle failed")
                 await ctx.send(f"❌ **Dreaming cycle failed:** {e}")

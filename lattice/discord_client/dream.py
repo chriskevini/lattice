@@ -1,6 +1,6 @@
-"""Dream channel mirror UI components.
+"""Dream channel mirror UI components (V2 Components Migration).
 
-Unified UI for dream channel mirrored messages using Discord embeds, buttons, and modals.
+This is the V2 components version - migrating from discord.ui.View to discord.ui.DesignerView.
 """
 
 import re
@@ -21,109 +21,86 @@ MODAL_TEXT_SAFE_LIMIT = 3900  # Leave room for truncation message
 MAX_DISPLAY_ITEMS = 5  # Maximum items to display in extraction mirrors
 
 
-class PromptViewModal(discord.ui.Modal):
-    """Modal for viewing full rendered prompts."""
+class PromptViewView(discord.ui.DesignerView):
+    """View for displaying full rendered prompts with TextDisplay (Components V2)."""
 
-    def __init__(self, prompt_key: str, version: int, rendered_prompt: str) -> None:
-        """Initialize prompt view modal.
+    def __init__(self, rendered_prompt: str) -> None:
+        """Initialize prompt view.
 
         Args:
-            prompt_key: Prompt template key (e.g., "BASIC_RESPONSE")
-            version: Template version number
             rendered_prompt: Full rendered prompt text
         """
-        super().__init__(title=f"📋 {prompt_key} v{version}")
+        super().__init__(timeout=60)  # 60 second timeout for ephemeral views
 
-        # Discord modals have a 4000 char limit per text input
-        # Truncate if needed
-        if len(rendered_prompt) > MODAL_TEXT_SAFE_LIMIT:
-            display_prompt = (
-                rendered_prompt[:MODAL_TEXT_SAFE_LIMIT]
-                + "\n\n[Truncated - full prompt in database]"
-            )
-        else:
-            display_prompt = rendered_prompt
-
-        self.prompt_display: discord.ui.TextInput = discord.ui.TextInput(
-            label="Rendered Template (Read-Only)",
-            style=discord.TextStyle.paragraph,
-            default=display_prompt,
-            required=False,
-            min_length=0,  # Allow empty for display
-            max_length=MODAL_TEXT_LIMIT,
-        )
-        self.add_item(self.prompt_display)
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Handle modal submission (just dismiss)."""
-        # Don't save any changes - this is read-only
-        await interaction.response.send_message(
-            "Prompt template is read-only (for viewing only).",
-            ephemeral=True,
-        )
-        logger.debug("Prompt modal dismissed", user=interaction.user.name)
+        # Components V2: TextDisplay shows unlimited scrollable text (not limited to 5 lines)
+        text_display = discord.ui.TextDisplay(content=rendered_prompt)  # type: ignore[attr-defined]
+        self.add_item(text_display)
 
 
-class FeedbackModal(discord.ui.DesignerModal):  # type: ignore[misc]
-    """Modal for submitting detailed feedback with Select dropdown for sentiment."""
+class FeedbackModal(discord.ui.Modal):
+    """Modal for submitting detailed feedback with pre-filled sentiment."""
 
-    def __init__(self, audit_id: UUID, message_id: int) -> None:
+    def __init__(self, audit_id: UUID, message_id: int, bot_message_id: int) -> None:
         """Initialize feedback modal.
 
         Args:
             audit_id: Prompt audit UUID
             message_id: Discord message ID this feedback is for
+            bot_message_id: Discord message ID of the bot's message to react to
         """
         super().__init__(title="💬 Give Feedback")
         self.audit_id = audit_id
         self.message_id = message_id
+        self.bot_message_id = bot_message_id
 
-        # Sentiment selection using Select dropdown wrapped in Label
-        sentiment_label = discord.ui.Label(  # type: ignore[call-arg]
-            label="Sentiment",
-            description="How was this response?",
+        # Sentiment input - pre-filled with "negative" (user can change)
+        self.add_item(
+            discord.ui.InputText(  # type: ignore[attr-defined]
+                label="Sentiment",
+                style=discord.InputTextStyle.short,  # type: ignore[attr-defined]
+                value="negative",  # Pre-fill with negative
+                placeholder="Type: positive or negative",
+                required=True,
+                max_length=10,
+            )
         )
-        self.sentiment_select = discord.ui.Select(  # type: ignore[call-arg]
-            select_type=discord.ComponentType.string_select,
-            placeholder="Choose sentiment...",
-            options=[
-                discord.SelectOption(
-                    label="Positive",
-                    value="positive",
-                    emoji="👍",
-                    description="Good response",
-                ),
-                discord.SelectOption(
-                    label="Negative",
-                    value="negative",
-                    emoji="👎",
-                    description="Needs improvement",
-                    default=True,  # Default to negative as requested
-                ),
-            ],
-            custom_id="sentiment_select",
-            required=True,
-        )
-        sentiment_label.set_item(self.sentiment_select)  # type: ignore[attr-defined]
-        self.add_item(sentiment_label)
 
-        # Comments - NOW REQUIRED
-        comment_label = discord.ui.Label(label="Comments")  # type: ignore[call-arg]
-        self.feedback_text = discord.ui.InputText(  # type: ignore[attr-defined, call-arg]
-            style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
-            placeholder="Provide details about what could be improved...",
-            required=True,
-            max_length=1000,
-            custom_id="feedback_text",
+        # Comments - REQUIRED
+        self.add_item(
+            discord.ui.InputText(  # type: ignore[attr-defined]
+                label="Comments (Required)",
+                style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
+                placeholder="Provide details about what could be improved...",
+                required=True,
+                max_length=1000,
+            )
         )
-        comment_label.set_item(self.feedback_text)  # type: ignore[attr-defined]
-        self.add_item(comment_label)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Handle feedback submission."""
-        # Get sentiment from select dropdown
-        sentiment = self.sentiment_select.values[0] if self.sentiment_select.values else "negative"
-        feedback_content = self.feedback_text.value
+        # Get sentiment from first InputText
+        sentiment_widget = self.children[0]
+        sentiment_input = (
+            sentiment_widget.value.lower().strip()
+            if hasattr(sentiment_widget, "value")
+            else "negative"
+        )  # type: ignore[attr-defined]
+
+        # Get comments from second InputText
+        comments_widget = self.children[1]
+        feedback_content = comments_widget.value if hasattr(comments_widget, "value") else ""  # type: ignore[attr-defined]
+
+        # Validate sentiment
+        if "positive" in sentiment_input or "pos" in sentiment_input or "👍" in sentiment_input:
+            sentiment = "positive"
+        elif "negative" in sentiment_input or "neg" in sentiment_input or "👎" in sentiment_input:
+            sentiment = "negative"
+        else:
+            await interaction.response.send_message(
+                "❌ Invalid sentiment. Please type 'positive' or 'negative'.",
+                ephemeral=True,
+            )
+            return
 
         # Store feedback using UserFeedback class
         feedback = user_feedback.UserFeedback(
@@ -134,8 +111,16 @@ class FeedbackModal(discord.ui.DesignerModal):  # type: ignore[misc]
         )
         await user_feedback.store_feedback(feedback)
 
-        # Emoji based on sentiment (only positive/negative)
+        # React to the bot's message with appropriate emoji
         emoji = {"positive": "👍", "negative": "👎"}[sentiment]
+        try:
+            # Get the bot's message and add reaction
+            channel = interaction.channel
+            if channel and hasattr(channel, "fetch_message"):
+                bot_message = await channel.fetch_message(self.bot_message_id)  # type: ignore[attr-defined]
+                await bot_message.add_reaction(emoji)
+        except Exception:
+            logger.exception("Failed to add reaction to bot message")
 
         await interaction.response.send_message(
             f"{emoji} **{sentiment.title()}** feedback recorded! "
@@ -152,8 +137,8 @@ class FeedbackModal(discord.ui.DesignerModal):  # type: ignore[misc]
         )
 
 
-class DreamMirrorView(discord.ui.View):
-    """Interactive view for dream channel mirrors with buttons."""
+class DreamMirrorView(discord.ui.DesignerView):
+    """Interactive view for dream channel mirrors with buttons (Components V2)."""
 
     def __init__(
         self,
@@ -182,256 +167,296 @@ class DreamMirrorView(discord.ui.View):
         self.rendered_prompt = rendered_prompt
         self.has_feedback = has_feedback
 
-    @discord.ui.button(
-        label="VIEW PROMPT",
-        emoji="📋",
-        style=discord.ButtonStyle.secondary,
-        custom_id="dream_mirror:view_prompt",
-    )
-    async def view_prompt_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
-    ) -> None:
-        """Handle VIEW PROMPT button click."""
-        # Extract data from embed footer if not in memory (persistent view)
-        if not self.audit_id and interaction.message and interaction.message.embeds:
-            embed = interaction.message.embeds[0]
-            if not embed.footer or not embed.footer.text:
-                await interaction.response.send_message(
-                    "❌ Error: Could not find audit information.",
-                    ephemeral=True,
-                )
-                return
+        # Create buttons
+        view_prompt_button = discord.ui.Button(  # type: ignore[attr-defined]
+            label="VIEW PROMPT",
+            emoji="📋",
+            style=discord.ButtonStyle.secondary,  # type: ignore[attr-defined]
+            custom_id="dream_mirror:view_prompt",
+        )
+        view_prompt_button.callback = self._make_view_prompt_callback()
 
-            # Parse footer: "Audit ID: <uuid>" or "Message ID: <id>"
-            try:
-                footer_text = embed.footer.text
-                if "Audit ID:" in footer_text:
-                    # Extract prompt info from embed title: "💬 REACTIVE • {prompt_key} v{version}"
-                    if embed.title and "•" in embed.title:
-                        parts = embed.title.split("•")[1].strip().split()
-                        self.prompt_key = parts[0]
-                        self.version = int(parts[1].replace("v", ""))
+        feedback_button = discord.ui.Button(  # type: ignore[attr-defined]
+            label="FEEDBACK",
+            emoji="💬",
+            style=discord.ButtonStyle.primary,  # type: ignore[attr-defined]
+            custom_id="dream_mirror:feedback",
+        )
+        feedback_button.callback = self._make_feedback_callback()
+
+        quick_positive_button = discord.ui.Button(  # type: ignore[attr-defined]
+            label="GOOD",
+            emoji="👍",
+            style=discord.ButtonStyle.success,  # type: ignore[attr-defined]
+            custom_id="dream_mirror:quick_positive",
+        )
+        quick_positive_button.callback = self._make_quick_positive_callback()
+
+        quick_negative_button = discord.ui.Button(  # type: ignore[attr-defined]
+            label="BAD",
+            emoji="👎",
+            style=discord.ButtonStyle.danger,  # type: ignore[attr-defined]
+            custom_id="dream_mirror:quick_negative",
+        )
+        quick_negative_button.callback = self._make_quick_negative_callback()
+
+        # Add buttons to ActionRow
+        action_row = discord.ui.ActionRow(  # type: ignore[attr-defined]
+            view_prompt_button,
+            feedback_button,
+            quick_positive_button,
+            quick_negative_button,
+        )
+        self.add_item(action_row)
+
+    def _make_view_prompt_callback(self):
+        """Create view prompt button callback."""
+
+        async def view_prompt_callback(interaction: discord.Interaction) -> None:
+            """Handle VIEW PROMPT button click - shows ephemeral message with TextDisplay."""
+            # Extract data from embed footer if not in memory (persistent view)
+            if not self.audit_id and interaction.message and interaction.message.embeds:
+                embed = interaction.message.embeds[0]
+                if not embed.footer or not embed.footer.text:
+                    await interaction.response.send_message(
+                        "❌ Error: Could not find audit information.",
+                        ephemeral=True,
+                    )
+                    return
+
+                # Parse footer: "Audit ID: <uuid>" or "Message ID: <id>"
+                try:
+                    footer_text = embed.footer.text
+                    if "Audit ID:" in footer_text:
+                        # Extract prompt info from embed title: "💬 REACTIVE • {prompt_key} v{version}"
+                        if embed.title and "•" in embed.title:
+                            parts = embed.title.split("•")[1].strip().split()
+                            self.prompt_key = parts[0]
+                            self.version = int(parts[1].replace("v", ""))
+                        else:
+                            await interaction.response.send_message(
+                                "❌ Error: Could not parse prompt information.",
+                                ephemeral=True,
+                            )
+                            return
                     else:
                         await interaction.response.send_message(
-                            "❌ Error: Could not parse prompt information.",
+                            "❌ This message type doesn't have prompt information.",
                             ephemeral=True,
                         )
                         return
-                else:
+                except (IndexError, ValueError):
                     await interaction.response.send_message(
-                        "❌ This message type doesn't have prompt information.",
+                        "❌ Error: Invalid message format.",
                         ephemeral=True,
                     )
                     return
-            except (IndexError, ValueError):
+
+                # Need to fetch rendered prompt from database
+                # For now, show error - will implement DB fetch in next iteration
                 await interaction.response.send_message(
-                    "❌ Error: Invalid message format.",
+                    "❌ Prompt viewing after bot restart not yet implemented. "
+                    "Please use VIEW PROMPT immediately after message is posted.",
                     ephemeral=True,
                 )
                 return
 
-            # Need to fetch rendered prompt from database
-            # For now, show error - will implement DB fetch in next iteration
-            await interaction.response.send_message(
-                "❌ Prompt viewing after bot restart not yet implemented. "
-                "Please use VIEW PROMPT immediately after message is posted.",
-                ephemeral=True,
-            )
-            return
-
-        if not self.prompt_key or not self.version or not self.rendered_prompt:
-            await interaction.response.send_message(
-                "❌ Error: Prompt information not available.",
-                ephemeral=True,
-            )
-            return
-
-        modal = PromptViewModal(self.prompt_key, self.version, self.rendered_prompt)
-        await interaction.response.send_modal(modal)
-        logger.debug("Prompt modal shown", user=interaction.user.name, audit_id=str(self.audit_id))
-
-    @discord.ui.button(
-        label="FEEDBACK",
-        emoji="💬",
-        style=discord.ButtonStyle.primary,
-        custom_id="dream_mirror:feedback",
-    )
-    async def feedback_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
-    ) -> None:
-        """Handle FEEDBACK button click."""
-        # Extract data from embed footer if not in memory (persistent view)
-        if not self.audit_id and interaction.message and interaction.message.embeds:
-            embed = interaction.message.embeds[0]
-            if not embed.footer or not embed.footer.text:
+            if not self.prompt_key or not self.version or not self.rendered_prompt:
                 await interaction.response.send_message(
-                    "❌ Error: Could not find audit information.",
+                    "❌ Error: Prompt information not available.",
                     ephemeral=True,
                 )
                 return
 
-            # Parse footer to get audit_id and message_id
-            try:
+            # Send ephemeral message with TextDisplay view (Components V2)
+            # NOTE: V2 components cannot be sent with embeds or content (Pycord restriction)
+            view = PromptViewView(self.rendered_prompt)
+
+            await interaction.response.send_message(
+                view=view,
+                ephemeral=True,
+            )
+            logger.debug(
+                "Prompt view shown", user=interaction.user.name, audit_id=str(self.audit_id)
+            )
+
+        return view_prompt_callback
+
+    def _make_feedback_callback(self):
+        """Create feedback button callback."""
+
+        async def feedback_callback(interaction: discord.Interaction) -> None:
+            """Handle FEEDBACK button click - opens modal with pre-filled sentiment."""
+            # Extract data from embed footer if not in memory (persistent view)
+            if not self.audit_id and interaction.message and interaction.message.embeds:
+                embed = interaction.message.embeds[0]
+                if not embed.footer or not embed.footer.text:
+                    await interaction.response.send_message(
+                        "❌ Error: Could not find audit information.",
+                        ephemeral=True,
+                    )
+                    return
+
+                # Parse footer to get audit_id and message_id
+                try:
+                    footer_text = embed.footer.text
+                    if "Audit ID:" in footer_text:
+                        audit_id_str = footer_text.split("Audit ID: ")[1]
+                        self.audit_id = UUID(audit_id_str)
+                        # Message ID would need to be fetched from DB or stored differently
+                        # For now, use interaction message ID as fallback
+                        self.message_id = interaction.message.id
+                    else:
+                        await interaction.response.send_message(
+                            "❌ This message type doesn't support feedback.",
+                            ephemeral=True,
+                        )
+                        return
+                except (IndexError, ValueError):
+                    await interaction.response.send_message(
+                        "❌ Error: Invalid audit ID format.",
+                        ephemeral=True,
+                    )
+                    return
+
+            if not self.audit_id or not self.message_id:
+                await interaction.response.send_message(
+                    "❌ Error: Message information not available.",
+                    ephemeral=True,
+                )
+                return
+
+            # Pass bot message ID so modal can add reaction
+            bot_message_id = interaction.message.id if interaction.message else self.message_id
+            modal = FeedbackModal(self.audit_id, self.message_id, bot_message_id)
+            await interaction.response.send_modal(modal)
+            logger.debug(
+                "Feedback modal shown", user=interaction.user.name, audit_id=str(self.audit_id)
+            )
+
+        return feedback_callback
+
+    def _make_quick_positive_callback(self):
+        """Create quick positive button callback."""
+
+        async def quick_positive_callback(interaction: discord.Interaction) -> None:
+            """Handle quick positive feedback without modal."""
+            # Extract data from embed footer if not in memory (persistent view)
+            if not self.audit_id and interaction.message and interaction.message.embeds:
+                embed = interaction.message.embeds[0]
+                if not embed.footer or not embed.footer.text:
+                    await interaction.response.send_message(
+                        "❌ Error: Could not find audit information.",
+                        ephemeral=True,
+                    )
+                    return
+
                 footer_text = embed.footer.text
-                if "Audit ID:" in footer_text:
-                    audit_id_str = footer_text.split("Audit ID: ")[1]
-                    self.audit_id = UUID(audit_id_str)
-                    # Message ID would need to be fetched from DB or stored differently
-                    # For now, use interaction message ID as fallback
-                    self.message_id = interaction.message.id
-                else:
+                try:
+                    audit_id_match = re.search(r"Audit: ([a-f0-9-]{36})", footer_text)
+                    if audit_id_match:
+                        self.audit_id = UUID(audit_id_match.group(1))
+                        self.message_id = interaction.message.id
+                    else:
+                        await interaction.response.send_message(
+                            "❌ This message type doesn't support feedback.",
+                            ephemeral=True,
+                        )
+                        return
+                except (IndexError, ValueError):
                     await interaction.response.send_message(
-                        "❌ This message type doesn't support feedback.",
+                        "❌ Error: Invalid audit ID format.",
                         ephemeral=True,
                     )
                     return
-            except (IndexError, ValueError):
+
+            if not self.audit_id or not self.message_id:
                 await interaction.response.send_message(
-                    "❌ Error: Invalid audit ID format.",
+                    "❌ Error: Message information not available.",
                     ephemeral=True,
                 )
                 return
 
-        if not self.audit_id or not self.message_id:
+            # Store positive feedback with auto-generated comment
+            feedback = user_feedback.UserFeedback(
+                content="(Quick positive feedback)",
+                sentiment="positive",
+                referenced_discord_message_id=self.message_id,
+                user_discord_message_id=(interaction.message.id if interaction.message else None),
+            )
+            await user_feedback.store_feedback(feedback)
             await interaction.response.send_message(
-                "❌ Error: Message information not available.",
+                "👍 **Positive** feedback recorded!",
                 ephemeral=True,
             )
-            return
+            logger.debug(
+                "Quick positive feedback recorded",
+                user=interaction.user.name if interaction.user else "Unknown",
+                audit_id=str(self.audit_id),
+            )
 
-        modal = FeedbackModal(self.audit_id, self.message_id)
-        await interaction.response.send_modal(modal)
-        logger.debug(
-            "Feedback modal shown", user=interaction.user.name, audit_id=str(self.audit_id)
-        )
+        return quick_positive_callback
 
-    @discord.ui.button(
-        label="GOOD",
-        emoji="👍",
-        style=discord.ButtonStyle.success,
-        custom_id="dream_mirror:quick_positive",
-    )  # type: ignore[arg-type]
-    async def quick_positive_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
-    ) -> None:
-        """Handle quick positive feedback without modal."""
-        # Extract data from embed footer if not in memory (persistent view)
-        if not self.audit_id and interaction.message and interaction.message.embeds:
-            embed = interaction.message.embeds[0]
-            if not embed.footer or not embed.footer.text:
-                await interaction.response.send_message(
-                    "❌ Error: Could not find audit information.",
-                    ephemeral=True,
-                )
-                return
+    def _make_quick_negative_callback(self):
+        """Create quick negative button callback."""
 
-            footer_text = embed.footer.text
-            try:
-                audit_id_match = re.search(r"Audit: ([a-f0-9-]{36})", footer_text)
-                if audit_id_match:
-                    self.audit_id = UUID(audit_id_match.group(1))
-                    self.message_id = interaction.message.id
-                else:
+        async def quick_negative_callback(interaction: discord.Interaction) -> None:
+            """Handle quick negative feedback without modal."""
+            # Extract data from embed footer if not in memory (persistent view)
+            if not self.audit_id and interaction.message and interaction.message.embeds:
+                embed = interaction.message.embeds[0]
+                if not embed.footer or not embed.footer.text:
                     await interaction.response.send_message(
-                        "❌ This message type doesn't support feedback.",
+                        "❌ Error: Could not find audit information.",
                         ephemeral=True,
                     )
                     return
-            except (IndexError, ValueError):
-                await interaction.response.send_message(
-                    "❌ Error: Invalid audit ID format.",
-                    ephemeral=True,
-                )
-                return
 
-        if not self.audit_id or not self.message_id:
-            await interaction.response.send_message(
-                "❌ Error: Message information not available.",
-                ephemeral=True,
-            )
-            return
-
-        # Store positive feedback with auto-generated comment
-        feedback = user_feedback.UserFeedback(
-            content="(Quick positive feedback)",
-            sentiment="positive",
-            referenced_discord_message_id=self.message_id,
-            user_discord_message_id=(interaction.message.id if interaction.message else None),
-        )
-        await user_feedback.store_feedback(feedback)
-        await interaction.response.send_message(
-            "👍 **Positive** feedback recorded!",
-            ephemeral=True,
-        )
-        logger.debug(
-            "Quick positive feedback recorded",
-            user=interaction.user.name if interaction.user else "Unknown",
-            audit_id=str(self.audit_id),
-        )
-
-    @discord.ui.button(
-        label="BAD",
-        emoji="👎",
-        style=discord.ButtonStyle.danger,
-        custom_id="dream_mirror:quick_negative",
-    )  # type: ignore[arg-type]
-    async def quick_negative_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
-    ) -> None:
-        """Handle quick negative feedback without modal."""
-        # Extract data from embed footer if not in memory (persistent view)
-        if not self.audit_id and interaction.message and interaction.message.embeds:
-            embed = interaction.message.embeds[0]
-            if not embed.footer or not embed.footer.text:
-                await interaction.response.send_message(
-                    "❌ Error: Could not find audit information.",
-                    ephemeral=True,
-                )
-                return
-
-            footer_text = embed.footer.text
-            try:
-                audit_id_match = re.search(r"Audit: ([a-f0-9-]{36})", footer_text)
-                if audit_id_match:
-                    self.audit_id = UUID(audit_id_match.group(1))
-                    self.message_id = interaction.message.id
-                else:
+                footer_text = embed.footer.text
+                try:
+                    audit_id_match = re.search(r"Audit: ([a-f0-9-]{36})", footer_text)
+                    if audit_id_match:
+                        self.audit_id = UUID(audit_id_match.group(1))
+                        self.message_id = interaction.message.id
+                    else:
+                        await interaction.response.send_message(
+                            "❌ This message type doesn't support feedback.",
+                            ephemeral=True,
+                        )
+                        return
+                except (IndexError, ValueError):
                     await interaction.response.send_message(
-                        "❌ This message type doesn't support feedback.",
+                        "❌ Error: Invalid audit ID format.",
                         ephemeral=True,
                     )
                     return
-            except (IndexError, ValueError):
+
+            if not self.audit_id or not self.message_id:
                 await interaction.response.send_message(
-                    "❌ Error: Invalid audit ID format.",
+                    "❌ Error: Message information not available.",
                     ephemeral=True,
                 )
                 return
 
-        if not self.audit_id or not self.message_id:
+            # Store negative feedback with auto-generated comment
+            feedback = user_feedback.UserFeedback(
+                content="(Quick negative feedback)",
+                sentiment="negative",
+                referenced_discord_message_id=self.message_id,
+                user_discord_message_id=(interaction.message.id if interaction.message else None),
+            )
+            await user_feedback.store_feedback(feedback)
             await interaction.response.send_message(
-                "❌ Error: Message information not available.",
+                "👎 **Negative** feedback recorded!",
                 ephemeral=True,
             )
-            return
+            logger.debug(
+                "Quick negative feedback recorded",
+                user=interaction.user.name if interaction.user else "Unknown",
+                audit_id=str(self.audit_id),
+            )
 
-        # Store negative feedback with auto-generated comment
-        feedback = user_feedback.UserFeedback(
-            content="(Quick negative feedback)",
-            sentiment="negative",
-            referenced_discord_message_id=self.message_id,
-            user_discord_message_id=(interaction.message.id if interaction.message else None),
-        )
-        await user_feedback.store_feedback(feedback)
-        await interaction.response.send_message(
-            "👎 **Negative** feedback recorded!",
-            ephemeral=True,
-        )
-        logger.debug(
-            "Quick negative feedback recorded",
-            user=interaction.user.name if interaction.user else "Unknown",
-            audit_id=str(self.audit_id),
-        )
+        return quick_negative_callback
 
 
 class DreamMirrorBuilder:
@@ -565,14 +590,16 @@ class DreamMirrorBuilder:
         embed.set_footer(text=f"Message ID: {main_message_id}")
 
         # Proactive messages don't have audit_id or rendered prompt yet
-        # Create view with buttons disabled since no audit data available
+        # Create view with message ID only - buttons will be disabled
         view = DreamMirrorView(
-            message_id=main_message_id,  # At least have message ID
+            message_id=main_message_id,
         )
-        # Disable buttons since no audit data
+        # Disable buttons since no audit data - need to access the ActionRow's buttons
         for item in view.children:
-            if isinstance(item, discord.ui.Button):
-                item.disabled = True
+            if hasattr(item, "children"):  # ActionRow has children (buttons)
+                for button in item.children:  # type: ignore[attr-defined]
+                    if isinstance(button, discord.ui.Button):
+                        button.disabled = True
 
         return embed, view
 
@@ -583,6 +610,10 @@ class DreamMirrorBuilder:
         triples: list[dict[str, str]],
         objectives: list[dict[str, Any]],
         main_message_id: int,
+        audit_id: UUID | None = None,
+        prompt_key: str | None = None,
+        version: int | None = None,
+        rendered_prompt: str | None = None,
     ) -> tuple[discord.Embed, DreamMirrorView]:
         """Build an extraction results mirror.
 
@@ -592,6 +623,10 @@ class DreamMirrorBuilder:
             triples: Extracted semantic triples (subject, predicate, object)
             objectives: Extracted objectives (description, saliency, status)
             main_message_id: Discord message ID in main channel
+            audit_id: Prompt audit ID for transparency
+            prompt_key: Prompt template key used for extraction
+            version: Template version
+            rendered_prompt: Full rendered prompt for inspection
 
         Returns:
             Tuple of (embed, view) for the extraction mirror message
@@ -656,16 +691,20 @@ class DreamMirrorBuilder:
             inline=False,
         )
 
-        embed.set_footer(text=f"Message ID: {main_message_id}")
+        # Footer with audit ID for transparency
+        if audit_id:
+            embed.set_footer(text=f"Audit ID: {audit_id} | Message ID: {main_message_id}")
+        else:
+            embed.set_footer(text=f"Message ID: {main_message_id}")
 
-        # Extraction messages don't have audit_id or rendered prompt
-        # Create view with buttons disabled since no audit data available
+        # Create view with full audit data for transparency and feedback
         view = DreamMirrorView(
-            message_id=main_message_id,  # At least have message ID
+            audit_id=audit_id,
+            message_id=main_message_id,
+            prompt_key=prompt_key,
+            version=version,
+            rendered_prompt=rendered_prompt,
+            has_feedback=False,
         )
-        # Disable buttons since no audit data
-        for item in view.children:
-            if isinstance(item, discord.ui.Button):
-                item.disabled = True
 
         return embed, view

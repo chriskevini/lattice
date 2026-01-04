@@ -7,6 +7,7 @@ based on feedback patterns and performance metrics.
 import asyncio
 import json
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
@@ -69,8 +70,9 @@ class OptimizationProposal:
     proposed_version: int
     current_template: str
     proposed_template: str
-    rationale: str
-    expected_improvements: dict[str, str]
+    proposal_metadata: dict[
+        str, Any
+    ]  # Full LLM response: {changes: [...], expected_improvements: "...", confidence: 0.XX}
     confidence: float
 
 
@@ -96,6 +98,12 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         )
         return None
 
+    # Get optimization prompt template from database
+    optimization_prompt_template = await get_prompt("PROMPT_OPTIMIZATION")
+    if not optimization_prompt_template:
+        logger.error("PROMPT_OPTIMIZATION template not found in database")
+        return None
+
     # Get feedback samples
     negative_samples = await get_feedback_samples(
         metrics.prompt_key,
@@ -109,12 +117,16 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         sentiment_filter="positive",
     )
 
-    # Build optimization prompt
-    optimization_prompt = _build_optimization_prompt(
-        prompt_template.template,
-        metrics,
-        negative_samples,
-        positive_samples,
+    # Format the optimization prompt using database template
+    optimization_prompt = optimization_prompt_template.template.format(
+        current_template=prompt_template.template,
+        total_uses=metrics.total_uses,
+        feedback_rate=f"{metrics.feedback_rate:.1%}",
+        success_rate=f"{metrics.success_rate:.1%}",
+        positive_feedback=metrics.positive_feedback,
+        negative_feedback=metrics.negative_feedback,
+        negative_feedback_samples=_format_feedback(negative_samples),
+        positive_feedback_samples=_format_feedback(positive_samples),
     )
 
     # Call LLM to generate proposal with timeout
@@ -140,8 +152,8 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     try:
         proposal_data = json.loads(result.content)
 
-        # Validate required fields
-        required_fields = ["proposed_template", "rationale", "expected_improvements", "confidence"]
+        # Validate required fields (new format uses "changes" array)
+        required_fields = ["proposed_template", "changes", "expected_improvements", "confidence"]
         missing = [f for f in required_fields if f not in proposal_data]
         if missing:
             logger.warning(
@@ -161,20 +173,31 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
                 type=type(proposal_data["proposed_template"]).__name__,
             )
             return None
-        if not isinstance(proposal_data["rationale"], str):
+
+        # New format: changes is an array of {issue, fix, why} objects
+        if not isinstance(proposal_data["changes"], list):
             logger.warning(
-                "LLM response has invalid rationale type",
+                "LLM response has invalid changes type",
                 prompt_key=metrics.prompt_key,
-                type=type(proposal_data["rationale"]).__name__,
+                type=type(proposal_data["changes"]).__name__,
             )
             return None
-        if not isinstance(proposal_data["expected_improvements"], dict):
+
+        # New format: expected_improvements is a string paragraph
+        if not isinstance(proposal_data["expected_improvements"], str):
             logger.warning(
                 "LLM response has invalid expected_improvements type",
                 prompt_key=metrics.prompt_key,
                 type=type(proposal_data["expected_improvements"]).__name__,
             )
             return None
+
+        # Store the entire LLM response as metadata (JSONB flexibility)
+        # Remove fields that are stored separately in the schema
+        proposal_metadata = {
+            "changes": proposal_data["changes"],
+            "expected_improvements": proposal_data["expected_improvements"],
+        }
 
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.exception(
@@ -203,8 +226,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         proposed_version=metrics.version + 1,
         current_template=prompt_template.template,
         proposed_template=proposal_data["proposed_template"],
-        rationale=proposal_data["rationale"],
-        expected_improvements=proposal_data["expected_improvements"],
+        proposal_metadata=proposal_metadata,  # Full JSONB structure
         confidence=confidence,
     )
 
@@ -216,67 +238,6 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     )
 
     return proposal
-
-
-def _build_optimization_prompt(
-    current_template: str,
-    metrics: PromptMetrics,
-    negative_feedback: list[str],
-    positive_feedback: list[str],
-) -> str:
-    """Build prompt for LLM to generate optimization proposal.
-
-    Args:
-        current_template: Current prompt template
-        metrics: Performance metrics
-        negative_feedback: Negative feedback samples
-        positive_feedback: Positive feedback samples
-
-    Returns:
-        Formatted optimization prompt
-    """
-    return f"""You are a prompt optimization expert. Analyze the following prompt \
-template and propose an improved version based on user feedback and performance metrics.
-
-CURRENT TEMPLATE:
-```
-{current_template}
-```
-
-PERFORMANCE METRICS:
-- Total uses: {metrics.total_uses}
-- Feedback rate: {metrics.feedback_rate:.1%}
-- Success rate: {metrics.success_rate:.1%} \
-({metrics.positive_feedback} positive, {metrics.negative_feedback} negative)
-- Avg latency: {metrics.avg_latency_ms:.0f}ms (if available)
-- Priority score: {metrics.priority_score:.1f} (higher = more urgent)
-
-NEGATIVE FEEDBACK SAMPLES:
-{_format_feedback(negative_feedback)}
-
-POSITIVE FEEDBACK SAMPLES (what's working):
-{_format_feedback(positive_feedback)}
-
-TASK:
-1. Analyze the issues indicated by the negative feedback
-2. Identify what's working from the positive feedback
-3. Propose an improved template that addresses the issues while preserving what works
-4. Provide rationale for your changes
-5. Estimate expected improvements
-
-Respond in this JSON format:
-{{
-    "proposed_template": "improved template text here",
-    "rationale": "explanation of changes and why they will help",
-    "expected_improvements": {{
-        "latency": "expected change (e.g., '-30%', 'no change', '+10%')",
-        "clarity": "expected improvement description",
-        "user_satisfaction": "expected improvement description"
-    }},
-    "confidence": 0.85  // 0.0-1.0, how confident you are this will improve performance
-}}
-
-Be conservative with confidence - only score high if you're very confident the changes will help."""
 
 
 def _format_feedback(feedback: list[str]) -> str:
@@ -313,12 +274,11 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
                 proposed_version,
                 current_template,
                 proposed_template,
-                rationale,
-                expected_improvements,
+                proposal_metadata,
                 confidence,
                 status
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
             RETURNING id
             """,
             proposal.proposal_id,
@@ -327,8 +287,7 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
             proposal.proposed_version,
             proposal.current_template,
             proposal.proposed_template,
-            proposal.rationale,
-            json.dumps(proposal.expected_improvements),
+            json.dumps(proposal.proposal_metadata),
             proposal.confidence,
         )
 
@@ -359,8 +318,7 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 proposed_version,
                 current_template,
                 proposed_template,
-                rationale,
-                expected_improvements,
+                proposal_metadata,
                 confidence
             FROM dreaming_proposals
             WHERE status = 'pending'
@@ -376,8 +334,7 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 proposed_version=row["proposed_version"],
                 current_template=row["current_template"],
                 proposed_template=row["proposed_template"],
-                rationale=row["rationale"],
-                expected_improvements=row["expected_improvements"],
+                proposal_metadata=row["proposal_metadata"],
                 confidence=float(row["confidence"]),
             )
             for row in rows
