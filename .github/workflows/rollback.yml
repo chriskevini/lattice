@@ -11,7 +11,7 @@ jobs:
   rollback:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy Specific SHA to Server
+      - name: Rollback to Specific SHA
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -20,20 +20,12 @@ jobs:
           script: |
             cd ~/lattice
 
-            # Login to registry
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Sync to specific SHA
+            git fetch origin
+            git reset --hard ${{ github.event.inputs.commit_sha }}
 
-            # Pull the specific image
-            IMAGE_NAME="ghcr.io/${{ github.repository }}:${{ github.event.inputs.commit_sha }}"
-            echo "Rolling back to image: $IMAGE_NAME"
-
-            docker pull $IMAGE_NAME
-
-            # Update docker-compose to use this specific image temporarily
-            # or just tag it as latest
-            docker tag $IMAGE_NAME ghcr.io/${{ github.repository }}:latest
-
-            # Restart with the tagged 'latest' image
+            # Rebuild and restart
+            docker compose build
             docker compose up -d --remove-orphans
 
             # Wait for health check
