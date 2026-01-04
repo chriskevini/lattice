@@ -16,14 +16,18 @@ This roadmap outlines the strategic direction for Lattice, an Adaptive Memory Or
 
 ---
 
-## Phase 2: Context Archetype System
-**Priority: High (Architectural Foundation)**
-*Goal: Give the AI "knobs" to control how much it remembers based on the conversation type.*
+## Phase 2: Graph-Based Retrieval
+**Priority: High (Complete the Memory Architecture)**
+*Goal: Actually use the graph traversal system that's been built but never integrated.*
 
-- [ ] **Archetype Implementation**: Create the `context_archetypes` DB table and classification logic. This is the most critical technical gap remaining in the memory architecture.
-- [ ] **Dynamic Retrieval**: Switch the bot from static context variables to dynamic parameters (`CONTEXT_TURNS`, `VECTOR_LIMIT`) determined by the conversation's semantic match (e.g., "debugging" vs. "casual chat").
+- [ ] **Integrate Graph Traversal into Retrieval Pipeline**: Wire `GraphTraversal` into `memory_orchestrator.retrieve_context()` so semantic triples are actually used during response generation
+- [ ] **Add `triple_depth` Parameter**: Extend retrieval API to support configurable graph depth (currently hardcoded episodic/semantic only)
+- [ ] **Fix Response Generator Turns**: Remove hardcoded `[-5:]` slice in `response_generator.py:55` and use full `episodic_limit` parameter
+- [ ] **Validate Graph Improves Quality**: Run A/B comparison (with/without graph traversal) to measure impact on response coherence and fact recall
 
-**Note**: Archetype system design has been documented (see `docs/archive/context-archetype-system.md`), but implementation is pending.
+**Status**: Graph traversal system exists but is never called in production. This phase completes the ENGRAM three-tier architecture by actually using the Semantic layer's relationship graph.
+
+**Note**: Dynamic context configuration (archetypes) is deferred to Phase 5 where it will be handled by unified optimization (#43), not as a separate classification layer.
 
 ---
 
@@ -70,15 +74,16 @@ This roadmap outlines the strategic direction for Lattice, an Adaptive Memory Or
 - [ ] **Triples-First Retrieval**: Prioritize graph relationships over raw fact strings in context building
 
 ### Unified Evolution (#43)
-- [ ] **Unified Proposals**: Merge Template optimization and Archetype optimization into a single decision engine
-- [ ] **Coherent Growth Packages**: AI proposes both new prompt *and* context configuration together
-- [ ] **Cross-System Validation**: Ensure prompt changes align with archetype expectations
+- [ ] **Unified Proposals**: Merge Template optimization and Context Configuration optimization into a single decision engine
+- [ ] **Coherent Growth Packages**: AI proposes both new prompt *and* retrieval parameters (turns, vectors, depth, threshold) together
+- [ ] **Cross-System Validation**: Ensure prompt changes align with context configuration needs
+- [ ] **Data-Driven Configuration**: Let Dreaming Cycle discover optimal retrieval parameters through performance analysis, not semantic classification
 
 ### Knowledge Graph (#11)
 - [ ] **Predicate Synonyms**: Store synonym mappings in DB to allow refinement through dream cycles
 - [ ] **Semantic Normalization**: Standardize similar predicates during extraction
 
-**Status**: Next phase of evolution. Phase 2 (Archetypes) is prerequisite for unified evolution (#43).
+**Status**: Next phase of evolution. Phase 2 (Graph-Based Retrieval) is prerequisite for unified evolution (#43).
 
 ---
 
@@ -129,7 +134,8 @@ This roadmap outlines the strategic direction for Lattice, an Adaptive Memory Or
 - **#50**: Semantic deduplication in consolidation phase (quality improvement)
 
 ### 🔵 Not Started / Future
-- **Context Archetype System**: Core architectural feature (Phase 2)
+- **Graph-Based Retrieval**: Integrate graph traversal into retrieval pipeline (Phase 2)
+- **#43**: Unified Template+Context Configuration optimization (Phase 5)
 - **#20**: Proactive scheduler personalization enhancements
 - **#11**: Predicate synonyms in DB
 - **#24**: Consolidating memory modules (technical debt)
@@ -139,6 +145,7 @@ This roadmap outlines the strategic direction for Lattice, an Adaptive Memory Or
 ## Recommended Next Steps
 
 1. **Close Completed Issues**: #13, #17, #18, #21, #25, #26, #27, #28, #32, #33, #34, #49
-2. **Phase 2 Priority**: Implement Context Archetype System (architectural foundation for unified evolution)
+2. **Phase 2 Priority**: Integrate Graph-Based Retrieval (complete the three-tier ENGRAM architecture)
 3. **Quality Improvements**: Address #50 (semantic deduplication) to prevent knowledge bloat
 4. **UX Enhancements**: #41 (threaded discussions) and #15 (extraction corrections) for better human feedback
+5. **Phase 5 Planning**: Design unified template+context optimization system (#43) after Phase 2 validates graph usage
