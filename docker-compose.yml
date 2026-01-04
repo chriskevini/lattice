@@ -47,6 +47,8 @@ services:
       # Persist logs
       - ./logs:/app/logs
     restart: unless-stopped
+    ports:
+      - "8080:8080"
     # Resource limits matching target environment (2GB RAM / 1vCPU)
     deploy:
       resources:
