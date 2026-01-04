@@ -5,6 +5,7 @@ Uses LLM to decide whether to initiate contact based on conversation context.
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -83,18 +84,19 @@ async def get_objectives_context() -> str:
 
 
 async def get_default_channel_id() -> int | None:
-    """Get the default channel for proactive messages.
+    """Get the main channel for proactive messages from environment variable.
 
-    For single-user setup, returns the first text channel.
+    Proactive messages should always go to the main channel, never the dream channel.
+    Dream channel is reserved for meta discussion (feedback, prompt refinement).
 
     Returns:
-        Channel ID or None if no suitable channel found
+        Main channel ID from DISCORD_MAIN_CHANNEL_ID, or None if not configured
     """
-    async with db_pool.pool.acquire() as conn:
-        channel_id = await conn.fetchval(
-            "SELECT channel_id FROM raw_messages ORDER BY timestamp DESC LIMIT 1"
-        )
-    return channel_id
+    main_channel_id = os.getenv("DISCORD_MAIN_CHANNEL_ID")
+    if not main_channel_id:
+        logger.warning("DISCORD_MAIN_CHANNEL_ID not set, cannot send proactive messages")
+        return None
+    return int(main_channel_id)
 
 
 async def decide_proactive() -> ProactiveDecision:
