@@ -112,7 +112,9 @@ def parse_triples(raw_output: str) -> list[dict[str, str]]:
                 and "subject" in item
                 and "predicate" in item
                 and "object" in item
-                and all(isinstance(item[k], str) for k in ("subject", "predicate", "object"))
+                and all(
+                    isinstance(item[k], str) for k in ("subject", "predicate", "object")
+                )
             ):
                 validated.append(
                     {

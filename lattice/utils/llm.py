@@ -61,10 +61,14 @@ class LLMClient:
         elif self.provider == "openrouter":
             return await self._openrouter_complete(prompt, temperature, max_tokens)
         else:
-            msg = f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
+            msg = (
+                f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
+            )
             raise ValueError(msg)
 
-    def _placeholder_complete(self, prompt: str, temperature: float) -> GenerationResult:
+    def _placeholder_complete(
+        self, prompt: str, temperature: float
+    ) -> GenerationResult:
         """Placeholder completion for development/testing.
 
         Returns a JSON array of triples for triple extraction prompts,

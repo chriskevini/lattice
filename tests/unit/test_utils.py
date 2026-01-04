@@ -119,7 +119,9 @@ class TestObjectiveParsing:
 
     def test_parse_objectives_valid_json(self) -> None:
         """Test parsing valid objective JSON array."""
-        raw = '[{"description": "Build a startup", "saliency": 0.9, "status": "pending"}]'
+        raw = (
+            '[{"description": "Build a startup", "saliency": 0.9, "status": "pending"}]'
+        )
 
         result = parse_objectives(raw)
 

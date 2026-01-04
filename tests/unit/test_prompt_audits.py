@@ -26,7 +26,9 @@ class TestStorePromptAudit:
         mock_conn.fetchrow = AsyncMock(return_value={"id": audit_id})
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await store_prompt_audit(
@@ -60,7 +62,9 @@ class TestStorePromptAudit:
         mock_conn.fetchrow = AsyncMock(return_value={"id": audit_id})
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await store_prompt_audit(
@@ -84,7 +88,9 @@ class TestUpdateAuditDreamMessage:
         mock_conn.execute = AsyncMock(return_value="UPDATE 1")
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await update_audit_dream_message(
@@ -102,7 +108,9 @@ class TestUpdateAuditDreamMessage:
         mock_conn.execute = AsyncMock(return_value="UPDATE 0")
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await update_audit_dream_message(
@@ -123,7 +131,9 @@ class TestLinkFeedbackToAudit:
         mock_conn.execute = AsyncMock(return_value="UPDATE 1")
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await link_feedback_to_audit(
@@ -141,7 +151,9 @@ class TestLinkFeedbackToAudit:
         mock_conn.execute = AsyncMock(return_value="UPDATE 0")
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await link_feedback_to_audit(
@@ -185,7 +197,9 @@ class TestGetAuditByDreamMessage:
         )
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_audit_by_dream_message(987654321)
@@ -203,7 +217,9 @@ class TestGetAuditByDreamMessage:
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_audit_by_dream_message(999999999)
@@ -268,7 +284,9 @@ class TestGetAuditsWithFeedback:
         )
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_audits_with_feedback(limit=10)
@@ -285,7 +303,9 @@ class TestGetAuditsWithFeedback:
         mock_conn.fetch = AsyncMock(return_value=[])
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_audits_with_feedback(limit=10)
@@ -299,7 +319,9 @@ class TestGetAuditsWithFeedback:
         mock_conn.fetch = AsyncMock(return_value=[])
 
         with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_audits_with_feedback(limit=5)

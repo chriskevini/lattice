@@ -163,7 +163,9 @@ async def store_prompt_audit(
         return audit_id
 
 
-async def update_audit_dream_message(audit_id: UUID, dream_discord_message_id: int) -> bool:
+async def update_audit_dream_message(
+    audit_id: UUID, dream_discord_message_id: int
+) -> bool:
     """Update audit with dream channel message ID.
 
     Args:
@@ -196,7 +198,9 @@ async def update_audit_dream_message(audit_id: UUID, dream_discord_message_id: i
         return updated
 
 
-async def link_feedback_to_audit(dream_discord_message_id: int, feedback_id: UUID) -> bool:
+async def link_feedback_to_audit(
+    dream_discord_message_id: int, feedback_id: UUID
+) -> bool:
     """Link feedback to prompt audit via dream channel message ID.
 
     Args:
@@ -285,7 +289,9 @@ async def get_audit_by_dream_message(
         )
 
 
-async def get_audits_with_feedback(limit: int = 100, offset: int = 0) -> list[PromptAudit]:
+async def get_audits_with_feedback(
+    limit: int = 100, offset: int = 0
+) -> list[PromptAudit]:
     """Get prompt audits that have feedback.
 
     Args:

@@ -1,5 +1,6 @@
 """Tests for dream channel UI components."""
 
+import pytest
 import discord
 
 from lattice.discord_client.dream import DreamMirrorBuilder
@@ -8,9 +9,10 @@ from lattice.discord_client.dream import DreamMirrorBuilder
 class TestDreamMirrorBuilder:
     """Tests for DreamMirrorBuilder class."""
 
-    def test_build_proactive_mirror(self) -> None:
+    @pytest.mark.asyncio
+    async def test_build_proactive_mirror(self) -> None:
         """Test building a proactive message mirror embed."""
-        embed = DreamMirrorBuilder.build_proactive_mirror(
+        embed, _ = DreamMirrorBuilder.build_proactive_mirror(
             bot_message="Hey! Just checking in on your project.",
             main_message_url="https://discord.com/channels/123/456/789",
             reasoning="User mentioned project deadline approaching",
@@ -41,12 +43,13 @@ class TestDreamMirrorBuilder:
         assert embed.footer.text is not None
         assert "Message ID: 789" in embed.footer.text
 
-    def test_build_proactive_mirror_truncates_long_content(self) -> None:
+    @pytest.mark.asyncio
+    async def test_build_proactive_mirror_truncates_long_content(self) -> None:
         """Test that long content is truncated to prevent Discord errors."""
         long_message = "x" * 1000
         long_reasoning = "y" * 1000
 
-        embed = DreamMirrorBuilder.build_proactive_mirror(
+        embed, _ = DreamMirrorBuilder.build_proactive_mirror(
             bot_message=long_message,
             main_message_url="https://discord.com/channels/123/456/789",
             reasoning=long_reasoning,
@@ -60,18 +63,23 @@ class TestDreamMirrorBuilder:
         assert len(embed.fields[0].value) <= 910  # 900 + 7 for code block + newlines
         assert len(embed.fields[1].value) <= 910
 
-    def test_build_extraction_mirror(self) -> None:
+    @pytest.mark.asyncio
+    async def test_build_extraction_mirror(self) -> None:
         """Test building an extraction results mirror embed."""
         triples = [
             {"subject": "User", "predicate": "likes", "object": "Python"},
             {"subject": "Python", "predicate": "is", "object": "programming_language"},
         ]
         objectives = [
-            {"description": "Learn advanced Python", "saliency": 0.8, "status": "pending"},
+            {
+                "description": "Learn advanced Python",
+                "saliency": 0.8,
+                "status": "pending",
+            },
             {"description": "Build a web app", "saliency": 0.6, "status": "active"},
         ]
 
-        embed = DreamMirrorBuilder.build_extraction_mirror(
+        embed, _ = DreamMirrorBuilder.build_extraction_mirror(
             user_message="I love Python and want to learn more!",
             main_message_url="https://discord.com/channels/123/456/789",
             triples=triples,
@@ -110,9 +118,10 @@ class TestDreamMirrorBuilder:
         assert embed.footer.text is not None
         assert "Message ID: 789" in embed.footer.text
 
-    def test_build_extraction_mirror_empty(self) -> None:
+    @pytest.mark.asyncio
+    async def test_build_extraction_mirror_empty(self) -> None:
         """Test extraction mirror with no triples or objectives."""
-        embed = DreamMirrorBuilder.build_extraction_mirror(
+        embed, _ = DreamMirrorBuilder.build_extraction_mirror(
             user_message="Hello!",
             main_message_url="https://discord.com/channels/123/456/789",
             triples=[],
@@ -129,11 +138,16 @@ class TestDreamMirrorBuilder:
         assert embed.fields[2].value is not None
         assert "No objectives extracted" in embed.fields[2].value
 
-    def test_build_extraction_mirror_truncates_many_items(self) -> None:
+    @pytest.mark.asyncio
+    async def test_build_extraction_mirror_truncates_many_items(self) -> None:
         """Test that many triples/objectives are truncated with indicator."""
         # Create 10 triples
         triples = [
-            {"subject": f"Subject{i}", "predicate": "relates_to", "object": f"Object{i}"}
+            {
+                "subject": f"Subject{i}",
+                "predicate": "relates_to",
+                "object": f"Object{i}",
+            }
             for i in range(10)
         ]
 
@@ -143,7 +157,7 @@ class TestDreamMirrorBuilder:
             for i in range(10)
         ]
 
-        embed = DreamMirrorBuilder.build_extraction_mirror(
+        embed, _ = DreamMirrorBuilder.build_extraction_mirror(
             user_message="Test message",
             main_message_url="https://discord.com/channels/123/456/789",
             triples=triples,

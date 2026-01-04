@@ -140,6 +140,8 @@ def is_north_star(message: Any) -> DetectionResult:
                 goal_preview=extracted_goal[:50],
                 confidence=confidence,
             )
-            return DetectionResult(detected=True, content=extracted_goal, confidence=confidence)
+            return DetectionResult(
+                detected=True, content=extracted_goal, confidence=confidence
+            )
 
     return DetectionResult(detected=False)

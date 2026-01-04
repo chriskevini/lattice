@@ -127,7 +127,13 @@ async def consolidate_message_async(
     main_message_url: str | None = None,
     main_message_id: int | None = None,
 ) -> None:
-    """Start async consolidation task for a message (fire-and-forget).
+    """Start background consolidation of a message (fire-and-forget).
+
+    This function spawns a background task to extract semantic information
+    from a message without blocking the caller. This is intended for use in
+    reactive message processing where we don't want to delay the response.
+
+    The consolidation creates its own audit record for the TRIPLE_EXTRACTION prompt.
 
     Note: This creates a background task that is not awaited. Errors in
     consolidation will be logged but not propagated to the caller.

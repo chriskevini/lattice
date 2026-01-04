@@ -30,6 +30,10 @@ docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuil
 	docker compose build
 	docker compose up -d
 
+docker-restart: ## Quick restart bot (for code changes, no rebuild)
+	docker compose restart bot
+	@echo "Bot restarted. View logs with: make docker-logs-bot"
+
 docker-shell: ## Open shell in bot container
 	docker compose exec bot /bin/bash
 
@@ -74,13 +78,13 @@ format-check: ## Check if code is formatted correctly
 type-check: ## Run type checking with mypy
 	uv run mypy lattice
 
-security: ## Run security checks with ruff
-	uv run ruff check --select S .
-
 pre-commit: ## Run all pre-commit hooks on all files
 	uv run pre-commit run --all-files
 
-check-all: lint type-check security test ## Run all quality checks
+check-discord-v2: ## Check that Discord UI components use V2 APIs
+	python scripts/check_discord_v2.py
+
+check-all: lint type-check check-discord-v2 ## Run all quality checks
 
 # ============================================================================
 # Application Commands

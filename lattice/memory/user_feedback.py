@@ -26,6 +26,7 @@ class UserFeedback:
         self,
         content: str,
         feedback_id: UUID | None = None,
+        sentiment: str | None = None,
         referenced_discord_message_id: int | None = None,
         user_discord_message_id: int | None = None,
         created_at: datetime | None = None,
@@ -35,12 +36,14 @@ class UserFeedback:
         Args:
             content: The feedback content
             feedback_id: UUID of the feedback (auto-generated if None)
+            sentiment: Sentiment of feedback (positive/negative/neutral)
             referenced_discord_message_id: ID of the bot message being replied to/quoted
             user_discord_message_id: ID of the user's message containing the feedback
             created_at: Timestamp (defaults to now)
         """
         self.content = content
         self.feedback_id = feedback_id or uuid4()
+        self.sentiment = sentiment
         self.referenced_discord_message_id = referenced_discord_message_id
         self.user_discord_message_id = user_discord_message_id
         self.created_at = created_at or datetime.now(UTC)
@@ -59,12 +62,13 @@ async def store_feedback(feedback: UserFeedback) -> UUID:
         row = await conn.fetchrow(
             """
             INSERT INTO user_feedback (
-                content, referenced_discord_message_id, user_discord_message_id
+                content, sentiment, referenced_discord_message_id, user_discord_message_id
             )
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
             """,
             feedback.content,
+            feedback.sentiment,
             feedback.referenced_discord_message_id,
             feedback.user_discord_message_id,
         )
@@ -74,13 +78,16 @@ async def store_feedback(feedback: UserFeedback) -> UUID:
         logger.info(
             "Stored user feedback",
             feedback_id=str(feedback_id),
+            sentiment=feedback.sentiment,
             referenced_message=feedback.referenced_discord_message_id,
         )
 
         return feedback_id
 
 
-async def get_feedback_by_user_message(user_discord_message_id: int) -> UserFeedback | None:
+async def get_feedback_by_user_message(
+    user_discord_message_id: int,
+) -> UserFeedback | None:
     """Get feedback by the user's Discord message ID.
 
     Args:

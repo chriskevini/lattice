@@ -89,7 +89,9 @@ async def store_message(message: EpisodicMessage) -> UUID:
             message.content,
             message.is_bot,
             message.is_proactive,
-            json.dumps(message.generation_metadata) if message.generation_metadata else None,
+            json.dumps(message.generation_metadata)
+            if message.generation_metadata
+            else None,
         )
 
         message_id = cast("UUID", row["id"])
@@ -167,6 +169,8 @@ async def consolidate_message(
 ) -> None:
     """Extract semantic triples and objectives from a message asynchronously.
 
+    This function creates its own audit record for the TRIPLE_EXTRACTION prompt.
+
     Args:
         message_id: UUID of the stored message
         content: Message content to extract from
@@ -193,7 +197,27 @@ async def consolidate_message(
     )
 
     logger.info(
-        "LLM response received", message_id=str(message_id), content_preview=result.content[:100]
+        "LLM response received",
+        message_id=str(message_id),
+        content_preview=result.content[:100],
+    )
+
+    # Create audit record for extraction (not the same as BASIC_RESPONSE)
+    from lattice.memory import prompt_audits
+
+    extraction_audit_id = await prompt_audits.store_prompt_audit(
+        prompt_key="TRIPLE_EXTRACTION",
+        rendered_prompt=filled_prompt,
+        response_content=result.content,
+        main_discord_message_id=main_message_id or 0,  # Fallback if not provided
+        template_version=triple_prompt.version,
+        message_id=message_id,
+        model=result.model,
+        provider=result.provider,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        cost_usd=result.cost_usd,
+        latency_ms=result.latency_ms,
     )
 
     triples = parse_triples(result.content)
@@ -205,7 +229,9 @@ async def consolidate_message(
                 subject_id = await _ensure_fact(
                     triple["subject"], message_id, conn, embedding_model
                 )
-                object_id = await _ensure_fact(triple["object"], message_id, conn, embedding_model)
+                object_id = await _ensure_fact(
+                    triple["object"], message_id, conn, embedding_model
+                )
 
                 await conn.execute(
                     """
@@ -233,6 +259,10 @@ async def consolidate_message(
             main_message_id=main_message_id,
             triples=triples or [],
             objectives=objectives or [],
+            audit_id=extraction_audit_id,  # Use extraction audit, not BASIC_RESPONSE
+            prompt_key="TRIPLE_EXTRACTION",
+            version=triple_prompt.version,
+            rendered_prompt=filled_prompt,
         )
 
 
@@ -327,6 +357,24 @@ async def extract_objectives(
         content_preview=result.content[:100],
     )
 
+    # Create audit record for objective extraction
+    from lattice.memory import prompt_audits
+
+    await prompt_audits.store_prompt_audit(
+        prompt_key="OBJECTIVE_EXTRACTION",
+        rendered_prompt=filled_prompt,
+        response_content=result.content,
+        main_discord_message_id=0,  # Background extraction, no specific message
+        template_version=objective_prompt.version,
+        message_id=message_id,
+        model=result.model,
+        provider=result.provider,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        cost_usd=result.cost_usd,
+        latency_ms=result.latency_ms,
+    )
+
     objectives = parse_objectives(result.content)
     logger.info("Parsed objectives", count=len(objectives) if objectives else 0)
 
@@ -353,7 +401,11 @@ async def store_objectives(
         for objective in objectives:
             description = cast("str", objective["description"])
             saliency_value = objective["saliency"]
-            saliency = float(saliency_value) if isinstance(saliency_value, (int, float)) else 0.5
+            saliency = (
+                float(saliency_value)
+                if isinstance(saliency_value, (int, float))
+                else 0.5
+            )
             status = cast("str", objective["status"])
 
             normalized = description.lower().strip()
@@ -367,7 +419,9 @@ async def store_objectives(
 
             if existing:
                 current_saliency = (
-                    float(existing["saliency_score"]) if existing["saliency_score"] else 0.5
+                    float(existing["saliency_score"])
+                    if existing["saliency_score"]
+                    else 0.5
                 )
                 status_changed = existing["status"] != status
                 saliency_changed = abs(current_saliency - saliency) > MIN_SALIENCY_DELTA
@@ -417,6 +471,10 @@ async def _mirror_extraction_to_dream(
     main_message_id: int,
     triples: list[dict[str, str]],
     objectives: list[dict[str, Any]],
+    audit_id: UUID | None = None,
+    prompt_key: str | None = None,
+    version: int | None = None,
+    rendered_prompt: str | None = None,
 ) -> None:
     """Mirror extraction results to dream channel.
 
@@ -428,6 +486,10 @@ async def _mirror_extraction_to_dream(
         main_message_id: Discord message ID for display
         triples: Extracted semantic triples
         objectives: Extracted objectives
+        audit_id: Optional audit ID from original response
+        prompt_key: Optional prompt template key
+        version: Optional template version
+        rendered_prompt: Optional full rendered prompt
     """
     # Lazy import to avoid circular dependency
     from lattice.discord_client.dream import DreamMirrorBuilder
@@ -441,17 +503,21 @@ async def _mirror_extraction_to_dream(
         return
 
     try:
-        # Build embed
-        embed = DreamMirrorBuilder.build_extraction_mirror(
+        # Build embed and view with full audit data for transparency
+        embed, view = DreamMirrorBuilder.build_extraction_mirror(
             user_message=user_message,
             main_message_url=main_message_url,
             triples=triples,
             objectives=objectives,
             main_message_id=main_message_id,
+            audit_id=audit_id,
+            prompt_key=prompt_key,
+            version=version,
+            rendered_prompt=rendered_prompt,
         )
 
         # Send to dream channel
-        await dream_channel.send(embed=embed)
+        await dream_channel.send(embed=embed, view=view)
         logger.info(
             "Extraction results mirrored to dream channel",
             triples_count=len(triples),

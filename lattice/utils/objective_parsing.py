@@ -45,8 +45,14 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
                 continue
 
             description = item.get("description")
-            if not description or not isinstance(description, str) or not description.strip():
-                logger.warning("parse_objectives: missing or invalid description: %s", item)
+            if (
+                not description
+                or not isinstance(description, str)
+                or not description.strip()
+            ):
+                logger.warning(
+                    "parse_objectives: missing or invalid description: %s", item
+                )
                 continue
 
             saliency = item.get("saliency", 0.5)
@@ -60,7 +66,9 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
             saliency = max(MIN_SALIENCY, min(MAX_SALIENCY, saliency))
 
             status = item.get("status", "pending")
-            status = "pending" if not isinstance(status, str) else status.lower().strip()
+            status = (
+                "pending" if not isinstance(status, str) else status.lower().strip()
+            )
             if status not in VALID_STATUSES:
                 logger.warning(
                     "parse_objectives: invalid status '%s', using 'pending'",

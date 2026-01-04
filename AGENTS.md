@@ -35,11 +35,14 @@
 4. **Total Evolvability**: All logic stored as data, not hardcoded
 5. **Resource Constraints**: Optimize for 2GB RAM / 1vCPU throughout
 6. **Transparent Constraints**: AI is aware of system limits and receives feedback when requests are clamped
+7. **Strict Channel Separation**: Use environment variables for channel IDs, never runtime calculation. Main channel = conversation + raw_messages storage. Dream channel = meta discussion, never stored.
 
 ### Discord Channels
 
-- **Main Channel**: Primary user interaction, conversation, proactive check-ins
-- **Dream Channel**: Meta activities, prompt optimization proposals, self-reflection, human approval gateway
+**CRITICAL: Channel Separation** - Always use `DISCORD_MAIN_CHANNEL_ID` and `DISCORD_DREAM_CHANNEL_ID` environment variables. Never calculate channel IDs at runtime from database queries.
+
+- **Main Channel** (`DISCORD_MAIN_CHANNEL_ID`): Primary user interaction, conversation, proactive check-ins. All messages stored in `raw_messages`.
+- **Dream Channel** (`DISCORD_DREAM_CHANNEL_ID`): Meta activities, prompt optimization proposals, self-reflection, human approval gateway. Never stored in `raw_messages`.
 
 ## Project Structure
 
