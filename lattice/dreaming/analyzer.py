@@ -94,7 +94,13 @@ async def analyze_prompt_effectiveness(
     async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            WITH prompt_stats AS (
+            WITH current_versions AS (
+                -- Get the current active version for each prompt
+                SELECT prompt_key, version
+                FROM prompt_registry
+                WHERE active = true
+            ),
+            prompt_stats AS (
                 SELECT
                     pa.prompt_key,
                     pa.template_version,
@@ -105,9 +111,13 @@ async def analyze_prompt_effectiveness(
                     AVG(pa.prompt_tokens + pa.completion_tokens) as avg_tokens,
                     AVG(pa.cost_usd) as avg_cost_usd
                 FROM prompt_audits pa
+                INNER JOIN current_versions cv
+                    ON pa.prompt_key = cv.prompt_key
+                    AND pa.template_version = cv.version
                 WHERE pa.created_at >= now() - INTERVAL '1 day' * $2
                 GROUP BY pa.prompt_key, pa.template_version
                 HAVING COUNT(*) >= $1
+                   AND COUNT(pa.feedback_id) >= $3  -- Minimum feedback threshold
             ),
             feedback_sentiment AS (
                 SELECT
@@ -117,6 +127,9 @@ async def analyze_prompt_effectiveness(
                     COUNT(*) FILTER (WHERE uf.sentiment = 'negative') as negative_count,
                     COUNT(*) FILTER (WHERE uf.sentiment = 'neutral') as neutral_count
                 FROM prompt_audits pa
+                INNER JOIN current_versions cv
+                    ON pa.prompt_key = cv.prompt_key
+                    AND pa.template_version = cv.version
                 JOIN user_feedback uf ON pa.feedback_id = uf.id
                 WHERE pa.created_at >= now() - INTERVAL '1 day' * $2
                 GROUP BY pa.prompt_key, pa.template_version
@@ -150,6 +163,7 @@ async def analyze_prompt_effectiveness(
             """,
             min_uses,
             lookback_days,
+            10,  # Minimum feedback threshold
         )
 
         metrics = [
@@ -186,7 +200,10 @@ async def get_feedback_samples(
     limit: int = 10,
     sentiment_filter: str | None = None,
 ) -> list[str]:
-    """Get sample feedback content for a prompt.
+    """Get sample feedback content for a prompt's current version.
+
+    Only returns feedback for the current active version of the prompt
+    to avoid analyzing stale feedback from previous versions.
 
     Args:
         prompt_key: The prompt key to get feedback for
@@ -201,7 +218,10 @@ async def get_feedback_samples(
             SELECT uf.content
             FROM user_feedback uf
             JOIN prompt_audits pa ON pa.feedback_id = uf.id
+            JOIN prompt_registry pr ON pr.prompt_key = pa.prompt_key
             WHERE pa.prompt_key = $1
+              AND pa.template_version = pr.version
+              AND pr.active = true
         """
         params: list[object] = [prompt_key]
 

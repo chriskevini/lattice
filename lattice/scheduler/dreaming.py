@@ -20,6 +20,7 @@ from lattice.dreaming.approval import TemplateComparisonView
 from lattice.dreaming.proposer import (
     OptimizationProposal,
     propose_optimization,
+    reject_stale_proposals,
     store_proposal,
 )
 from lattice.utils.database import get_system_health
@@ -221,6 +222,16 @@ class DreamingScheduler:
             proposals: list[OptimizationProposal] = []
 
             for prompt_metrics in metrics[:MAX_PROPOSALS_PER_CYCLE]:
+                # First, reject any stale proposals for this prompt
+                # (pending proposals with outdated current_version)
+                rejected_count = await reject_stale_proposals(prompt_metrics.prompt_key)
+                if rejected_count > 0:
+                    logger.info(
+                        "Cleaned up stale proposals before generating new one",
+                        prompt_key=prompt_metrics.prompt_key,
+                        rejected_count=rejected_count,
+                    )
+
                 proposal = await propose_optimization(
                     metrics=prompt_metrics,
                     min_confidence=config.min_confidence,

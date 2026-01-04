@@ -23,7 +23,7 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-        args: [--config-file, pyproject.toml, lattice/]
+        args: [--config-file, pyproject.toml, --exclude, 'lattice/discord_client/dream_v1_backup\.py', lattice/]
 
   # Commitizen - Enforce conventional commits
   - repo: https://github.com/commitizen-tools/commitizen

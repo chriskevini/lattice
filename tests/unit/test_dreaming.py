@@ -12,6 +12,7 @@ from lattice.dreaming.proposer import (
     approve_proposal,
     propose_optimization,
     reject_proposal,
+    reject_stale_proposals,
     store_proposal,
 )
 
@@ -233,6 +234,7 @@ class TestProposer:
             mock_conn.fetchrow = AsyncMock(
                 return_value={
                     "prompt_key": "BASIC_RESPONSE",
+                    "current_version": 1,
                     "proposed_template": "New template",
                     "proposed_version": 2,
                 }
@@ -252,6 +254,34 @@ class TestProposer:
             )  # Update prompt_registry + proposals
 
     @pytest.mark.asyncio
+    async def test_approve_proposal_version_mismatch(self) -> None:
+        """Test that approving fails when prompt version has changed."""
+        proposal_id = uuid4()
+
+        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+            mock_conn = AsyncMock()
+            # Proposal fetches successfully
+            mock_conn.fetchrow = AsyncMock(
+                return_value={
+                    "prompt_key": "BASIC_RESPONSE",
+                    "current_version": 1,
+                    "proposed_template": "New template",
+                    "proposed_version": 2,
+                }
+            )
+            # But UPDATE fails because version doesn't match (prompt was already updated)
+            mock_conn.execute = AsyncMock(return_value="UPDATE 0")
+            mock_conn.transaction = MagicMock()
+            mock_conn.transaction().__aenter__ = AsyncMock()
+            mock_conn.transaction().__aexit__ = AsyncMock()
+            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+
+            success = await approve_proposal(proposal_id, "user123", "Looks good")
+
+            assert success is False
+
+    @pytest.mark.asyncio
     async def test_reject_proposal_success(self) -> None:
         """Test rejecting a proposal."""
         proposal_id = uuid4()
@@ -266,3 +296,39 @@ class TestProposer:
 
             assert success is True
             mock_conn.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reject_stale_proposals(self) -> None:
+        """Test rejecting stale proposals when version has changed."""
+        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+            mock_conn = AsyncMock()
+            # Mock current version lookup
+            mock_conn.fetchrow = AsyncMock(return_value={"version": 2})
+            # Mock rejection of stale proposals (3 proposals were stale)
+            mock_conn.execute = AsyncMock(return_value="UPDATE 3")
+            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+
+            rejected_count = await reject_stale_proposals("BASIC_RESPONSE")
+
+            assert rejected_count == 3
+            # Should fetch current version
+            mock_conn.fetchrow.assert_called_once()
+            # Should reject stale proposals
+            mock_conn.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reject_stale_proposals_prompt_not_found(self) -> None:
+        """Test that reject_stale_proposals handles missing prompt gracefully."""
+        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+            mock_conn = AsyncMock()
+            # Prompt not found
+            mock_conn.fetchrow = AsyncMock(return_value=None)
+            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+
+            rejected_count = await reject_stale_proposals("NONEXISTENT")
+
+            assert rejected_count == 0
+            # Should not try to update proposals
+            mock_conn.execute.assert_not_called()

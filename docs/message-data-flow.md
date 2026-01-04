@@ -210,7 +210,7 @@ embedding = model.encode("I love working with Python for AI projects")
 -- Result: [0.123, -0.456, 0.789, ..., 0.234]  (384 dimensions)
 
 -- Search for similar facts
-SELECT 
+SELECT
     id,
     content,
     entity_type,
@@ -243,16 +243,16 @@ WITH RECURSIVE triple_traverse AS (
     WHERE subject_id IN (
         '770e8400-...', '880e8400-...', '990e8400-...'  -- IDs from semantic search
     )
-    
+
     UNION ALL
-    
+
     -- Recursive: Follow relationships
     SELECT st.subject_id, st.predicate, st.object_id, tt.depth + 1
     FROM semantic_triples st
     INNER JOIN triple_traverse tt ON st.subject_id = tt.object_id
     WHERE tt.depth < 1  -- TRIPLE_DEPTH limit
 )
-SELECT 
+SELECT
     sf_subject.content as subject,
     tt.predicate,
     sf_object.content as object
@@ -422,7 +422,7 @@ Resolve "I" to "User", resolve ambiguous references to specific entities.
 ```python
 for fact in extracted_facts:
     embedding = await model.encode(fact)
-    
+
     # Check if similar fact exists (avoid duplicates)
     existing = await db.fetch("""
         SELECT id, content
@@ -430,7 +430,7 @@ for fact in extracted_facts:
         WHERE embedding <=> $1::vector < 0.1  -- Very similar
         LIMIT 1
     """, embedding)
-    
+
     if existing:
         # Update existing fact (optional: merge or skip)
         pass
@@ -488,7 +488,7 @@ Does this conversation reveal any user goals, objectives, or intentions?
 
 Turn: "I love working with Python for AI projects"
 
-Extract objectives if present. Mark saliency (0.0-1.0) based on 
+Extract objectives if present. Mark saliency (0.0-1.0) based on
 explicitness and importance.
 ```
 
@@ -508,7 +508,7 @@ VALUES (
     'pending',
     '660e8400-e29b-41d4-a716-446655440001'
 )
-ON CONFLICT (description) DO UPDATE 
+ON CONFLICT (description) DO UPDATE
 SET saliency_score = GREATEST(objectives.saliency_score, EXCLUDED.saliency_score),
     last_updated = now();
 ```

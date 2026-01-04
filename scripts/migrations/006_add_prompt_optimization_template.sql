@@ -42,4 +42,3 @@ ON CONFLICT (prompt_key) DO UPDATE SET
     template = EXCLUDED.template,
     temperature = EXCLUDED.temperature,
     updated_at = CURRENT_TIMESTAMP;
-

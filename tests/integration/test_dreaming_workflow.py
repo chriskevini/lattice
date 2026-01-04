@@ -119,6 +119,7 @@ async def test_full_dreaming_cycle_workflow() -> None:
         mock_conn.fetchrow = AsyncMock(
             return_value={
                 "prompt_key": proposal.prompt_key,
+                "current_version": proposal.current_version,
                 "proposed_template": proposal.proposed_template,
                 "proposed_version": proposal.proposed_version,
             }

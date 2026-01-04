@@ -7,7 +7,7 @@
    - Note the channel IDs:
      - Main channel (for conversation)
      - Dream channel (for prompt audits and feedback)
-   
+
 2. **Environment Configuration:**
    ```bash
    # Add to .env file
@@ -61,7 +61,7 @@ LIMIT 1;
 **Verification:**
 ```sql
 -- Check feedback is linked to audit
-SELECT 
+SELECT
     pa.id AS audit_id,
     pa.prompt_key,
     pa.dream_discord_message_id,
@@ -87,8 +87,8 @@ LIMIT 1;
 **Verification:**
 ```sql
 -- Should NOT find feedback for main channel message
-SELECT COUNT(*) 
-FROM user_feedback 
+SELECT COUNT(*)
+FROM user_feedback
 WHERE user_discord_message_id = <your_feedback_message_id>;
 -- Result should be 0
 ```
@@ -111,9 +111,9 @@ WHERE user_discord_message_id = <your_feedback_message_id>;
 SELECT COUNT(*), message_id
 FROM prompt_audits
 WHERE message_id = (
-    SELECT id FROM raw_messages 
-    WHERE is_bot = false 
-    ORDER BY timestamp DESC 
+    SELECT id FROM raw_messages
+    WHERE is_bot = false
+    ORDER BY timestamp DESC
     LIMIT 1
 )
 GROUP BY message_id;
@@ -149,7 +149,7 @@ WHERE dream_discord_message_id = <dream_message_id>;
 **Verification:**
 ```sql
 -- Check context_config is populated
-SELECT 
+SELECT
     prompt_key,
     context_config,
     created_at
@@ -182,7 +182,7 @@ Should show JSON like:
 **Verification:**
 ```sql
 -- Compare rendered prompt length in DB vs displayed
-SELECT 
+SELECT
     prompt_key,
     LENGTH(rendered_prompt) AS full_length,
     rendered_prompt
@@ -195,7 +195,7 @@ LIMIT 1;
 
 ### Get All Audits with Feedback
 ```sql
-SELECT 
+SELECT
     pa.id,
     pa.prompt_key,
     pa.created_at,
@@ -208,7 +208,7 @@ ORDER BY pa.created_at DESC;
 
 ### Feedback Rate Analysis
 ```sql
-SELECT 
+SELECT
     COUNT(*) AS total_audits,
     COUNT(feedback_id) AS audits_with_feedback,
     ROUND(COUNT(feedback_id)::numeric / COUNT(*)::numeric * 100, 2) AS feedback_rate_percent
@@ -217,7 +217,7 @@ FROM prompt_audits;
 
 ### Average Performance Metrics
 ```sql
-SELECT 
+SELECT
     prompt_key,
     AVG(latency_ms) AS avg_latency_ms,
     AVG(cost_usd) AS avg_cost_usd,
@@ -230,13 +230,13 @@ ORDER BY usage_count DESC;
 
 ### Recent Interactions Timeline
 ```sql
-SELECT 
+SELECT
     rm.timestamp,
     rm.is_bot,
     LEFT(rm.content, 50) AS content_preview,
     pa.prompt_key,
     pa.latency_ms,
-    CASE 
+    CASE
         WHEN pa.feedback_id IS NOT NULL THEN '✅ Has feedback'
         ELSE ''
     END AS feedback_status
@@ -273,7 +273,7 @@ docker exec lattice-bot env | grep DREAM
 **Solution:**
 ```sql
 -- Find orphaned feedback (not linked to any audit)
-SELECT 
+SELECT
     uf.id,
     uf.content,
     uf.referenced_discord_message_id,

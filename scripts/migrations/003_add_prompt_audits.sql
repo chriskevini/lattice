@@ -7,16 +7,16 @@
 -- Create prompt_audits table
 CREATE TABLE IF NOT EXISTS prompt_audits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
+
     -- Core linkage
     prompt_key TEXT NOT NULL,
     template_version INT,
     message_id UUID REFERENCES raw_messages(id),
-    
+
     -- Prompt & response
     rendered_prompt TEXT NOT NULL CHECK (length(rendered_prompt) <= 50000),
     response_content TEXT NOT NULL,
-    
+
     -- Performance metrics
     model TEXT,
     provider TEXT,
@@ -24,22 +24,22 @@ CREATE TABLE IF NOT EXISTS prompt_audits (
     completion_tokens INT,
     cost_usd DECIMAL(10, 6),
     latency_ms INT,
-    
+
     -- Context used (for analysis)
     context_config JSONB,  -- {episodic: 5, semantic: 3, graph: 0}
     archetype_matched TEXT,
     archetype_confidence FLOAT,
-    
+
     -- AI reasoning (optional transparency)
     reasoning JSONB,
-    
+
     -- Discord linkage
     main_discord_message_id BIGINT NOT NULL,
     dream_discord_message_id BIGINT,
-    
+
     -- Feedback linkage (populated when feedback received)
     feedback_id UUID REFERENCES user_feedback(id),
-    
+
     created_at TIMESTAMPTZ DEFAULT now()
 );
 

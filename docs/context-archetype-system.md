@@ -58,26 +58,26 @@ CREATE TABLE context_archetypes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     archetype_name TEXT UNIQUE NOT NULL,
     description TEXT,  -- Human-readable explanation
-    
+
     -- Example messages that define this archetype
     example_messages TEXT[] NOT NULL,
-    
+
     -- Pre-computed centroid embedding (cached for performance)
     centroid_embedding VECTOR(384),
-    
+
     -- Context configuration when this archetype matches
     context_turns INT NOT NULL CHECK (context_turns BETWEEN 1 AND 20),
     context_vectors INT NOT NULL CHECK (context_vectors BETWEEN 0 AND 15),
     similarity_threshold FLOAT NOT NULL CHECK (similarity_threshold BETWEEN 0.5 AND 0.9),
     triple_depth INT NOT NULL CHECK (triple_depth BETWEEN 0 AND 3),
-    
+
     -- Metadata
     active BOOLEAN DEFAULT true,
     created_by TEXT,  -- 'human' or 'ai_dream_cycle'
     approved_by TEXT,  -- Human approver username
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
-    
+
     -- Performance tracking
     match_count INT DEFAULT 0,  -- How many times this archetype was matched
     avg_similarity FLOAT  -- Average similarity when matched
@@ -108,26 +108,26 @@ FOR EACH ROW EXECUTE FUNCTION invalidate_centroid();
 ```python
 class ContextAnalyzer:
     """Determines context configuration via semantic archetype matching."""
-    
+
     def __init__(self, db_pool, embedding_model):
         self.db = db_pool
         self.model = embedding_model
         self.archetypes = []
         self.cache_updated_at = None
         asyncio.create_task(self._refresh_archetypes_loop())
-    
+
     async def _refresh_archetypes_loop(self):
         """Reload archetypes from database every 60 seconds."""
         while True:
             await self._load_archetypes()
             await asyncio.sleep(60)
-    
+
     async def _load_archetypes(self):
         """Load active archetypes and compute/cache centroids."""
         archetypes_data = await self.db.fetch("""
             SELECT * FROM context_archetypes WHERE active = true
         """)
-        
+
         self.archetypes = []
         for arch in archetypes_data:
             # Compute centroid if not cached
@@ -136,7 +136,7 @@ class ContextAnalyzer:
                 examples = arch['example_messages']
                 embeddings = await self.model.encode(examples)
                 centroid = embeddings.mean(axis=0)
-                
+
                 # Cache in database
                 await self.db.execute("""
                     UPDATE context_archetypes
@@ -145,7 +145,7 @@ class ContextAnalyzer:
                 """, centroid.tolist(), arch['id'])
             else:
                 centroid = np.array(arch['centroid_embedding'])
-            
+
             self.archetypes.append({
                 'id': arch['id'],
                 'name': arch['archetype_name'],
@@ -157,38 +157,38 @@ class ContextAnalyzer:
                     'depth': arch['triple_depth']
                 }
             })
-        
+
         self.cache_updated_at = datetime.now()
         logger.info(f"Loaded {len(self.archetypes)} active archetypes")
-    
+
     async def analyze(
         self,
         message: str,
         recent_turns: Optional[List[Message]] = None
     ) -> ContextRequest:
         """Classify message and return optimal context configuration.
-        
+
         Args:
             message: The incoming message to classify
             recent_turns: Optional recent conversation context
-            
+
         Returns:
             ContextRequest with turns, vectors, similarity, depth
         """
         # Generate embedding for message
         msg_embedding = await self.model.encode([message])
         msg_embedding = msg_embedding[0]  # Extract from batch
-        
+
         # Find best matching archetype
         best_match = None
         best_similarity = -1
-        
+
         for archetype in self.archetypes:
             similarity = cosine_similarity(msg_embedding, archetype['centroid'])
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_match = archetype
-        
+
         if best_match is None:
             # Fallback to defaults (should never happen if at least one archetype exists)
             logger.warning("No archetypes available, using defaults")
@@ -198,16 +198,16 @@ class ContextAnalyzer:
                 similarity=DEFAULT_SIMILARITY_THRESHOLD,
                 depth=DEFAULT_TRIPLE_DEPTH
             )
-        
+
         # Update statistics
         await self._update_archetype_stats(best_match['id'], best_similarity)
-        
+
         # Log classification
         logger.debug(
             f"Archetype match: {best_match['name']} "
             f"(similarity={best_similarity:.3f})"
         )
-        
+
         # Return configuration
         config = best_match['config']
         return ContextRequest(
@@ -216,14 +216,14 @@ class ContextAnalyzer:
             similarity=config['similarity'],
             depth=config['depth']
         )
-    
+
     async def _update_archetype_stats(self, archetype_id: UUID, similarity: float):
         """Update match statistics for archetype."""
         await self.db.execute("""
             UPDATE context_archetypes
-            SET 
+            SET
                 match_count = match_count + 1,
-                avg_similarity = CASE 
+                avg_similarity = CASE
                     WHEN avg_similarity IS NULL THEN $2
                     ELSE (avg_similarity * match_count + $2) / (match_count + 1)
                 END
@@ -346,10 +346,10 @@ During dreaming cycle, AI analyzes archetype performance:
 ```python
 async def analyze_archetype_performance():
     """Analyze archetype classification quality."""
-    
+
     # Find conversations with low similarity matches
     low_confidence = await db.fetch("""
-        SELECT 
+        SELECT
             m.content,
             ca.archetype_name,
             ca.avg_similarity
@@ -359,7 +359,7 @@ async def analyze_archetype_performance():
         WHERE cam.similarity < 0.6  -- Low confidence matches
         AND m.timestamp > now() - interval '7 days'
     """)
-    
+
     # Cluster low-confidence messages to find patterns
     # Use LLM to identify common themes
     # Generate archetype proposals
@@ -410,17 +410,17 @@ React with ✅ to approve, ❌ to reject, 💬 to discuss.
 @bot.event
 async def on_reaction_add(reaction, user):
     """Handle archetype proposal approvals."""
-    
+
     if reaction.message.channel.id != DISCORD_DREAM_CHANNEL_ID:
         return
-    
+
     if user.bot:
         return
-    
+
     if reaction.emoji == "✅":
         # Parse proposal from message
         proposal = parse_archetype_proposal(reaction.message.content)
-        
+
         # Insert into database
         await db.execute("""
             INSERT INTO context_archetypes (
@@ -428,7 +428,7 @@ async def on_reaction_add(reaction, user):
                 context_turns, context_vectors, similarity_threshold, triple_depth,
                 created_by, approved_by
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'ai_dream_cycle', $8)
-        """, 
+        """,
             proposal.name,
             proposal.description,
             proposal.examples,
@@ -438,7 +438,7 @@ async def on_reaction_add(reaction, user):
             proposal.config.depth,
             user.name
         )
-        
+
         await reaction.message.reply("✅ Archetype approved and deployed. Will be active within 60 seconds.")
         logger.info(f"New archetype '{proposal.name}' approved by {user.name}")
 ```

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS dreaming_proposals (
     created_at TIMESTAMPTZ DEFAULT now(),
     reviewed_at TIMESTAMPTZ,
     reviewed_by TEXT,
-    
+
     -- Foreign key to prompt_registry
     FOREIGN KEY (prompt_key) REFERENCES prompt_registry(prompt_key) ON DELETE CASCADE
 );

@@ -26,9 +26,10 @@ MAX_TEMPLATE_LENGTH = 10000
 # LLM timeout for proposal generation
 LLM_PROPOSAL_TIMEOUT = 120.0  # 2 minutes
 
-# Feedback sampling limits for proposal generation
-NEGATIVE_FEEDBACK_SAMPLE_LIMIT = 5
-POSITIVE_FEEDBACK_SAMPLE_LIMIT = 3
+# Feedback limits for proposal generation
+# Show all feedback (up to reasonable limit to avoid token bloat)
+# The minimum feedback threshold (10) in analyzer ensures we have enough data
+MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
 LLM_MAX_TOKENS = 2000
 
 
@@ -177,16 +178,17 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         )
         return None
 
-    # Get feedback samples
+    # Get feedback samples - show all feedback up to reasonable limit
+    # The minimum feedback threshold (10) in analyzer ensures statistical significance
     negative_samples = await get_feedback_samples(
         metrics.prompt_key,
-        limit=NEGATIVE_FEEDBACK_SAMPLE_LIMIT,
+        limit=MAX_FEEDBACK_SAMPLES,
         sentiment_filter="negative",
     )
 
     positive_samples = await get_feedback_samples(
         metrics.prompt_key,
-        limit=POSITIVE_FEEDBACK_SAMPLE_LIMIT,
+        limit=MAX_FEEDBACK_SAMPLES,
         sentiment_filter="positive",
     )
 
@@ -441,7 +443,7 @@ async def approve_proposal(
         # Get proposal
         proposal_row = await conn.fetchrow(
             """
-            SELECT prompt_key, proposed_template, proposed_version
+            SELECT prompt_key, current_version, proposed_template, proposed_version
             FROM dreaming_proposals
             WHERE id = $1 AND status = 'pending'
             """,
@@ -470,20 +472,31 @@ async def approve_proposal(
 
         # Begin transaction
         async with conn.transaction():
-            # Update prompt_registry with new template
-            await conn.execute(
+            # Update prompt_registry with new template (with optimistic locking on version)
+            update_result = await conn.execute(
                 """
                 UPDATE prompt_registry
                 SET
                     template = $1,
                     version = $2,
                     updated_at = now()
-                WHERE prompt_key = $3
+                WHERE prompt_key = $3 AND version = $4
                 """,
                 proposal_row["proposed_template"],
                 proposal_row["proposed_version"],
                 proposal_row["prompt_key"],
+                proposal_row["current_version"],
             )
+
+            # Check if update succeeded (version mismatch = prompt was already updated)
+            if update_result != "UPDATE 1":
+                logger.warning(
+                    "Prompt version mismatch - prompt was modified since proposal creation",
+                    proposal_id=str(proposal_id),
+                    prompt_key=proposal_row["prompt_key"],
+                    expected_version=proposal_row["current_version"],
+                )
+                return False
 
             # Mark proposal as approved (with optimistic locking)
             result = await conn.execute(
@@ -560,3 +573,66 @@ async def reject_proposal(
             )
 
         return bool(rejected)
+
+
+async def reject_stale_proposals(prompt_key: str) -> int:
+    """Reject all pending proposals for a prompt that have outdated current_version.
+
+    This cleans up proposals that are no longer applicable because the prompt
+    has been updated since the proposal was created.
+
+    Args:
+        prompt_key: The prompt key to check for stale proposals
+
+    Returns:
+        Number of stale proposals rejected
+    """
+    async with db_pool.pool.acquire() as conn:
+        # Get current version from prompt_registry
+        current_version_row = await conn.fetchrow(
+            """
+            SELECT version
+            FROM prompt_registry
+            WHERE prompt_key = $1
+            """,
+            prompt_key,
+        )
+
+        if not current_version_row:
+            logger.warning(
+                "Cannot reject stale proposals - prompt not found in registry",
+                prompt_key=prompt_key,
+            )
+            return 0
+
+        current_version = current_version_row["version"]
+
+        # Reject all pending proposals with mismatched current_version
+        result = await conn.execute(
+            """
+            UPDATE dreaming_proposals
+            SET
+                status = 'rejected',
+                reviewed_at = now(),
+                reviewed_by = 'system',
+                human_feedback = 'Auto-rejected: prompt version changed (stale proposal)'
+            WHERE prompt_key = $1
+              AND status = 'pending'
+              AND current_version != $2
+            """,
+            prompt_key,
+            current_version,
+        )
+
+        # Parse result like "UPDATE 5" to get count
+        rejected_count = int(result.split()[1]) if result.startswith("UPDATE") else 0
+
+        if rejected_count > 0:
+            logger.info(
+                "Rejected stale proposals",
+                prompt_key=prompt_key,
+                count=rejected_count,
+                current_version=current_version,
+            )
+
+        return rejected_count

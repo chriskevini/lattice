@@ -68,8 +68,8 @@ CREATE TABLE stable_facts (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX stable_facts_embedding_idx 
-ON stable_facts USING hnsw (embedding vector_cosine_ops) 
+CREATE INDEX stable_facts_embedding_idx
+ON stable_facts USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 
 -- [Semantic] Explicit triples for relational reasoning
@@ -113,26 +113,26 @@ CREATE TABLE context_archetypes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     archetype_name TEXT UNIQUE NOT NULL,
     description TEXT,                          -- Human-readable explanation
-    
+
     -- Example messages that define this archetype
     example_messages TEXT[] NOT NULL,
-    
+
     -- Pre-computed centroid embedding (cached for performance)
     centroid_embedding VECTOR(384),
-    
+
     -- Context configuration when this archetype matches
     context_turns INT NOT NULL CHECK (context_turns BETWEEN 1 AND 20),
     context_vectors INT NOT NULL CHECK (context_vectors BETWEEN 0 AND 15),
     similarity_threshold FLOAT NOT NULL CHECK (similarity_threshold BETWEEN 0.5 AND 0.9),
     triple_depth INT NOT NULL CHECK (triple_depth BETWEEN 0 AND 3),
-    
+
     -- Metadata
     active BOOLEAN DEFAULT true,
     created_by TEXT,                           -- 'human' or 'ai_dream_cycle'
     approved_by TEXT,                          -- Human approver username
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
-    
+
     -- Performance tracking
     match_count INT DEFAULT 0,                 -- How many times matched
     avg_similarity FLOAT                       -- Average similarity when matched
