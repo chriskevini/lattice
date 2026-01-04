@@ -33,6 +33,7 @@ LLM_PROPOSAL_TIMEOUT = 120.0  # 2 minutes
 # Show all feedback (up to reasonable limit to avoid token bloat)
 # The minimum feedback threshold (10) in analyzer ensures we have enough data
 MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
+DETAILED_SAMPLES_COUNT = 3  # Number of samples with full rendered prompts
 LLM_MAX_TOKENS = 2000
 
 
@@ -181,15 +182,29 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         )
         return None
 
-    # Get feedback samples - show all feedback up to reasonable limit
-    # The minimum feedback threshold (10) in analyzer ensures statistical significance
-    samples = await get_feedback_with_context(
+    # Get feedback samples using hybrid approach:
+    # - First 3 samples: Include full context (rendered prompt + response + feedback)
+    # - Remaining samples: Lightweight (just user message + response + feedback)
+    # This balances diagnostic depth with token efficiency
+    detailed_samples = await get_feedback_with_context(
         metrics.prompt_key,
-        limit=MAX_FEEDBACK_SAMPLES,
+        limit=DETAILED_SAMPLES_COUNT,
+        include_rendered_prompt=True,
+        max_prompt_chars=5000,
     )
 
-    # Format samples into experience triplets (Prompt -> Response -> Feedback)
-    experience_triplets = _format_experience_triplets(samples)
+    lightweight_samples = (
+        await get_feedback_with_context(
+            metrics.prompt_key,
+            limit=MAX_FEEDBACK_SAMPLES - DETAILED_SAMPLES_COUNT,
+            include_rendered_prompt=False,
+        )
+        if MAX_FEEDBACK_SAMPLES > DETAILED_SAMPLES_COUNT
+        else []
+    )
+
+    # Format samples into experience cases
+    experience_cases = _format_experience_cases(detailed_samples, lightweight_samples)
 
     # Format the optimization prompt using database template
     optimization_prompt = optimization_prompt_template.template.format(
@@ -199,7 +214,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         success_rate=f"{metrics.success_rate:.1%}",
         positive_feedback=metrics.positive_feedback,
         negative_feedback=metrics.negative_feedback,
-        experience_triplets=experience_triplets,
+        experience_cases=experience_cases,
     )
 
     # Call LLM to generate proposal with timeout
@@ -279,28 +294,54 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     return proposal
 
 
-def _format_experience_triplets(samples: list[dict[str, Any]]) -> str:
-    """Format feedback with context into experience triplets.
+def _format_experience_cases(
+    detailed_samples: list[dict[str, Any]], lightweight_samples: list[dict[str, Any]]
+) -> str:
+    """Format feedback with context into experience cases.
+
+    Uses hybrid sampling: first few samples include rendered prompt for deep analysis,
+    remaining samples are lightweight for breadth. This balances diagnostic value
+    with token efficiency.
 
     Args:
-        samples: List of feedback samples with context
+        detailed_samples: Samples with rendered_prompt included
+        lightweight_samples: Samples without rendered_prompt
 
     Returns:
-        Formatted experience triplets string
+        Formatted experience cases string
     """
-    if not samples:
+    if not detailed_samples and not lightweight_samples:
         return "(none)"
 
     formatted = []
-    for s in samples:
-        triplet = (
-            f"--- EXPERIENCE TRIPLET ---\n"
+
+    # Format detailed samples (with rendered prompt excerpts)
+    for i, s in enumerate(detailed_samples, 1):
+        user_msg = s.get("user_message") or "(proactive/no user message)"
+        rendered_prompt = s.get("rendered_prompt", "")
+
+        case = (
+            f"--- DETAILED EXPERIENCE #{i} ---\n"
             f"SENTIMENT: {s['sentiment'].upper()}\n"
-            f"USER MESSAGE: {s['user_message']}\n"
+            f"USER MESSAGE: {user_msg}\n"
+            f"RENDERED PROMPT EXCERPT:\n{rendered_prompt}\n"
             f"BOT RESPONSE:\n{s['response_content']}\n"
             f"FEEDBACK: {s['feedback_content']}\n"
         )
-        formatted.append(triplet)
+        formatted.append(case)
+
+    # Format lightweight samples (without rendered prompt)
+    for i, s in enumerate(lightweight_samples, len(detailed_samples) + 1):
+        user_msg = s.get("user_message") or "(proactive/no user message)"
+
+        case = (
+            f"--- EXPERIENCE #{i} ---\n"
+            f"SENTIMENT: {s['sentiment'].upper()}\n"
+            f"USER MESSAGE: {user_msg}\n"
+            f"BOT RESPONSE:\n{s['response_content']}\n"
+            f"FEEDBACK: {s['feedback_content']}\n"
+        )
+        formatted.append(case)
 
     return "\n".join(formatted)
 
