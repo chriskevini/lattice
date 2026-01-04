@@ -44,17 +44,22 @@ class PromptViewModal(discord.ui.Modal):
             display_prompt = rendered_prompt
 
         self.prompt_display: discord.ui.TextInput = discord.ui.TextInput(
-            label="Rendered Template",
+            label="Rendered Template (Read-Only)",
             style=discord.TextStyle.paragraph,
             default=display_prompt,
             required=False,
+            min_length=0,  # Allow empty for display
             max_length=MODAL_TEXT_LIMIT,
         )
         self.add_item(self.prompt_display)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handle modal submission (just dismiss)."""
-        await interaction.response.defer()
+        # Don't save any changes - this is read-only
+        await interaction.response.send_message(
+            "Prompt template is read-only (for viewing only).",
+            ephemeral=True,
+        )
         logger.debug("Prompt modal dismissed", user=interaction.user.name)
 
 
@@ -72,6 +77,18 @@ class FeedbackModal(discord.ui.Modal):
         self.audit_id = audit_id
         self.message_id = message_id
 
+        # Sentiment selection (short text for dropdown-like behavior)
+        self.sentiment_input: discord.ui.TextInput = discord.ui.TextInput(
+            label="Sentiment (positive/negative/neutral)",
+            style=discord.TextStyle.short,
+            placeholder="Enter: positive, negative, or neutral",
+            required=True,
+            min_length=7,  # "neutral" is shortest
+            max_length=10,  # "negative" is longest
+        )
+        self.add_item(self.sentiment_input)
+
+        # Comments
         self.feedback_text: discord.ui.TextInput = discord.ui.TextInput(
             label="Comments (optional)",
             style=discord.TextStyle.paragraph,
@@ -83,18 +100,33 @@ class FeedbackModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handle feedback submission."""
+        # Validate sentiment
+        sentiment_raw = self.sentiment_input.value.strip().lower()
+        if sentiment_raw not in ("positive", "negative", "neutral"):
+            await interaction.response.send_message(
+                "❌ Invalid sentiment. Please use: positive, negative, or neutral",
+                ephemeral=True,
+            )
+            return
+
+        sentiment = sentiment_raw
         feedback_content = self.feedback_text.value or "(No comment provided)"
 
         # Store feedback using UserFeedback class
         feedback = user_feedback.UserFeedback(
             content=feedback_content,
+            sentiment=sentiment,
             referenced_discord_message_id=self.message_id,
             user_discord_message_id=interaction.message.id if interaction.message else None,
         )
         await user_feedback.store_feedback(feedback)
 
+        # Emoji based on sentiment
+        emoji = {"positive": "👍", "negative": "👎", "neutral": "🤷"}[sentiment]
+
         await interaction.response.send_message(
-            "✅ Feedback recorded! Thank you for helping improve the bot.",
+            f"{emoji} **{sentiment.title()}** feedback recorded! "
+            "Thank you for helping improve the bot.",
             ephemeral=True,
         )
 
@@ -102,6 +134,7 @@ class FeedbackModal(discord.ui.Modal):
             "Feedback submitted",
             audit_id=str(self.audit_id),
             message_id=self.message_id,
+            sentiment=sentiment,
             user=interaction.user.name,
         )
 
@@ -391,8 +424,14 @@ class DreamMirrorBuilder:
         embed.set_footer(text=f"Message ID: {main_message_id}")
 
         # Proactive messages don't have audit_id or rendered prompt yet
-        # Create view without interactive buttons for now
-        view = DreamMirrorView()
+        # Create view with buttons disabled since no audit data available
+        view = DreamMirrorView(
+            message_id=main_message_id,  # At least have message ID
+        )
+        # Disable buttons since no audit data
+        for item in view.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
 
         return embed, view
 
@@ -479,7 +518,13 @@ class DreamMirrorBuilder:
         embed.set_footer(text=f"Message ID: {main_message_id}")
 
         # Extraction messages don't have audit_id or rendered prompt
-        # Create view without interactive buttons for now
-        view = DreamMirrorView()
+        # Create view with buttons disabled since no audit data available
+        view = DreamMirrorView(
+            message_id=main_message_id,  # At least have message ID
+        )
+        # Disable buttons since no audit data
+        for item in view.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
 
         return embed, view
