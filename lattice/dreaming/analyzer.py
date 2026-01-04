@@ -6,6 +6,7 @@ that need optimization.
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 import structlog
 
@@ -13,6 +14,41 @@ from lattice.utils.database import db_pool
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:  # noqa: ANN401
+    """Safely convert a value to float with a default.
+
+    Args:
+        value: Value to convert (may be None, numeric, or string)
+        default: Default value if conversion fails or value is None
+
+    Returns:
+        Float value or default
+    """
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float_optional(value: Any) -> float | None:  # noqa: ANN401
+    """Safely convert a value to optional float.
+
+    Args:
+        value: Value to convert (may be None, numeric, or string)
+
+    Returns:
+        Float value or None
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
 
 
 @dataclass
@@ -122,15 +158,15 @@ async def analyze_prompt_effectiveness(
                 version=row["template_version"] or 1,
                 total_uses=row["total_uses"],
                 uses_with_feedback=row["uses_with_feedback"],
-                feedback_rate=float(row["feedback_rate"] or 0.0),
+                feedback_rate=_safe_float(row["feedback_rate"]),
                 positive_feedback=row["positive_feedback"],
                 negative_feedback=row["negative_feedback"],
                 neutral_feedback=row["neutral_count"],
-                success_rate=float(row["success_rate"]),
-                avg_latency_ms=float(row["avg_latency_ms"]) if row["avg_latency_ms"] else None,
-                avg_tokens=float(row["avg_tokens"]) if row["avg_tokens"] else None,
+                success_rate=_safe_float(row["success_rate"]),
+                avg_latency_ms=_safe_float_optional(row["avg_latency_ms"]),
+                avg_tokens=_safe_float_optional(row["avg_tokens"]),
                 avg_cost_usd=row["avg_cost_usd"],
-                priority_score=float(row["priority_score"] or 0.0),
+                priority_score=_safe_float(row["priority_score"]),
             )
             for row in rows
         ]

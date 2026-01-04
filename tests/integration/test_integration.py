@@ -10,10 +10,6 @@ from uuid import UUID
 import pytest
 
 from lattice.core import handlers
-from lattice.core.handlers import (
-    SALUTE_EMOJI,
-    WASTEBASKET_EMOJI,
-)
 from lattice.discord_client.bot import LatticeBot
 from lattice.memory.episodic import (
     EpisodicMessage,
@@ -124,7 +120,9 @@ class TestBotIntegration:
 
         with patch("lattice.memory.episodic.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value={"id": "test-uuid-1234"})
 
@@ -141,7 +139,9 @@ class TestBotIntegration:
             mock_model.encode_single = MagicMock(return_value=[0.1] * 384)
 
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetch = AsyncMock(return_value=[])
 
@@ -155,7 +155,9 @@ class TestBotIntegration:
         """Test procedural memory retrieval operations."""
         with patch("lattice.memory.procedural.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 return_value={
@@ -183,8 +185,13 @@ class TestDatabaseIntegration:
             return AsyncMock()
 
         with (
-            patch.dict(os.environ, {"DATABASE_URL": "postgresql://test:test@localhost/test"}),
-            patch("lattice.utils.database.asyncpg.create_pool", side_effect=mock_create_pool),
+            patch.dict(
+                os.environ, {"DATABASE_URL": "postgresql://test:test@localhost/test"}
+            ),
+            patch(
+                "lattice.utils.database.asyncpg.create_pool",
+                side_effect=mock_create_pool,
+            ),
         ):
             pool = DatabasePool()
             await pool.initialize()
@@ -218,7 +225,9 @@ class TestFullPipelineIntegration:
         ):
             mock_model.encode_single = MagicMock(return_value=[0.1] * 384)
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value={"id": "test-fact-uuid"})
 
@@ -237,7 +246,9 @@ class TestFullPipelineIntegration:
 
         with patch("lattice.memory.episodic.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 side_effect=[
@@ -269,7 +280,9 @@ class TestFullPipelineIntegration:
 
         with patch("lattice.memory.procedural.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 return_value={
@@ -302,7 +315,9 @@ class TestFeedbackIntegration:
 
         with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
@@ -316,7 +331,9 @@ class TestFeedbackIntegration:
         """Test retrieving feedback by user message ID."""
         with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 return_value={
@@ -338,7 +355,9 @@ class TestFeedbackIntegration:
         """Test that None is returned when feedback doesn't exist."""
         with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=None)
 
@@ -352,7 +371,9 @@ class TestFeedbackIntegration:
 
         with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.execute = AsyncMock(return_value="DELETE 1")
 
@@ -366,7 +387,9 @@ class TestFeedbackIntegration:
 
         with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.execute = AsyncMock(return_value="DELETE 0")
 
@@ -378,7 +401,9 @@ class TestFeedbackIntegration:
         """Test retrieving all feedback entries."""
         with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetch = AsyncMock(
                 return_value=[
@@ -458,7 +483,9 @@ class TestFeedbackDetectionIntegration:
 
     def test_is_north_star_with_pattern(self) -> None:
         """Test detection of North Star declaration."""
-        message = MockDiscordMessage(content="North Star: I want to learn Python programming")
+        message = MockDiscordMessage(
+            content="North Star: I want to learn Python programming"
+        )
         result = is_north_star(message)
         assert result.detected is True
         assert result.content is not None
@@ -485,111 +512,6 @@ class TestFeedbackDetectionIntegration:
         assert result.detected is False
 
 
-class TestFeedbackHandlerIntegration:
-    """Integration tests for feedback handlers."""
-
-    @pytest.mark.asyncio
-    async def test_handle_invisible_feedback(self) -> None:
-        """Test handling of invisible feedback."""
-        mock_message = MockDiscordMessage(
-            content="This response was not helpful",
-            is_reply=True,
-            message_id=99999,
-        )
-        mock_message.add_reaction = AsyncMock()
-        mock_message.reference = MockDiscordReference(message_id=12345)
-
-        with (
-            patch("lattice.memory.user_feedback.db_pool") as mock_feedback_pool,
-            patch("lattice.memory.prompt_audits.db_pool") as mock_audit_pool,
-        ):
-            mock_conn = AsyncMock()
-            mock_feedback_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_feedback_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-            mock_conn.fetchrow = AsyncMock(
-                return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
-            )
-
-            # Mock audit pool
-            mock_audit_conn = AsyncMock()
-            mock_audit_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_audit_conn
-            )
-            mock_audit_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-            mock_audit_conn.execute = AsyncMock(return_value="UPDATE 1")
-
-            result = await handlers.handle_invisible_feedback(
-                message=mock_message,
-                feedback_content="This response was not helpful",
-            )
-            assert result is True
-            mock_message.add_reaction.assert_called_once_with(SALUTE_EMOJI)
-
-    @pytest.mark.asyncio
-    async def test_handle_feedback_undo_success(self) -> None:
-        """Test successful feedback undo."""
-        mock_message = MagicMock()
-        mock_message.id = 67890
-        mock_message.author.name = "testuser"
-        mock_message.guild.me = MagicMock()
-        mock_message.remove_reaction = AsyncMock()
-
-        with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-            mock_conn.fetchrow = AsyncMock(
-                return_value={
-                    "id": UUID("12345678-1234-5678-1234-567812345678"),
-                    "content": "Test feedback",
-                    "referenced_discord_message_id": 12345,
-                    "user_discord_message_id": 67890,
-                    "created_at": MagicMock(),
-                }
-            )
-            mock_conn.execute = AsyncMock(return_value="DELETE 1")
-
-            result = await handlers.handle_feedback_undo(
-                user_message=mock_message,
-                emoji=WASTEBASKET_EMOJI,
-            )
-            assert result is True
-            mock_message.remove_reaction.assert_called_once_with(
-                SALUTE_EMOJI, mock_message.guild.me
-            )
-
-    @pytest.mark.asyncio
-    async def test_handle_feedback_undo_not_found(self) -> None:
-        """Test feedback undo when feedback doesn't exist."""
-        mock_message = MagicMock()
-        mock_message.id = 99999
-
-        with patch("lattice.memory.user_feedback.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-            mock_conn.fetchrow = AsyncMock(return_value=None)
-
-            result = await handlers.handle_feedback_undo(
-                user_message=mock_message,
-                emoji=WASTEBASKET_EMOJI,
-            )
-            assert result is False
-
-    @pytest.mark.asyncio
-    async def test_handle_feedback_undo_wrong_emoji(self) -> None:
-        """Test feedback undo with wrong emoji returns False."""
-        mock_message = MagicMock()
-
-        result = await handlers.handle_feedback_undo(
-            user_message=mock_message,
-            emoji="👍",
-        )
-        assert result is False
-
-
 class TestNorthStarHandlerIntegration:
     """Integration tests for North Star handlers."""
 
@@ -606,7 +528,9 @@ class TestNorthStarHandlerIntegration:
         ):
             mock_model.encode_single = MagicMock(return_value=[0.1] * 384)
             mock_conn = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}

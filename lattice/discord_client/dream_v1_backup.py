@@ -44,12 +44,11 @@ class PromptViewModal(discord.ui.Modal):
         else:
             display_prompt = rendered_prompt
 
-        self.prompt_display: discord.ui.TextInput = discord.ui.TextInput(
+        self.prompt_display: Any = discord.ui.TextInput(
             label="Rendered Template (Read-Only)",
-            style=discord.TextStyle.paragraph,
-            default=display_prompt,
+            style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
+            value=display_prompt,
             required=False,
-            min_length=0,  # Allow empty for display
             max_length=MODAL_TEXT_LIMIT,
         )
         self.add_item(self.prompt_display)
@@ -61,10 +60,13 @@ class PromptViewModal(discord.ui.Modal):
             "Prompt template is read-only (for viewing only).",
             ephemeral=True,
         )
-        logger.debug("Prompt modal dismissed", user=interaction.user.name)
+        logger.debug(
+            "Prompt modal dismissed",
+            user=interaction.user.name if interaction.user else "unknown",
+        )
 
 
-class FeedbackModal(discord.ui.DesignerModal):  # type: ignore[misc]
+class FeedbackModal(discord.ui.Modal):  # type: ignore[misc]
     """Modal for submitting detailed feedback with Select dropdown for sentiment."""
 
     def __init__(self, audit_id: UUID, message_id: int) -> None:
@@ -78,59 +80,54 @@ class FeedbackModal(discord.ui.DesignerModal):  # type: ignore[misc]
         self.audit_id = audit_id
         self.message_id = message_id
 
-        # Sentiment selection using Select dropdown wrapped in Label
-        sentiment_label = discord.ui.Label(  # type: ignore[call-arg]
-            label="Sentiment",
-            description="How was this response?",
-        )
-        self.sentiment_select = discord.ui.Select(  # type: ignore[call-arg]
-            select_type=discord.ComponentType.string_select,
+        # Sentiment selection
+        self.sentiment_select: Any = discord.ui.Select(
             placeholder="Choose sentiment...",
             options=[
                 discord.SelectOption(
                     label="Positive",
                     value="positive",
                     emoji="👍",
-                    description="Good response",
                 ),
                 discord.SelectOption(
                     label="Negative",
                     value="negative",
                     emoji="👎",
-                    description="Needs improvement",
-                    default=True,  # Default to negative as requested
+                    default=True,
                 ),
             ],
             custom_id="sentiment_select",
-            required=True,
         )
-        sentiment_label.set_item(self.sentiment_select)  # type: ignore[attr-defined]
-        self.add_item(sentiment_label)
+        self.add_item(self.sentiment_select)  # type: ignore[arg-type]
 
-        # Comments - NOW REQUIRED
-        comment_label = discord.ui.Label(label="Comments")  # type: ignore[call-arg]
-        self.feedback_text = discord.ui.InputText(  # type: ignore[attr-defined, call-arg]
+        # Comments
+        self.feedback_text: Any = discord.ui.InputText(
             style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
             placeholder="Provide details about what could be improved...",
             required=True,
             max_length=1000,
             custom_id="feedback_text",
         )
-        comment_label.set_item(self.feedback_text)  # type: ignore[attr-defined]
-        self.add_item(comment_label)
+        self.add_item(self.feedback_text)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Handle feedback submission."""
         # Get sentiment from select dropdown
-        sentiment = self.sentiment_select.values[0] if self.sentiment_select.values else "negative"
-        feedback_content = self.feedback_text.value
+        sentiment = (
+            self.sentiment_select.values[0]
+            if self.sentiment_select.values
+            else "negative"
+        )
+        feedback_content: str = self.feedback_text.value or ""
 
         # Store feedback using UserFeedback class
         feedback = user_feedback.UserFeedback(
             content=feedback_content,
             sentiment=sentiment,
             referenced_discord_message_id=self.message_id,
-            user_discord_message_id=interaction.message.id if interaction.message else None,
+            user_discord_message_id=interaction.message.id
+            if interaction.message
+            else None,
         )
         await user_feedback.store_feedback(feedback)
 
@@ -182,14 +179,14 @@ class DreamMirrorView(discord.ui.View):
         self.rendered_prompt = rendered_prompt
         self.has_feedback = has_feedback
 
-    @discord.ui.button(
+    @discord.ui.button(  # type: ignore[arg-type]
         label="VIEW PROMPT",
         emoji="📋",
         style=discord.ButtonStyle.secondary,
         custom_id="dream_mirror:view_prompt",
     )
     async def view_prompt_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
+        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
     ) -> None:
         """Handle VIEW PROMPT button click."""
         # Extract data from embed footer if not in memory (persistent view)
@@ -248,16 +245,20 @@ class DreamMirrorView(discord.ui.View):
 
         modal = PromptViewModal(self.prompt_key, self.version, self.rendered_prompt)
         await interaction.response.send_modal(modal)
-        logger.debug("Prompt modal shown", user=interaction.user.name, audit_id=str(self.audit_id))
+        logger.debug(
+            "Prompt modal shown",
+            user=(interaction.user.name if interaction.user else "unknown"),
+            audit_id=str(self.audit_id),
+        )
 
-    @discord.ui.button(
+    @discord.ui.button(  # type: ignore[arg-type]
         label="FEEDBACK",
         emoji="💬",
         style=discord.ButtonStyle.primary,
         custom_id="dream_mirror:feedback",
     )
     async def feedback_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
+        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
     ) -> None:
         """Handle FEEDBACK button click."""
         # Extract data from embed footer if not in memory (persistent view)
@@ -302,17 +303,19 @@ class DreamMirrorView(discord.ui.View):
         modal = FeedbackModal(self.audit_id, self.message_id)
         await interaction.response.send_modal(modal)
         logger.debug(
-            "Feedback modal shown", user=interaction.user.name, audit_id=str(self.audit_id)
+            "Feedback modal shown",
+            user=(interaction.user.name if interaction.user else "unknown"),
+            audit_id=str(self.audit_id),
         )
 
-    @discord.ui.button(
+    @discord.ui.button(  # type: ignore[arg-type]
         label="GOOD",
         emoji="👍",
         style=discord.ButtonStyle.success,
         custom_id="dream_mirror:quick_positive",
-    )  # type: ignore[arg-type]
+    )
     async def quick_positive_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
+        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
     ) -> None:
         """Handle quick positive feedback without modal."""
         # Extract data from embed footer if not in memory (persistent view)
@@ -356,7 +359,9 @@ class DreamMirrorView(discord.ui.View):
             content="(Quick positive feedback)",
             sentiment="positive",
             referenced_discord_message_id=self.message_id,
-            user_discord_message_id=(interaction.message.id if interaction.message else None),
+            user_discord_message_id=(
+                interaction.message.id if interaction.message else None
+            ),
         )
         await user_feedback.store_feedback(feedback)
         await interaction.response.send_message(
@@ -365,18 +370,18 @@ class DreamMirrorView(discord.ui.View):
         )
         logger.debug(
             "Quick positive feedback recorded",
-            user=interaction.user.name if interaction.user else "Unknown",
+            user=(interaction.user.name if interaction.user else "Unknown"),
             audit_id=str(self.audit_id),
         )
 
-    @discord.ui.button(
+    @discord.ui.button(  # type: ignore[arg-type]
         label="BAD",
         emoji="👎",
         style=discord.ButtonStyle.danger,
         custom_id="dream_mirror:quick_negative",
     )  # type: ignore[arg-type]
     async def quick_negative_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
+        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
     ) -> None:
         """Handle quick negative feedback without modal."""
         # Extract data from embed footer if not in memory (persistent view)
@@ -420,7 +425,9 @@ class DreamMirrorView(discord.ui.View):
             content="(Quick negative feedback)",
             sentiment="negative",
             referenced_discord_message_id=self.message_id,
-            user_discord_message_id=(interaction.message.id if interaction.message else None),
+            user_discord_message_id=(
+                interaction.message.id if interaction.message else None
+            ),
         )
         await user_feedback.store_feedback(feedback)
         await interaction.response.send_message(
@@ -429,7 +436,7 @@ class DreamMirrorView(discord.ui.View):
         )
         logger.debug(
             "Quick negative feedback recorded",
-            user=interaction.user.name if interaction.user else "Unknown",
+            user=(interaction.user.name if interaction.user else "Unknown"),
             audit_id=str(self.audit_id),
         )
 
@@ -496,7 +503,9 @@ class DreamMirrorBuilder:
         latency = performance.get("latency_ms", 0)
         cost = performance.get("cost_usd", 0)
 
-        context_line = f"{episodic}E • {semantic}S • {graph}G | ⚡{latency}ms | ${cost:.4f}"
+        context_line = (
+            f"{episodic}E • {semantic}S • {graph}G | ⚡{latency}ms | ${cost:.4f}"
+        )
 
         embed.add_field(
             name="📊 CONTEXT & PERFORMANCE",
@@ -636,7 +645,9 @@ class DreamMirrorBuilder:
                 for obj in objectives[:MAX_DISPLAY_ITEMS]
             )
             if len(objectives) > MAX_DISPLAY_ITEMS:
-                objectives_text += f"\n... and {len(objectives) - MAX_DISPLAY_ITEMS} more"
+                objectives_text += (
+                    f"\n... and {len(objectives) - MAX_DISPLAY_ITEMS} more"
+                )
             embed.add_field(
                 name=f"🎯 OBJECTIVES ({len(objectives)})",
                 value=objectives_text[:1020],  # Discord field limit

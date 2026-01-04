@@ -26,6 +26,11 @@ MAX_TEMPLATE_LENGTH = 10000
 # LLM timeout for proposal generation
 LLM_PROPOSAL_TIMEOUT = 120.0  # 2 minutes
 
+# Feedback sampling limits for proposal generation
+NEGATIVE_FEEDBACK_SAMPLE_LIMIT = 5
+POSITIVE_FEEDBACK_SAMPLE_LIMIT = 3
+LLM_MAX_TOKENS = 2000
+
 
 def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]:
     """Validate a prompt template before applying.
@@ -52,7 +57,8 @@ def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]
         # for prompts that typically need them
         # These prompts typically need some context/input placeholder
         has_placeholder = any(
-            p in template for p in ["{context}", "{message}", "{conversation", "{objective"]
+            p in template
+            for p in ["{context}", "{message}", "{conversation", "{objective"]
         )
         if not has_placeholder:
             return False, "Template appears to be missing context/message placeholders"
@@ -74,6 +80,70 @@ class OptimizationProposal:
         str, Any
     ]  # Full LLM response: {changes: [...], expected_improvements: "...", confidence: 0.XX}
     confidence: float
+
+
+def _parse_llm_response(
+    llm_response: str, prompt_key: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Parse JSON from LLM response.
+
+    Args:
+        llm_response: The raw string response from LLM
+        prompt_key: The prompt key for logging context
+
+    Returns:
+        (parsed_data, None) on success, (None, error_message) on failure
+    """
+    try:
+        data = json.loads(llm_response)
+    except (json.JSONDecodeError, ValueError, TypeError) as e:
+        logger.exception(
+            "Failed to parse optimization proposal",
+            prompt_key=prompt_key,
+            error=str(e),
+            response=llm_response[:200],
+        )
+        return None, f"JSON parse error: {e}"
+
+    return data, None
+
+
+def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
+    """Validate required fields and types in proposal data.
+
+    Args:
+        data: Parsed proposal data dictionary
+
+    Returns:
+        None if valid, error message string if invalid
+    """
+    required_fields = [
+        "proposed_template",
+        "changes",
+        "expected_improvements",
+        "confidence",
+    ]
+    missing = [f for f in required_fields if f not in data]
+    if missing:
+        return f"Missing required fields: {missing}"
+
+    if not isinstance(data["proposed_template"], str):
+        return f"Invalid proposed_template type: expected str, got {type(data['proposed_template']).__name__}"
+
+    if not isinstance(data["changes"], list):
+        return (
+            f"Invalid changes type: expected list, got {type(data['changes']).__name__}"
+        )
+
+    if not isinstance(data["expected_improvements"], str):
+        return f"Invalid expected_improvements type: expected str, got {type(data['expected_improvements']).__name__}"
+
+    try:
+        float(data["confidence"])
+    except (ValueError, TypeError):
+        return f"Invalid confidence type: expected float-convertible, got {type(data['confidence']).__name__}"
+
+    return None
 
 
 async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
@@ -101,19 +171,22 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     # Get optimization prompt template from database
     optimization_prompt_template = await get_prompt("PROMPT_OPTIMIZATION")
     if not optimization_prompt_template:
-        logger.error("PROMPT_OPTIMIZATION template not found in database")
+        logger.warning(
+            "Cannot propose optimization - PROMPT_OPTIMIZATION template not found",
+            prompt_key=metrics.prompt_key,
+        )
         return None
 
     # Get feedback samples
     negative_samples = await get_feedback_samples(
         metrics.prompt_key,
-        limit=5,
+        limit=NEGATIVE_FEEDBACK_SAMPLE_LIMIT,
         sentiment_filter="negative",
     )
 
     positive_samples = await get_feedback_samples(
         metrics.prompt_key,
-        limit=3,
+        limit=POSITIVE_FEEDBACK_SAMPLE_LIMIT,
         sentiment_filter="positive",
     )
 
@@ -136,7 +209,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
             llm_client.complete(
                 prompt=optimization_prompt,
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=LLM_MAX_TOKENS,
             ),
             timeout=LLM_PROPOSAL_TIMEOUT,
         )
@@ -149,64 +222,30 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         return None
 
     # Parse LLM response
-    try:
-        proposal_data = json.loads(result.content)
+    proposal_data, parse_error = _parse_llm_response(result.content, metrics.prompt_key)
+    if proposal_data is None:
+        return None
 
-        # Validate required fields (new format uses "changes" array)
-        required_fields = ["proposed_template", "changes", "expected_improvements", "confidence"]
-        missing = [f for f in required_fields if f not in proposal_data]
-        if missing:
-            logger.warning(
-                "LLM response missing required fields",
-                prompt_key=metrics.prompt_key,
-                missing_fields=missing,
-                response=result.content[:200],
-            )
-            return None
-
-        # Validate field types
-        confidence = float(proposal_data["confidence"])
-        if not isinstance(proposal_data["proposed_template"], str):
-            logger.warning(
-                "LLM response has invalid proposed_template type",
-                prompt_key=metrics.prompt_key,
-                type=type(proposal_data["proposed_template"]).__name__,
-            )
-            return None
-
-        # New format: changes is an array of {issue, fix, why} objects
-        if not isinstance(proposal_data["changes"], list):
-            logger.warning(
-                "LLM response has invalid changes type",
-                prompt_key=metrics.prompt_key,
-                type=type(proposal_data["changes"]).__name__,
-            )
-            return None
-
-        # New format: expected_improvements is a string paragraph
-        if not isinstance(proposal_data["expected_improvements"], str):
-            logger.warning(
-                "LLM response has invalid expected_improvements type",
-                prompt_key=metrics.prompt_key,
-                type=type(proposal_data["expected_improvements"]).__name__,
-            )
-            return None
-
-        # Store the entire LLM response as metadata (JSONB flexibility)
-        # Remove fields that are stored separately in the schema
-        proposal_metadata = {
-            "changes": proposal_data["changes"],
-            "expected_improvements": proposal_data["expected_improvements"],
-        }
-
-    except (json.JSONDecodeError, ValueError, TypeError) as e:
-        logger.exception(
-            "Failed to parse optimization proposal",
+    # Validate required fields and types
+    validation_error = _validate_proposal_fields(proposal_data)
+    if validation_error:
+        logger.warning(
+            "LLM response validation failed",
             prompt_key=metrics.prompt_key,
-            error=str(e),
+            error=validation_error,
             response=result.content[:200],
         )
         return None
+
+    # Extract confidence (validated as float-convertible above)
+    confidence = float(proposal_data["confidence"])
+
+    # Store the entire LLM response as metadata (JSONB flexibility)
+    # Remove fields that are stored separately in the schema
+    proposal_metadata = {
+        "changes": proposal_data["changes"],
+        "expected_improvements": proposal_data["expected_improvements"],
+    }
 
     # Check confidence threshold
     if confidence < min_confidence:
@@ -302,6 +341,48 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
         return proposal_id
 
 
+async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
+    """Fetch a proposal from the database by ID.
+
+    Args:
+        proposal_id: UUID of the proposal
+
+    Returns:
+        OptimizationProposal if found, None otherwise
+    """
+    async with db_pool.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                id,
+                prompt_key,
+                current_version,
+                proposed_version,
+                current_template,
+                proposed_template,
+                proposal_metadata,
+                confidence
+            FROM dreaming_proposals
+            WHERE id = $1
+            """,
+            proposal_id,
+        )
+
+        if not row:
+            return None
+
+        return OptimizationProposal(
+            proposal_id=row["id"],
+            prompt_key=row["prompt_key"],
+            current_version=row["current_version"],
+            proposed_version=row["proposed_version"],
+            current_template=row["current_template"],
+            proposed_template=row["proposed_template"],
+            proposal_metadata=row["proposal_metadata"],
+            confidence=float(row["confidence"]),
+        )
+
+
 async def get_pending_proposals() -> list[OptimizationProposal]:
     """Get all pending optimization proposals.
 
@@ -368,7 +449,9 @@ async def approve_proposal(
         )
 
         if not proposal_row:
-            logger.warning("Proposal not found or not pending", proposal_id=str(proposal_id))
+            logger.warning(
+                "Proposal not found or not pending", proposal_id=str(proposal_id)
+            )
             return False
 
         # Validate proposed template before applying

@@ -50,27 +50,40 @@ async def test_full_dreaming_cycle_workflow() -> None:
 
     # Step 2: Generate optimization proposal (mock LLM)
     mock_template = MagicMock()
-    mock_template.template = "You are a helpful Discord bot. {context}\n\nRespond to: {message}"
+    mock_template.template = "You are a helpful Discord bot."
+
+    # Mock the PROMPT_OPTIMIZATION template
+    mock_optimization_template = MagicMock()
+    mock_optimization_template.template = "Optimize this prompt: {current_template}"
 
     mock_llm_result = MagicMock()
     mock_llm_result.content = """{
-        "proposed_template": "You are a concise Discord assistant. \
-{context}\\n\\nRespond briefly to: {message}",
-        "rationale": "Reduce response length to improve latency and user satisfaction. \
-Negative feedback indicates responses are too verbose.",
-        "expected_improvements": {
-            "latency": "-40%",
-            "clarity": "More focused, direct responses",
-            "user_satisfaction": "Reduced verbosity addresses main complaint"
-        },
+        "proposed_template": "You are a concise Discord assistant.",
+        "changes": [
+            {
+                "issue": "Responses are too verbose",
+                "fix": "Reduce response length",
+                "why": "Negative feedback indicates verbosity is a problem"
+            }
+        ],
+        "expected_improvements": "This change will reduce response latency by 40% and improve user satisfaction. Responses will be more focused and direct, addressing the main complaint from users.",
         "confidence": 0.88
     }"""
 
     with (
-        patch("lattice.dreaming.proposer.get_prompt", return_value=mock_template),
+        patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
         patch("lattice.dreaming.proposer.get_feedback_samples") as mock_feedback,
         patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
     ):
+        # Mock get_prompt to return different templates for different keys
+        def get_prompt_side_effect(prompt_key: str):
+            if prompt_key == "BASIC_RESPONSE":
+                return mock_template
+            elif prompt_key == "PROMPT_OPTIMIZATION":
+                return mock_optimization_template
+            return None
+
+        mock_get_prompt.side_effect = get_prompt_side_effect
         mock_feedback.return_value = [
             "Too wordy",
             "Responses are too long",
@@ -110,7 +123,7 @@ Negative feedback indicates responses are too verbose.",
                 "proposed_version": proposal.proposed_version,
             }
         )
-        mock_conn.execute = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
         mock_conn.transaction = MagicMock()
         mock_conn.transaction().__aenter__ = AsyncMock()
         mock_conn.transaction().__aexit__ = AsyncMock()
@@ -161,7 +174,9 @@ async def test_dreaming_cycle_no_proposals_when_performing_well() -> None:
 
         assert len(metrics) == 1
         assert metrics[0].success_rate == 0.8
-        assert metrics[0].priority_score == 5.0  # Low priority, likely won't generate proposal
+        assert (
+            metrics[0].priority_score == 5.0
+        )  # Low priority, likely won't generate proposal
 
 
 @pytest.mark.asyncio

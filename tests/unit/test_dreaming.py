@@ -91,24 +91,35 @@ class TestProposer:
         )
 
         mock_template = MagicMock()
-        mock_template.template = "You are a helpful assistant. {context}"
+        mock_template.template = "You are a helpful assistant."
+
+        # Mock the PROMPT_OPTIMIZATION template
+        mock_optimization_template = MagicMock()
+        mock_optimization_template.template = "Optimize this prompt: {current_template}"
 
         mock_llm_result = MagicMock()
         mock_llm_result.content = """{
-            "proposed_template": "You are a concise assistant. {context}",
-            "rationale": "Reducing verbosity to improve response time",
-            "expected_improvements": {
-                "latency": "-30%",
-                "clarity": "More focused responses"
-            },
+            "proposed_template": "You are a concise assistant.",
+            "changes": [{"issue": "High latency", "fix": "Reduce verbosity", "why": "Shorter responses are faster"}],
+            "expected_improvements": "This change will reduce response latency by 30% and improve clarity with more focused responses.",
             "confidence": 0.85
         }"""
 
         with (
-            patch("lattice.dreaming.proposer.get_prompt", return_value=mock_template),
+            patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
             patch("lattice.dreaming.proposer.get_feedback_samples", return_value=[]),
             patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
         ):
+            # Mock get_prompt to return different templates for different keys
+            def get_prompt_side_effect(prompt_key: str):
+                if prompt_key == "BASIC_RESPONSE":
+                    return mock_template
+                elif prompt_key == "PROMPT_OPTIMIZATION":
+                    return mock_optimization_template
+                return None
+
+            mock_get_prompt.side_effect = get_prompt_side_effect
+
             mock_llm = AsyncMock()
             mock_llm.complete = AsyncMock(return_value=mock_llm_result)
             mock_llm_client.return_value = mock_llm
@@ -144,19 +155,32 @@ class TestProposer:
         mock_template = MagicMock()
         mock_template.template = "You are a helpful assistant."
 
+        # Mock the PROMPT_OPTIMIZATION template
+        mock_optimization_template = MagicMock()
+        mock_optimization_template.template = "Optimize this prompt: {current_template}"
+
         mock_llm_result = MagicMock()
         mock_llm_result.content = """{
             "proposed_template": "You are an assistant.",
-            "rationale": "Minor improvement",
-            "expected_improvements": {},
+            "changes": [{"issue": "Minor issue", "fix": "Small tweak", "why": "Minor improvement"}],
+            "expected_improvements": "Small performance improvement",
             "confidence": 0.5
         }"""
 
         with (
-            patch("lattice.dreaming.proposer.get_prompt", return_value=mock_template),
+            patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
             patch("lattice.dreaming.proposer.get_feedback_samples", return_value=[]),
             patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
         ):
+            # Mock get_prompt to return different templates for different keys
+            def get_prompt_side_effect(prompt_key: str):
+                if prompt_key == "BASIC_RESPONSE":
+                    return mock_template
+                elif prompt_key == "PROMPT_OPTIMIZATION":
+                    return mock_optimization_template
+                return None
+
+            mock_get_prompt.side_effect = get_prompt_side_effect
             mock_llm = AsyncMock()
             mock_llm.complete = AsyncMock(return_value=mock_llm_result)
             mock_llm_client.return_value = mock_llm
@@ -175,8 +199,16 @@ class TestProposer:
             proposed_version=2,
             current_template="Old template",
             proposed_template="New template",
-            rationale="Improvement needed",
-            expected_improvements={"latency": "-20%"},
+            proposal_metadata={
+                "changes": [
+                    {
+                        "issue": "Performance issue",
+                        "fix": "Improve template",
+                        "why": "Better performance",
+                    }
+                ],
+                "expected_improvements": "This change will improve latency by 20%",
+            },
             confidence=0.8,
         )
 
@@ -205,7 +237,7 @@ class TestProposer:
                     "proposed_version": 2,
                 }
             )
-            mock_conn.execute = AsyncMock()
+            mock_conn.execute = AsyncMock(return_value="UPDATE 1")
             mock_conn.transaction = MagicMock()
             mock_conn.transaction().__aenter__ = AsyncMock()
             mock_conn.transaction().__aexit__ = AsyncMock()
@@ -215,7 +247,9 @@ class TestProposer:
             success = await approve_proposal(proposal_id, "user123", "Looks good")
 
             assert success is True
-            assert mock_conn.execute.call_count == 2  # Update prompt_registry + proposals
+            assert (
+                mock_conn.execute.call_count == 2
+            )  # Update prompt_registry + proposals
 
     @pytest.mark.asyncio
     async def test_reject_proposal_success(self) -> None:

@@ -28,6 +28,10 @@ from lattice.utils.embeddings import embedding_model
 
 logger = structlog.get_logger(__name__)
 
+# Database initialization retry settings
+DB_INIT_MAX_RETRIES = 20
+DB_INIT_RETRY_INTERVAL = 0.5  # seconds
+
 
 class LatticeBot(commands.Bot):
     """The Lattice Discord bot with ENGRAM memory framework."""
@@ -96,10 +100,10 @@ class LatticeBot(commands.Bot):
             if not db_pool.is_initialized():
                 logger.warning("Database pool not initialized yet, waiting...")
                 # Wait up to 10 seconds for initialization
-                for _ in range(20):
+                for _ in range(DB_INIT_MAX_RETRIES):
                     if db_pool.is_initialized():
                         break
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(DB_INIT_RETRY_INTERVAL)
                 else:
                     logger.error(
                         "Database pool failed to initialize, cannot start schedulers"

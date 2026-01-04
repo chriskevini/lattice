@@ -5,7 +5,6 @@ persistence support (buttons work after bot restart).
 """
 
 from typing import Any
-from uuid import UUID
 
 import discord
 import structlog
@@ -13,54 +12,12 @@ import structlog
 from lattice.dreaming.proposer import (
     OptimizationProposal,
     approve_proposal,
+    get_proposal_by_id,
     reject_proposal,
 )
-from lattice.utils.database import db_pool
 
 
 logger = structlog.get_logger(__name__)
-
-
-async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
-    """Fetch a proposal from the database by ID.
-
-    Args:
-        proposal_id: UUID of the proposal
-
-    Returns:
-        OptimizationProposal if found, None otherwise
-    """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT
-                id,
-                prompt_key,
-                current_version,
-                proposed_version,
-                current_template,
-                proposed_template,
-                proposal_metadata,
-                confidence
-            FROM dreaming_proposals
-            WHERE id = $1
-            """,
-            proposal_id,
-        )
-
-        if not row:
-            return None
-
-        return OptimizationProposal(
-            proposal_id=row["id"],
-            prompt_key=row["prompt_key"],
-            current_version=row["current_version"],
-            proposed_version=row["proposed_version"],
-            current_template=row["current_template"],
-            proposed_template=row["proposed_template"],
-            proposal_metadata=row["proposal_metadata"],
-            confidence=float(row["confidence"]),
-        )
 
 
 class TemplateComparisonView(discord.ui.DesignerView):
@@ -102,49 +59,22 @@ class TemplateComparisonView(discord.ui.DesignerView):
             else "No changes listed"
         )
 
-        # Create TextDisplay components (no dummy buttons needed - cleaner UI)
-        # TextDisplay 1: Changes & Rationale
-        changes_display: Any = discord.ui.TextDisplay(  # type: ignore[attr-defined]
-            content=f"📋 CHANGES & RATIONALE\n\n{changes_formatted}"
+        # Create UI sections using helper method
+        changes_section = self._create_text_section(
+            "📋 CHANGES & RATIONALE", changes_formatted
         )
-
-        # Separator 1
-        separator1: Any = discord.ui.Separator(  # type: ignore[attr-defined]
-            divider=True,
-            spacing=discord.SeparatorSpacingSize.small,  # type: ignore[attr-defined]
+        improvements_section = self._create_text_section(
+            "📈 EXPECTED IMPROVEMENTS", expected_improvements
         )
-
-        # TextDisplay 2: Expected Improvements
-        improvements_display: Any = discord.ui.TextDisplay(  # type: ignore[attr-defined]
-            content=f"📈 EXPECTED IMPROVEMENTS\n\n{expected_improvements}"
+        current_section = self._create_text_section(
+            f"📄 CURRENT TEMPLATE (v{proposal.current_version})",
+            proposal.current_template[:1000],
+            code_block=True,
         )
-
-        # Separator 2
-        separator2: Any = discord.ui.Separator(  # type: ignore[attr-defined]
-            divider=True,
-            spacing=discord.SeparatorSpacingSize.small,  # type: ignore[attr-defined]
-        )
-
-        # TextDisplay 3: Current Template
-        current_display: Any = discord.ui.TextDisplay(  # type: ignore[attr-defined]
-            content=(
-                f"📄 CURRENT TEMPLATE (v{proposal.current_version})\n\n"
-                f"```\n{proposal.current_template[:1000]}\n```"
-            )
-        )
-
-        # Separator 3
-        separator3: Any = discord.ui.Separator(  # type: ignore[attr-defined]
-            divider=True,
-            spacing=discord.SeparatorSpacingSize.small,  # type: ignore[attr-defined]
-        )
-
-        # TextDisplay 4: Proposed Template
-        proposed_display: Any = discord.ui.TextDisplay(  # type: ignore[attr-defined]
-            content=(
-                f"✨ PROPOSED TEMPLATE (v{proposal.proposed_version})\n\n"
-                f"```\n{proposal.proposed_template[:1000]}\n```"
-            )
+        proposed_section = self._create_text_section(
+            f"✨ PROPOSED TEMPLATE (v{proposal.proposed_version})",
+            proposal.proposed_template[:1000],
+            code_block=True,
         )
 
         # Approval buttons in ActionRow
@@ -167,30 +97,81 @@ class TemplateComparisonView(discord.ui.DesignerView):
 
         action_row: Any = discord.ui.ActionRow(approve_button, reject_button)  # type: ignore[attr-defined]
 
-        # Add all TextDisplays with separators and action row to view
-        self.add_item(changes_display)
-        self.add_item(separator1)
-        self.add_item(improvements_display)
-        self.add_item(separator2)
-        self.add_item(current_display)
-        self.add_item(separator3)
-        self.add_item(proposed_display)
+        # Add all sections and action row to view
+        for item in changes_section:
+            self.add_item(item)
+        for item in improvements_section:
+            self.add_item(item)
+        for item in current_section:
+            self.add_item(item)
+        for item in proposed_section:
+            self.add_item(item)
         self.add_item(action_row)
+
+    def _create_text_section(
+        self,
+        title: str,
+        content: str,
+        code_block: bool = False,
+    ) -> list[Any]:
+        """Create text section with separator.
+
+        Args:
+            title: Section title
+            content: Section content
+            code_block: Whether to wrap content in code block
+
+        Returns:
+            List containing [TextDisplay, Separator]
+        """
+        formatted = f"```\n{content}\n```" if code_block else content
+        display: Any = discord.ui.TextDisplay(  # type: ignore[attr-defined]
+            content=f"{title}\n\n{formatted}"
+        )
+        separator: Any = discord.ui.Separator(  # type: ignore[attr-defined]
+            divider=True,
+            spacing=discord.SeparatorSpacingSize.small,  # type: ignore[attr-defined]
+        )
+        return [display, separator]
+
+    def _disable_all_buttons(self) -> None:
+        for item in self.children:
+            if hasattr(item, "children"):
+                for button in item.children:
+                    if isinstance(button, discord.ui.Button):
+                        button.disabled = True
+
+    async def _finalize_proposal_action(
+        self, interaction: discord.Interaction, emoji: str, log_type: str
+    ) -> None:
+        self._disable_all_buttons()
+        if interaction.message:
+            await interaction.message.edit(view=self)
+            try:
+                await interaction.message.add_reaction(emoji)
+            except Exception:
+                logger.warning(f"Failed to add {log_type} reaction to message")
+
+    async def _fetch_proposal_or_error(
+        self, interaction: discord.Interaction
+    ) -> OptimizationProposal | None:
+        proposal = await get_proposal_by_id(self.proposal_id)
+        if not proposal:
+            await interaction.response.send_message(
+                "❌ Proposal not found. It may have been deleted.",
+                ephemeral=True,
+            )
+            return None
+        return proposal
 
     def _make_approve_callback(self):  # noqa: ANN202 - Callback factory pattern
         """Create approve button callback."""
 
         async def approve_callback(interaction: discord.Interaction) -> None:
-            # Fetch proposal from database
-            proposal = await get_proposal_by_id(self.proposal_id)
+            proposal = await self._fetch_proposal_or_error(interaction)
             if not proposal:
-                await interaction.response.send_message(
-                    "❌ Proposal not found. It may have been deleted.",
-                    ephemeral=True,
-                )
                 return
 
-            # Apply the proposal
             success = await approve_proposal(
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
@@ -198,20 +179,7 @@ class TemplateComparisonView(discord.ui.DesignerView):
             )
 
             if success:
-                # Disable all buttons in the view
-                for item in self.children:
-                    if hasattr(item, "children"):  # ActionRow has children
-                        for button in item.children:  # type: ignore[attr-defined]
-                            if isinstance(button, discord.ui.Button):
-                                button.disabled = True
-
-                # Update message with disabled buttons and add reaction
-                if interaction.message:
-                    await interaction.message.edit(view=self)
-                    try:
-                        await interaction.message.add_reaction("✅")
-                    except Exception:
-                        logger.warning("Failed to add approval reaction to message")
+                await self._finalize_proposal_action(interaction, "✅", "approval")
 
                 await interaction.response.send_message(
                     f"✅ **Proposal approved!** Template `{proposal.prompt_key}` "
@@ -236,16 +204,10 @@ class TemplateComparisonView(discord.ui.DesignerView):
         """Create reject button callback."""
 
         async def reject_callback(interaction: discord.Interaction) -> None:
-            # Fetch proposal from database
-            proposal = await get_proposal_by_id(self.proposal_id)
+            proposal = await self._fetch_proposal_or_error(interaction)
             if not proposal:
-                await interaction.response.send_message(
-                    "❌ Proposal not found. It may have been deleted.",
-                    ephemeral=True,
-                )
                 return
 
-            # Reject the proposal silently (no reason required)
             success = await reject_proposal(
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
@@ -253,20 +215,7 @@ class TemplateComparisonView(discord.ui.DesignerView):
             )
 
             if success:
-                # Disable all buttons in the view
-                for item in self.children:
-                    if hasattr(item, "children"):  # ActionRow has children
-                        for button in item.children:  # type: ignore[attr-defined]
-                            if isinstance(button, discord.ui.Button):
-                                button.disabled = True
-
-                # Update message with disabled buttons and add reaction
-                if interaction.message:
-                    await interaction.message.edit(view=self)
-                    try:
-                        await interaction.message.add_reaction("❌")
-                    except Exception:
-                        logger.warning("Failed to add rejection reaction to message")
+                await self._finalize_proposal_action(interaction, "❌", "rejection")
 
                 await interaction.response.send_message(
                     f"❌ **Proposal rejected.** Template `{proposal.prompt_key}` "
