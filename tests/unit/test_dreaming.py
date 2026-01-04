@@ -47,7 +47,9 @@ class TestAnalyzer:
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-            metrics = await analyze_prompt_effectiveness(min_uses=10, lookback_days=30)
+            metrics = await analyze_prompt_effectiveness(
+                min_uses=10, lookback_days=30, min_feedback=0
+            )
 
             assert len(metrics) == 1
             assert metrics[0].prompt_key == "BASIC_RESPONSE"
@@ -108,7 +110,9 @@ class TestProposer:
 
         with (
             patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
-            patch("lattice.dreaming.proposer.get_feedback_samples", return_value=[]),
+            patch(
+                "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
+            ),
             patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
         ):
             # Mock get_prompt to return different templates for different keys
@@ -170,7 +174,9 @@ class TestProposer:
 
         with (
             patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
-            patch("lattice.dreaming.proposer.get_feedback_samples", return_value=[]),
+            patch(
+                "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
+            ),
             patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
         ):
             # Mock get_prompt to return different templates for different keys
