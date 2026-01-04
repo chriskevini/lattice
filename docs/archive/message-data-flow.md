@@ -1,4 +1,8 @@
-# Message Data Flow - Detailed Walkthrough
+# 🌊 [ARCHIVED] MESSAGE DATA FLOW
+
+> [!CAUTION]
+> **ARCHIVED DOCUMENT**
+> This document is kept for historical context only. Implementation details have evolved significantly, especially around "invisible feedback" and "North Star" detection, which are now handled via explicit UI components in the Dream Channel.
 
 ## Overview
 

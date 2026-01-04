@@ -15,11 +15,11 @@ import discord
 import structlog
 from discord.ext import commands
 
-from lattice.core import handlers, memory_orchestrator, response_generator
+from lattice.core import memory_orchestrator, response_generator
 from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
-from lattice.memory import feedback_detection, prompt_audits
+from lattice.memory import prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
@@ -197,19 +197,6 @@ class LatticeBot(commands.Bot):
         )
 
         try:
-            north_star_result = feedback_detection.is_north_star(message)
-            if north_star_result.detected:
-                goal_content = north_star_result.content or ""
-                logger.info(
-                    "North Star detected, short-circuiting",
-                    goal_preview=goal_content[:50],
-                )
-                await handlers.handle_north_star(
-                    message=message,
-                    goal_content=goal_content,
-                )
-                return
-
             # Store user message in memory
             user_message_id = await memory_orchestrator.store_user_message(
                 content=message.content,

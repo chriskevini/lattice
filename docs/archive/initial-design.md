@@ -1,4 +1,8 @@
-# 📂 SYSTEM DESIGN SPECIFICATION: ADAPTIVE MEMORY ORCHESTRATOR
+# 📂 [ARCHIVED] SYSTEM DESIGN SPECIFICATION: ADAPTIVE MEMORY ORCHESTRATOR
+
+> [!CAUTION]
+> **ARCHIVED DOCUMENT**
+> This document is kept for historical context only. Implementation details, especially around "invisible feedback" and "North Star" detection, have been deprecated in favor of explicit UI components (V2 Components) in the Dream Channel.
 
 **Target Environment:** 2GB RAM / 1vCPU / PostgreSQL 16 + `pgvector`
 
