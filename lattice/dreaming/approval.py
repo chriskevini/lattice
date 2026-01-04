@@ -9,6 +9,7 @@ from typing import Any
 import discord
 import structlog
 
+from lattice.discord_client.dream import PromptViewView
 from lattice.dreaming.proposer import (
     OptimizationProposal,
     approve_proposal,
@@ -35,6 +36,7 @@ class TemplateComparisonView(discord.ui.DesignerView):
         """
         super().__init__(timeout=None)  # No timeout for proposal views
         self.proposal_id = proposal.proposal_id
+        self.rendered_optimization_prompt = proposal.rendered_optimization_prompt
 
         # Extract data from proposal_metadata JSONB
         changes = proposal.proposal_metadata.get("changes", [])
@@ -77,7 +79,13 @@ class TemplateComparisonView(discord.ui.DesignerView):
             code_block=True,
         )
 
-        # Approval buttons in ActionRow
+        # Action buttons in ActionRow
+        view_prompt_button: Any = discord.ui.Button(
+            label="VIEW PROMPT",
+            emoji="📋",
+            style=discord.ButtonStyle.secondary,
+            custom_id="dream_proposal:view_prompt",
+        )
         approve_button: Any = discord.ui.Button(
             label="APPROVE",
             emoji="✅",
@@ -91,10 +99,13 @@ class TemplateComparisonView(discord.ui.DesignerView):
             custom_id="dream_proposal:reject",
         )
 
+        view_prompt_button.callback = self._make_view_prompt_callback()
         approve_button.callback = self._make_approve_callback()
         reject_button.callback = self._make_reject_callback()
 
-        action_row: Any = discord.ui.ActionRow(approve_button, reject_button)
+        action_row: Any = discord.ui.ActionRow(
+            view_prompt_button, approve_button, reject_button
+        )
 
         # Add all sections and action row to view
         for item in changes_section:
@@ -160,6 +171,34 @@ class TemplateComparisonView(discord.ui.DesignerView):
             )
             return None
         return proposal
+
+    def _make_view_prompt_callback(self) -> Any:
+        """Create view prompt button callback."""
+
+        async def view_prompt_callback(interaction: discord.Interaction) -> None:
+            """Handle VIEW PROMPT button click - shows ephemeral message with TextDisplay."""
+            if not self.rendered_optimization_prompt:
+                await interaction.response.send_message(
+                    "❌ Error: Rendered prompt not available.",
+                    ephemeral=True,
+                )
+                return
+
+            # Send ephemeral message with TextDisplay view (Components V2)
+            # NOTE: V2 components cannot be sent with embeds or content (Pycord restriction)
+            view = PromptViewView(self.rendered_optimization_prompt)
+
+            await interaction.response.send_message(
+                view=view,
+                ephemeral=True,
+            )
+            logger.debug(
+                "Optimization prompt view shown",
+                user=interaction.user.name if interaction.user else "unknown",
+                proposal_id=str(self.proposal_id),
+            )
+
+        return view_prompt_callback
 
     def _make_approve_callback(self) -> Any:
         """Create approve button callback."""
