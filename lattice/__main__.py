@@ -10,6 +10,7 @@ import structlog
 from dotenv import load_dotenv
 
 from lattice.discord_client.bot import LatticeBot
+from lattice.core.health import HealthServer
 
 
 load_dotenv()
@@ -81,7 +82,12 @@ async def main() -> None:
         )
 
     bot = LatticeBot()
+    health_server = HealthServer(port=int(os.getenv("HEALTH_PORT", "8080")))
+
     try:
+        # Start health server in background
+        await health_server.start()
+
         # Manually call setup_hook to ensure database is initialized
         # py-cord should call this automatically, but we ensure it's called
         await bot.setup_hook()
@@ -92,6 +98,7 @@ async def main() -> None:
         logger.exception("Bot crashed", error=str(e))
         raise
     finally:
+        await health_server.stop()
         await bot.close()
         logger.info("Bot shutdown complete")
 
