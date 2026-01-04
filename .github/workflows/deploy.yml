@@ -21,17 +21,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -41,6 +30,14 @@ jobs:
           script: |
             mkdir -p ~/lattice
             cd ~/lattice
+
+            # Sync code via Git
+            if [ -d ".git" ]; then
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              git clone https://github.com/${{ github.repository }}.git .
+            fi
 
             # Create/update .env file from secrets
             cat <<EOF > .env
@@ -64,12 +61,8 @@ jobs:
             STRUCTURED_LOGS=true
             EOF
 
-            # Download docker-compose.yml if not exists
-            curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.yml
-
-            # Pull latest image and restart
-            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-            docker compose pull
+            # Build and restart locally
+            docker compose build
             docker compose up -d --remove-orphans
 
             # Wait for health check
@@ -83,4 +76,5 @@ jobs:
               sleep 5
             done
             echo "Health check failed!"
+            docker compose logs bot
             exit 1
