@@ -12,7 +12,10 @@ from uuid import UUID, uuid4
 
 import structlog
 
-from lattice.dreaming.analyzer import PromptMetrics, get_feedback_samples
+from lattice.dreaming.analyzer import (
+    PromptMetrics,
+    get_feedback_with_context,
+)
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.llm import get_llm_client
@@ -180,17 +183,13 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
 
     # Get feedback samples - show all feedback up to reasonable limit
     # The minimum feedback threshold (10) in analyzer ensures statistical significance
-    negative_samples = await get_feedback_samples(
+    samples = await get_feedback_with_context(
         metrics.prompt_key,
         limit=MAX_FEEDBACK_SAMPLES,
-        sentiment_filter="negative",
     )
 
-    positive_samples = await get_feedback_samples(
-        metrics.prompt_key,
-        limit=MAX_FEEDBACK_SAMPLES,
-        sentiment_filter="positive",
-    )
+    # Format samples into experience triplets (Prompt -> Response -> Feedback)
+    experience_triplets = _format_experience_triplets(samples)
 
     # Format the optimization prompt using database template
     optimization_prompt = optimization_prompt_template.template.format(
@@ -200,8 +199,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         success_rate=f"{metrics.success_rate:.1%}",
         positive_feedback=metrics.positive_feedback,
         negative_feedback=metrics.negative_feedback,
-        negative_feedback_samples=_format_feedback(negative_samples),
-        positive_feedback_samples=_format_feedback(positive_samples),
+        experience_triplets=experience_triplets,
     )
 
     # Call LLM to generate proposal with timeout
@@ -281,19 +279,30 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     return proposal
 
 
-def _format_feedback(feedback: list[str]) -> str:
-    """Format feedback samples for prompt.
+def _format_experience_triplets(samples: list[dict[str, Any]]) -> str:
+    """Format feedback with context into experience triplets.
 
     Args:
-        feedback: List of feedback strings
+        samples: List of feedback samples with context
 
     Returns:
-        Formatted feedback text
+        Formatted experience triplets string
     """
-    if not feedback:
+    if not samples:
         return "(none)"
 
-    return "\n".join(f"- {f}" for f in feedback)
+    formatted = []
+    for s in samples:
+        triplet = (
+            f"--- EXPERIENCE TRIPLET ---\n"
+            f"SENTIMENT: {s['sentiment'].upper()}\n"
+            f"USER MESSAGE: {s['user_message']}\n"
+            f"BOT RESPONSE:\n{s['response_content']}\n"
+            f"FEEDBACK: {s['feedback_content']}\n"
+        )
+        formatted.append(triplet)
+
+    return "\n".join(formatted)
 
 
 async def store_proposal(proposal: OptimizationProposal) -> UUID:

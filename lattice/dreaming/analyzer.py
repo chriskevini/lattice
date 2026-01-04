@@ -237,3 +237,47 @@ async def get_feedback_samples(
         rows = await conn.fetch(query, *params)
 
         return [row["content"] for row in rows]
+
+
+async def get_feedback_with_context(
+    prompt_key: str,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Get feedback along with the response and relevant user message.
+
+    This provides optimized context for the optimizer LLM by showing:
+    1. The specific user message being responded to
+    2. The bot's response
+    3. The user's feedback
+    4. Sentiment
+
+    Args:
+        prompt_key: The prompt key to get feedback for
+        limit: Maximum number of samples to return
+
+    Returns:
+        List of dicts containing message, response, and feedback
+    """
+    async with db_pool.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                rm.content as user_message,
+                pa.response_content,
+                uf.content as feedback_content,
+                uf.sentiment
+            FROM user_feedback uf
+            JOIN prompt_audits pa ON pa.feedback_id = uf.id
+            LEFT JOIN raw_messages rm ON pa.message_id = rm.id
+            JOIN prompt_registry pr ON pr.prompt_key = pa.prompt_key
+            WHERE pa.prompt_key = $1
+              AND pa.template_version = pr.version
+              AND pr.active = true
+            ORDER BY uf.created_at DESC
+            LIMIT $2
+            """,
+            prompt_key,
+            limit,
+        )
+
+        return [dict(row) for row in rows]
