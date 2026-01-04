@@ -220,64 +220,6 @@ class ProposalApprovalView(discord.ui.View):
             proposal_id=str(proposal.proposal_id),
         )
 
-    @discord.ui.button(
-        label="DISCUSS",
-        emoji="🤔",
-        style=discord.ButtonStyle.secondary,
-        custom_id="dream_proposal:discuss",
-    )
-    async def discuss_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button
-    ) -> None:
-        """Handle DISCUSS button click - allows further conversation."""
-        # Extract proposal_id from message embed footer
-        if not interaction.message or not interaction.message.embeds:
-            await interaction.response.send_message(
-                "❌ Error: Could not find proposal information.",
-                ephemeral=True,
-            )
-            return
-
-        embed = interaction.message.embeds[0]
-        if not embed.footer or not embed.footer.text:
-            await interaction.response.send_message(
-                "❌ Error: Proposal ID not found in message.",
-                ephemeral=True,
-            )
-            return
-
-        # Extract UUID from footer text
-        try:
-            proposal_id_str = embed.footer.text.split("Proposal ID: ")[1]
-            proposal_id = UUID(proposal_id_str)
-        except (IndexError, ValueError):
-            await interaction.response.send_message(
-                "❌ Error: Invalid proposal ID format.",
-                ephemeral=True,
-            )
-            return
-
-        # Fetch proposal to get prompt_key for message
-        proposal = await get_proposal_by_id(proposal_id)
-        if not proposal:
-            await interaction.response.send_message(
-                "❌ Proposal not found. It may have been deleted.",
-                ephemeral=True,
-            )
-            return
-
-        await interaction.response.send_message(
-            f"💬 **Discussion started for `{proposal.prompt_key}` optimization.**\n\n"
-            f"Reply to this message with your thoughts. The proposal will remain pending until "
-            f"you click APPROVE or REJECT on the original message.",
-            ephemeral=False,  # Public discussion
-        )
-        logger.info(
-            "Proposal discussion started",
-            proposal_id=str(proposal.proposal_id),
-            user=interaction.user.name,
-        )
-
 
 class ProposalRejectionModal(discord.ui.Modal):
     """Modal for explaining why a proposal was rejected."""
