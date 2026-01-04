@@ -330,7 +330,7 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
             proposal.confidence,
         )
 
-        proposal_id = row["id"]
+        proposal_id: UUID = row["id"]
 
         logger.info(
             "Stored optimization proposal",
@@ -338,7 +338,7 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
             prompt_key=proposal.prompt_key,
         )
 
-        return UUID(proposal_id)
+        return proposal_id
 
 
 async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
