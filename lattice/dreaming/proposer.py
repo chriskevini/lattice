@@ -85,6 +85,7 @@ class OptimizationProposal:
         str, Any
     ]  # Full LLM response: {changes: [...], expected_improvements: "...", confidence: 0.XX}
     confidence: float
+    rendered_optimization_prompt: str  # The exact prompt sent to optimizer LLM
 
 
 def _parse_llm_response(
@@ -272,7 +273,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         )
         return None
 
-    # Create proposal object
+    # Create proposal object (store the exact prompt sent to LLM for auditability)
     proposal = OptimizationProposal(
         proposal_id=uuid4(),
         prompt_key=metrics.prompt_key,
@@ -282,6 +283,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         proposed_template=proposal_data["proposed_template"],
         proposal_metadata=proposal_metadata,  # Full JSONB structure
         confidence=confidence,
+        rendered_optimization_prompt=optimization_prompt,  # Store full rendered prompt
     )
 
     logger.info(
@@ -367,9 +369,10 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
                 proposed_template,
                 proposal_metadata,
                 confidence,
+                rendered_optimization_prompt,
                 status
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
             RETURNING id
             """,
             proposal.proposal_id,
@@ -380,6 +383,7 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
             proposal.proposed_template,
             json.dumps(proposal.proposal_metadata),
             proposal.confidence,
+            proposal.rendered_optimization_prompt,
         )
 
         proposal_id: UUID = row["id"]
@@ -413,7 +417,8 @@ async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
                 current_template,
                 proposed_template,
                 proposal_metadata,
-                confidence
+                confidence,
+                rendered_optimization_prompt
             FROM dreaming_proposals
             WHERE id = $1
             """,
@@ -432,6 +437,7 @@ async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
             proposed_template=row["proposed_template"],
             proposal_metadata=row["proposal_metadata"],
             confidence=float(row["confidence"]),
+            rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
         )
 
 
@@ -452,7 +458,8 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 current_template,
                 proposed_template,
                 proposal_metadata,
-                confidence
+                confidence,
+                rendered_optimization_prompt
             FROM dreaming_proposals
             WHERE status = 'pending'
             ORDER BY confidence DESC, created_at DESC
@@ -469,6 +476,7 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 proposed_template=row["proposed_template"],
                 proposal_metadata=row["proposal_metadata"],
                 confidence=float(row["confidence"]),
+                rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
             )
             for row in rows
         ]

@@ -217,6 +217,7 @@ class TestProposer:
                 "expected_improvements": "This change will improve latency by 20%",
             },
             confidence=0.8,
+            rendered_optimization_prompt="CURRENT TEMPLATE:\nOld template\n\nPERFORMANCE METRICS:\n...",
         )
 
         with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
