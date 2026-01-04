@@ -63,6 +63,11 @@ jobs:
 
             # Build and restart locally
             docker compose build
+
+            # Run migrations before starting the bot
+            # We use the builder stage environment or run inside the container
+            docker compose run --rm bot python scripts/migrate.py
+
             docker compose up -d --remove-orphans
 
             # Wait for health check

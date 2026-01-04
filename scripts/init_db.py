@@ -170,13 +170,16 @@ async def init_database() -> None:
         """
         )
 
-        print("Initializing scheduler configuration...")
+        print("Initializing scheduler and dreaming configuration...")
         await conn.execute(
             """
             INSERT INTO system_health (metric_key, metric_value) VALUES
             ('scheduler_base_interval', '15'),
             ('scheduler_current_interval', '15'),
-            ('scheduler_max_interval', '1440')
+            ('scheduler_max_interval', '1440'),
+            ('dreaming_min_uses', '10'),
+            ('dreaming_min_confidence', '0.7'),
+            ('dreaming_enabled', 'true')
             ON CONFLICT (metric_key) DO NOTHING
             """
         )
