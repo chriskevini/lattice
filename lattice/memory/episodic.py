@@ -441,8 +441,8 @@ async def _mirror_extraction_to_dream(
         return
 
     try:
-        # Build embed
-        embed = DreamMirrorBuilder.build_extraction_mirror(
+        # Build embed and view
+        embed, view = DreamMirrorBuilder.build_extraction_mirror(
             user_message=user_message,
             main_message_url=main_message_url,
             triples=triples,
@@ -451,7 +451,7 @@ async def _mirror_extraction_to_dream(
         )
 
         # Send to dream channel
-        await dream_channel.send(embed=embed)
+        await dream_channel.send(embed=embed, view=view)
         logger.info(
             "Extraction results mirrored to dream channel",
             triples_count=len(triples),

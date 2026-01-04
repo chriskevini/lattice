@@ -179,8 +179,8 @@ class ProactiveScheduler:
             return
 
         try:
-            # Build embed
-            embed = DreamMirrorBuilder.build_proactive_mirror(
+            # Build embed and view
+            embed, view = DreamMirrorBuilder.build_proactive_mirror(
                 bot_message=bot_message.content,
                 main_message_url=bot_message.jump_url,
                 reasoning=reasoning,
@@ -188,7 +188,7 @@ class ProactiveScheduler:
             )
 
             # Send to dream channel
-            await dream_channel.send(embed=embed)
+            await dream_channel.send(embed=embed, view=view)
             logger.info("Proactive message mirrored to dream channel")
 
         except Exception:

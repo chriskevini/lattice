@@ -111,24 +111,24 @@ class DreamMirrorView(discord.ui.View):
 
     def __init__(
         self,
-        audit_id: UUID,
-        message_id: int,
-        prompt_key: str,
-        version: int,
-        rendered_prompt: str,
+        audit_id: UUID | None = None,
+        message_id: int | None = None,
+        prompt_key: str | None = None,
+        version: int | None = None,
+        rendered_prompt: str | None = None,
         has_feedback: bool = False,
     ) -> None:
         """Initialize dream mirror view.
 
         Args:
-            audit_id: Prompt audit UUID
-            message_id: Discord message ID
-            prompt_key: Prompt template key
-            version: Template version
-            rendered_prompt: Full rendered prompt
+            audit_id: Prompt audit UUID (None for persistent view registration)
+            message_id: Discord message ID (None for persistent view registration)
+            prompt_key: Prompt template key (None for persistent view registration)
+            version: Template version (None for persistent view registration)
+            rendered_prompt: Full rendered prompt (None for persistent view registration)
             has_feedback: Whether feedback has already been submitted
         """
-        super().__init__(timeout=600)  # 10 minute timeout for dream channel monitoring
+        super().__init__(timeout=None)  # Persistent view (no timeout)
         self.audit_id = audit_id
         self.message_id = message_id
         self.prompt_key = prompt_key
@@ -140,11 +140,66 @@ class DreamMirrorView(discord.ui.View):
         label="VIEW PROMPT",
         emoji="📋",
         style=discord.ButtonStyle.secondary,
+        custom_id="dream_mirror:view_prompt",
     )
     async def view_prompt_button(
         self, interaction: discord.Interaction, _button: discord.ui.Button
     ) -> None:
         """Handle VIEW PROMPT button click."""
+        # Extract data from embed footer if not in memory (persistent view)
+        if not self.audit_id and interaction.message and interaction.message.embeds:
+            embed = interaction.message.embeds[0]
+            if not embed.footer or not embed.footer.text:
+                await interaction.response.send_message(
+                    "❌ Error: Could not find audit information.",
+                    ephemeral=True,
+                )
+                return
+
+            # Parse footer: "Audit ID: <uuid>" or "Message ID: <id>"
+            try:
+                footer_text = embed.footer.text
+                if "Audit ID:" in footer_text:
+                    # Extract prompt info from embed title: "💬 REACTIVE • {prompt_key} v{version}"
+                    if embed.title and "•" in embed.title:
+                        parts = embed.title.split("•")[1].strip().split()
+                        self.prompt_key = parts[0]
+                        self.version = int(parts[1].replace("v", ""))
+                    else:
+                        await interaction.response.send_message(
+                            "❌ Error: Could not parse prompt information.",
+                            ephemeral=True,
+                        )
+                        return
+                else:
+                    await interaction.response.send_message(
+                        "❌ This message type doesn't have prompt information.",
+                        ephemeral=True,
+                    )
+                    return
+            except (IndexError, ValueError):
+                await interaction.response.send_message(
+                    "❌ Error: Invalid message format.",
+                    ephemeral=True,
+                )
+                return
+
+            # Need to fetch rendered prompt from database
+            # For now, show error - will implement DB fetch in next iteration
+            await interaction.response.send_message(
+                "❌ Prompt viewing after bot restart not yet implemented. "
+                "Please use VIEW PROMPT immediately after message is posted.",
+                ephemeral=True,
+            )
+            return
+
+        if not self.prompt_key or not self.version or not self.rendered_prompt:
+            await interaction.response.send_message(
+                "❌ Error: Prompt information not available.",
+                ephemeral=True,
+            )
+            return
+
         modal = PromptViewModal(self.prompt_key, self.version, self.rendered_prompt)
         await interaction.response.send_modal(modal)
         logger.debug("Prompt modal shown", user=interaction.user.name, audit_id=str(self.audit_id))
@@ -153,11 +208,51 @@ class DreamMirrorView(discord.ui.View):
         label="FEEDBACK",
         emoji="💬",
         style=discord.ButtonStyle.primary,
+        custom_id="dream_mirror:feedback",
     )
     async def feedback_button(
         self, interaction: discord.Interaction, _button: discord.ui.Button
     ) -> None:
         """Handle FEEDBACK button click."""
+        # Extract data from embed footer if not in memory (persistent view)
+        if not self.audit_id and interaction.message and interaction.message.embeds:
+            embed = interaction.message.embeds[0]
+            if not embed.footer or not embed.footer.text:
+                await interaction.response.send_message(
+                    "❌ Error: Could not find audit information.",
+                    ephemeral=True,
+                )
+                return
+
+            # Parse footer to get audit_id and message_id
+            try:
+                footer_text = embed.footer.text
+                if "Audit ID:" in footer_text:
+                    audit_id_str = footer_text.split("Audit ID: ")[1]
+                    self.audit_id = UUID(audit_id_str)
+                    # Message ID would need to be fetched from DB or stored differently
+                    # For now, use interaction message ID as fallback
+                    self.message_id = interaction.message.id
+                else:
+                    await interaction.response.send_message(
+                        "❌ This message type doesn't support feedback.",
+                        ephemeral=True,
+                    )
+                    return
+            except (IndexError, ValueError):
+                await interaction.response.send_message(
+                    "❌ Error: Invalid audit ID format.",
+                    ephemeral=True,
+                )
+                return
+
+        if not self.audit_id or not self.message_id:
+            await interaction.response.send_message(
+                "❌ Error: Message information not available.",
+                ephemeral=True,
+            )
+            return
+
         modal = FeedbackModal(self.audit_id, self.message_id)
         await interaction.response.send_modal(modal)
         logger.debug(
@@ -255,7 +350,7 @@ class DreamMirrorBuilder:
         main_message_url: str,
         reasoning: str,
         main_message_id: int,
-    ) -> discord.Embed:
+    ) -> tuple[discord.Embed, DreamMirrorView]:
         """Build a proactive message mirror.
 
         Args:
@@ -265,7 +360,7 @@ class DreamMirrorBuilder:
             main_message_id: Discord message ID in main channel
 
         Returns:
-            Embed for the proactive mirror message
+            Tuple of (embed, view) for the proactive mirror message
         """
         embed = discord.Embed(
             title="🌟 PROACTIVE CHECK-IN",
@@ -295,7 +390,11 @@ class DreamMirrorBuilder:
 
         embed.set_footer(text=f"Message ID: {main_message_id}")
 
-        return embed
+        # Proactive messages don't have audit_id or rendered prompt yet
+        # Create view without interactive buttons for now
+        view = DreamMirrorView()
+
+        return embed, view
 
     @staticmethod
     def build_extraction_mirror(
@@ -304,7 +403,7 @@ class DreamMirrorBuilder:
         triples: list[dict[str, str]],
         objectives: list[dict[str, Any]],
         main_message_id: int,
-    ) -> discord.Embed:
+    ) -> tuple[discord.Embed, DreamMirrorView]:
         """Build an extraction results mirror.
 
         Args:
@@ -315,7 +414,7 @@ class DreamMirrorBuilder:
             main_message_id: Discord message ID in main channel
 
         Returns:
-            Embed for the extraction mirror message
+            Tuple of (embed, view) for the extraction mirror message
         """
         embed = discord.Embed(
             title="🧠 EXTRACTION RESULTS",
@@ -379,4 +478,8 @@ class DreamMirrorBuilder:
 
         embed.set_footer(text=f"Message ID: {main_message_id}")
 
-        return embed
+        # Extraction messages don't have audit_id or rendered prompt
+        # Create view without interactive buttons for now
+        view = DreamMirrorView()
+
+        return embed, view

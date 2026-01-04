@@ -17,7 +17,7 @@ from discord.ext import commands
 
 from lattice.core import handlers, memory_orchestrator, response_generator
 from lattice.core.handlers import WASTEBASKET_EMOJI
-from lattice.discord_client.dream import DreamMirrorBuilder
+from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
 from lattice.dreaming.approval import ProposalApprovalView
 from lattice.memory import episodic, feedback_detection, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
@@ -93,8 +93,9 @@ class LatticeBot(commands.Bot):
             )
             await self._dreaming_scheduler.start()
 
-            # Register persistent view for proposal approval (allows buttons to work after restart)
-            self.add_view(ProposalApprovalView(proposal_id=None))
+            # Register persistent views for bot restart resilience
+            self.add_view(ProposalApprovalView(proposal_id=None))  # Dreaming proposals
+            self.add_view(DreamMirrorView())  # Dream channel mirrors
 
             logger.info("Schedulers started (proactive + dreaming)")
         else:
