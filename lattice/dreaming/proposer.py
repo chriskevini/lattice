@@ -338,7 +338,7 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
             prompt_key=proposal.prompt_key,
         )
 
-        return proposal_id
+        return UUID(proposal_id)
 
 
 async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
@@ -559,4 +559,4 @@ async def reject_proposal(
                 reviewed_by=reviewed_by,
             )
 
-        return rejected
+        return bool(rejected)

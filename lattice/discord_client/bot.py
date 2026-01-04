@@ -438,7 +438,7 @@ async def setup_commands(bot: LatticeBot) -> None:
 
     @bot.command(name="dream")  # type: ignore[arg-type]
     @commands.has_permissions(administrator=True)
-    async def trigger_dream_cycle(ctx: commands.Context) -> None:
+    async def trigger_dream_cycle(ctx: commands.Context[LatticeBot]) -> None:
         """Manually trigger the dreaming cycle (admin only)."""
         if ctx.channel.id != bot.dream_channel_id:
             await ctx.send("⚠️ This command can only be used in the dream channel.")

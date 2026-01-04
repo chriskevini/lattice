@@ -46,7 +46,7 @@ class PromptViewModal(discord.ui.Modal):
 
         self.prompt_display: Any = discord.ui.TextInput(
             label="Rendered Template (Read-Only)",
-            style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
+            style=discord.InputTextStyle.paragraph,
             value=display_prompt,
             required=False,
             max_length=MODAL_TEXT_LIMIT,
@@ -66,7 +66,7 @@ class PromptViewModal(discord.ui.Modal):
         )
 
 
-class FeedbackModal(discord.ui.Modal):  # type: ignore[misc]
+class FeedbackModal(discord.ui.Modal):
     """Modal for submitting detailed feedback with Select dropdown for sentiment."""
 
     def __init__(self, audit_id: UUID, message_id: int) -> None:
@@ -102,7 +102,7 @@ class FeedbackModal(discord.ui.Modal):  # type: ignore[misc]
 
         # Comments
         self.feedback_text: Any = discord.ui.InputText(
-            style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
+            style=discord.InputTextStyle.paragraph,
             placeholder="Provide details about what could be improved...",
             required=True,
             max_length=1000,
@@ -179,15 +179,13 @@ class DreamMirrorView(discord.ui.View):
         self.rendered_prompt = rendered_prompt
         self.has_feedback = has_feedback
 
-    @discord.ui.button(  # type: ignore[arg-type]
+    @discord.ui.button(
         label="VIEW PROMPT",
         emoji="📋",
         style=discord.ButtonStyle.secondary,
         custom_id="dream_mirror:view_prompt",
     )
-    async def view_prompt_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
-    ) -> None:
+    async def view_prompt_button(self, interaction: discord.Interaction) -> None:
         """Handle VIEW PROMPT button click."""
         # Extract data from embed footer if not in memory (persistent view)
         if not self.audit_id and interaction.message and interaction.message.embeds:
@@ -251,15 +249,13 @@ class DreamMirrorView(discord.ui.View):
             audit_id=str(self.audit_id),
         )
 
-    @discord.ui.button(  # type: ignore[arg-type]
+    @discord.ui.button(
         label="FEEDBACK",
         emoji="💬",
         style=discord.ButtonStyle.primary,
         custom_id="dream_mirror:feedback",
     )
-    async def feedback_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
-    ) -> None:
+    async def feedback_button(self, interaction: discord.Interaction) -> None:
         """Handle FEEDBACK button click."""
         # Extract data from embed footer if not in memory (persistent view)
         if not self.audit_id and interaction.message and interaction.message.embeds:
@@ -308,15 +304,13 @@ class DreamMirrorView(discord.ui.View):
             audit_id=str(self.audit_id),
         )
 
-    @discord.ui.button(  # type: ignore[arg-type]
+    @discord.ui.button(
         label="GOOD",
         emoji="👍",
         style=discord.ButtonStyle.success,
         custom_id="dream_mirror:quick_positive",
     )
-    async def quick_positive_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
-    ) -> None:
+    async def quick_positive_button(self, interaction: discord.Interaction) -> None:
         """Handle quick positive feedback without modal."""
         # Extract data from embed footer if not in memory (persistent view)
         if not self.audit_id and interaction.message and interaction.message.embeds:
@@ -374,15 +368,13 @@ class DreamMirrorView(discord.ui.View):
             audit_id=str(self.audit_id),
         )
 
-    @discord.ui.button(  # type: ignore[arg-type]
+    @discord.ui.button(
         label="BAD",
         emoji="👎",
         style=discord.ButtonStyle.danger,
         custom_id="dream_mirror:quick_negative",
-    )  # type: ignore[arg-type]
-    async def quick_negative_button(
-        self, interaction: discord.Interaction, _button: discord.ui.Button[Any]
-    ) -> None:
+    )
+    async def quick_negative_button(self, interaction: discord.Interaction) -> None:
         """Handle quick negative feedback without modal."""
         # Extract data from embed footer if not in memory (persistent view)
         if not self.audit_id and interaction.message and interaction.message.embeds:

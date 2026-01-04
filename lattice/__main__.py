@@ -76,7 +76,9 @@ async def main() -> None:
         await init_db.init_database()
         logger.info("Database initialization check complete")
     except Exception as e:
-        logger.warning("Database initialization failed (may already exist)", error=str(e))
+        logger.warning(
+            "Database initialization failed (may already exist)", error=str(e)
+        )
 
     bot = LatticeBot()
     try:

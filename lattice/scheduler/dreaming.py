@@ -9,7 +9,7 @@ import contextlib
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
-from typing import Any
+from typing import Any, cast
 
 import asyncpg
 import discord
@@ -279,7 +279,7 @@ class DreamingScheduler:
             )
             return None
 
-        return channel
+        return cast(discord.TextChannel, channel)
 
     async def _post_empty_summary(self, channel: discord.TextChannel) -> None:
         """Post message when no proposals to display.

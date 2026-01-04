@@ -85,7 +85,9 @@ async def store_feedback(feedback: UserFeedback) -> UUID:
         return feedback_id
 
 
-async def get_feedback_by_user_message(user_discord_message_id: int) -> UserFeedback | None:
+async def get_feedback_by_user_message(
+    user_discord_message_id: int,
+) -> UserFeedback | None:
     """Get feedback by the user's Discord message ID.
 
     Args:

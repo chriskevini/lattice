@@ -24,7 +24,9 @@ def get_migration_files() -> list[Path]:
     if not MIGRATIONS_DIR.exists():
         return []
     pattern = re.compile(r"^\d{3}_.+\.sql$")
-    files = [f for f in MIGRATIONS_DIR.iterdir() if f.is_file() and pattern.match(f.name)]
+    files = [
+        f for f in MIGRATIONS_DIR.iterdir() if f.is_file() and pattern.match(f.name)
+    ]
     return sorted(files)
 
 
@@ -117,7 +119,9 @@ async def run_migrations() -> None:
 
         applied_migrations = await get_applied_migrations(conn)
         pending_migrations = [
-            f for f in migration_files if extract_migration_name(f) not in applied_migrations
+            f
+            for f in migration_files
+            if extract_migration_name(f) not in applied_migrations
         ]
 
         if not pending_migrations:
@@ -131,7 +135,10 @@ async def run_migrations() -> None:
             try:
                 await apply_migration(conn, migration_file)
             except Exception as e:
-                print(f"ERROR: Failed to apply {migration_file.name}: {e}", file=sys.stderr)
+                print(
+                    f"ERROR: Failed to apply {migration_file.name}: {e}",
+                    file=sys.stderr,
+                )
                 raise
 
         print("-" * 50)

@@ -79,7 +79,9 @@ async def get_objectives_context() -> str:
     if not objectives:
         return "No active objectives."
 
-    lines: list[str] = [f"- {obj['description']} ({obj['status']})" for obj in objectives]
+    lines: list[str] = [
+        f"- {obj['description']} ({obj['status']})" for obj in objectives
+    ]
     return "User goals:\n" + "\n".join(lines)
 
 
@@ -94,7 +96,9 @@ async def get_default_channel_id() -> int | None:
     """
     main_channel_id = os.getenv("DISCORD_MAIN_CHANNEL_ID")
     if not main_channel_id:
-        logger.warning("DISCORD_MAIN_CHANNEL_ID not set, cannot send proactive messages")
+        logger.warning(
+            "DISCORD_MAIN_CHANNEL_ID not set, cannot send proactive messages"
+        )
         return None
     return int(main_channel_id)
 

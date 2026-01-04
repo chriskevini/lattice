@@ -68,7 +68,9 @@ class TestEpisodicMemoryFunctions:
         )
 
         with patch("lattice.memory.episodic.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             message = EpisodicMessage(
@@ -111,7 +113,9 @@ class TestEpisodicMemoryFunctions:
         )
 
         with patch("lattice.memory.episodic.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             messages = await get_recent_messages(channel_id=67890, limit=10)
@@ -169,7 +173,9 @@ class TestSemanticMemoryFunctions:
             patch("lattice.memory.semantic.db_pool") as mock_pool,
             patch("lattice.memory.semantic.embedding_model") as mock_embed,
         ):
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
             mock_embed.encode_single.return_value = [0.1, 0.2, 0.3]
 
@@ -191,7 +197,9 @@ class TestSemanticMemoryFunctions:
             patch("lattice.memory.semantic.db_pool") as mock_pool,
             patch("lattice.memory.semantic.embedding_model") as mock_embed,
         ):
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             fact = StableFact(content="Test fact", embedding=[0.5, 0.6, 0.7])
@@ -227,7 +235,9 @@ class TestSemanticMemoryFunctions:
     @pytest.mark.asyncio
     async def test_search_similar_facts_invalid_threshold(self) -> None:
         """Test that invalid threshold raises ValueError."""
-        with pytest.raises(ValueError, match=r"similarity_threshold must be between 0\.0 and 1\.0"):
+        with pytest.raises(
+            ValueError, match=r"similarity_threshold must be between 0\.0 and 1\.0"
+        ):
             await search_similar_facts(query="test", limit=5, similarity_threshold=1.5)
 
 
@@ -279,7 +289,9 @@ class TestProceduralMemoryFunctions:
         )
 
         with patch("lattice.memory.procedural.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_prompt("test_key")
@@ -295,7 +307,9 @@ class TestProceduralMemoryFunctions:
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
         with patch("lattice.memory.procedural.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_prompt("nonexistent")
@@ -309,7 +323,9 @@ class TestProceduralMemoryFunctions:
         mock_conn.execute = AsyncMock()
 
         with patch("lattice.memory.procedural.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             prompt = PromptTemplate(prompt_key="new_key", template="New template")
@@ -515,7 +531,9 @@ class TestFeedbackDetectionFunctions:
     def test_is_invisible_feedback_no_dream_channel_configured(self) -> None:
         """Test that feedback works without dream channel configured (backward compat)."""
         message = MockMessage(content="Feedback", is_reply=True)
-        result = feedback_detection.is_invisible_feedback(message, dream_channel_id=None)
+        result = feedback_detection.is_invisible_feedback(
+            message, dream_channel_id=None
+        )
 
         assert result.detected is True
         assert result.content == "Feedback"

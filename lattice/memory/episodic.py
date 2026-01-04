@@ -89,7 +89,9 @@ async def store_message(message: EpisodicMessage) -> UUID:
             message.content,
             message.is_bot,
             message.is_proactive,
-            json.dumps(message.generation_metadata) if message.generation_metadata else None,
+            json.dumps(message.generation_metadata)
+            if message.generation_metadata
+            else None,
         )
 
         message_id = cast("UUID", row["id"])
@@ -195,7 +197,9 @@ async def consolidate_message(
     )
 
     logger.info(
-        "LLM response received", message_id=str(message_id), content_preview=result.content[:100]
+        "LLM response received",
+        message_id=str(message_id),
+        content_preview=result.content[:100],
     )
 
     # Create audit record for extraction (not the same as BASIC_RESPONSE)
@@ -225,7 +229,9 @@ async def consolidate_message(
                 subject_id = await _ensure_fact(
                     triple["subject"], message_id, conn, embedding_model
                 )
-                object_id = await _ensure_fact(triple["object"], message_id, conn, embedding_model)
+                object_id = await _ensure_fact(
+                    triple["object"], message_id, conn, embedding_model
+                )
 
                 await conn.execute(
                     """
@@ -395,7 +401,11 @@ async def store_objectives(
         for objective in objectives:
             description = cast("str", objective["description"])
             saliency_value = objective["saliency"]
-            saliency = float(saliency_value) if isinstance(saliency_value, (int, float)) else 0.5
+            saliency = (
+                float(saliency_value)
+                if isinstance(saliency_value, (int, float))
+                else 0.5
+            )
             status = cast("str", objective["status"])
 
             normalized = description.lower().strip()
@@ -409,7 +419,9 @@ async def store_objectives(
 
             if existing:
                 current_saliency = (
-                    float(existing["saliency_score"]) if existing["saliency_score"] else 0.5
+                    float(existing["saliency_score"])
+                    if existing["saliency_score"]
+                    else 0.5
                 )
                 status_changed = existing["status"] != status
                 saliency_changed = abs(current_saliency - saliency) > MIN_SALIENCY_DELTA

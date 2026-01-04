@@ -104,7 +104,9 @@ async def search_similar_facts(
     if limit < 1 or limit > MAX_SEARCH_LIMIT:
         msg = f"limit must be between 1 and {MAX_SEARCH_LIMIT}, got {limit}"
         raise ValueError(msg)
-    if not (MIN_SIMILARITY_THRESHOLD <= similarity_threshold <= MAX_SIMILARITY_THRESHOLD):
+    if not (
+        MIN_SIMILARITY_THRESHOLD <= similarity_threshold <= MAX_SIMILARITY_THRESHOLD
+    ):
         msg = f"similarity_threshold must be between 0.0 and 1.0, got {similarity_threshold}"
         raise ValueError(msg)
 

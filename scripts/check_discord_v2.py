@@ -103,10 +103,14 @@ def main() -> int:
         print("   ✅ class MyView(discord.ui.DesignerView):")
         print()
         print("2. Replace @discord.ui.button with ActionRow + Button:")
-        print("   ❌ @discord.ui.button(label='Click', style=discord.ButtonStyle.primary)")
+        print(
+            "   ❌ @discord.ui.button(label='Click', style=discord.ButtonStyle.primary)"
+        )
         print("      async def my_button(self, interaction, button):")
         print()
-        print("   ✅ button = discord.ui.Button(label='Click', style=discord.ButtonStyle.primary)")
+        print(
+            "   ✅ button = discord.ui.Button(label='Click', style=discord.ButtonStyle.primary)"
+        )
         print("      button.callback = self._make_callback()")
         print("      action_row = discord.ui.ActionRow(button)")
         print("      self.add_item(action_row)")

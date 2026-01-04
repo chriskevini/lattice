@@ -21,7 +21,7 @@ MODAL_TEXT_SAFE_LIMIT = 3900  # Leave room for truncation message
 MAX_DISPLAY_ITEMS = 5  # Maximum items to display in extraction mirrors
 
 
-class PromptViewView(discord.ui.DesignerView):  # type: ignore[attr-defined]
+class PromptViewView(discord.ui.DesignerView):
     """View for displaying full rendered prompts with TextDisplay (Components V2)."""
 
     def __init__(self, rendered_prompt: str) -> None:
@@ -33,7 +33,7 @@ class PromptViewView(discord.ui.DesignerView):  # type: ignore[attr-defined]
         super().__init__(timeout=60)  # 60 second timeout for ephemeral views
 
         # Components V2: TextDisplay shows unlimited scrollable text (not limited to 5 lines)
-        text_display: Any = discord.ui.TextDisplay(content=rendered_prompt)  # type: ignore[attr-defined]
+        text_display: Any = discord.ui.TextDisplay(content=rendered_prompt)
         self.add_item(text_display)
 
 
@@ -148,7 +148,7 @@ class FeedbackModal(discord.ui.Modal):
         )
 
 
-class DreamMirrorView(discord.ui.DesignerView):  # type: ignore[attr-defined]
+class DreamMirrorView(discord.ui.DesignerView):
     """Interactive view for dream channel mirrors with buttons (Components V2)."""
 
     def __init__(

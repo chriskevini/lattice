@@ -51,10 +51,13 @@ async def generate_response(
         ts = msg.timestamp.strftime("%Y-%m-%d %H:%M")
         return f"[{ts}] {msg.role}: {msg.content}"
 
-    episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages[-5:])
+    episodic_context = "\n".join(
+        format_with_timestamp(msg) for msg in recent_messages[-5:]
+    )
 
     semantic_context = (
-        "\n".join([f"- {fact.content}" for fact in semantic_facts]) or "No relevant facts found."
+        "\n".join([f"- {fact.content}" for fact in semantic_facts])
+        or "No relevant facts found."
     )
 
     logger.debug(

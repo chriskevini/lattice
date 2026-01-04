@@ -91,7 +91,9 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_objectives_context",
                 return_value="No active objectives.",
             ),
-            patch("lattice.scheduler.triggers.get_default_channel_id", return_value=None),
+            patch(
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=None
+            ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch("lattice.scheduler.triggers.get_system_health", return_value="15"),
         ):

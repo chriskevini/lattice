@@ -49,7 +49,10 @@ class TestParseTriples:
 
     def test_invalid_field_types(self) -> None:
         """Test parsing JSON with invalid field types."""
-        assert parse_triples('[{"subject": "Alice", "predicate": 123, "object": "Acme"}]') == []
+        assert (
+            parse_triples('[{"subject": "Alice", "predicate": 123, "object": "Acme"}]')
+            == []
+        )
 
     def test_with_markdown_code_block(self) -> None:
         """Test parsing JSON with markdown code block."""
@@ -68,7 +71,9 @@ class TestParseTriples:
 
     def test_predicate_normalization(self) -> None:
         """Test that predicates are normalized to lowercase."""
-        result = parse_triples('[{"subject": "Alice", "predicate": "WORKS_AT", "object": "Acme"}]')
+        result = parse_triples(
+            '[{"subject": "Alice", "predicate": "WORKS_AT", "object": "Acme"}]'
+        )
         assert len(result) == 1
         assert result[0]["predicate"] == "works_at"
 
@@ -235,9 +240,13 @@ class TestGraphTraversal:
         assert result[0]["predicate"] == "acquired"
 
     @pytest.mark.asyncio
-    async def test_empty_result(self, traverser: GraphTraversal, db_pool: MagicMock) -> None:
+    async def test_empty_result(
+        self, traverser: GraphTraversal, db_pool: MagicMock
+    ) -> None:
         """Test traversal returns empty list when no relationships exist."""
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(return_value=[])
+        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
+            return_value=[]
+        )
 
         result = await traverser.traverse_from_fact(uuid4())
 

@@ -78,24 +78,23 @@ class TemplateComparisonView(discord.ui.DesignerView):
         )
 
         # Approval buttons in ActionRow
-        approve_button: Any = discord.ui.Button(  # type: ignore[attr-defined]
+        approve_button: Any = discord.ui.Button(
             label="APPROVE",
             emoji="✅",
-            style=discord.ButtonStyle.success,  # type: ignore[attr-defined]
+            style=discord.ButtonStyle.success,
             custom_id="dream_proposal:approve",
         )
-        reject_button: Any = discord.ui.Button(  # type: ignore[attr-defined]
+        reject_button: Any = discord.ui.Button(
             label="REJECT",
             emoji="❌",
-            style=discord.ButtonStyle.danger,  # type: ignore[attr-defined]
+            style=discord.ButtonStyle.danger,
             custom_id="dream_proposal:reject",
         )
 
-        # Add callback handlers
-        approve_button.callback = self._make_approve_callback()  # type: ignore[method-assign]
-        reject_button.callback = self._make_reject_callback()  # type: ignore[method-assign]
+        approve_button.callback = self._make_approve_callback()
+        reject_button.callback = self._make_reject_callback()
 
-        action_row: Any = discord.ui.ActionRow(approve_button, reject_button)  # type: ignore[attr-defined]
+        action_row: Any = discord.ui.ActionRow(approve_button, reject_button)
 
         # Add all sections and action row to view
         for item in changes_section:
@@ -125,12 +124,10 @@ class TemplateComparisonView(discord.ui.DesignerView):
             List containing [TextDisplay, Separator]
         """
         formatted = f"```\n{content}\n```" if code_block else content
-        display: Any = discord.ui.TextDisplay(  # type: ignore[attr-defined]
-            content=f"{title}\n\n{formatted}"
-        )
-        separator: Any = discord.ui.Separator(  # type: ignore[attr-defined]
+        display: Any = discord.ui.TextDisplay(content=f"{title}\n\n{formatted}")
+        separator: Any = discord.ui.Separator(
             divider=True,
-            spacing=discord.SeparatorSpacingSize.small,  # type: ignore[attr-defined]
+            spacing=discord.SeparatorSpacingSize.small,
         )
         return [display, separator]
 
@@ -164,7 +161,7 @@ class TemplateComparisonView(discord.ui.DesignerView):
             return None
         return proposal
 
-    def _make_approve_callback(self):  # noqa: ANN202 - Callback factory pattern
+    def _make_approve_callback(self) -> Any:
         """Create approve button callback."""
 
         async def approve_callback(interaction: discord.Interaction) -> None:
@@ -200,7 +197,7 @@ class TemplateComparisonView(discord.ui.DesignerView):
 
         return approve_callback
 
-    def _make_reject_callback(self):  # noqa: ANN202 - Callback factory pattern
+    def _make_reject_callback(self) -> Any:
         """Create reject button callback."""
 
         async def reject_callback(interaction: discord.Interaction) -> None:

@@ -14,8 +14,17 @@ import structlog
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.discord_client.dream import DreamMirrorBuilder
 from lattice.memory import episodic
-from lattice.scheduler.triggers import decide_proactive, get_current_interval, set_current_interval
-from lattice.utils.database import db_pool, get_next_check_at, get_system_health, set_next_check_at
+from lattice.scheduler.triggers import (
+    decide_proactive,
+    get_current_interval,
+    set_current_interval,
+)
+from lattice.utils.database import (
+    db_pool,
+    get_next_check_at,
+    get_system_health,
+    set_next_check_at,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -92,7 +101,9 @@ class ProactiveScheduler:
                 logger.warning("No valid channel for proactive message, skipping")
                 # Treat as "wait" - exponential backoff
                 current_interval = await get_current_interval()
-                max_interval = int(await get_system_health("scheduler_max_interval") or 1440)
+                max_interval = int(
+                    await get_system_health("scheduler_max_interval") or 1440
+                )
                 new_interval = min(current_interval * 2, max_interval)
                 await set_current_interval(new_interval)
                 next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
@@ -129,20 +140,26 @@ class ProactiveScheduler:
                     )
 
                     # Reset to base interval after successful message
-                    base_interval = int(await get_system_health("scheduler_base_interval") or 15)
+                    base_interval = int(
+                        await get_system_health("scheduler_base_interval") or 15
+                    )
                     await set_current_interval(base_interval)
                     next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
                 else:
                     # Message send failed - treat as "wait" with exponential backoff
                     current_interval = await get_current_interval()
-                    max_interval = int(await get_system_health("scheduler_max_interval") or 1440)
+                    max_interval = int(
+                        await get_system_health("scheduler_max_interval") or 1440
+                    )
                     new_interval = min(current_interval * 2, max_interval)
                     await set_current_interval(new_interval)
                     next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
         else:
             # AI decided to wait - exponential backoff
             current_interval = await get_current_interval()
-            max_interval = int(await get_system_health("scheduler_max_interval") or 1440)
+            max_interval = int(
+                await get_system_health("scheduler_max_interval") or 1440
+            )
             new_interval = min(current_interval * 2, max_interval)
             await set_current_interval(new_interval)
             next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
