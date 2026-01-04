@@ -81,12 +81,14 @@ class PromptMetrics:
 async def analyze_prompt_effectiveness(
     min_uses: int = 10,
     lookback_days: int = 30,
+    min_feedback: int = 10,
 ) -> list[PromptMetrics]:
     """Analyze prompt effectiveness from audit data.
 
     Args:
         min_uses: Minimum number of uses to consider for analysis
         lookback_days: Number of days to look back for analysis
+        min_feedback: Minimum number of feedback items to consider for analysis
 
     Returns:
         List of prompt metrics, sorted by priority (highest first)
@@ -163,7 +165,7 @@ async def analyze_prompt_effectiveness(
             """,
             min_uses,
             lookback_days,
-            10,  # Minimum feedback threshold
+            min_feedback,
         )
 
         metrics = [
