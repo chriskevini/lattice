@@ -80,6 +80,9 @@ async def main() -> None:
 
     bot = LatticeBot()
     try:
+        # Manually call setup_hook to ensure database is initialized
+        # py-cord should call this automatically, but we ensure it's called
+        await bot.setup_hook()
         await bot.start(discord_token)
     except KeyboardInterrupt:
         logger.info("Received shutdown signal")

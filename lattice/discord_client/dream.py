@@ -3,6 +3,7 @@
 Unified UI for dream channel mirrored messages using Discord embeds, buttons, and modals.
 """
 
+import re
 from typing import Any
 from uuid import UUID
 
@@ -63,8 +64,8 @@ class PromptViewModal(discord.ui.Modal):
         logger.debug("Prompt modal dismissed", user=interaction.user.name)
 
 
-class FeedbackModal(discord.ui.Modal):
-    """Modal for submitting feedback on bot responses."""
+class FeedbackModal(discord.ui.DesignerModal):  # type: ignore[misc]
+    """Modal for submitting detailed feedback with Select dropdown for sentiment."""
 
     def __init__(self, audit_id: UUID, message_id: int) -> None:
         """Initialize feedback modal.
@@ -77,40 +78,52 @@ class FeedbackModal(discord.ui.Modal):
         self.audit_id = audit_id
         self.message_id = message_id
 
-        # Sentiment selection (short text for dropdown-like behavior)
-        self.sentiment_input: discord.ui.TextInput = discord.ui.TextInput(
-            label="Sentiment (positive/negative/neutral)",
-            style=discord.TextStyle.short,
-            placeholder="Enter: positive, negative, or neutral",
+        # Sentiment selection using Select dropdown wrapped in Label
+        sentiment_label = discord.ui.Label(  # type: ignore[call-arg]
+            label="Sentiment",
+            description="How was this response?",
+        )
+        self.sentiment_select = discord.ui.Select(  # type: ignore[call-arg]
+            select_type=discord.ComponentType.string_select,
+            placeholder="Choose sentiment...",
+            options=[
+                discord.SelectOption(
+                    label="Positive",
+                    value="positive",
+                    emoji="👍",
+                    description="Good response",
+                ),
+                discord.SelectOption(
+                    label="Negative",
+                    value="negative",
+                    emoji="👎",
+                    description="Needs improvement",
+                    default=True,  # Default to negative as requested
+                ),
+            ],
+            custom_id="sentiment_select",
             required=True,
-            min_length=7,  # "neutral" is shortest
-            max_length=10,  # "negative" is longest
         )
-        self.add_item(self.sentiment_input)
+        sentiment_label.set_item(self.sentiment_select)  # type: ignore[attr-defined]
+        self.add_item(sentiment_label)
 
-        # Comments
-        self.feedback_text: discord.ui.TextInput = discord.ui.TextInput(
-            label="Comments (optional)",
-            style=discord.TextStyle.paragraph,
+        # Comments - NOW REQUIRED
+        comment_label = discord.ui.Label(label="Comments")  # type: ignore[call-arg]
+        self.feedback_text = discord.ui.InputText(  # type: ignore[attr-defined, call-arg]
+            style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
             placeholder="Provide details about what could be improved...",
-            required=False,
+            required=True,
             max_length=1000,
+            custom_id="feedback_text",
         )
-        self.add_item(self.feedback_text)
+        comment_label.set_item(self.feedback_text)  # type: ignore[attr-defined]
+        self.add_item(comment_label)
 
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def callback(self, interaction: discord.Interaction) -> None:
         """Handle feedback submission."""
-        # Validate sentiment
-        sentiment_raw = self.sentiment_input.value.strip().lower()
-        if sentiment_raw not in ("positive", "negative", "neutral"):
-            await interaction.response.send_message(
-                "❌ Invalid sentiment. Please use: positive, negative, or neutral",
-                ephemeral=True,
-            )
-            return
-
-        sentiment = sentiment_raw
-        feedback_content = self.feedback_text.value or "(No comment provided)"
+        # Get sentiment from select dropdown
+        sentiment = self.sentiment_select.values[0] if self.sentiment_select.values else "negative"
+        feedback_content = self.feedback_text.value
 
         # Store feedback using UserFeedback class
         feedback = user_feedback.UserFeedback(
@@ -121,8 +134,8 @@ class FeedbackModal(discord.ui.Modal):
         )
         await user_feedback.store_feedback(feedback)
 
-        # Emoji based on sentiment
-        emoji = {"positive": "👍", "negative": "👎", "neutral": "🤷"}[sentiment]
+        # Emoji based on sentiment (only positive/negative)
+        emoji = {"positive": "👍", "negative": "👎"}[sentiment]
 
         await interaction.response.send_message(
             f"{emoji} **{sentiment.title()}** feedback recorded! "
@@ -135,7 +148,7 @@ class FeedbackModal(discord.ui.Modal):
             audit_id=str(self.audit_id),
             message_id=self.message_id,
             sentiment=sentiment,
-            user=interaction.user.name,
+            user=interaction.user.name if interaction.user else "unknown",
         )
 
 
@@ -290,6 +303,134 @@ class DreamMirrorView(discord.ui.View):
         await interaction.response.send_modal(modal)
         logger.debug(
             "Feedback modal shown", user=interaction.user.name, audit_id=str(self.audit_id)
+        )
+
+    @discord.ui.button(
+        label="GOOD",
+        emoji="👍",
+        style=discord.ButtonStyle.success,
+        custom_id="dream_mirror:quick_positive",
+    )  # type: ignore[arg-type]
+    async def quick_positive_button(
+        self, interaction: discord.Interaction, _button: discord.ui.Button
+    ) -> None:
+        """Handle quick positive feedback without modal."""
+        # Extract data from embed footer if not in memory (persistent view)
+        if not self.audit_id and interaction.message and interaction.message.embeds:
+            embed = interaction.message.embeds[0]
+            if not embed.footer or not embed.footer.text:
+                await interaction.response.send_message(
+                    "❌ Error: Could not find audit information.",
+                    ephemeral=True,
+                )
+                return
+
+            footer_text = embed.footer.text
+            try:
+                audit_id_match = re.search(r"Audit: ([a-f0-9-]{36})", footer_text)
+                if audit_id_match:
+                    self.audit_id = UUID(audit_id_match.group(1))
+                    self.message_id = interaction.message.id
+                else:
+                    await interaction.response.send_message(
+                        "❌ This message type doesn't support feedback.",
+                        ephemeral=True,
+                    )
+                    return
+            except (IndexError, ValueError):
+                await interaction.response.send_message(
+                    "❌ Error: Invalid audit ID format.",
+                    ephemeral=True,
+                )
+                return
+
+        if not self.audit_id or not self.message_id:
+            await interaction.response.send_message(
+                "❌ Error: Message information not available.",
+                ephemeral=True,
+            )
+            return
+
+        # Store positive feedback with auto-generated comment
+        feedback = user_feedback.UserFeedback(
+            content="(Quick positive feedback)",
+            sentiment="positive",
+            referenced_discord_message_id=self.message_id,
+            user_discord_message_id=(interaction.message.id if interaction.message else None),
+        )
+        await user_feedback.store_feedback(feedback)
+        await interaction.response.send_message(
+            "👍 **Positive** feedback recorded!",
+            ephemeral=True,
+        )
+        logger.debug(
+            "Quick positive feedback recorded",
+            user=interaction.user.name if interaction.user else "Unknown",
+            audit_id=str(self.audit_id),
+        )
+
+    @discord.ui.button(
+        label="BAD",
+        emoji="👎",
+        style=discord.ButtonStyle.danger,
+        custom_id="dream_mirror:quick_negative",
+    )  # type: ignore[arg-type]
+    async def quick_negative_button(
+        self, interaction: discord.Interaction, _button: discord.ui.Button
+    ) -> None:
+        """Handle quick negative feedback without modal."""
+        # Extract data from embed footer if not in memory (persistent view)
+        if not self.audit_id and interaction.message and interaction.message.embeds:
+            embed = interaction.message.embeds[0]
+            if not embed.footer or not embed.footer.text:
+                await interaction.response.send_message(
+                    "❌ Error: Could not find audit information.",
+                    ephemeral=True,
+                )
+                return
+
+            footer_text = embed.footer.text
+            try:
+                audit_id_match = re.search(r"Audit: ([a-f0-9-]{36})", footer_text)
+                if audit_id_match:
+                    self.audit_id = UUID(audit_id_match.group(1))
+                    self.message_id = interaction.message.id
+                else:
+                    await interaction.response.send_message(
+                        "❌ This message type doesn't support feedback.",
+                        ephemeral=True,
+                    )
+                    return
+            except (IndexError, ValueError):
+                await interaction.response.send_message(
+                    "❌ Error: Invalid audit ID format.",
+                    ephemeral=True,
+                )
+                return
+
+        if not self.audit_id or not self.message_id:
+            await interaction.response.send_message(
+                "❌ Error: Message information not available.",
+                ephemeral=True,
+            )
+            return
+
+        # Store negative feedback with auto-generated comment
+        feedback = user_feedback.UserFeedback(
+            content="(Quick negative feedback)",
+            sentiment="negative",
+            referenced_discord_message_id=self.message_id,
+            user_discord_message_id=(interaction.message.id if interaction.message else None),
+        )
+        await user_feedback.store_feedback(feedback)
+        await interaction.response.send_message(
+            "👎 **Negative** feedback recorded!",
+            ephemeral=True,
+        )
+        logger.debug(
+            "Quick negative feedback recorded",
+            user=interaction.user.name if interaction.user else "Unknown",
+            audit_id=str(self.audit_id),
         )
 
 

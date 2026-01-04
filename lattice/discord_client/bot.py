@@ -64,9 +64,19 @@ class LatticeBot(commands.Bot):
         """Called when the bot is starting up."""
         logger.info("Bot setup starting")
 
-        await db_pool.initialize()
+        try:
+            await db_pool.initialize()
+            logger.info("Database pool initialized successfully")
+        except Exception:
+            logger.exception("Failed to initialize database pool")
+            raise
 
-        embedding_model.load()
+        try:
+            embedding_model.load()
+            logger.info("Embedding model loaded successfully")
+        except Exception:
+            logger.exception("Failed to load embedding model")
+            raise
 
         self._memory_healthy = True
         logger.info("Bot setup complete")
@@ -79,6 +89,18 @@ class LatticeBot(commands.Bot):
                 bot_username=self.user.name,
                 bot_id=self.user.id,
             )
+
+            # Ensure database pool is initialized before starting schedulers
+            if not db_pool.is_initialized():
+                logger.warning("Database pool not initialized yet, waiting...")
+                # Wait up to 10 seconds for initialization
+                for _ in range(20):
+                    if db_pool.is_initialized():
+                        break
+                    await asyncio.sleep(0.5)
+                else:
+                    logger.error("Database pool failed to initialize, cannot start schedulers")
+                    return
 
             # Setup commands
             await setup_commands(self)
@@ -266,7 +288,7 @@ class LatticeBot(commands.Bot):
                     },
                 )
 
-            # Start async consolidation
+            # Start async consolidation (creates its own TRIPLE_EXTRACTION audit)
             await memory_orchestrator.consolidate_message_async(
                 message_id=user_message_id,
                 content=message.content,
@@ -409,7 +431,7 @@ async def setup_commands(bot: LatticeBot) -> None:
         bot: The bot instance
     """
 
-    @bot.command(name="dream")
+    @bot.command(name="dream")  # type: ignore[arg-type]
     @commands.has_permissions(administrator=True)
     async def trigger_dream_cycle(ctx: commands.Context) -> None:
         """Manually trigger the dreaming cycle (admin only)."""
