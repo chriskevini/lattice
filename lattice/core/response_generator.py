@@ -55,8 +55,15 @@ async def generate_response(
         format_with_timestamp(msg) for msg in recent_messages[-5:]
     )
 
+    seen_facts = set()
+    unique_facts = []
+    for fact in semantic_facts:
+        if fact.content not in seen_facts:
+            unique_facts.append(fact)
+            seen_facts.add(fact.content)
+
     semantic_context = (
-        "\n".join([f"- {fact.content}" for fact in semantic_facts])
+        "\n".join([f"- {fact.content}" for fact in unique_facts])
         or "No relevant facts found."
     )
 

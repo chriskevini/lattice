@@ -163,7 +163,7 @@ async def analyze_prompt_effectiveness(
             """,
             min_uses,
             lookback_days,
-            10,  # Minimum feedback threshold
+            0,  # Minimum feedback threshold (set to 0 for manual override/proactive check)
         )
 
         metrics = [
