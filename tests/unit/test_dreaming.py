@@ -110,7 +110,9 @@ class TestProposer:
 
         with (
             patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
-            patch("lattice.dreaming.proposer.get_feedback_samples", return_value=[]),
+            patch(
+                "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
+            ),
             patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
         ):
             # Mock get_prompt to return different templates for different keys
@@ -172,7 +174,9 @@ class TestProposer:
 
         with (
             patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
-            patch("lattice.dreaming.proposer.get_feedback_samples", return_value=[]),
+            patch(
+                "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
+            ),
             patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
         ):
             # Mock get_prompt to return different templates for different keys
@@ -213,6 +217,7 @@ class TestProposer:
                 "expected_improvements": "This change will improve latency by 20%",
             },
             confidence=0.8,
+            rendered_optimization_prompt="CURRENT TEMPLATE:\nOld template\n\nPERFORMANCE METRICS:\n...",
         )
 
         with patch("lattice.dreaming.proposer.db_pool") as mock_pool:

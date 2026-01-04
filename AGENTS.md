@@ -45,6 +45,7 @@ make check-all      # Lint, type-check, and test
 - **Documentation**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff (linting/formatting) and Mypy.
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) required.
+- **Rendered Prompt Storage**: Always store the fully rendered prompt sent to LLM (not just ingredients). Enables auditability and Dreaming Cycle optimization.
 
 ---
 

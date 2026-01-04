@@ -72,7 +72,7 @@ async def test_full_dreaming_cycle_workflow() -> None:
 
     with (
         patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
-        patch("lattice.dreaming.proposer.get_feedback_samples") as mock_feedback,
+        patch("lattice.dreaming.proposer.get_feedback_with_context") as mock_feedback,
         patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
     ):
         # Mock get_prompt to return different templates for different keys
@@ -85,9 +85,18 @@ async def test_full_dreaming_cycle_workflow() -> None:
 
         mock_get_prompt.side_effect = get_prompt_side_effect
         mock_feedback.return_value = [
-            "Too wordy",
-            "Responses are too long",
-            "Can you be more concise?",
+            {
+                "user_message": "How do I fix this error?",
+                "response_content": "You need to check the logs and verify your configuration files are correct. Make sure to review all the settings carefully and ensure that each parameter is set according to the documentation...",
+                "feedback_content": "Too wordy",
+                "sentiment": "negative",
+            },
+            {
+                "user_message": "What's the status?",
+                "response_content": "The current status is that the system is operational and all services are running as expected. Everything appears to be functioning within normal parameters...",
+                "feedback_content": "Responses are too long",
+                "sentiment": "negative",
+            },
         ]
 
         mock_llm = AsyncMock()
@@ -213,7 +222,7 @@ async def test_dreaming_cycle_rejects_low_confidence_proposals() -> None:
 
     with (
         patch("lattice.dreaming.proposer.get_prompt", return_value=mock_template),
-        patch("lattice.dreaming.proposer.get_feedback_samples", return_value=[]),
+        patch("lattice.dreaming.proposer.get_feedback_with_context", return_value=[]),
         patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
     ):
         mock_llm = AsyncMock()

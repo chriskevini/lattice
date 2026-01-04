@@ -237,3 +237,91 @@ async def get_feedback_samples(
         rows = await conn.fetch(query, *params)
 
         return [row["content"] for row in rows]
+
+
+async def get_feedback_with_context(
+    prompt_key: str,
+    limit: int = 10,
+    include_rendered_prompt: bool = True,
+    max_prompt_chars: int = 5000,
+) -> list[dict[str, Any]]:
+    """Get feedback along with the response and relevant user message.
+
+    This provides context for the optimizer LLM by showing:
+    1. The specific user message being responded to
+    2. The rendered prompt (optionally truncated for token efficiency)
+    3. The bot's response
+    4. The user's feedback
+    5. Sentiment
+
+    Args:
+        prompt_key: The prompt key to get feedback for
+        limit: Maximum number of samples to return
+        include_rendered_prompt: Whether to include the rendered prompt (default True)
+        max_prompt_chars: Maximum characters of rendered prompt to include (default 5000)
+
+    Returns:
+        List of dicts containing message, rendered_prompt (if requested), response, and feedback
+    """
+    async with db_pool.pool.acquire() as conn:
+        # Use separate queries based on whether we need rendered_prompt
+        # This avoids dynamic SQL construction which triggers security warnings
+        if include_rendered_prompt:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    rm.content as user_message,
+                    pa.rendered_prompt,
+                    pa.response_content,
+                    uf.content as feedback_content,
+                    uf.sentiment
+                FROM user_feedback uf
+                JOIN prompt_audits pa ON pa.feedback_id = uf.id
+                LEFT JOIN raw_messages rm ON pa.message_id = rm.id
+                JOIN prompt_registry pr ON pr.prompt_key = pa.prompt_key
+                WHERE pa.prompt_key = $1
+                  AND pa.template_version = pr.version
+                  AND pr.active = true
+                ORDER BY uf.created_at DESC
+                LIMIT $2
+                """,
+                prompt_key,
+                limit,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    rm.content as user_message,
+                    pa.response_content,
+                    uf.content as feedback_content,
+                    uf.sentiment
+                FROM user_feedback uf
+                JOIN prompt_audits pa ON pa.feedback_id = uf.id
+                LEFT JOIN raw_messages rm ON pa.message_id = rm.id
+                JOIN prompt_registry pr ON pr.prompt_key = pa.prompt_key
+                WHERE pa.prompt_key = $1
+                  AND pa.template_version = pr.version
+                  AND pr.active = true
+                ORDER BY uf.created_at DESC
+                LIMIT $2
+                """,
+                prompt_key,
+                limit,
+            )
+
+        results = []
+        for row in rows:
+            result = dict(row)
+
+            # Truncate rendered_prompt if it exists and exceeds max_prompt_chars
+            if include_rendered_prompt and result.get("rendered_prompt"):
+                if len(result["rendered_prompt"]) > max_prompt_chars:
+                    result["rendered_prompt"] = (
+                        result["rendered_prompt"][:max_prompt_chars]
+                        + "\n... [truncated]"
+                    )
+
+            results.append(result)
+
+        return results

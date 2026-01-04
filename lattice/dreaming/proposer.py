@@ -12,7 +12,10 @@ from uuid import UUID, uuid4
 
 import structlog
 
-from lattice.dreaming.analyzer import PromptMetrics, get_feedback_samples
+from lattice.dreaming.analyzer import (
+    PromptMetrics,
+    get_feedback_with_context,
+)
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.llm import get_llm_client
@@ -30,6 +33,7 @@ LLM_PROPOSAL_TIMEOUT = 120.0  # 2 minutes
 # Show all feedback (up to reasonable limit to avoid token bloat)
 # The minimum feedback threshold (10) in analyzer ensures we have enough data
 MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
+DETAILED_SAMPLES_COUNT = 3  # Number of samples with full rendered prompts
 LLM_MAX_TOKENS = 2000
 
 
@@ -81,6 +85,7 @@ class OptimizationProposal:
         str, Any
     ]  # Full LLM response: {changes: [...], expected_improvements: "...", confidence: 0.XX}
     confidence: float
+    rendered_optimization_prompt: str  # The exact prompt sent to optimizer LLM
 
 
 def _parse_llm_response(
@@ -178,19 +183,29 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         )
         return None
 
-    # Get feedback samples - show all feedback up to reasonable limit
-    # The minimum feedback threshold (10) in analyzer ensures statistical significance
-    negative_samples = await get_feedback_samples(
+    # Get feedback samples using hybrid approach:
+    # - First 3 samples: Include full context (rendered prompt + response + feedback)
+    # - Remaining samples: Lightweight (just user message + response + feedback)
+    # This balances diagnostic depth with token efficiency
+    detailed_samples = await get_feedback_with_context(
         metrics.prompt_key,
-        limit=MAX_FEEDBACK_SAMPLES,
-        sentiment_filter="negative",
+        limit=DETAILED_SAMPLES_COUNT,
+        include_rendered_prompt=True,
+        max_prompt_chars=5000,
     )
 
-    positive_samples = await get_feedback_samples(
-        metrics.prompt_key,
-        limit=MAX_FEEDBACK_SAMPLES,
-        sentiment_filter="positive",
+    lightweight_samples = (
+        await get_feedback_with_context(
+            metrics.prompt_key,
+            limit=MAX_FEEDBACK_SAMPLES - DETAILED_SAMPLES_COUNT,
+            include_rendered_prompt=False,
+        )
+        if MAX_FEEDBACK_SAMPLES > DETAILED_SAMPLES_COUNT
+        else []
     )
+
+    # Format samples into experience cases
+    experience_cases = _format_experience_cases(detailed_samples, lightweight_samples)
 
     # Format the optimization prompt using database template
     optimization_prompt = optimization_prompt_template.template.format(
@@ -200,8 +215,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         success_rate=f"{metrics.success_rate:.1%}",
         positive_feedback=metrics.positive_feedback,
         negative_feedback=metrics.negative_feedback,
-        negative_feedback_samples=_format_feedback(negative_samples),
-        positive_feedback_samples=_format_feedback(positive_samples),
+        experience_cases=experience_cases,
     )
 
     # Call LLM to generate proposal with timeout
@@ -259,7 +273,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         )
         return None
 
-    # Create proposal object
+    # Create proposal object (store the exact prompt sent to LLM for auditability)
     proposal = OptimizationProposal(
         proposal_id=uuid4(),
         prompt_key=metrics.prompt_key,
@@ -269,6 +283,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         proposed_template=proposal_data["proposed_template"],
         proposal_metadata=proposal_metadata,  # Full JSONB structure
         confidence=confidence,
+        rendered_optimization_prompt=optimization_prompt,  # Store full rendered prompt
     )
 
     logger.info(
@@ -281,19 +296,56 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     return proposal
 
 
-def _format_feedback(feedback: list[str]) -> str:
-    """Format feedback samples for prompt.
+def _format_experience_cases(
+    detailed_samples: list[dict[str, Any]], lightweight_samples: list[dict[str, Any]]
+) -> str:
+    """Format feedback with context into experience cases.
+
+    Uses hybrid sampling: first few samples include rendered prompt for deep analysis,
+    remaining samples are lightweight for breadth. This balances diagnostic value
+    with token efficiency.
 
     Args:
-        feedback: List of feedback strings
+        detailed_samples: Samples with rendered_prompt included
+        lightweight_samples: Samples without rendered_prompt
 
     Returns:
-        Formatted feedback text
+        Formatted experience cases string
     """
-    if not feedback:
+    if not detailed_samples and not lightweight_samples:
         return "(none)"
 
-    return "\n".join(f"- {f}" for f in feedback)
+    formatted = []
+
+    # Format detailed samples (with rendered prompt excerpts)
+    for i, s in enumerate(detailed_samples, 1):
+        user_msg = s.get("user_message") or "(proactive/no user message)"
+        rendered_prompt = s.get("rendered_prompt", "")
+
+        case = (
+            f"--- DETAILED EXPERIENCE #{i} ---\n"
+            f"SENTIMENT: {s['sentiment'].upper()}\n"
+            f"USER MESSAGE: {user_msg}\n"
+            f"RENDERED PROMPT EXCERPT:\n{rendered_prompt}\n"
+            f"BOT RESPONSE:\n{s['response_content']}\n"
+            f"FEEDBACK: {s['feedback_content']}\n"
+        )
+        formatted.append(case)
+
+    # Format lightweight samples (without rendered prompt)
+    for i, s in enumerate(lightweight_samples, len(detailed_samples) + 1):
+        user_msg = s.get("user_message") or "(proactive/no user message)"
+
+        case = (
+            f"--- EXPERIENCE #{i} ---\n"
+            f"SENTIMENT: {s['sentiment'].upper()}\n"
+            f"USER MESSAGE: {user_msg}\n"
+            f"BOT RESPONSE:\n{s['response_content']}\n"
+            f"FEEDBACK: {s['feedback_content']}\n"
+        )
+        formatted.append(case)
+
+    return "\n".join(formatted)
 
 
 async def store_proposal(proposal: OptimizationProposal) -> UUID:
@@ -317,9 +369,10 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
                 proposed_template,
                 proposal_metadata,
                 confidence,
+                rendered_optimization_prompt,
                 status
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
             RETURNING id
             """,
             proposal.proposal_id,
@@ -330,6 +383,7 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
             proposal.proposed_template,
             json.dumps(proposal.proposal_metadata),
             proposal.confidence,
+            proposal.rendered_optimization_prompt,
         )
 
         proposal_id: UUID = row["id"]
@@ -363,7 +417,8 @@ async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
                 current_template,
                 proposed_template,
                 proposal_metadata,
-                confidence
+                confidence,
+                rendered_optimization_prompt
             FROM dreaming_proposals
             WHERE id = $1
             """,
@@ -382,6 +437,7 @@ async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
             proposed_template=row["proposed_template"],
             proposal_metadata=row["proposal_metadata"],
             confidence=float(row["confidence"]),
+            rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
         )
 
 
@@ -402,7 +458,8 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 current_template,
                 proposed_template,
                 proposal_metadata,
-                confidence
+                confidence,
+                rendered_optimization_prompt
             FROM dreaming_proposals
             WHERE status = 'pending'
             ORDER BY confidence DESC, created_at DESC
@@ -419,6 +476,7 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 proposed_template=row["proposed_template"],
                 proposal_metadata=row["proposal_metadata"],
                 confidence=float(row["confidence"]),
+                rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
             )
             for row in rows
         ]
