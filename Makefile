@@ -30,6 +30,10 @@ docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuil
 	docker compose build
 	docker compose up -d
 
+docker-restart: ## Quick restart bot (for code changes, no rebuild)
+	docker compose restart bot
+	@echo "Bot restarted. View logs with: make docker-logs-bot"
+
 docker-shell: ## Open shell in bot container
 	docker compose exec bot /bin/bash
 
