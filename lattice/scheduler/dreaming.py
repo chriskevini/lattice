@@ -190,20 +190,28 @@ class DreamingScheduler:
             enabled=enabled,
         )
 
-    async def _run_dreaming_cycle(self) -> dict[str, Any]:
+    async def _run_dreaming_cycle(self, force: bool = False) -> dict[str, Any]:
         """Run the dreaming cycle: analyze prompts and create proposals.
+
+        Args:
+            force: If True, bypass statistical thresholds (min_uses, min_feedback)
 
         Returns:
             Summary dict with analysis results
         """
-        logger.info("Starting dreaming cycle run")
+        logger.info("Starting dreaming cycle run", force=force)
 
         try:
             config = await self._get_dreaming_config()
 
+            # If forced, use 1 as minimum for thresholding
+            min_uses = 1 if force else config.min_uses
+            min_feedback = 1 if force else 10  # Standard threshold is 10 feedback items
+
             metrics = await analyze_prompt_effectiveness(
-                min_uses=config.min_uses,
+                min_uses=min_uses,
                 lookback_days=config.lookback_days,
+                min_feedback=min_feedback,
             )
 
             if not metrics:
@@ -399,14 +407,15 @@ class DreamingScheduler:
 
 
 async def trigger_dreaming_cycle_manually(
-    bot: Any, dream_channel_id: int | None = None
+    bot: Any, dream_channel_id: int | None = None, force: bool = True
 ) -> None:
     """Manually trigger the dreaming cycle (for testing or manual invocation).
 
     Args:
         bot: Discord bot instance
         dream_channel_id: Dream channel ID for posting proposals
+        force: Whether to bypass statistical thresholds
     """
     scheduler = DreamingScheduler(bot=bot, dream_channel_id=dream_channel_id)
     # Call public method for running the cycle
-    await scheduler._run_dreaming_cycle()  # noqa: SLF001
+    await scheduler._run_dreaming_cycle(force=force)  # noqa: SLF001
