@@ -10,7 +10,7 @@ from uuid import UUID
 import discord
 import structlog
 
-from lattice.memory import user_feedback
+from lattice.memory import prompt_audits, user_feedback
 
 
 logger = structlog.get_logger(__name__)
@@ -119,7 +119,10 @@ class FeedbackModal(discord.ui.Modal):
             if interaction.message
             else None,
         )
-        await user_feedback.store_feedback(feedback)
+        feedback_id = await user_feedback.store_feedback(feedback)
+
+        # Link feedback to prompt audit
+        await prompt_audits.link_feedback_to_audit(self.bot_message_id, feedback_id)
 
         # React to the bot's message with appropriate emoji
         emoji = {"positive": "👍", "negative": "👎"}[sentiment]
@@ -400,10 +403,17 @@ class DreamMirrorView(discord.ui.DesignerView):
                 sentiment="positive",
                 referenced_discord_message_id=self.message_id,
                 user_discord_message_id=(
-                    interaction.message.id if interaction.message else None
+                    interaction.message.id if interaction.message is not None else None
                 ),
             )
-            await user_feedback.store_feedback(feedback)
+            feedback_id = await user_feedback.store_feedback(feedback)
+
+            # Link feedback to prompt audit
+            if interaction.message is not None:
+                await prompt_audits.link_feedback_to_audit(
+                    interaction.message.id, feedback_id
+                )
+
             await interaction.response.send_message(
                 "👍 **Positive** feedback recorded!",
                 ephemeral=True,
@@ -463,10 +473,17 @@ class DreamMirrorView(discord.ui.DesignerView):
                 sentiment="negative",
                 referenced_discord_message_id=self.message_id,
                 user_discord_message_id=(
-                    interaction.message.id if interaction.message else None
+                    interaction.message.id if interaction.message is not None else None
                 ),
             )
-            await user_feedback.store_feedback(feedback)
+            feedback_id = await user_feedback.store_feedback(feedback)
+
+            # Link feedback to prompt audit
+            if interaction.message is not None:
+                await prompt_audits.link_feedback_to_audit(
+                    interaction.message.id, feedback_id
+                )
+
             await interaction.response.send_message(
                 "👎 **Negative** feedback recorded!",
                 ephemeral=True,
@@ -619,7 +636,9 @@ class DreamMirrorBuilder:
         )
         # Disable buttons since no audit data - need to access the ActionRow's buttons
         for item in view.children:
-            if hasattr(item, "children"):  # ActionRow has children (buttons)
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+            elif hasattr(item, "children"):  # ActionRow has children (buttons)
                 for button in item.children:
                     if isinstance(button, discord.ui.Button):
                         button.disabled = True

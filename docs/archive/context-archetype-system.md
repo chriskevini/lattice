@@ -1,3 +1,9 @@
+# 🧩 [ARCHIVED] CONTEXT ARCHETYPE SYSTEM
+
+> [!CAUTION]
+> **ARCHIVED DOCUMENT**
+> This document is kept for historical context only. Implementation details have evolved significantly, and many concepts like "invisible feedback" mentioned here are deprecated in favor of explicit UI components (V2 Components).
+
 # Context Archetype System Design
 
 > **⚠️ FUTURE WORK**: This document describes a planned feature that is NOT YET IMPLEMENTED. The system currently uses default context configuration values for all messages. This document is kept for reference and future development.
