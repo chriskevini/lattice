@@ -1,256 +1,82 @@
-# Agent Onboarding Guide - Lattice Project
+# Agent Onboarding Guide
 
-## Project Overview
+## 📌 Project Overview
+**Lattice** is an Adaptive Memory Orchestrator—a self-evolving Discord companion using the **ENGRAM** neuro-symbolic memory framework.
+- **Constraints**: 2GB RAM / 1vCPU.
+- **Stack**: Python 3.12+, PostgreSQL + pgvector, discord.py.
+- **Core Goal**: Total evolvability via metadata-driven logic.
 
-**Lattice** is an Adaptive Memory Orchestrator - a self-evolving Discord companion bot using the ENGRAM neuro-symbolic memory framework. It runs on constrained hardware (2GB RAM / 1vCPU) with PostgreSQL + pgvector.
+---
 
-## Core Architecture
+## 🏗️ [Core Architecture](#core-architecture)
+### [Three-Tier Memory (ENGRAM)](#three-tier-memory-engram)
+1. **[Episodic](#episodic-memory)** (`raw_messages`): Immutable conversation log.
+2. **[Semantic](#semantic-memory)** (`stable_facts` + `semantic_triples`): Vector-embedded knowledge + graph relationships.
+3. **[Procedural](#procedural-memory)** (`prompt_registry`): Evolving templates via the [Dreaming Cycle](#dreaming-cycle).
 
-### Three-Tier Memory System (ENGRAM Framework)
+### [Key Design Principles](#key-design-principles)
+- **Canonical Integrity**: No internal thoughts in public channels.
+- **Unified Pipeline**: Same flow for reactive and proactive inputs.
+- **Strict Channel Separation**:
+  - `DISCORD_MAIN_CHANNEL_ID`: Stored episodic memory.
+  - `DISCORD_DREAM_CHANNEL_ID`: Meta-discussion & approvals (never stored).
 
-1. **Episodic Memory** (`raw_messages`)
-   - Recency: Immutable conversation log ordered by timestamp
-   - Source of truth for all interactions
+---
 
-2. **Semantic Memory** (`stable_facts` + `semantic_triples`)
-   - Relevance: Vector-embedded knowledge (384-dim)
-   - Explicit Subject-Predicate-Object relationships
-   - Enables hybrid retrieval (vector + graph traversal)
+## 📂 [Project Structure](#project-structure)
+- `lattice/core/`: Pipeline & ingestion logic.
+- `lattice/memory/`: [ENGRAM](#three-tier-memory-engram) implementations.
+- `lattice/discord_client/`: Bot interface & [Dream Channel](#strict-channel-separation) UI.
+- `lattice/prompts/`: Templates & extraction strategies.
+- `tests/`: [Unit and Integration tests](#development-workflow).
 
-3. **Procedural Memory** (`prompt_registry`)
-   - Relationships: Evolving templates and strategies
-   - Self-modifying behavior system
-   - Approval-gated updates via "dreaming cycle"
+---
 
-**Context retrieval combines three dimensions:**
-- **Recency**: `ORDER BY timestamp` on `raw_messages`
-- **Relevance**: Vector similarity search on `stable_facts`
-- **Relationships**: Graph traversal on `semantic_triples`
-
-### Key Design Principles
-
-1. **Canonical Integrity**: Never pollute visible conversation with internal thoughts
-2. **Unified Pipeline**: Reactive (user input) and proactive (check-ins) flow through same pipeline
-3. **Invisible Alignment**: Feedback via 🫡 emoji reactions, North Star goals stored silently
-4. **Total Evolvability**: All logic stored as data, not hardcoded
-5. **Resource Constraints**: Optimize for 2GB RAM / 1vCPU throughout
-6. **Transparent Constraints**: AI is aware of system limits and receives feedback when requests are clamped
-7. **Strict Channel Separation**: Use environment variables for channel IDs, never runtime calculation. Main channel = conversation + raw_messages storage. Dream channel = meta discussion, never stored.
-
-### Discord Channels
-
-**CRITICAL: Channel Separation** - Always use `DISCORD_MAIN_CHANNEL_ID` and `DISCORD_DREAM_CHANNEL_ID` environment variables. Never calculate channel IDs at runtime from database queries.
-
-- **Main Channel** (`DISCORD_MAIN_CHANNEL_ID`): Primary user interaction, conversation, proactive check-ins. All messages stored in `raw_messages`.
-- **Dream Channel** (`DISCORD_DREAM_CHANNEL_ID`): Meta activities, prompt optimization proposals, self-reflection, human approval gateway. Never stored in `raw_messages`.
-
-## Project Structure
-
-```
-lattice/
-├── core/           # Pipeline orchestration, unified ingestion, short-circuit logic
-├── memory/         # ENGRAM implementation (episodic, semantic, procedural)
-│   ├── episodic.py     # raw_messages handling, temporal chaining
-│   ├── semantic.py     # stable_facts, semantic_triples, vector ops
-│   └── procedural.py   # prompt_registry, template management
-├── discord_client/ # Discord bot interface, reaction handling, rate limiting
-│   ├── bot.py          # Main Discord client, event handlers
-│   └── dream.py        # Dream channel UI (embeds, modals, buttons)
-├── prompts/        # Prompt templates and extraction strategies
-└── utils/          # Embeddings, database pooling, logging
-
-tests/
-├── unit/           # Isolated component tests
-└── integration/    # Full pipeline tests with test DB
-```
-
-## Technical Stack
-
-- **Language**: Python 3.12+ (chosen for ML/AI ecosystem superiority)
-- **Discord**: discord.py (async, lightweight)
-- **Database**: asyncpg + pgvector
-- **Embeddings**: sentence-transformers (all-MiniLM-L6-v2, 384-dim, ~80MB)
-- **Type Safety**: mypy strict mode
-- **Package Manager**: UV (10-100x faster than Poetry)
-- **Linting**: Ruff (replaces flake8, black, isort, pyupgrade)
-- **Testing**: pytest with async support
-
-## Development Workflow
-
+## 🛠️ [Development Workflow](#development-workflow)
 ### Quick Start
 ```bash
-make install        # Install deps + setup hooks
+make install        # Install deps + hooks
 make test           # Run tests
-make check-all      # Run all quality checks
-make commit         # Interactive conventional commit
+make check-all      # Lint, type-check, and test
 ```
 
-### Code Standards (Auto-Enforced)
+### Standards
+- **Strict Typing**: All functions must have type annotations.
+- **Documentation**: Google-style docstrings (focus on "why").
+- **Quality**: Enforced via Ruff (linting/formatting) and Mypy.
+- **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) required.
 
-- **Type hints required**: All functions must have type annotations
-- **Docstrings required**: Google style, explain "why" not "what"
-- **Line length**: 100 characters max
-- **Import order**: stdlib → third-party → first-party (auto-sorted)
-- **Complexity limit**: Max McCabe complexity of 10
+---
 
-Pre-commit hooks will auto-fix most issues. Trust the linters.
+## ⚙️ [Key Implementation Details](#key-implementation-details)
 
-### Commit Messages
+### [Pipeline Flow](#pipeline-flow)
+1. **Ingestion**: Message or proactive trigger.
+2. **Short-Circuit**: North Star or feedback detection.
+3. **Logging**: Episodic storage.
+4. **[Context Analysis](#context-archetype-system)**: Dynamic scaling based on semantic archetypes.
+5. **Retrieval**: Hybrid (Recency + Relevance + Relationships).
+6. **Generation**: `prompt_registry` template execution.
+7. **Consolidation**: Async extraction of facts and triples.
 
-Use conventional commits (enforced):
-```bash
-feat(memory): add semantic triple extraction
-fix(discord): handle rate limiting edge case
-refactor(core): simplify pipeline short-circuit logic
-perf(memory): optimize vector search for low RAM
-docs: update ENGRAM architecture diagram
-```
+### [Context Archetype System](#context-archetype-system)
+Automatically optimizes retrieval parameters (`CONTEXT_TURNS`, `VECTOR_LIMIT`, etc.) by matching message embeddings against centroids.
+- **Validation**: Limits enforced via DB constraints to respect 2GB RAM.
+- **Evolvability**: AI proposes archetypes → Human approves → Hot-reload.
 
-## Key Implementation Details
+### [Memory Optimization](#memory-optimization)
+- **Streaming**: Use async generators for large message sets.
+- **Pooling**: Strict connection limits (`min_size=2, max_size=5`).
 
-### Database Schema
+---
 
-See `README.md` lines 29-150 for complete DDL. Key tables:
+## 📚 [Resources](#resources)
+- **[README.md](README.md)**: Installation, [Database Schema](README.md#database-schema), and Config.
+- **[DEVELOPMENT.md](DEVELOPMENT.md)**: Setup and troubleshooting.
 
-- `raw_messages`: Episodic log ordered by timestamp
-- `stable_facts`: Vector-embedded facts (HNSW index: m=16, ef_construction=64)
-- `semantic_triples`: Subject-Predicate-Object relationships
-- `prompt_registry`: Evolvable templates with version control
-- `context_archetypes`: Semantic archetypes for context classification
-- `objectives`: User goals with saliency scoring
-- `user_feedback`: Out-of-band feedback via emoji reactions
-- `system_health`: Proactive scheduling metadata
+---
 
-### Pipeline Flow
-
-1. **Ingestion**: Discord message or scheduled proactive check-in
-2. **Short-Circuit Logic**:
-   - North Star declaration → upsert to `stable_facts` → ack → exit
-   - Invisible feedback (reply to bot) → insert `user_feedback` → 🫡 → exit
-   - Feedback undo (🗑️ on 🫡) → delete feedback → exit
- 3. **Episodic Logging**: Insert to `raw_messages`
- 4. **Context Analysis**: Semantic archetype matching determines optimal context configuration
-    - Embedding-based classification using `context_archetypes` table
-    - Outputs: `CONTEXT_TURNS`, `VECTOR_LIMIT`, `SIMILARITY_THRESHOLD`, `TRIPLE_DEPTH`
-    - Evolvable: AI can propose new archetypes via Dream Channel
- 5. **Hybrid Retrieval**:
-    - Recency: `ORDER BY timestamp` on `raw_messages`
-    - Relevance: Vector similarity on `stable_facts.embedding`
-    - Relationships: Graph traversal on `semantic_triples`
-6. **Generation**: Route to `prompt_registry` template
-7. **Async Consolidation**: Extract facts/triples/objectives (background)
-
-**Details**: See `docs/message-data-flow.md` for complete step-by-step walkthrough
-
-### Resource Constraint System
-
-**Philosophy**: AI's goal is to generate the best response. System's goal is to enforce hardware constraints.
-
-The system uses **Context Archetype Classification** to automatically determine optimal context configuration:
-1. Incoming message → Generate embedding (~20ms)
-2. Match against archetype centroids in `context_archetypes` table
-3. Apply archetype's context settings (pre-validated against hardware limits)
-
-**Resource Dimensions** (configured per archetype):
-
-- **CONTEXT_TURNS** (1-20): Sequential conversation history
-- **VECTOR_LIMIT** (0-15): Semantic search results
-- **SIMILARITY_THRESHOLD** (0.5-0.9): Semantic matching strictness
-- **TRIPLE_DEPTH** (0-3): Relationship graph hops
-
-All archetype configurations (human or AI-proposed) are validated against MIN/MAX limits via database CHECK constraints, preventing configurations that would exceed hardware capacity.
-
-### Context Archetype System
-
-**Purpose**: Automatically determine optimal context configuration based on message type using semantic similarity matching.
-
-**How It Works**:
-1. Message arrives → Generate embedding (~20ms)
-2. Match to archetype → Compare with pre-computed centroids in `context_archetypes` table
-3. Apply configuration → Use archetype's context settings for retrieval
-
-**Evolvability**: AI can propose new archetypes via Dream Channel. Human approves → auto-inserted into database → hot-reloaded within 60 seconds → immediately active.
-
-**Details**: See `docs/context-archetype-system.md` for implementation and examples
-
-### Memory Optimization Patterns
-
-**Critical for 2GB RAM:**
-
-```python
-# ✅ Good: Stream results, limit queries
-async def get_recent_context(n: int = 10) -> AsyncIterator[Message]:
-    async for msg in fetch_messages_streaming(limit=n):
-        yield msg
-
-# ❌ Bad: Load everything into memory
-messages = await fetch_all_messages()  # Could be 10k+ messages
-```
-
-```python
-# ✅ Good: Connection pooling with limits
-pool = await asyncpg.create_pool(min_size=2, max_size=5)
-
-# ❌ Bad: Unlimited connections
-pool = await asyncpg.create_pool(min_size=10, max_size=50)
-```
-
-## Common Tasks
-
-### Adding a New Memory Type
-
-1. Add table to schema (see `README.md` section 2.2)
-2. Create model in `lattice/memory/`
-3. Add extraction logic to consolidation pipeline
-4. Update relevant `prompt_registry` templates
-5. Add tests in `tests/unit/test_memory.py`
-
-### Adding a New Prompt Template
-
-```python
-await db.execute("""
-    INSERT INTO prompt_registry (prompt_key, template, temperature)
-    VALUES ($1, $2, $3)
-""", "NEW_TEMPLATE", template_text, 0.7)
-```
-
-### Modifying Short-Circuit Logic
-
-Edit `lattice/core/pipeline.py`:
-```python
-async def should_short_circuit(message: Message) -> bool:
-    if is_north_star(message):
-        await handle_north_star(message)
-        return True
-
-    if is_invisible_feedback(message):
-        await handle_feedback(message)
-        return True
-
-    return False
-```
-
-## Resources
-
-### Documentation
-- **README.md**: Complete system design specification
-- **DEVELOPMENT.md**: Setup, code quality, workflow, troubleshooting
-- **docs/message-data-flow.md**: Detailed message processing walkthrough
-- **docs/context-archetype-system.md**: Context classification implementation
-
-### Key Reference Points
-- Database Schema: `README.md` lines 29-150
-- Pipeline Operations: `README.md` lines 152-178
-- Proactive Scheduling: `README.md` lines 180-202
-
-## Philosophy
-
-This project embodies **radical simplicity** through **metadata-driven evolution**. When in doubt:
-
-1. **Store logic as data** (prompt_registry, context_archetypes, system_health)
-2. **Optimize for constraints** (2GB RAM is real, respect it)
-3. **Trust the linters** (they enforce consistency)
-4. **Test async code** (bugs hide in concurrency)
-5. **Document "why"** (the "what" is in the code)
-
-Welcome to Lattice. Let's build something adaptive.
+## 🎯 Philosophy
+1. **Logic as Data**: Prompts and archetypes live in the DB.
+2. **Respect Constraints**: 2GB RAM is a hard wall.
+3. **Document "Why"**: The "what" is in the code.
