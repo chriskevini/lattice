@@ -60,6 +60,7 @@ async def init_database() -> None:
                 content TEXT NOT NULL,
                 is_bot BOOLEAN DEFAULT false,
                 is_proactive BOOLEAN DEFAULT false,
+                generation_metadata JSONB,
                 timestamp TIMESTAMPTZ DEFAULT now()
             );
         """

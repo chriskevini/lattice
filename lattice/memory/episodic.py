@@ -187,7 +187,15 @@ async def consolidate_message(
         logger.warning("TRIPLE_EXTRACTION prompt not found")
         return
 
-    filled_prompt = triple_prompt.template.format(CONTEXT=content)
+    try:
+        filled_prompt = triple_prompt.template.format(CONTEXT=content)
+    except KeyError as e:
+        logger.error(
+            "Template formatting failed", error=str(e), prompt_key="TRIPLE_EXTRACTION"
+        )
+        # Fallback: if format fails, it might be due to nested braces in the template
+        # that weren't properly escaped in the DB.
+        filled_prompt = triple_prompt.template.replace("{CONTEXT}", content)
     logger.info("Calling LLM for triple extraction", message_id=str(message_id))
 
     llm_client = get_llm_client()
@@ -342,7 +350,15 @@ async def extract_objectives(
     if context:
         context_text = "\n".join(context[-5:]) + "\n\nCurrent message:\n" + content
 
-    filled_prompt = objective_prompt.template.format(CONTEXT=context_text)
+    try:
+        filled_prompt = objective_prompt.template.format(CONTEXT=context_text)
+    except KeyError as e:
+        logger.error(
+            "Template formatting failed",
+            error=str(e),
+            prompt_key="OBJECTIVE_EXTRACTION",
+        )
+        filled_prompt = objective_prompt.template.replace("{CONTEXT}", context_text)
     logger.info("Calling LLM for objective extraction", message_id=str(message_id))
 
     llm_client = get_llm_client()
