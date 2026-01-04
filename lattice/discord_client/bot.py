@@ -18,8 +18,10 @@ from discord.ext import commands
 from lattice.core import handlers, memory_orchestrator, response_generator
 from lattice.core.handlers import WASTEBASKET_EMOJI
 from lattice.discord_client.dream import DreamMirrorBuilder
+from lattice.dreaming.approval import ProposalApprovalView
 from lattice.memory import episodic, feedback_detection, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
+from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
 from lattice.utils.embeddings import embedding_model
 
@@ -56,6 +58,7 @@ class LatticeBot(commands.Bot):
         self._max_consecutive_failures = 5
 
         self._scheduler: ProactiveScheduler | None = None
+        self._dreaming_scheduler: DreamingScheduler | None = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -76,8 +79,21 @@ class LatticeBot(commands.Bot):
                 bot_username=self.user.name,
                 bot_id=self.user.id,
             )
+
+            # Setup commands
+            await setup_commands(self)
+
+            # Start proactive scheduler
             self._scheduler = ProactiveScheduler(bot=self, dream_channel_id=self.dream_channel_id)
             await self._scheduler.start()
+
+            # Start dreaming cycle scheduler
+            self._dreaming_scheduler = DreamingScheduler(
+                bot=self, dream_channel_id=self.dream_channel_id
+            )
+            await self._dreaming_scheduler.start()
+
+            logger.info("Schedulers started (proactive + dreaming)")
         else:
             logger.warning("Bot connected but user is None")
 
@@ -375,5 +391,36 @@ class LatticeBot(commands.Bot):
         logger.info("Bot shutting down")
         if self._scheduler:
             await self._scheduler.stop()
+        if self._dreaming_scheduler:
+            await self._dreaming_scheduler.stop()
         await db_pool.close()
         await super().close()
+
+
+# Commands
+async def setup_commands(bot: LatticeBot) -> None:
+    """Setup bot commands.
+
+    Args:
+        bot: The bot instance
+    """
+
+    @bot.command(name="dream")
+    @commands.has_permissions(administrator=True)
+    async def trigger_dream_cycle(ctx: commands.Context) -> None:
+        """Manually trigger the dreaming cycle (admin only)."""
+        if ctx.channel.id != bot.dream_channel_id:
+            await ctx.send("⚠️ This command can only be used in the dream channel.")
+            return
+
+        await ctx.send("🌙 **Starting dreaming cycle manually...**")
+
+        if bot._dreaming_scheduler:
+            try:
+                await bot._dreaming_scheduler._run_dreaming_cycle()
+                await ctx.send("✅ **Dreaming cycle completed!**")
+            except Exception as e:
+                logger.exception("Manual dreaming cycle failed")
+                await ctx.send(f"❌ **Dreaming cycle failed:** {e}")
+        else:
+            await ctx.send("❌ **Dreaming scheduler not initialized.**")

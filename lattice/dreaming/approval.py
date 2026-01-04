@@ -58,7 +58,8 @@ class ProposalApprovalView(discord.ui.View):
             if interaction.message:
                 embed = interaction.message.embeds[0]
                 embed.color = discord.Color.green()
-                embed.title = "✅ " + embed.title.replace("🌙 ", "")
+                if embed.title:
+                    embed.title = "✅ " + embed.title.replace("🌙 ", "")
                 await interaction.message.edit(embed=embed, view=self)
 
             logger.info(
@@ -161,7 +162,8 @@ class ProposalRejectionModal(discord.ui.Modal):
                 # Update embed to show rejected status
                 embed = interaction.message.embeds[0]
                 embed.color = discord.Color.red()
-                embed.title = "❌ " + embed.title.replace("🌙 ", "")
+                if embed.title:
+                    embed.title = "❌ " + embed.title.replace("🌙 ", "")
                 await interaction.message.edit(embed=embed, view=view)
 
             logger.info(
