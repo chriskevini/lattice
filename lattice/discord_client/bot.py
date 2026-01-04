@@ -415,9 +415,9 @@ async def setup_commands(bot: LatticeBot) -> None:
 
         await ctx.send("🌙 **Starting dreaming cycle manually...**")
 
-        if bot._dreaming_scheduler:
+        if bot._dreaming_scheduler:  # noqa: SLF001
             try:
-                await bot._dreaming_scheduler._run_dreaming_cycle()
+                await bot._dreaming_scheduler._run_dreaming_cycle()  # noqa: SLF001
                 await ctx.send("✅ **Dreaming cycle completed!**")
             except Exception as e:
                 logger.exception("Manual dreaming cycle failed")

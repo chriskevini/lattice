@@ -89,7 +89,7 @@ async def propose_optimization(
     try:
         proposal_data = json.loads(result.content)
     except json.JSONDecodeError:
-        logger.error(
+        logger.exception(
             "Failed to parse optimization proposal",
             prompt_key=metrics.prompt_key,
             response=result.content,
@@ -147,7 +147,8 @@ def _build_optimization_prompt(
     Returns:
         Formatted optimization prompt
     """
-    return f"""You are a prompt optimization expert. Analyze the following prompt template and propose an improved version based on user feedback and performance metrics.
+    return f"""You are a prompt optimization expert. Analyze the following prompt \
+template and propose an improved version based on user feedback and performance metrics.
 
 CURRENT TEMPLATE:
 ```
@@ -157,7 +158,8 @@ CURRENT TEMPLATE:
 PERFORMANCE METRICS:
 - Total uses: {metrics.total_uses}
 - Feedback rate: {metrics.feedback_rate:.1%}
-- Success rate: {metrics.success_rate:.1%} ({metrics.positive_feedback} positive, {metrics.negative_feedback} negative)
+- Success rate: {metrics.success_rate:.1%} \
+({metrics.positive_feedback} positive, {metrics.negative_feedback} negative)
 - Avg latency: {metrics.avg_latency_ms:.0f}ms (if available)
 - Priority score: {metrics.priority_score:.1f} (higher = more urgent)
 

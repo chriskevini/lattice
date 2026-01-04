@@ -13,11 +13,12 @@ from lattice.dreaming.analyzer import PromptMetrics, analyze_prompt_effectivenes
 from lattice.dreaming.approval import ProposalApprovalView, ProposalRejectionModal
 from lattice.dreaming.proposer import OptimizationProposal, propose_optimization
 
+
 __all__ = [
-    "PromptMetrics",
-    "analyze_prompt_effectiveness",
     "OptimizationProposal",
-    "propose_optimization",
+    "PromptMetrics",
     "ProposalApprovalView",
     "ProposalRejectionModal",
+    "analyze_prompt_effectiveness",
+    "propose_optimization",
 ]

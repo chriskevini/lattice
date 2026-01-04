@@ -5,6 +5,7 @@ underperforming prompts and propose improvements via the dream channel.
 """
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
@@ -14,13 +15,22 @@ import structlog
 from lattice.dreaming.analyzer import analyze_prompt_effectiveness
 from lattice.dreaming.approval import ProposalApprovalView
 from lattice.dreaming.proposer import OptimizationProposal, propose_optimization, store_proposal
-from lattice.utils.database import db_pool, get_system_health, set_system_health
+from lattice.utils.database import get_system_health
 
 
 logger = structlog.get_logger(__name__)
 
 DEFAULT_DREAM_TIME = time(3, 0)  # 3:00 AM UTC
 MAX_PROPOSALS_PER_CYCLE = 3
+
+# Priority thresholds for embed colors
+PRIORITY_VERY_HIGH = 0.9
+PRIORITY_HIGH = 0.8
+PRIORITY_MEDIUM = 0.7
+
+# Preview text length limits
+RATIONALE_PREVIEW_LENGTH = 400
+TEMPLATE_PREVIEW_LENGTH = 200
 
 
 class DreamingScheduler:
@@ -56,10 +66,8 @@ class DreamingScheduler:
         self._running = False
         if self._scheduler_task:
             self._scheduler_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._scheduler_task
-            except asyncio.CancelledError:
-                pass
         logger.info("Stopping dreaming cycle scheduler")
 
     async def _scheduler_loop(self) -> None:
@@ -236,13 +244,13 @@ class DreamingScheduler:
             Discord embed with proposal details
         """
         # Calculate priority indicator
-        if proposal.confidence >= 0.9:
+        if proposal.confidence >= PRIORITY_VERY_HIGH:
             priority = "🔴 VERY HIGH"
             color = discord.Color.red()
-        elif proposal.confidence >= 0.8:
+        elif proposal.confidence >= PRIORITY_HIGH:
             priority = "🟠 HIGH"
             color = discord.Color.orange()
-        elif proposal.confidence >= 0.7:
+        elif proposal.confidence >= PRIORITY_MEDIUM:
             priority = "🟡 MEDIUM"
             color = discord.Color.gold()
         else:
@@ -250,16 +258,26 @@ class DreamingScheduler:
             color = discord.Color.green()
 
         embed = discord.Embed(
-            title=f"🌙 DREAMING CYCLE: PROPOSED OPTIMIZATION",
-            description=f"**Target:** `{proposal.prompt_key}` (v{proposal.current_version} → v{proposal.proposed_version})\n"
-            f"**Priority:** {priority} (confidence: {proposal.confidence:.0%})",
+            title="🌙 DREAMING CYCLE: PROPOSED OPTIMIZATION",
+            description=(
+                f"**Target:** `{proposal.prompt_key}` "
+                f"(v{proposal.current_version} → v{proposal.proposed_version})\n"
+                f"**Priority:** {priority} (confidence: {proposal.confidence:.0%})"
+            ),
             color=color,
         )
 
         # Add rationale
         rationale_preview = (
-            proposal.rationale[:400] + "..."
-            if len(proposal.rationale) > 400
+            proposal.rationale[:RATIONALE_PREVIEW_LENGTH] + "..."
+            if len(proposal.rationale) > RATIONALE_PREVIEW_LENGTH
+            else proposal.rationale
+        )
+
+        # Add rationale
+        rationale_preview = (
+            proposal.rationale[:RATIONALE_PREVIEW_LENGTH] + "..."
+            if len(proposal.rationale) > RATIONALE_PREVIEW_LENGTH
             else proposal.rationale
         )
         embed.add_field(
@@ -280,13 +298,13 @@ class DreamingScheduler:
 
         # Add current/proposed template preview (truncated)
         current_preview = (
-            proposal.current_template[:200] + "..."
-            if len(proposal.current_template) > 200
+            proposal.current_template[:TEMPLATE_PREVIEW_LENGTH] + "..."
+            if len(proposal.current_template) > TEMPLATE_PREVIEW_LENGTH
             else proposal.current_template
         )
         proposed_preview = (
-            proposal.proposed_template[:200] + "..."
-            if len(proposal.proposed_template) > 200
+            proposal.proposed_template[:TEMPLATE_PREVIEW_LENGTH] + "..."
+            if len(proposal.proposed_template) > TEMPLATE_PREVIEW_LENGTH
             else proposal.proposed_template
         )
 
@@ -315,4 +333,5 @@ async def trigger_dreaming_cycle_manually(bot: Any, dream_channel_id: int | None
         dream_channel_id: Dream channel ID for posting proposals
     """
     scheduler = DreamingScheduler(bot=bot, dream_channel_id=dream_channel_id)
-    await scheduler._run_dreaming_cycle()
+    # Call public method for running the cycle
+    await scheduler._run_dreaming_cycle()  # noqa: SLF001

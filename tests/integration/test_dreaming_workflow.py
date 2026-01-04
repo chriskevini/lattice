@@ -2,11 +2,10 @@
 
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
 
-from lattice.dreaming.analyzer import analyze_prompt_effectiveness
+from lattice.dreaming.analyzer import PromptMetrics, analyze_prompt_effectiveness
 from lattice.dreaming.proposer import (
     approve_proposal,
     propose_optimization,
@@ -55,8 +54,10 @@ async def test_full_dreaming_cycle_workflow() -> None:
 
     mock_llm_result = MagicMock()
     mock_llm_result.content = """{
-        "proposed_template": "You are a concise Discord assistant. {context}\\n\\nRespond briefly to: {message}",
-        "rationale": "Reduce response length to improve latency and user satisfaction. Negative feedback indicates responses are too verbose.",
+        "proposed_template": "You are a concise Discord assistant. \
+{context}\\n\\nRespond briefly to: {message}",
+        "rationale": "Reduce response length to improve latency and user satisfaction. \
+Negative feedback indicates responses are too verbose.",
         "expected_improvements": {
             "latency": "-40%",
             "clarity": "More focused, direct responses",
@@ -166,9 +167,6 @@ async def test_dreaming_cycle_no_proposals_when_performing_well() -> None:
 @pytest.mark.asyncio
 async def test_dreaming_cycle_rejects_low_confidence_proposals() -> None:
     """Test that low-confidence proposals are automatically rejected."""
-
-    from lattice.dreaming.analyzer import PromptMetrics
-
     metrics = PromptMetrics(
         prompt_key="BASIC_RESPONSE",
         version=1,

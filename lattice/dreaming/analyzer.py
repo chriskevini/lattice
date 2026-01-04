@@ -104,7 +104,7 @@ async def analyze_prompt_effectiveness(
                 ps.avg_tokens,
                 ps.avg_cost_usd,
                 -- Priority scoring: higher negative feedback + higher usage = higher priority
-                (COALESCE(fs.negative_count, 0)::FLOAT / NULLIF(ps.total_uses, 0)) * 
+                (COALESCE(fs.negative_count, 0)::FLOAT / NULLIF(ps.total_uses, 0)) *
                 LN(ps.total_uses + 1) * 100 as priority_score
             FROM prompt_stats ps
             LEFT JOIN feedback_sentiment fs
