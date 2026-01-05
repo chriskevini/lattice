@@ -1,16 +1,21 @@
 """Unit tests for scheduler components."""
 
-from datetime import datetime, UTC
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from lattice.memory.episodic import EpisodicMessage
+from lattice.scheduler.adaptive import (
+    calculate_active_hours,
+    is_within_active_hours,
+    update_active_hours,
+)
 from lattice.scheduler.triggers import (
     ProactiveDecision,
     decide_proactive,
     format_message,
 )
-from lattice.memory.episodic import EpisodicMessage
 
 
 class TestFormatMessage:
@@ -82,6 +87,9 @@ class TestDecideProactive:
     async def test_decide_proactive_with_missing_prompt(self) -> None:
         """Test that missing PROACTIVE_DECISION prompt returns wait."""
         with (
+            patch(
+                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
+            ),
             patch("lattice.scheduler.triggers.get_prompt", return_value=None),
             patch(
                 "lattice.scheduler.triggers.get_conversation_context",
@@ -100,6 +108,145 @@ class TestDecideProactive:
             result = await decide_proactive()
             assert result.action == "wait"
             assert "prompt not found" in result.reason.lower()
+
+
+class TestAdaptiveActiveHours:
+    """Tests for adaptive active hours functionality."""
+
+    @pytest.mark.asyncio
+    async def test_calculate_active_hours_insufficient_data(self) -> None:
+        """Test that default hours are used when insufficient messages."""
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=[])  # No messages
+
+        with (
+            patch("lattice.scheduler.adaptive.db_pool") as mock_pool,
+            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+        ):
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+            result = await calculate_active_hours()
+
+            assert result["start_hour"] == 9  # Default
+            assert result["end_hour"] == 21  # Default
+            assert result["confidence"] == 0.0
+            assert result["sample_size"] == 0
+
+    @pytest.mark.asyncio
+    async def test_calculate_active_hours_with_messages(self) -> None:
+        """Test active hours calculation with sufficient messages."""
+        # Create 100 messages concentrated in evening hours (18-22)
+        now = datetime.now(UTC)
+        messages = []
+        for i in range(100):
+            # Most messages in evening
+            hour = 18 + (i % 5)  # 18-22
+            timestamp = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            messages.append({"timestamp": timestamp, "user_timezone": "UTC"})
+
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=messages)
+
+        with (
+            patch("lattice.scheduler.adaptive.db_pool") as mock_pool,
+            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+        ):
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+            result = await calculate_active_hours()
+
+            # Should detect evening activity window
+            assert result["sample_size"] == 100
+            assert result["confidence"] > 0.7  # High concentration
+            # Window should capture evening hours (12-hour window starting around 11-12)
+            assert 10 <= result["start_hour"] <= 20
+
+    @pytest.mark.asyncio
+    async def test_is_within_active_hours_normal_window(self) -> None:
+        """Test active hours check for normal window (9 AM - 9 PM)."""
+        with (
+            patch(
+                "lattice.scheduler.adaptive.get_system_health",
+                side_effect=lambda key: {
+                    "active_hours_start": "9",
+                    "active_hours_end": "21",
+                }.get(key),
+            ),
+            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+        ):
+            # Test time within active hours (noon)
+            within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+            assert await is_within_active_hours(within_time) is True
+
+            # Test time outside active hours (2 AM)
+            outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)
+            assert await is_within_active_hours(outside_time) is False
+
+    @pytest.mark.asyncio
+    async def test_is_within_active_hours_wrap_around(self) -> None:
+        """Test active hours check for window wrapping midnight (9 PM - 9 AM)."""
+        with (
+            patch(
+                "lattice.scheduler.adaptive.get_system_health",
+                side_effect=lambda key: {
+                    "active_hours_start": "21",  # 9 PM
+                    "active_hours_end": "9",  # 9 AM
+                }.get(key),
+            ),
+            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+        ):
+            # Test time within active hours (midnight)
+            within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+            assert await is_within_active_hours(within_time) is True
+
+            # Test time within active hours (6 AM)
+            within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=UTC)
+            assert await is_within_active_hours(within_time2) is True
+
+            # Test time outside active hours (noon)
+            outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+            assert await is_within_active_hours(outside_time) is False
+
+    @pytest.mark.asyncio
+    async def test_update_active_hours_stores_result(self) -> None:
+        """Test that update_active_hours calculates and stores result."""
+        mock_result = {
+            "start_hour": 10,
+            "end_hour": 22,
+            "confidence": 0.85,
+            "sample_size": 50,
+            "timezone": "UTC",
+        }
+
+        with (
+            patch(
+                "lattice.scheduler.adaptive.calculate_active_hours",
+                return_value=mock_result,
+            ),
+            patch("lattice.scheduler.adaptive.set_system_health") as mock_set,
+        ):
+            result = await update_active_hours()
+
+            assert result == mock_result
+            # Verify system_health was updated
+            assert mock_set.call_count >= 4  # start, end, confidence, last_updated
+
+    @pytest.mark.asyncio
+    async def test_decide_proactive_respects_active_hours(self) -> None:
+        """Test that decide_proactive checks active hours first."""
+        with patch(
+            "lattice.scheduler.triggers.is_within_active_hours", return_value=False
+        ):
+            result = await decide_proactive()
+
+            assert result.action == "wait"
+            assert "active hours" in result.reason.lower()
 
 
 if __name__ == "__main__":

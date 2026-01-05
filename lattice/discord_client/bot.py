@@ -21,6 +21,7 @@ from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
 from lattice.memory import episodic, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
+from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.database import (
     db_pool,
@@ -542,3 +543,61 @@ async def setup_commands(bot: LatticeBot) -> None:
             )
         except ValueError as e:
             await ctx.send(f"❌ Invalid timezone: {e}")
+
+    @bot.command(name="active_hours")  # type: ignore[arg-type]
+    @commands.has_permissions(administrator=True)
+    async def update_active_hours_cmd(ctx: commands.Context[LatticeBot]) -> None:
+        """Recalculate active hours from message patterns (admin only).
+
+        Analyzes the last 30 days of messages to determine when you're most active.
+
+        Usage: !active_hours
+        """
+        await ctx.send("🔄 **Analyzing message patterns...**")
+
+        try:
+            result = await update_active_hours()
+
+            # Format hours for display
+            start_h = result["start_hour"]
+            end_h = result["end_hour"]
+
+            # Convert to 12-hour format
+            start_period = "AM" if start_h < 12 else "PM"
+            start_display = start_h if start_h <= 12 else start_h - 12
+            if start_display == 0:
+                start_display = 12
+
+            end_period = "AM" if end_h < 12 else "PM"
+            end_display = end_h if end_h <= 12 else end_h - 12
+            if end_display == 0:
+                end_display = 12
+
+            confidence_pct = int(result["confidence"] * 100)
+
+            embed = discord.Embed(
+                title="✅ Active Hours Updated",
+                description=f"Analyzed **{result['sample_size']} messages** from the last 30 days",
+                color=discord.Color.green(),
+            )
+            embed.add_field(
+                name="Active Window",
+                value=f"{start_display}:00 {start_period} - {end_display}:00 {end_period}",
+                inline=False,
+            )
+            embed.add_field(name="Confidence", value=f"{confidence_pct}%", inline=True)
+            embed.add_field(name="Timezone", value=result["timezone"], inline=True)
+            embed.set_footer(text="Proactive messages will respect these hours")
+
+            await ctx.send(embed=embed)
+            logger.info(
+                "Active hours updated via command",
+                start=start_h,
+                end=end_h,
+                confidence=result["confidence"],
+                user=ctx.author.name,
+            )
+
+        except Exception as e:
+            logger.exception("Failed to update active hours")
+            await ctx.send(f"❌ **Failed to update active hours:** {e}")

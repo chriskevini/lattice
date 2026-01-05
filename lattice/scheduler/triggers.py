@@ -1,6 +1,7 @@
 """Proactive trigger detection using AI decisions.
 
 Uses LLM to decide whether to initiate contact based on conversation context.
+Respects adaptive active hours to avoid disturbing users outside their active times.
 """
 
 import json
@@ -11,6 +12,7 @@ from datetime import UTC, datetime
 
 from lattice.memory.episodic import EpisodicMessage, get_recent_messages
 from lattice.memory.procedural import get_prompt
+from lattice.scheduler.adaptive import is_within_active_hours
 from lattice.utils.database import db_pool, get_system_health, set_system_health
 from lattice.utils.llm import get_llm_client
 
@@ -106,9 +108,21 @@ async def get_default_channel_id() -> int | None:
 async def decide_proactive() -> ProactiveDecision:
     """Ask AI whether to send a proactive message.
 
+    First checks if current time is within user's active hours.
+    If outside active hours, immediately returns "wait" decision.
+
     Returns:
         ProactiveDecision with action, content, and reason
     """
+    # Check active hours first to avoid disturbing user
+    if not await is_within_active_hours():
+        logger.info("Outside active hours, skipping proactive check")
+        return ProactiveDecision(
+            action="wait",
+            content=None,
+            reason="Outside user's active hours",
+        )
+
     conversation = await get_conversation_context()
     objectives = await get_objectives_context()
     channel_id = await get_default_channel_id()
