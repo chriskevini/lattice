@@ -265,6 +265,11 @@ def test_get_local_model_configured():
 
 def test_get_local_model_not_configured():
     """Test get_local_model returns None when not configured."""
+    # Clear global singleton state from previous tests
+    import lattice.core.local_extraction
+
+    lattice.core.local_extraction._local_model = None
+
     with patch("os.getenv", return_value=""):
         model = get_local_model()
         assert model is None
