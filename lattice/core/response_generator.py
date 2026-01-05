@@ -18,6 +18,7 @@ async def generate_response(
     user_message: str,
     semantic_facts: list[semantic.StableFact],
     recent_messages: list[episodic.EpisodicMessage],
+    graph_triples: list[dict[str, Any]] | None = None,
 ) -> tuple[GenerationResult, str, dict[str, Any]]:
     """Generate a response using the prompt template.
 
@@ -25,10 +26,14 @@ async def generate_response(
         user_message: The user's message
         semantic_facts: Relevant facts from semantic memory
         recent_messages: Recent conversation history
+        graph_triples: Related facts from graph traversal
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
     """
+    if graph_triples is None:
+        graph_triples = []
+
     prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
     if not prompt_template:
         return (
@@ -51,9 +56,8 @@ async def generate_response(
         ts = msg.timestamp.strftime("%Y-%m-%d %H:%M")
         return f"[{ts}] {msg.role}: {msg.content}"
 
-    episodic_context = "\n".join(
-        format_with_timestamp(msg) for msg in recent_messages[-5:]
-    )
+    # Use full episodic_limit instead of hardcoded [-5:]
+    episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages)
 
     seen_facts = set()
     unique_facts = []
@@ -62,9 +66,31 @@ async def generate_response(
             unique_facts.append(fact)
             seen_facts.add(fact.content)
 
+    # Format semantic context with optional graph relationships
+    semantic_lines = []
+    if unique_facts:
+        semantic_lines.append("Relevant facts you remember:")
+        semantic_lines.extend([f"- {fact.content}" for fact in unique_facts])
+
+    # Format graph triples as relationships
+    if graph_triples:
+        relationships = []
+        for triple in graph_triples[:10]:  # Limit to avoid prompt bloat
+            subject = triple.get("subject_content", "")
+            predicate = triple.get("predicate", "")
+            obj = triple.get("object_content", "")
+            if subject and predicate and obj:
+                relationships.append(f"{subject} {predicate} {obj}")
+
+        if relationships:
+            if semantic_lines:
+                semantic_lines.append("\nRelated knowledge:")
+            else:
+                semantic_lines.append("Related knowledge:")
+            semantic_lines.extend([f"- {rel}" for rel in relationships])
+
     semantic_context = (
-        "\n".join([f"- {fact.content}" for fact in unique_facts])
-        or "No relevant facts found."
+        "\n".join(semantic_lines) if semantic_lines else "No relevant context found."
     )
 
     logger.debug(
@@ -87,9 +113,9 @@ async def generate_response(
 
     # Build context info for audit
     context_info = {
-        "episodic": len(recent_messages[-5:]),
+        "episodic": len(recent_messages),
         "semantic": len(semantic_facts),
-        "graph": 0,  # Not yet implemented
+        "graph": len(graph_triples),
     }
 
     client = get_llm_client()

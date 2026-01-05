@@ -213,17 +213,18 @@ class LatticeBot(commands.Bot):
             await set_next_check_at(next_check)
 
             # Retrieve context
-            # TODO: Replace hardcoded values with Context Archetype System
-            # See: docs/context-archetype-system.md  # noqa: ERA001
+            # Retrieve context including graph traversal
             (
                 semantic_facts,
                 recent_messages,
+                graph_triples,
             ) = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,
                 semantic_limit=5,
                 semantic_threshold=0.7,
                 episodic_limit=10,
+                triple_depth=1,
             )
 
             # Generate response
@@ -235,6 +236,7 @@ class LatticeBot(commands.Bot):
                 user_message=message.content,
                 semantic_facts=semantic_facts,
                 recent_messages=recent_messages,
+                graph_triples=graph_triples,
             )
 
             # Split response for Discord length limits
