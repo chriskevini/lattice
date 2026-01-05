@@ -30,6 +30,7 @@ def mock_extraction_declaration() -> QueryExtraction:
         continuation=False,
         rendered_prompt="test prompt",
         raw_response="test response",
+        extraction_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -50,6 +51,7 @@ def mock_extraction_query() -> QueryExtraction:
         continuation=False,
         rendered_prompt="test prompt",
         raw_response="test response",
+        extraction_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -70,6 +72,7 @@ def mock_extraction_activity() -> QueryExtraction:
         continuation=False,
         rendered_prompt="test prompt",
         raw_response="test response",
+        extraction_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -90,6 +93,7 @@ def mock_extraction_conversation() -> QueryExtraction:
         continuation=True,
         rendered_prompt="test prompt",
         raw_response="test response",
+        extraction_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -230,6 +234,7 @@ class TestSelectResponseTemplate:
             continuation=False,
             rendered_prompt="test",
             raw_response="test",
+            extraction_method="api",
             created_at=datetime.now(UTC),
         )
         template = select_response_template(extraction)
@@ -561,6 +566,7 @@ class TestGenerateResponseWithTemplates:
             continuation=False,
             rendered_prompt="test",
             raw_response="test",
+            extraction_method="api",
             created_at=datetime.now(UTC),
         )
 

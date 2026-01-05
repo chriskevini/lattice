@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,7 +44,11 @@ def mock_llama():
 @pytest.mark.asyncio
 async def test_local_model_extract_success(model_config, mock_llama):
     """Test successful extraction with local model."""
-    with patch("lattice.core.local_extraction.Llama", mock_llama):
+    # Mock llama_cpp module
+    mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama
+
+    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
         with patch("os.path.exists", return_value=True):
             model = LocalExtractionModel(model_config)
             result = await model.extract("Test prompt")
@@ -56,7 +61,11 @@ async def test_local_model_extract_success(model_config, mock_llama):
 @pytest.mark.asyncio
 async def test_local_model_load_on_demand(model_config, mock_llama):
     """Test model is loaded on first extraction."""
-    with patch("lattice.core.local_extraction.Llama", mock_llama) as llama_mock:
+    # Mock llama_cpp module
+    mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama
+
+    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
         with patch("os.path.exists", return_value=True):
             model = LocalExtractionModel(model_config)
 
@@ -66,13 +75,15 @@ async def test_local_model_load_on_demand(model_config, mock_llama):
             # First extraction should load model
             await model.extract("Test prompt")
             assert model._model is not None
-            assert llama_mock.called
+            assert mock_llama.called
 
 
 @pytest.mark.asyncio
 async def test_local_model_unload_after_idle(model_config, mock_llama):
     """Test model is unloaded after idle timeout."""
-    with patch("lattice.core.local_extraction.Llama", mock_llama):
+    mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama
+    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
         with patch("os.path.exists", return_value=True):
             model = LocalExtractionModel(model_config)
 
@@ -90,7 +101,9 @@ async def test_local_model_unload_after_idle(model_config, mock_llama):
 @pytest.mark.asyncio
 async def test_local_model_keeps_loaded_with_frequent_use(model_config, mock_llama):
     """Test model stays loaded when used frequently."""
-    with patch("lattice.core.local_extraction.Llama", mock_llama):
+    mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama
+    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
         with patch("os.path.exists", return_value=True):
             model = LocalExtractionModel(model_config)
 
@@ -106,7 +119,9 @@ async def test_local_model_keeps_loaded_with_frequent_use(model_config, mock_lla
 @pytest.mark.asyncio
 async def test_local_model_memory_check(model_config, mock_llama):
     """Test memory check prevents loading when insufficient."""
-    with patch("lattice.core.local_extraction.Llama", mock_llama):
+    mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama
+    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
         with patch("os.path.exists", return_value=True):
             # Mock psutil to report high memory usage
             mock_process = MagicMock()
@@ -137,7 +152,8 @@ async def test_local_model_file_not_found(model_config):
 async def test_is_available_success(model_config, mock_llama):
     """Test is_available returns True when model exists and llama-cpp available."""
     with patch("os.path.exists", return_value=True):
-        with patch("lattice.core.local_extraction.llama_cpp"):
+        mock_llama_module = MagicMock()
+        with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
             model = LocalExtractionModel(model_config)
             assert await model.is_available()
 
@@ -154,7 +170,7 @@ async def test_is_available_no_model_file(model_config):
 async def test_is_available_no_llama_cpp(model_config):
     """Test is_available returns False when llama-cpp-python not installed."""
     with patch("os.path.exists", return_value=True):
-        with patch("lattice.core.local_extraction.__import__", side_effect=ImportError):
+        with patch("builtins.__import__", side_effect=ImportError):
             model = LocalExtractionModel(model_config)
             assert not await model.is_available()
 
@@ -167,13 +183,16 @@ async def test_extract_with_local_model_success(mock_llama):
         idle_timeout_seconds=1,
     )
 
-    with patch("lattice.core.local_extraction.get_local_model") as mock_get:
-        mock_model = LocalExtractionModel(config)
-        mock_model._model = mock_llama()
-        mock_get.return_value = mock_model
+    mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama
 
-        with patch("os.path.exists", return_value=True):
-            with patch("lattice.core.local_extraction.Llama", mock_llama):
+    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
+        with patch("lattice.core.local_extraction.get_local_model") as mock_get:
+            mock_model = LocalExtractionModel(config)
+            mock_model._model = mock_llama()
+            mock_get.return_value = mock_model
+
+            with patch("os.path.exists", return_value=True):
                 result = await extract_with_local_model("Test prompt")
                 assert result is not None
 
@@ -200,14 +219,28 @@ async def test_extract_with_local_model_invalid_json(mock_llama):
         mock_get.return_value = mock_model
 
         with patch("os.path.exists", return_value=True):
-            with patch("lattice.core.local_extraction.Llama", mock_llama):
-                result = await extract_with_local_model("Test prompt")
-                assert result is None
+            mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama
+    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
+        result = await extract_with_local_model("Test prompt")
+        assert result is None
 
 
 def test_get_local_model_configured():
     """Test get_local_model returns instance when configured."""
-    with patch("os.getenv", return_value="/tmp/test.gguf"):
+    env_vars = {
+        "LOCAL_EXTRACTION_MODEL_PATH": "/tmp/test.gguf",
+        "LOCAL_EXTRACTION_MAX_CONTEXT": "2048",
+        "LOCAL_EXTRACTION_IDLE_TIMEOUT": "30",
+        "LOCAL_EXTRACTION_MEMORY_LIMIT": "300",
+        "LOCAL_EXTRACTION_GPU_LAYERS": "0",
+    }
+    with patch.dict("os.environ", env_vars, clear=False):
+        # Clear global instance
+        import lattice.core.local_extraction
+
+        lattice.core.local_extraction._local_model = None
+
         model = get_local_model()
         assert model is not None
         assert isinstance(model, LocalExtractionModel)
@@ -222,7 +255,14 @@ def test_get_local_model_not_configured():
 
 def test_get_local_model_singleton():
     """Test get_local_model returns same instance."""
-    with patch("os.getenv", return_value="/tmp/test.gguf"):
+    env_vars = {
+        "LOCAL_EXTRACTION_MODEL_PATH": "/tmp/test.gguf",
+        "LOCAL_EXTRACTION_MAX_CONTEXT": "2048",
+        "LOCAL_EXTRACTION_IDLE_TIMEOUT": "30",
+        "LOCAL_EXTRACTION_MEMORY_LIMIT": "300",
+        "LOCAL_EXTRACTION_GPU_LAYERS": "0",
+    }
+    with patch.dict("os.environ", env_vars, clear=False):
         # Clear global instance
         import lattice.core.local_extraction
 

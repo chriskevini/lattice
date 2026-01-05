@@ -84,6 +84,7 @@ class TestQueryExtraction:
             continuation=False,
             rendered_prompt="test prompt",
             raw_response="test response",
+            extraction_method="api",
             created_at=now,
         )
 
@@ -99,6 +100,7 @@ class TestQueryExtraction:
         assert extraction.continuation is False
         assert extraction.rendered_prompt == "test prompt"
         assert extraction.raw_response == "test response"
+        assert extraction.extraction_method == "api"
         assert extraction.created_at == now
 
 
