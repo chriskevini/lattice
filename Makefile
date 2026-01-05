@@ -123,6 +123,56 @@ init-db: ## Initialize database schema
 migrate: ## Run database migrations
 	uv run python scripts/migrate.py
 
+# ============================================================================
+# Local Extraction Model (Optional)
+# ============================================================================
+
+setup-local-model: ## Download and setup FunctionGemma-270M for local extraction
+	@echo "Setting up local extraction model..."
+	@mkdir -p models
+	@if [ -f models/functiongemma-270m-q4_k_m.gguf ]; then \
+		echo "✓ Model already exists at models/functiongemma-270m-q4_k_m.gguf"; \
+	else \
+		echo "Downloading FunctionGemma-270M (4-bit quantized, ~200MB)..."; \
+		wget --progress=bar:force \
+			https://huggingface.co/google/functiongemma-270m-gguf/resolve/main/functiongemma-270m-q4_k_m.gguf \
+			-O models/functiongemma-270m-q4_k_m.gguf; \
+		echo "✓ Model downloaded successfully"; \
+	fi
+	@echo ""
+	@echo "Installing optional dependencies..."
+	@uv pip install -e ".[local-extraction]"
+	@echo ""
+	@echo "✓ Setup complete!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Add to .env: LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf"
+	@echo "  2. Restart bot: make docker-restart"
+	@echo ""
+	@echo "Benefits:"
+	@echo "  - Lower API costs (extraction runs locally)"
+	@echo "  - Faster extraction (< 200ms vs ~500ms API)"
+	@echo "  - Privacy (on-device processing)"
+	@echo "  - Automatic fallback to API if unavailable"
+
+check-local-model: ## Check if local extraction model is configured and available
+	@echo "Checking local extraction model setup..."
+	@if [ -f models/functiongemma-270m-q4_k_m.gguf ]; then \
+		echo "✓ Model file exists: models/functiongemma-270m-q4_k_m.gguf"; \
+	else \
+		echo "✗ Model file not found. Run: make setup-local-model"; \
+	fi
+	@if grep -q "^LOCAL_EXTRACTION_MODEL_PATH=" .env 2>/dev/null; then \
+		echo "✓ LOCAL_EXTRACTION_MODEL_PATH configured in .env"; \
+	else \
+		echo "✗ LOCAL_EXTRACTION_MODEL_PATH not set in .env"; \
+	fi
+	@if uv pip show llama-cpp-python >/dev/null 2>&1; then \
+		echo "✓ llama-cpp-python installed"; \
+	else \
+		echo "✗ llama-cpp-python not installed. Run: make setup-local-model"; \
+	fi
+
 update: ## Update dependencies
 	uv update
 	uv run pre-commit autoupdate
