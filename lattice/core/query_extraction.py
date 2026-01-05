@@ -3,10 +3,11 @@
 This module provides the query extraction service for Issue #61 Phase 2.
 It parses user messages into structured JSONB for routing and retrieval.
 
-Extraction Strategy (Phase 5):
-    1. Try local FunctionGemma-270M model (if configured and available)
-    2. Fallback to OpenRouter API if local fails or unavailable
-    3. Store extraction with metadata about which method was used
+Extraction Strategy:
+    - Uses OpenRouter API (Google Gemini Flash 1.5) for extraction
+    - Cost: ~$0.50/month for typical usage
+    - After testing 12+ local alternatives, API proved optimal for 2GB RAM constraint
+    - See docs/local-extraction-investigation.md for analysis
 """
 
 import json
@@ -16,7 +17,6 @@ from datetime import UTC, datetime
 
 import structlog
 
-from lattice.core.local_extraction import extract_with_local_model
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.llm import get_llm_client
@@ -45,7 +45,7 @@ class QueryExtraction:
     continuation: bool
     rendered_prompt: str
     raw_response: str
-    extraction_method: str  # "local" or "api"
+    extraction_method: str  # Always "api" (local extraction removed)
     created_at: datetime
 
 
@@ -56,13 +56,12 @@ async def extract_query_structure(
 ) -> QueryExtraction:
     """Extract structured information from a user message.
 
-    This function (Phase 5):
+    This function:
     1. Fetches the QUERY_EXTRACTION prompt template
     2. Renders the prompt with message content and context
-    3. Tries local FunctionGemma-270M model first (if available)
-    4. Falls back to OpenRouter API if local fails or unavailable
-    5. Parses JSON response into extraction fields
-    6. Stores extraction in message_extractions table with method metadata
+    3. Calls OpenRouter API for extraction
+    4. Parses JSON response into extraction fields
+    5. Stores extraction in message_extractions table
 
     Args:
         message_id: UUID of the message being extracted
@@ -94,32 +93,25 @@ async def extract_query_structure(
         message_length=len(message_content),
     )
 
-    # 3. Try local model first (Phase 5)
-    raw_response = await extract_with_local_model(
-        rendered_prompt, temperature=prompt_template.temperature
+    # 3. Call API for extraction
+    llm_client = get_llm_client()
+    result = await llm_client.complete(
+        prompt=rendered_prompt,
+        temperature=prompt_template.temperature,
+        # No max_tokens - let model complete naturally (JSON is ~50-200 tokens)
     )
-    extraction_method = "local" if raw_response else "api"
+    raw_response = result.content
+    extraction_method = "api"
 
-    # 4. Fallback to API if local unavailable/failed
-    if raw_response is None:
-        logger.info("Using API fallback for extraction")
-        llm_client = get_llm_client()
-        result = await llm_client.complete(
-            prompt=rendered_prompt,
-            temperature=prompt_template.temperature,
-            # No max_tokens - let model complete naturally (JSON is ~50-200 tokens)
-        )
-        raw_response = result.content
+    logger.info(
+        "API extraction completed",
+        message_id=str(message_id),
+        model=result.model,
+        tokens=result.total_tokens,
+        latency_ms=result.latency_ms,
+    )
 
-        logger.info(
-            "API extraction completed",
-            message_id=str(message_id),
-            model=result.model,
-            tokens=result.total_tokens,
-            latency_ms=result.latency_ms,
-        )
-
-    # 5. Parse JSON response
+    # 4. Parse JSON response
     try:
         # Handle markdown code blocks if present
         content = raw_response.strip()
@@ -152,7 +144,7 @@ async def extract_query_structure(
         msg = f"Invalid message_type: {message_type}. Must be one of {VALID_MESSAGE_TYPES}"
         raise ValueError(msg)
 
-    # 6. Store extraction in database (with extraction_method metadata)
+    # 5. Store extraction in database
     now = datetime.now(UTC)
     extraction_id = uuid.uuid4()
 

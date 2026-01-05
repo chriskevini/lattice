@@ -13,7 +13,7 @@
 ## 🌟 Key Features
 
 - **ENGRAM Memory Framework**: Three-tier neuro-symbolic system (Episodic, Semantic, Procedural).
-- **Query Extraction**: FunctionGemma-270M structured message analysis (replacing context archetypes).
+- **Query Extraction**: API-based structured message analysis (Google Gemini Flash 1.5).
 - **Dreaming Cycle**: Self-optimization loop where AI proposes logic updates for human approval.
 - **Resource-First Design**: Native support for low-memory environments via streaming and pooling.
 - **Graph-First Retrieval**: Unified search across temporal logs and relationship graphs.
@@ -63,32 +63,6 @@ MAX_EPISODIC_CONTEXT_TURNS=20
 MAX_TRIPLE_DEPTH=3
 ```
 _(Note: Vector search limits removed in Issue #61's graph-first architecture)_
-
-### Local Extraction Model (Optional)
-Lattice supports running FunctionGemma-270M locally for low-latency query extraction:
-
-**Benefits:**
-- Reduces API costs and latency (< 200ms extraction)
-- Privacy: Extraction happens on-device
-- Automatic fallback to OpenRouter if unavailable
-
-**Setup:**
-```bash
-# Install optional dependencies
-uv pip install -e ".[local-extraction]"
-
-# Download model (4-bit quantized, ~200MB)
-mkdir -p models
-wget https://huggingface.co/google/functiongemma-270m-gguf/resolve/main/functiongemma-270m-q4_k_m.gguf -O models/functiongemma-270m-q4_k_m.gguf
-
-# Configure in .env
-LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf
-```
-
-**Memory Management:**
-- Model loads on-demand (first extraction request)
-- Auto-unloads after 30s idle to conserve memory
-- Memory check prevents loading if insufficient RAM
 
 ### Discord Channels
 - **`DISCORD_MAIN_CHANNEL_ID`**: The public face. Conversations are stored here.
