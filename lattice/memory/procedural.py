@@ -3,6 +3,8 @@
 Stores evolving templates and strategies for bot behavior.
 """
 
+from typing import Any
+
 import structlog
 
 from lattice.utils.database import db_pool
@@ -37,7 +39,7 @@ class PromptTemplate:
         self.version = version
         self.active = active
 
-    def safe_format(self, **kwargs: str) -> str:
+    def safe_format(self, **kwargs: Any) -> str:
         """Safely format template, escaping unknown placeholders.
 
         This method prevents KeyError when templates contain example placeholders

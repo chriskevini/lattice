@@ -8,6 +8,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -111,7 +112,7 @@ async def resolve_entity(
     )
 
 
-async def _find_existing_entity(name: str) -> dict | None:
+async def _find_existing_entity(name: str) -> dict[str, Any] | None:
     """Find an existing entity by case-insensitive name match.
 
     Args:
@@ -275,10 +276,10 @@ async def _create_entity(canonical_name: str) -> uuid.UUID:
             msg = f"Failed to create or retrieve entity: {canonical_name}"
             raise Exception(msg)
 
-        return row["id"]
+        return uuid.UUID(str(row["id"]))
 
 
-async def get_entity_by_id(entity_id: uuid.UUID) -> dict | None:
+async def get_entity_by_id(entity_id: uuid.UUID) -> dict[str, Any] | None:
     """Retrieve an entity by its ID.
 
     Args:
@@ -309,7 +310,7 @@ async def get_entity_by_id(entity_id: uuid.UUID) -> dict | None:
         }
 
 
-async def get_entity_by_name(name: str) -> dict | None:
+async def get_entity_by_name(name: str) -> dict[str, Any] | None:
     """Retrieve an entity by its canonical name (case-insensitive).
 
     Args:
