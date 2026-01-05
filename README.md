@@ -100,7 +100,8 @@ wget https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/func
 
 # Configure in .env
 LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf
-INCLUDE_LOCAL_EXTRACTION=true  # For Docker builds
+LOCAL_EXTRACTION_KEEP_LOADED=true  # Keep model loaded for instant responses
+INCLUDE_LOCAL_EXTRACTION=true      # For Docker builds
 ```
 
 **Verification:**
@@ -109,9 +110,14 @@ make check-local-model
 ```
 
 **Memory Management:**
-- Model loads on-demand (first extraction request)
-- Auto-unloads after 30s idle to conserve memory
-- Memory check prevents loading if insufficient RAM
+- **Keep Loaded Mode** (Recommended): Set `LOCAL_EXTRACTION_KEEP_LOADED=true` to keep model in memory permanently (~240MB)
+  - Instant extraction responses (no load time)
+  - Suitable for servers with >1GB free RAM
+  - Default for production deployments
+- **On-Demand Mode**: Model loads on first request, unloads after 30s idle
+  - Conserves memory when extractions are infrequent
+  - Adds ~2-3s latency on first extraction after idle
+  - Default if `KEEP_LOADED` not set
 
 ### Discord Channels
 - **`DISCORD_MAIN_CHANNEL_ID`**: The public face. Conversations are stored here.

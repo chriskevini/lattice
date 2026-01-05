@@ -180,6 +180,14 @@ setup-local-model: ## Download and setup FunctionGemma-270M for local extraction
 		echo "INCLUDE_LOCAL_EXTRACTION=true" >> .env; \
 	fi
 	@echo "✓ Enabled INCLUDE_LOCAL_EXTRACTION for Docker builds"
+	@if grep -q "^LOCAL_EXTRACTION_KEEP_LOADED=" .env; then \
+		sed -i 's|^LOCAL_EXTRACTION_KEEP_LOADED=.*|LOCAL_EXTRACTION_KEEP_LOADED=true|' .env; \
+	elif grep -q "^# LOCAL_EXTRACTION_KEEP_LOADED=" .env; then \
+		sed -i 's|^# LOCAL_EXTRACTION_KEEP_LOADED=.*|LOCAL_EXTRACTION_KEEP_LOADED=true|' .env; \
+	else \
+		echo "LOCAL_EXTRACTION_KEEP_LOADED=true" >> .env; \
+	fi
+	@echo "✓ Enabled LOCAL_EXTRACTION_KEEP_LOADED (model stays in memory)"
 	@echo ""
 	@echo "✅ Setup complete!"
 	@echo ""

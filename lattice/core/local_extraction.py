@@ -24,6 +24,7 @@ class LocalModelConfig:
     model_path: str
     max_context: int = 2048
     idle_timeout_seconds: int = 30
+    keep_loaded: bool = False  # Keep model loaded permanently
     memory_limit_mb: int = 300  # Max model memory footprint
     gpu_layers: int = 0  # CPU only for 2GB constraint
 
@@ -75,12 +76,14 @@ class LocalExtractionModel:
         # Update last used timestamp
         self._last_used = time.monotonic()
 
-        # Cancel existing unload task
-        if self._unload_task is not None and not self._unload_task.done():
-            self._unload_task.cancel()
+        # Only schedule unload if not keeping model loaded permanently
+        if not self.config.keep_loaded:
+            # Cancel existing unload task
+            if self._unload_task is not None and not self._unload_task.done():
+                self._unload_task.cancel()
 
-        # Schedule new unload task
-        self._unload_task = asyncio.create_task(self._schedule_unload())
+            # Schedule new unload task
+            self._unload_task = asyncio.create_task(self._schedule_unload())
 
         logger.info("Running local extraction", prompt_length=len(prompt))
 
@@ -229,10 +232,15 @@ def get_local_model() -> LocalExtractionModel | None:
         if not model_path:
             return None
 
+        # Check if we should keep model loaded permanently
+        keep_loaded_env = os.getenv("LOCAL_EXTRACTION_KEEP_LOADED", "false").lower()
+        keep_loaded = keep_loaded_env in ("true", "1", "yes")
+
         config = LocalModelConfig(
             model_path=model_path,
             max_context=int(os.getenv("LOCAL_EXTRACTION_MAX_CONTEXT", "2048")),
             idle_timeout_seconds=int(os.getenv("LOCAL_EXTRACTION_IDLE_TIMEOUT", "30")),
+            keep_loaded=keep_loaded,
             memory_limit_mb=int(os.getenv("LOCAL_EXTRACTION_MEMORY_LIMIT", "300")),
             gpu_layers=int(os.getenv("LOCAL_EXTRACTION_GPU_LAYERS", "0")),
         )
