@@ -6,12 +6,14 @@
 - **Stack**: Python 3.12+, PostgreSQL + pgvector, discord.py.
 - **Core Goal**: Total evolvability via metadata-driven logic.
 
+> **⚠️ ARCHITECTURAL SHIFT IN PROGRESS**: The semantic memory system is being rewritten to use query extraction instead of vector embeddings. See [Issue #61](https://github.com/chriskevini/lattice/issues/61) for the new direction. Parts of this document describe the old architecture that is being phased out.
+
 ---
 
 ## 🏗️ [Core Architecture](#core-architecture)
 ### [Three-Tier Memory (ENGRAM)](#three-tier-memory-engram)
 1. **[Episodic](#episodic-memory)** (`raw_messages`): Immutable conversation log.
-2. **[Semantic](#semantic-memory)** (`stable_facts` + `semantic_triples`): Vector-embedded knowledge + graph relationships.
+2. **[Semantic](#semantic-memory)** (`entities` + `semantic_triples`): Graph-first knowledge with query extraction (replacing vector embeddings).
 3. **[Procedural](#procedural-memory)** (`prompt_registry`): Evolving templates via the [Dreaming Cycle](#dreaming-cycle).
 
 ### [Key Design Principles](#key-design-principles)
@@ -55,15 +57,18 @@ make check-all      # Lint, type-check, and test
 1. **Ingestion**: Message or proactive trigger.
 2. **Short-Circuit**: North Star or feedback detection.
 3. **Logging**: Episodic storage.
-4. **[Context Analysis](#context-archetype-system)**: Dynamic scaling based on semantic archetypes.
-5. **Retrieval**: Hybrid (Recency + Relevance + Relationships).
+4. **Query Extraction**: Structured message analysis (message type, entities, predicates, temporal constraints).
+5. **Retrieval**: Hybrid (Recency + Graph Traversal + Context-Aware).
 6. **Generation**: `prompt_registry` template execution.
-7. **Consolidation**: Async extraction of facts and triples.
+7. **Consolidation**: Async extraction of entities, triples, and activities.
 
-### [Context Archetype System](#context-archetype-system)
-Automatically optimizes retrieval parameters (`CONTEXT_TURNS`, `VECTOR_LIMIT`, etc.) by matching message embeddings against centroids.
-- **Validation**: Limits enforced via DB constraints to respect 2GB RAM.
-- **Evolvability**: AI proposes archetypes → Human approves → Hot-reload.
+### [Query Extraction System](#query-extraction-system)
+_(New in Issue #61)_ Uses FunctionGemma-270M (or API fallback) to extract structured data from messages:
+- **Message Type**: declaration, query, activity_update, conversation
+- **Entities**: Named entities referenced in the message
+- **Predicates**: Relationships and attributes
+- **Temporal Constraints**: Deadlines, time references
+- **Evolvability**: Extraction schema evolves via Dreaming Cycle (append-only).
 
 ### [Memory Optimization](#memory-optimization)
 - **Streaming**: Use async generators for large message sets.
@@ -74,6 +79,8 @@ Automatically optimizes retrieval parameters (`CONTEXT_TURNS`, `VECTOR_LIMIT`, e
 ## 📚 [Resources](#resources)
 - **[README.md](README.md)**: Installation, [Database Schema](README.md#database-schema), and Config.
 - **[DEVELOPMENT.md](DEVELOPMENT.md)**: Setup and troubleshooting.
+- **[Issue #61](https://github.com/chriskevini/lattice/issues/61)**: Current roadmap - Graph-first semantic memory rewrite.
+- **[docs/roadmap.md](docs/roadmap.md)**: Roadmap status and archive links.
 
 ---
 
