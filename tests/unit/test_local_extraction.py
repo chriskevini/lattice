@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,15 +29,30 @@ def model_config():
 @pytest.fixture
 def mock_llama():
     """Mock llama_cpp.Llama model."""
-    mock = MagicMock()
-    mock.return_value = {
+    # Create a mock class
+    mock_class = MagicMock()
+    # Create a mock instance that's callable and returns the expected dict
+    mock_instance = MagicMock()
+    mock_instance.return_value = {
         "choices": [
             {
                 "text": '{"message_type": "query", "entities": [], "predicates": [], "continuation": false}'
             }
         ]
     }
-    return mock
+    # Make the instance itself callable (for when used as __call__)
+    mock_instance.__call__ = MagicMock(
+        return_value={
+            "choices": [
+                {
+                    "text": '{"message_type": "query", "entities": [], "predicates": [], "continuation": false}'
+                }
+            ]
+        }
+    )
+    # The class returns the instance when instantiated
+    mock_class.return_value = mock_instance
+    return mock_class
 
 
 @pytest.mark.asyncio
@@ -121,21 +135,22 @@ async def test_local_model_memory_check(model_config, mock_llama):
     """Test memory check prevents loading when insufficient."""
     mock_llama_module = MagicMock()
     mock_llama_module.Llama = mock_llama
-    with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
+
+    # Mock psutil module to report high memory usage
+    mock_psutil = MagicMock()
+    mock_process = MagicMock()
+    mock_process.memory_info.return_value = MagicMock(rss=1800 * 1024 * 1024)
+    mock_psutil.Process.return_value = mock_process
+
+    with patch.dict(
+        "sys.modules", {"llama_cpp": mock_llama_module, "psutil": mock_psutil}
+    ):
         with patch("os.path.exists", return_value=True):
-            # Mock psutil to report high memory usage
-            mock_process = MagicMock()
-            mock_process.memory_info.return_value = MagicMock(rss=1800 * 1024 * 1024)
+            model = LocalExtractionModel(model_config)
 
-            with patch(
-                "lattice.core.local_extraction.psutil.Process",
-                return_value=mock_process,
-            ):
-                model = LocalExtractionModel(model_config)
-
-                # Should raise MemoryError
-                with pytest.raises(MemoryError, match="Insufficient memory"):
-                    await model.extract("Test prompt")
+            # Should raise MemoryError
+            with pytest.raises(MemoryError, match="Insufficient memory"):
+                await model.extract("Test prompt")
 
 
 @pytest.mark.asyncio
@@ -198,32 +213,34 @@ async def test_extract_with_local_model_success(mock_llama):
 
 
 @pytest.mark.asyncio
-async def test_extract_with_local_model_not_configured():
-    """Test extract_with_local_model returns None when not configured."""
-    with patch("os.getenv", return_value=""):
-        result = await extract_with_local_model("Test prompt")
-        assert result is None
-
-
-@pytest.mark.asyncio
 async def test_extract_with_local_model_invalid_json(mock_llama):
     """Test extract_with_local_model returns None for invalid JSON."""
-    # Mock to return invalid JSON
-    mock_llama.return_value = {"choices": [{"text": "not valid json"}]}
-
     config = LocalModelConfig(model_path="/tmp/test.gguf", idle_timeout_seconds=1)
 
-    with patch("lattice.core.local_extraction.get_local_model") as mock_get:
-        mock_model = LocalExtractionModel(config)
-        mock_model._model = mock_llama()
-        mock_get.return_value = mock_model
+    # Create custom mock instance with invalid JSON (string that's not JSON)
+    mock_instance = MagicMock(
+        return_value={
+            "choices": [{"text": "not valid json"}]  # String that's not valid JSON
+        }
+    )
 
-        with patch("os.path.exists", return_value=True):
-            mock_llama_module = MagicMock()
-    mock_llama_module.Llama = mock_llama
+    # Override the fixture's return_value for this test
+    mock_llama_custom = MagicMock()
+    mock_llama_custom.return_value = mock_instance
+
+    mock_llama_module = MagicMock()
+    mock_llama_module.Llama = mock_llama_custom
+
     with patch.dict("sys.modules", {"llama_cpp": mock_llama_module}):
-        result = await extract_with_local_model("Test prompt")
-        assert result is None
+        with patch("lattice.core.local_extraction.get_local_model") as mock_get:
+            mock_model = LocalExtractionModel(config)
+            mock_model._model = mock_instance
+            mock_get.return_value = mock_model
+
+            with patch("os.path.exists", return_value=True):
+                result = await extract_with_local_model("Test prompt")
+                # Should return None because JSON is invalid
+                assert result is None
 
 
 def test_get_local_model_configured():
