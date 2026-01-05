@@ -95,11 +95,16 @@ async def retrieve_context(
 ]:
     """Retrieve relevant context from memory.
 
+    Note:
+        Semantic search is currently stubbed out during Issue #61 refactor.
+        The function returns empty semantic facts list until the graph-first
+        architecture is implemented.
+
     Args:
         query: Query text for semantic search
         channel_id: Discord channel ID for episodic search
-        semantic_limit: Maximum semantic facts to retrieve
-        semantic_threshold: Minimum similarity threshold for semantic search
+        semantic_limit: Maximum semantic facts to retrieve (currently unused)
+        semantic_threshold: Minimum similarity threshold (currently unused)
         episodic_limit: Maximum recent messages to retrieve
         triple_depth: Maximum depth for graph traversal (0 = disabled)
 
@@ -107,6 +112,7 @@ async def retrieve_context(
         Tuple of (semantic_facts, recent_messages, graph_triples)
     """
     # Retrieve semantic facts and recent messages in parallel
+    # Note: semantic.search_similar_facts currently returns [] (stubbed)
     semantic_facts, recent_messages = await asyncio.gather(
         semantic.search_similar_facts(
             query=query,
@@ -117,6 +123,13 @@ async def retrieve_context(
             channel_id=channel_id,
             limit=episodic_limit,
         ),
+    )
+
+    logger.debug(
+        "Context retrieved",
+        semantic_facts=len(semantic_facts),
+        recent_messages=len(recent_messages),
+        note="Semantic search stubbed during Issue #61 refactor",
     )
 
     # Traverse graph from semantic facts if depth > 0

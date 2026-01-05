@@ -12,7 +12,7 @@ from lattice.memory.episodic import (
     store_message,
 )
 from lattice.memory.procedural import PromptTemplate, get_prompt, store_prompt
-from lattice.memory.semantic import StableFact, search_similar_facts, store_fact
+from lattice.memory.semantic import StableFact, search_similar_facts
 
 
 class TestEpisodicMessage:
@@ -156,88 +156,32 @@ class TestStableFact:
         assert fact.origin_id == origin_id
         assert fact.entity_type == "preference"
 
-
-class TestSemanticMemoryFunctions:
-    """Tests for semantic memory functions."""
-
-    @pytest.mark.asyncio
-    async def test_store_fact_generates_embedding(self) -> None:
-        """Test storing a fact generates embedding if not provided."""
-        mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
-        )
-
-        with (
-            patch("lattice.memory.semantic.db_pool") as mock_pool,
-            patch("lattice.memory.semantic.embedding_model") as mock_embed,
-        ):
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-            mock_embed.encode_single.return_value = [0.1, 0.2, 0.3]
-
-            fact = StableFact(content="Test fact")
-            result = await store_fact(fact)
-
-            assert result == UUID("12345678-1234-5678-1234-567812345678")
-            mock_embed.encode_single.assert_called_once_with("Test fact")
-
-    @pytest.mark.asyncio
-    async def test_store_fact_with_existing_embedding(self) -> None:
-        """Test storing a fact uses existing embedding."""
-        mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
-        )
-
-        with (
-            patch("lattice.memory.semantic.db_pool") as mock_pool,
-            patch("lattice.memory.semantic.embedding_model") as mock_embed,
-        ):
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-            fact = StableFact(content="Test fact", embedding=[0.5, 0.6, 0.7])
-            result = await store_fact(fact)
-
-            assert result == UUID("12345678-1234-5678-1234-567812345678")
-            mock_embed.encode_single.assert_not_called()
-
     @pytest.mark.asyncio
     async def test_search_similar_facts_empty_query(self) -> None:
         """Test that empty query returns empty list."""
-        with patch("lattice.memory.semantic.embedding_model") as mock_embed:
-            result = await search_similar_facts(query="", limit=5)
-
-            assert result == []
-            mock_embed.encode_single.assert_not_called()
+        # Stub implementation always returns empty list
+        result = await search_similar_facts(query="", limit=5)
+        assert result == []
 
     @pytest.mark.asyncio
     async def test_search_similar_facts_whitespace_query(self) -> None:
-        """Test that whitespace-only query returns empty list."""
-        with patch("lattice.memory.semantic.embedding_model") as mock_embed:
-            result = await search_similar_facts(query="   ", limit=5)
-
-            assert result == []
-            mock_embed.encode_single.assert_not_called()
+        """Test that whitespace query returns empty list."""
+        # Stub implementation always returns empty list
+        result = await search_similar_facts(query="   ", limit=5)
+        assert result == []
 
     @pytest.mark.asyncio
-    async def test_search_similar_facts_invalid_limit(self) -> None:
-        """Test that invalid limit raises ValueError."""
-        with pytest.raises(ValueError, match="limit must be between 1 and 100"):
-            await search_similar_facts(query="test", limit=0)
+    async def test_search_similar_facts_stub_returns_empty(self) -> None:
+        """Test that valid queries return empty list during refactor."""
+        # Stub implementation always returns empty list during Issue #61 refactor
+        result = await search_similar_facts(query="what does alice like", limit=5)
+        assert result == []
+        assert isinstance(result, list)
 
-    @pytest.mark.asyncio
-    async def test_search_similar_facts_invalid_threshold(self) -> None:
-        """Test that invalid threshold raises ValueError."""
-        with pytest.raises(
-            ValueError, match=r"similarity_threshold must be between 0\.0 and 1\.0"
-        ):
-            await search_similar_facts(query="test", limit=5, similarity_threshold=1.5)
+
+# NOTE: Additional semantic memory function tests removed during Issue #61 refactor
+# Semantic memory is being rewritten with graph-first architecture
+# New tests will be added in Phase 1 of Issue #61
 
 
 class TestPromptTemplate:

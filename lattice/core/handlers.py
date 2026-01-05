@@ -8,8 +8,6 @@ from typing import Any
 
 import structlog
 
-from lattice.memory import semantic
-
 
 logger = structlog.get_logger(__name__)
 
@@ -22,8 +20,10 @@ async def handle_north_star(
 ) -> bool:
     """Handle North Star goal declaration.
 
-    Stores the goal in stable_facts with entity_type='north_star' and
-    adds a 🌟 reaction to acknowledge (no elaboration).
+    Stores the goal acknowledgment with a 🌟 reaction.
+
+    TODO: During Issue #61 refactor, this will store goals as
+    semantic triples with predicate='has_goal' in the new graph schema.
 
     Args:
         message: The user's message containing the goal
@@ -33,22 +33,20 @@ async def handle_north_star(
         True if handled successfully, False otherwise
     """
     try:
-        fact_entry = semantic.StableFact(
-            content=f"User North Star: {goal_content}",
-            origin_id=None,
-            entity_type="north_star",
+        # TODO: Replace with graph-first goal storage (Issue #61)
+        logger.info(
+            "North Star goal declared (storage disabled during refactor)",
+            user=message.author.name if hasattr(message.author, "name") else "unknown",
+            goal_preview=goal_content[:50],
         )
-
-        fact_id = await semantic.store_fact(fact_entry)
 
         with suppress(Exception):
             await message.add_reaction(NORTH_STAR_EMOJI)
 
         logger.info(
-            "Handled North Star declaration",
+            "Acknowledged North Star declaration",
             user=message.author.name if hasattr(message.author, "name") else "unknown",
             goal_preview=goal_content[:50],
-            fact_id=str(fact_id),
         )
 
     except Exception as e:

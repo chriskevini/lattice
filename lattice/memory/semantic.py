@@ -1,26 +1,21 @@
-"""Semantic memory module - handles stable_facts and vector search.
+"""Semantic memory module - STUB during Issue #61 refactor.
 
-Stores extracted facts with embeddings for semantic similarity search.
+This module is being rewritten with a graph-first architecture using
+query extraction instead of vector embeddings.
+
+See: https://github.com/chriskevini/lattice/issues/61
 """
 
-from typing import cast
 from uuid import UUID
 
 import structlog
 
-from lattice.utils.database import db_pool
-from lattice.utils.embeddings import embedding_model
-
 
 logger = structlog.get_logger(__name__)
 
-MAX_SEARCH_LIMIT = 100
-MIN_SIMILARITY_THRESHOLD = 0.0
-MAX_SIMILARITY_THRESHOLD = 1.0
-
 
 class StableFact:
-    """Represents a fact in semantic memory."""
+    """Stub class for backward compatibility during refactor."""
 
     def __init__(
         self,
@@ -30,12 +25,12 @@ class StableFact:
         origin_id: UUID | None = None,
         entity_type: str | None = None,
     ) -> None:
-        """Initialize a stable fact.
+        """Initialize a stable fact (stub implementation).
 
         Args:
             content: Textual representation of the fact
             fact_id: UUID of the fact (auto-generated if None)
-            embedding: Vector embedding of the content
+            embedding: Vector embedding (deprecated, unused)
             origin_id: UUID of the raw_message this fact was extracted from
             entity_type: Type of entity (e.g., 'person', 'preference', 'event')
         """
@@ -47,40 +42,26 @@ class StableFact:
 
 
 async def store_fact(fact: StableFact) -> UUID:
-    """Store a fact in semantic memory.
+    """Stub for storing facts (disabled during Issue #61 refactor).
 
     Args:
         fact: The fact to store
 
     Returns:
-        UUID of the stored fact
+        Dummy UUID
+
+    Note:
+        This function is stubbed out during the Issue #61 refactor.
+        Semantic fact storage will be reimplemented using the new
+        graph-first architecture with query extraction.
     """
-    if fact.embedding is None:
-        fact.embedding = embedding_model.encode_single(fact.content)
-
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO stable_facts (content, embedding, origin_id, entity_type)
-            VALUES ($1, $2::vector, $3, $4)
-            RETURNING id
-            """,
-            fact.content,
-            fact.embedding,
-            fact.origin_id,
-            fact.entity_type,
-        )
-
-        fact_id = cast("UUID", row["id"])
-
-        logger.info(
-            "Stored semantic fact",
-            fact_id=str(fact_id),
-            entity_type=fact.entity_type,
-            content_preview=fact.content[:50],
-        )
-
-        return fact_id
+    logger.debug(
+        "store_fact called (stubbed during Issue #61 refactor)",
+        content_preview=fact.content[:50],
+        entity_type=fact.entity_type,
+    )
+    # Return a dummy UUID to maintain compatibility
+    return UUID("00000000-0000-0000-0000-000000000000")
 
 
 async def search_similar_facts(
@@ -88,64 +69,24 @@ async def search_similar_facts(
     limit: int = 5,
     similarity_threshold: float = 0.7,
 ) -> list[StableFact]:
-    """Search for facts similar to a query using vector similarity.
+    """Stub for semantic search (disabled during Issue #61 refactor).
 
     Args:
         query: Query text to search for
-        limit: Maximum number of results to return (1-100)
-        similarity_threshold: Minimum cosine similarity (0.0-1.0)
+        limit: Maximum number of results to return
+        similarity_threshold: Minimum similarity threshold
 
     Returns:
-        List of similar facts, ordered by similarity (most similar first)
+        Empty list (semantic search disabled during refactor)
 
-    Raises:
-        ValueError: If limit or similarity_threshold are out of valid ranges
+    Note:
+        This function is stubbed out during the Issue #61 refactor.
+        Semantic retrieval will be reimplemented using context-aware
+        graph traversal based on extracted query structure.
     """
-    if limit < 1 or limit > MAX_SEARCH_LIMIT:
-        msg = f"limit must be between 1 and {MAX_SEARCH_LIMIT}, got {limit}"
-        raise ValueError(msg)
-    if not (
-        MIN_SIMILARITY_THRESHOLD <= similarity_threshold <= MAX_SIMILARITY_THRESHOLD
-    ):
-        msg = f"similarity_threshold must be between 0.0 and 1.0, got {similarity_threshold}"
-        raise ValueError(msg)
-
-    if not query.strip():
-        logger.warning("Empty query provided to semantic search")
-        return []
-
-    query_embedding = embedding_model.encode_single(query)
-
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, content, embedding, origin_id, entity_type,
-                   1 - (embedding <=> $1::vector) AS similarity
-            FROM stable_facts
-            WHERE 1 - (embedding <=> $1::vector) >= $2
-            ORDER BY embedding <=> $1::vector
-            LIMIT $3
-            """,
-            query_embedding,
-            similarity_threshold,
-            limit,
-        )
-
-        facts = [
-            StableFact(
-                fact_id=row["id"],
-                content=row["content"],
-                embedding=list(row["embedding"]),
-                origin_id=row["origin_id"],
-                entity_type=row["entity_type"],
-            )
-            for row in rows
-        ]
-
-        logger.info(
-            "Semantic search completed",
-            query_preview=query[:50],
-            results_found=len(facts),
-        )
-
-        return facts
+    logger.debug(
+        "search_similar_facts called (stubbed during Issue #61 refactor)",
+        query_preview=query[:50],
+        limit=limit,
+    )
+    return []

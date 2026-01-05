@@ -32,6 +32,9 @@ async def init_database() -> None:
 
     try:
         print("Creating vector extension...")
+        # WARNING: This extension is LEGACY and maintained for schema compatibility only.
+        # The vector embedding functionality is not used by the application as of PR #64.
+        # Will be removed in Issue #61 Phase 1 (migration 010_graph_first_architecture.sql).
         await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
         print("Creating prompt_registry table...")
@@ -67,6 +70,10 @@ async def init_database() -> None:
         )
 
         print("Creating stable_facts table...")
+        # WARNING: This schema is LEGACY and maintained for compatibility only.
+        # The embedding column is NOT populated and the vector index is NOT used
+        # by the application as of PR #64. Both will be dropped in Issue #61 Phase 1
+        # via migration 010_graph_first_architecture.sql.
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS stable_facts (
@@ -81,6 +88,8 @@ async def init_database() -> None:
         )
 
         print("Creating vector index...")
+        # WARNING: This index is LEGACY and NOT used by the application as of PR #64.
+        # Will be dropped in Issue #61 Phase 1 along with the embedding column.
         await conn.execute(
             """
             CREATE INDEX IF NOT EXISTS stable_facts_embedding_idx

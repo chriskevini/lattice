@@ -23,7 +23,6 @@ from lattice.memory import prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
-from lattice.utils.embeddings import embedding_model
 
 
 logger = structlog.get_logger(__name__)
@@ -75,13 +74,6 @@ class LatticeBot(commands.Bot):
             logger.info("Database pool initialized successfully")
         except Exception:
             logger.exception("Failed to initialize database pool")
-            raise
-
-        try:
-            embedding_model.load()
-            logger.info("Embedding model loaded successfully")
-        except Exception:
-            logger.exception("Failed to load embedding model")
             raise
 
         self._memory_healthy = True
