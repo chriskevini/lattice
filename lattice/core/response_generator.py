@@ -3,15 +3,60 @@
 Handles prompt formatting, LLM generation, and message splitting for Discord.
 """
 
-from typing import Any
+import re
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from lattice.memory import episodic, procedural, semantic
 from lattice.utils.llm import GenerationResult, get_llm_client
 
+if TYPE_CHECKING:
+    from lattice.core.query_extraction import QueryExtraction
+
 
 logger = structlog.get_logger(__name__)
+
+# Maximum number of graph triples to include in prompt context
+MAX_GRAPH_TRIPLES = 10
+
+
+def select_response_template(extraction: "QueryExtraction | None") -> str:
+    """Select the appropriate response template based on message type.
+
+    This function maps the extracted message type to one of four specialized
+    response templates, each optimized for different interaction patterns.
+
+    Args:
+        extraction: Query extraction containing message type and metadata.
+                   If None, defaults to BASIC_RESPONSE for backward compatibility.
+
+    Returns:
+        Template name to use for response generation:
+        - GOAL_RESPONSE: For declarations, goals, and time-sensitive tasks
+        - QUERY_RESPONSE: For factual queries and information requests
+        - ACTIVITY_RESPONSE: For activity updates and progress reports
+        - CONVERSATION_RESPONSE: For general conversational messages
+        - BASIC_RESPONSE: Fallback for legacy code paths
+
+    Note:
+        During Issue #61 Phase 2, this enables message-type-specific response
+        generation. Each template can later be independently optimized via the
+        Dreaming Cycle based on user feedback patterns.
+    """
+    if extraction is None:
+        # Legacy path: No extraction available, use basic template
+        return "BASIC_RESPONSE"
+
+    template_map = {
+        "declaration": "GOAL_RESPONSE",
+        "query": "QUERY_RESPONSE",
+        "activity_update": "ACTIVITY_RESPONSE",
+        "conversation": "CONVERSATION_RESPONSE",
+    }
+
+    # Default to conversation template for unknown message types
+    return template_map.get(extraction.message_type, "CONVERSATION_RESPONSE")
 
 
 async def generate_response(
@@ -19,20 +64,26 @@ async def generate_response(
     semantic_facts: list[semantic.StableFact],
     recent_messages: list[episodic.EpisodicMessage],
     graph_triples: list[dict[str, Any]] | None = None,
+    extraction: "QueryExtraction | None" = None,
 ) -> tuple[GenerationResult, str, dict[str, Any]]:
-    """Generate a response using the prompt template.
+    """Generate a response using the appropriate prompt template.
+
+    Selects template based on extracted message type and populates it with
+    context from episodic memory, semantic memory, and graph traversal.
 
     Note:
         During Issue #61 refactor, semantic_facts will typically be empty
         as vector-based semantic search is disabled. The bot relies primarily
         on episodic context (recent messages) until the new query extraction
-        system is implemented.
+        system is fully integrated.
 
     Args:
         user_message: The user's message
         semantic_facts: Relevant facts from semantic memory (stubbed during refactor)
         recent_messages: Recent conversation history
         graph_triples: Related facts from graph traversal
+        extraction: Query extraction with message type and structured fields.
+                   If None, uses BASIC_RESPONSE template for backward compatibility.
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
@@ -40,7 +91,19 @@ async def generate_response(
     if graph_triples is None:
         graph_triples = []
 
-    prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
+    # Select appropriate template based on message type
+    template_name = select_response_template(extraction)
+    prompt_template = await procedural.get_prompt(template_name)
+
+    # Fallback to BASIC_RESPONSE if selected template doesn't exist
+    if not prompt_template and template_name != "BASIC_RESPONSE":
+        logger.warning(
+            "Template not found, falling back",
+            requested_template=template_name,
+            fallback="BASIC_RESPONSE",
+        )
+        prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
+
     if not prompt_template:
         return (
             GenerationResult(
@@ -81,7 +144,7 @@ async def generate_response(
     # Format graph triples as relationships
     if graph_triples:
         relationships = []
-        for triple in graph_triples[:10]:  # Limit to avoid prompt bloat
+        for triple in graph_triples[:MAX_GRAPH_TRIPLES]:
             subject = triple.get("subject_content", "")
             predicate = triple.get("predicate", "")
             obj = triple.get("object_content", "")
@@ -104,18 +167,48 @@ async def generate_response(
         episodic_context_preview=episodic_context[:200],
         semantic_context_preview=semantic_context[:200],
         user_message=user_message[:100],
+        template_name=template_name,
         note="Semantic facts empty during Issue #61 refactor",
     )
 
-    filled_prompt = prompt_template.template.format(
-        episodic_context=episodic_context or "No recent conversation.",
-        semantic_context=semantic_context,
-        user_message=user_message,
-    )
+    # Build template parameters from extraction if available
+    template_params = {
+        "episodic_context": episodic_context or "No recent conversation.",
+        "semantic_context": semantic_context,
+        "user_message": user_message,
+    }
+
+    # Add extraction-specific fields if available
+    if extraction:
+        template_params.update(
+            {
+                "entities": ", ".join(extraction.entities)
+                if extraction.entities
+                else "None",
+                "query": extraction.query or "N/A",
+                "activity": extraction.activity or "N/A",
+                "time_constraint": extraction.time_constraint or "None specified",
+                "urgency": extraction.urgency or "normal",
+                "continuation": "yes" if extraction.continuation else "no",
+            }
+        )
+
+    # Only pass parameters that the template actually uses
+    # This allows backward compatibility with BASIC_RESPONSE template
+    template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
+    filtered_params = {
+        key: value
+        for key, value in template_params.items()
+        if key in template_placeholders
+    }
+
+    filled_prompt = prompt_template.template.format(**filtered_params)
 
     logger.debug(
         "Filled prompt for generation",
         prompt_preview=filled_prompt[:500],
+        template_name=template_name,
+        extraction_available=extraction is not None,
     )
 
     # Build context info for audit
@@ -123,10 +216,15 @@ async def generate_response(
         "episodic": len(recent_messages),
         "semantic": len(semantic_facts),
         "graph": len(graph_triples),
+        "template": template_name,
+        "extraction_id": str(extraction.id) if extraction else None,
     }
 
+    # Use template's temperature setting if available, otherwise default to 0.7
+    temperature = prompt_template.temperature if prompt_template.temperature else 0.7
+
     client = get_llm_client()
-    result = await client.complete(filled_prompt, temperature=0.7)
+    result = await client.complete(filled_prompt, temperature=temperature)
     return result, filled_prompt, context_info
 
 
