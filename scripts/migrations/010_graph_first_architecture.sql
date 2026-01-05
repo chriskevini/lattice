@@ -10,6 +10,20 @@
 --
 -- This enables query-extraction based retrieval and graph traversal instead of
 -- vector similarity search on meaningless entity names.
+--
+-- IMPORTANT: This migration is NOT easily reversible due to:
+-- - DROP TABLE stable_facts CASCADE (loses all entity embeddings)
+-- - DROP EXTENSION vector CASCADE (removes pgvector type system)
+-- - Data is migrated from stable_facts to entities, but embeddings are lost
+--
+-- Before running this migration:
+-- 1. Backup your database: pg_dump lattice > backup.sql
+-- 2. Verify you have backups of all stable_facts data if needed
+-- 3. Test on staging environment first
+--
+-- Rollback strategy:
+-- - Restore from backup taken before migration
+-- - There is no automated rollback script due to data structure changes
 
 -- 1. Create message_extractions table for query extraction audit trail
 CREATE TABLE IF NOT EXISTS message_extractions (
@@ -119,12 +133,28 @@ ON activity_logs (user_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_metadata
 ON activity_logs USING gin (metadata);
 
--- 5. Drop legacy stable_facts table and its indexes
+-- 5. Migrate data from stable_facts to entities (if stable_facts exists)
+-- This preserves any existing entity data before dropping the table
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'stable_facts') THEN
+        -- Migrate stable_facts to entities, preserving IDs for semantic_triples FK integrity
+        INSERT INTO entities (id, name, entity_type, first_mentioned)
+        SELECT id, content, entity_type, created_at
+        FROM stable_facts
+        ON CONFLICT (name) DO NOTHING;  -- Skip duplicates
+
+        RAISE NOTICE 'Migrated % entities from stable_facts', (SELECT COUNT(*) FROM entities);
+    END IF;
+END $$;
+
+-- 6. Drop legacy stable_facts table and its indexes
 -- This table stored useless embeddings on bare entity names and is no longer used
+-- CASCADE will handle any remaining FK constraints
 DROP INDEX IF EXISTS stable_facts_embedding_idx;
 DROP TABLE IF EXISTS stable_facts CASCADE;
 
--- 6. Drop pgvector extension (no longer needed)
+-- 7. Drop pgvector extension (no longer needed)
 DROP EXTENSION IF EXISTS vector CASCADE;
 
 -- Comments for documentation

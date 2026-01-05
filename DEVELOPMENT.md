@@ -42,7 +42,7 @@ make docker-clean       # Remove all containers and volumes
 ### Prerequisites
 - Python 3.12+
 - [UV](https://docs.astral.sh/uv/) (modern Python package manager)
-- PostgreSQL 16+ with pgvector extension (or use Docker)
+- PostgreSQL 16+ (or use Docker)
 - Docker & Docker Compose (for containerized development)
 
 ### Installation
@@ -410,7 +410,7 @@ SELECT * FROM conversation_chain ORDER BY depth DESC;
 ### Environment Setup
 
 - **Platform**: 2GB RAM / 1vCPU VPS (Oracle Cloud, DigitalOcean, Hetzner, etc.)
-- **PostgreSQL**: Version 16+ with pgvector extension
+- **PostgreSQL**: Version 16+
 - **Process Manager**: systemd or supervisord (handle crashes gracefully)
 - **Logging**: Structured logs (structlog) to file + stdout
 - **Monitoring**: Track memory usage, response times, error rates
@@ -443,4 +443,3 @@ WantedBy=multi-user.target
 - [pytest Documentation](https://docs.pytest.org/)
 - [Conventional Commits](https://www.conventionalcommits.org/)
 - [discord.py Documentation](https://discordpy.readthedocs.io/)
-- [pgvector Documentation](https://github.com/pgvector/pgvector)
