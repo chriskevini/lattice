@@ -1,19 +1,12 @@
 """Database connection and pool management.
 
-Provides async PostgreSQL connection pooling with pgvector support.
-
-Note:
-    pgvector dependency is maintained for backward compatibility with the
-    existing database schema (stable_facts.embedding column). This will be
-    removed in Phase 1 of Issue #61 when the embedding column is dropped
-    during the graph-first architecture migration.
+Provides async PostgreSQL connection pooling.
 """
 
 import os
 from datetime import datetime
 
 import asyncpg
-import pgvector.asyncpg  # Temporary: Will be removed in Issue #61 Phase 1
 import structlog
 
 
@@ -48,7 +41,6 @@ class DatabasePool:
             min_size=min_size,
             max_size=max_size,
             command_timeout=30,
-            setup=setup_connection,
         )
 
         logger.info("Database pool initialized")
@@ -82,21 +74,6 @@ class DatabasePool:
             msg = "Database pool not initialized. Call initialize() first."
             raise RuntimeError(msg)
         return self._pool
-
-
-async def setup_connection(conn: asyncpg.Connection) -> None:
-    """Set up a database connection with pgvector type support.
-
-    Note:
-        pgvector registration is maintained for backward compatibility
-        with existing database schema (stable_facts.embedding column).
-        Will be removed in Phase 1 of Issue #61 when the embedding
-        column is dropped during schema migration.
-
-    Args:
-        conn: The asyncpg connection to set up
-    """
-    await pgvector.asyncpg.register_vector(conn)
 
 
 async def get_system_health(key: str) -> str | None:

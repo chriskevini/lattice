@@ -31,12 +31,6 @@ async def init_database() -> None:
         sys.exit(1)
 
     try:
-        print("Creating vector extension...")
-        # WARNING: This extension is LEGACY and maintained for schema compatibility only.
-        # The vector embedding functionality is not used by the application as of PR #64.
-        # Will be removed in Issue #61 Phase 1 (migration 010_graph_first_architecture.sql).
-        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-
         print("Creating prompt_registry table...")
         await conn.execute(
             """
@@ -69,32 +63,70 @@ async def init_database() -> None:
         """
         )
 
-        print("Creating stable_facts table...")
-        # WARNING: This schema is LEGACY and maintained for compatibility only.
-        # The embedding column is NOT populated and the vector index is NOT used
-        # by the application as of PR #64. Both will be dropped in Issue #61 Phase 1
-        # via migration 010_graph_first_architecture.sql.
+        print("Creating message_extractions table...")
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS stable_facts (
+            CREATE TABLE IF NOT EXISTS message_extractions (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                content TEXT NOT NULL,
-                embedding VECTOR(384),
-                origin_id UUID REFERENCES raw_messages(id),
-                entity_type TEXT,
+                message_id UUID NOT NULL REFERENCES raw_messages(id) ON DELETE CASCADE,
+                extraction JSONB NOT NULL,
+                prompt_key TEXT NOT NULL,
+                prompt_version INT NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT now()
             );
         """
         )
 
-        print("Creating vector index...")
-        # WARNING: This index is LEGACY and NOT used by the application as of PR #64.
-        # Will be dropped in Issue #61 Phase 1 along with the embedding column.
+        print("Creating message_extractions indexes...")
         await conn.execute(
             """
-            CREATE INDEX IF NOT EXISTS stable_facts_embedding_idx
-            ON stable_facts USING hnsw (embedding vector_cosine_ops)
-            WITH (m = 16, ef_construction = 64);
+            CREATE INDEX IF NOT EXISTS idx_extractions_message_type
+            ON message_extractions ((extraction->>'message_type'));
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_extractions_entities
+            ON message_extractions USING gin ((extraction->'entities'));
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_extractions_created_at
+            ON message_extractions (created_at DESC);
+        """
+        )
+
+        print("Creating entities table...")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS entities (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name TEXT UNIQUE NOT NULL,
+                entity_type TEXT,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                first_mentioned TIMESTAMPTZ DEFAULT now()
+            );
+        """
+        )
+
+        print("Creating entities indexes...")
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_entities_name_lower
+            ON entities (LOWER(name));
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_entities_type
+            ON entities (entity_type) WHERE entity_type IS NOT NULL;
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_entities_metadata
+            ON entities USING gin (metadata);
         """
         )
 
@@ -103,10 +135,13 @@ async def init_database() -> None:
             """
             CREATE TABLE IF NOT EXISTS semantic_triples (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                subject_id UUID REFERENCES stable_facts(id) ON DELETE CASCADE,
+                subject_id UUID REFERENCES entities(id) ON DELETE CASCADE,
                 predicate TEXT NOT NULL,
-                object_id UUID REFERENCES stable_facts(id) ON DELETE CASCADE,
+                object_id UUID REFERENCES entities(id) ON DELETE CASCADE,
                 origin_id UUID REFERENCES raw_messages(id),
+                valid_from TIMESTAMPTZ DEFAULT now(),
+                valid_until TIMESTAMPTZ,
+                metadata JSONB DEFAULT '{}'::jsonb,
                 created_at TIMESTAMPTZ DEFAULT now()
             );
         """
@@ -129,6 +164,66 @@ async def init_database() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_triples_predicate
             ON semantic_triples(predicate);
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_triples_valid_from
+            ON semantic_triples(valid_from);
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_triples_valid_until
+            ON semantic_triples(valid_until) WHERE valid_until IS NOT NULL;
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_triples_temporal_validity
+            ON semantic_triples(valid_from, valid_until)
+            WHERE valid_until IS NULL OR valid_until > now();
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_triples_metadata
+            ON semantic_triples USING gin (metadata);
+        """
+        )
+
+        print("Creating activity_logs table...")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL,
+                activity_type TEXT NOT NULL,
+                duration_minutes INT,
+                date DATE NOT NULL,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ DEFAULT now()
+            );
+        """
+        )
+
+        print("Creating activity_logs indexes...")
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_date_type
+            ON activity_logs(date DESC, activity_type);
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_user
+            ON activity_logs(user_id, date DESC);
+        """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_metadata
+            ON activity_logs USING gin (metadata);
         """
         )
 
@@ -195,8 +290,8 @@ async def init_database() -> None:
 
         print("Database schema initialization complete!")
         print(
-            "Tables created: prompt_registry, raw_messages, stable_facts, "
-            "semantic_triples, objectives, user_feedback, system_health"
+            "Tables created: prompt_registry, raw_messages, message_extractions, "
+            "entities, semantic_triples, activity_logs, objectives, user_feedback, system_health"
         )
         print("\nNOTE: Prompt templates should be inserted via migrations.")
         print("Run: python scripts/migrate.py")
