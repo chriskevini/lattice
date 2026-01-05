@@ -130,24 +130,46 @@ migrate: ## Run database migrations
 setup-local-model: ## Download and setup FunctionGemma-270M for local extraction
 	@echo "Setting up local extraction model..."
 	@mkdir -p models
-	@if [ -f models/functiongemma-270m-q4_k_m.gguf ]; then \
+	@if [ -f models/functiongemma-270m-q4_k_m.gguf ] && [ -s models/functiongemma-270m-q4_k_m.gguf ]; then \
 		echo "✓ Model already exists at models/functiongemma-270m-q4_k_m.gguf"; \
 	else \
-		echo "Downloading FunctionGemma-270M (4-bit quantized, ~200MB)..."; \
+		echo "Downloading FunctionGemma-270M (4-bit quantized, ~240MB)..."; \
+		rm -f models/functiongemma-270m-q4_k_m.gguf; \
 		wget --progress=bar:force \
-			https://huggingface.co/google/functiongemma-270m-gguf/resolve/main/functiongemma-270m-q4_k_m.gguf \
-			-O models/functiongemma-270m-q4_k_m.gguf; \
+			https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q4_K_M.gguf \
+			-O models/functiongemma-270m-q4_k_m.gguf || { echo "✗ Download failed"; rm -f models/functiongemma-270m-q4_k_m.gguf; exit 1; }; \
+		if [ ! -s models/functiongemma-270m-q4_k_m.gguf ]; then \
+			echo "✗ Downloaded file is empty"; \
+			rm -f models/functiongemma-270m-q4_k_m.gguf; \
+			exit 1; \
+		fi; \
 		echo "✓ Model downloaded successfully"; \
 	fi
 	@echo ""
 	@echo "Installing optional dependencies..."
 	@uv pip install -e ".[local-extraction]"
 	@echo ""
-	@echo "✓ Setup complete!"
+	@echo "Configuring .env..."
+	@if [ ! -f .env ]; then \
+		echo "✗ .env file not found. Creating from .env.example..."; \
+		cp .env.example .env; \
+		echo "⚠ WARNING: Please update .env with your API keys and tokens!"; \
+	fi
+	@if grep -q "^LOCAL_EXTRACTION_MODEL_PATH=" .env; then \
+		echo "✓ LOCAL_EXTRACTION_MODEL_PATH already configured in .env"; \
+	elif grep -q "^# LOCAL_EXTRACTION_MODEL_PATH=" .env; then \
+		sed -i 's|^# LOCAL_EXTRACTION_MODEL_PATH=.*|LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf|' .env; \
+		echo "✓ Enabled LOCAL_EXTRACTION_MODEL_PATH in .env"; \
+	else \
+		echo "" >> .env; \
+		echo "# Local extraction model (added by make setup-local-model)" >> .env; \
+		echo "LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf" >> .env; \
+		echo "✓ Added LOCAL_EXTRACTION_MODEL_PATH to .env"; \
+	fi
 	@echo ""
-	@echo "Next steps:"
-	@echo "  1. Add to .env: LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf"
-	@echo "  2. Restart bot: make docker-restart"
+	@echo "✅ Setup complete!"
+	@echo ""
+	@echo "Next step: Restart bot with: make docker-restart"
 	@echo ""
 	@echo "Benefits:"
 	@echo "  - Lower API costs (extraction runs locally)"
