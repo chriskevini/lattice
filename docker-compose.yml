@@ -40,8 +40,6 @@ services:
       - ./lattice:/app/lattice
       - ./scripts:/app/scripts
       - ./tests:/app/tests
-      # Persist model cache
-      - model_cache:/app/models
       # Persist logs
       - ./logs:/app/logs
     restart: unless-stopped
@@ -59,6 +57,4 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-  model_cache:
     driver: local

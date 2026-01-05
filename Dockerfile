@@ -40,8 +40,8 @@ COPY lattice/ ./lattice/
 COPY scripts/ ./scripts/
 COPY pyproject.toml ./
 
-# Create directories for logs and models
-RUN mkdir -p /app/logs /app/models
+# Create directories for logs
+RUN mkdir -p /app/logs
 
 # Set Python to run in unbuffered mode (better for logs)
 ENV PYTHONUNBUFFERED=1

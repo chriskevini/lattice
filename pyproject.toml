@@ -27,10 +27,6 @@ dev = [
     "pre-commit>=3.6.0,<4.0.0",
     "commitizen>=3.13.0,<4.0.0",
 ]
-local-extraction = [
-    "llama-cpp-python>=0.2.0,<1.0.0",
-    "psutil>=5.9.0,<6.0.0",
-]
 
 [build-system]
 requires = ["hatchling>=1.21.0,<2.0.0"]
@@ -223,10 +219,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["lattice.memory.*", "lattice.utils.*"]
 ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = ["llama_cpp", "psutil"]
-ignore_missing_imports = true
 
 # ============================================================================
 # PYTEST CONFIGURATION
