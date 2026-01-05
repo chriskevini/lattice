@@ -15,11 +15,11 @@ import discord
 import structlog
 from discord.ext import commands
 
-from lattice.core import memory_orchestrator, response_generator
+from lattice.core import memory_orchestrator, query_extraction, response_generator
 from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
-from lattice.memory import prompt_audits
+from lattice.memory import episodic, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.database import db_pool, get_system_health, set_next_check_at
@@ -196,6 +196,48 @@ class LatticeBot(commands.Bot):
                 channel_id=message.channel.id,
             )
 
+            # Extract structured query information
+            # This analyzes message type, entities, predicates, etc. for routing and retrieval
+            extraction = None
+            try:
+                # Build context from recent messages for extraction
+                # Retrieve 5 messages but use only last 3 for context to balance:
+                # - Enough context to understand conversation flow
+                # - Minimal token usage for extraction prompt (2GB RAM constraint)
+                recent_msgs_for_context = await episodic.get_recent_messages(
+                    channel_id=message.channel.id,
+                    limit=5,
+                )
+                context_str = "\n".join(
+                    [f"{msg.content}" for msg in recent_msgs_for_context[-3:]]
+                )
+
+                extraction = await query_extraction.extract_query_structure(
+                    message_id=user_message_id,
+                    message_content=message.content,
+                    context=context_str,
+                )
+
+                # Validate extraction structure
+                if extraction and extraction.message_type:
+                    logger.info(
+                        "Query extraction completed",
+                        message_type=extraction.message_type,
+                        entities=extraction.entities,
+                        extraction_id=str(extraction.id),
+                    )
+                else:
+                    logger.warning("Extraction returned invalid structure")
+                    extraction = None
+
+            except Exception as e:
+                logger.warning(
+                    "Query extraction failed, continuing without extraction",
+                    error=str(e),
+                    message_preview=message.content[:50],
+                )
+                # Continue processing without extraction - templates will fall back to BASIC_RESPONSE
+
             # Update scheduler interval
             base_interval = int(
                 await get_system_health("scheduler_base_interval") or 15
@@ -219,7 +261,7 @@ class LatticeBot(commands.Bot):
                 triple_depth=1,
             )
 
-            # Generate response
+            # Generate response with extraction for template selection
             (
                 response_result,
                 rendered_prompt,
@@ -229,6 +271,7 @@ class LatticeBot(commands.Bot):
                 semantic_facts=semantic_facts,
                 recent_messages=recent_messages,
                 graph_triples=graph_triples,
+                extraction=extraction,
             )
 
             # Split response for Discord length limits
@@ -249,7 +292,11 @@ class LatticeBot(commands.Bot):
                 "total_tokens": response_result.total_tokens,
                 "cost_usd": response_result.cost_usd,
                 "latency_ms": response_result.latency_ms,
+                "extraction_id": context_info.get("extraction_id"),
             }
+
+            # Get template key from context_info (defaults to BASIC_RESPONSE for backward compat)
+            template_key = context_info.get("template", "BASIC_RESPONSE")
 
             # Store episodic messages and prompt audits
             for bot_msg in bot_messages:
@@ -263,7 +310,7 @@ class LatticeBot(commands.Bot):
 
                 # Store prompt audit for each bot message
                 audit_id = await prompt_audits.store_prompt_audit(
-                    prompt_key="BASIC_RESPONSE",
+                    prompt_key=template_key,
                     rendered_prompt=rendered_prompt,
                     response_content=bot_msg.content,
                     main_discord_message_id=bot_msg.id,
@@ -286,7 +333,7 @@ class LatticeBot(commands.Bot):
                     context_info=context_info,
                     audit_id=audit_id,
                     performance={
-                        "prompt_key": "BASIC_RESPONSE",
+                        "prompt_key": template_key,
                         "version": 1,
                         "model": response_result.model,
                         "latency_ms": response_result.latency_ms,
