@@ -96,16 +96,18 @@ CREATE TABLE entities (
 );
 ```
 
-### 2a. Legacy: `stable_facts`
-_(Being phased out)_ Knowledge with 384-dimensional vector embeddings.
+### 2a. Legacy: `stable_facts` (UNUSED - Phase Out in Progress)
+⚠️ **This table structure is maintained for schema compatibility only. The embedding column is not populated and will be removed in Issue #61 Phase 1 (PR #64 removed all embedding functionality).**
+
+Knowledge with 384-dimensional vector embeddings (no longer generated).
 ```sql
 CREATE TABLE stable_facts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     content TEXT NOT NULL,
-    embedding VECTOR(384),
+    embedding VECTOR(384),  -- UNUSED - Will be dropped in Issue #61
     origin_id UUID REFERENCES raw_messages(id)
 );
--- HNSW index optimized for 2GB RAM
+-- HNSW index optimized for 2GB RAM (UNUSED - Will be dropped in Issue #61)
 CREATE INDEX ON stable_facts USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 ```
