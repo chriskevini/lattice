@@ -35,7 +35,6 @@ LLM_PROPOSAL_TIMEOUT = 120.0  # 2 minutes
 # The minimum feedback threshold (10) in analyzer ensures we have enough data
 MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
 DETAILED_SAMPLES_COUNT = 3  # Number of samples with full rendered prompts
-LLM_MAX_TOKENS = 2000
 
 
 def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]:
@@ -236,7 +235,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
             llm_client.complete(
                 prompt=optimization_prompt,
                 temperature=0.7,
-                max_tokens=LLM_MAX_TOKENS,
+                # No max_tokens - proposals need full reasoning (typically 500-1500 tokens)
             ),
             timeout=LLM_PROPOSAL_TIMEOUT,
         )

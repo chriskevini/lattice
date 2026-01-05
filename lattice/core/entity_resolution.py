@@ -173,7 +173,7 @@ async def _normalize_with_llm(
     result = await llm_client.complete(
         prompt=rendered_prompt,
         temperature=prompt_template.temperature,
-        max_tokens=200,  # Normalization responses are compact
+        # No max_tokens - entity names are naturally short (~5-20 tokens)
     )
 
     logger.info(

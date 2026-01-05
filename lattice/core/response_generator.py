@@ -97,7 +97,7 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
         - QUERY_RESPONSE: For factual queries and information requests
         - ACTIVITY_RESPONSE: For activity updates and progress reports
         - CONVERSATION_RESPONSE: For general conversational messages
-        - BASIC_RESPONSE: Fallback for legacy code paths
+        - BASIC_RESPONSE: Fallback when extraction unavailable
 
     Note:
         During Issue #61 Phase 2, this enables message-type-specific response
@@ -105,7 +105,7 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
         Dreaming Cycle based on user feedback patterns.
     """
     if extraction is None:
-        # Legacy path: No extraction available, use basic template
+        # No extraction available, use basic fallback template
         return "BASIC_RESPONSE"
 
     template_map = {
@@ -115,8 +115,8 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
         "conversation": "CONVERSATION_RESPONSE",
     }
 
-    # Default to conversation template for unknown message types
-    return template_map.get(extraction.message_type, "CONVERSATION_RESPONSE")
+    # Default to BASIC_RESPONSE for unknown message types (general-purpose fallback)
+    return template_map.get(extraction.message_type, "BASIC_RESPONSE")
 
 
 async def generate_response(

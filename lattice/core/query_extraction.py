@@ -107,7 +107,7 @@ async def extract_query_structure(
         result = await llm_client.complete(
             prompt=rendered_prompt,
             temperature=prompt_template.temperature,
-            max_tokens=500,  # Extraction responses are compact
+            # No max_tokens - let model complete naturally (JSON is ~50-200 tokens)
         )
         raw_response = result.content
 
