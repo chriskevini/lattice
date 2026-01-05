@@ -8,12 +8,10 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-import asyncpg
 import structlog
 
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.embeddings import EmbeddingModel, embedding_model
 from lattice.utils.llm import get_llm_client
 from lattice.utils.objective_parsing import MIN_SALIENCY_DELTA, parse_objectives
 from lattice.utils.triple_parsing import parse_triples
@@ -231,27 +229,13 @@ async def consolidate_message(
     triples = parse_triples(result.content)
     logger.info("Parsed triples", count=len(triples) if triples else 0)
 
-    if triples:
-        async with db_pool.pool.acquire() as conn, conn.transaction():
-            for triple in triples:
-                subject_id = await _ensure_fact(
-                    triple["subject"], message_id, conn, embedding_model
-                )
-                object_id = await _ensure_fact(
-                    triple["object"], message_id, conn, embedding_model
-                )
-
-                await conn.execute(
-                    """
-                        INSERT INTO semantic_triples (subject_id, predicate, object_id, origin_id)
-                        VALUES ($1, $2, $3, $4)
-                        ON CONFLICT DO NOTHING
-                        """,
-                    subject_id,
-                    triple["predicate"],
-                    object_id,
-                    message_id,
-                )
+    # TODO: Consolidation is temporarily disabled during Issue #61 refactor
+    # Will be reimplemented with query extraction + graph-first architecture
+    logger.debug(
+        "Skipping triple consolidation (disabled during Issue #61 refactor)",
+        message_id=str(message_id),
+        triple_count=len(triples) if triples else 0,
+    )
 
     objectives = await extract_objectives(message_id, content, context)
     if objectives:
@@ -272,56 +256,6 @@ async def consolidate_message(
             version=triple_prompt.version,
             rendered_prompt=filled_prompt,
         )
-
-
-async def _ensure_fact(
-    content: str,
-    origin_id: UUID,
-    conn: asyncpg.Connection,
-    embedding_model: EmbeddingModel,
-) -> UUID:
-    """Ensure fact exists, return its ID.
-
-    Args:
-        content: Fact content
-        origin_id: Origin message ID
-        conn: Database connection
-        embedding_model: Embedding model for vector generation
-
-    Returns:
-        UUID of existing or new fact
-    """
-    normalized = content.lower().strip()
-
-    existing = await conn.fetchval(
-        """
-        SELECT id FROM stable_facts WHERE content = $1
-        """,
-        normalized,
-    )
-
-    if existing:
-        return cast("UUID", existing)
-
-    embedding = embedding_model.encode_single(normalized)
-
-    row = await conn.fetchrow(
-        """
-        INSERT INTO stable_facts (content, embedding, origin_id, entity_type)
-        VALUES ($1, $2::vector, $3, 'inferred')
-        RETURNING id
-        """,
-        normalized,
-        embedding,
-        origin_id,
-    )
-
-    if not row:
-        msg = "Failed to insert fact"
-        raise RuntimeError(msg)
-
-    logger.info("Created new fact from triple", content_preview=normalized[:50])
-    return cast("UUID", row["id"])
 
 
 async def extract_objectives(

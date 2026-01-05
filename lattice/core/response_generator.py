@@ -22,9 +22,15 @@ async def generate_response(
 ) -> tuple[GenerationResult, str, dict[str, Any]]:
     """Generate a response using the prompt template.
 
+    Note:
+        During Issue #61 refactor, semantic_facts will typically be empty
+        as vector-based semantic search is disabled. The bot relies primarily
+        on episodic context (recent messages) until the new query extraction
+        system is implemented.
+
     Args:
         user_message: The user's message
-        semantic_facts: Relevant facts from semantic memory
+        semantic_facts: Relevant facts from semantic memory (stubbed during refactor)
         recent_messages: Recent conversation history
         graph_triples: Related facts from graph traversal
 
@@ -98,6 +104,7 @@ async def generate_response(
         episodic_context_preview=episodic_context[:200],
         semantic_context_preview=semantic_context[:200],
         user_message=user_message[:100],
+        note="Semantic facts empty during Issue #61 refactor",
     )
 
     filled_prompt = prompt_template.template.format(
