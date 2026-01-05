@@ -102,9 +102,9 @@ CREATE INDEX IF NOT EXISTS idx_triples_valid_until
 ON semantic_triples (valid_until) WHERE valid_until IS NOT NULL;
 
 -- Combined index for finding currently valid triples
+-- Note: Cannot use WHERE clause with now() as it's not IMMUTABLE
 CREATE INDEX IF NOT EXISTS idx_triples_temporal_validity
-ON semantic_triples (valid_from, valid_until)
-WHERE valid_until IS NULL OR valid_until > now();
+ON semantic_triples (valid_from, valid_until);
 
 -- GIN index for flexible metadata queries
 CREATE INDEX IF NOT EXISTS idx_triples_metadata
