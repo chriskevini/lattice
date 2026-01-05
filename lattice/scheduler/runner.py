@@ -23,6 +23,7 @@ from lattice.utils.database import (
     db_pool,
     get_next_check_at,
     get_system_health,
+    get_user_timezone,
     set_next_check_at,
 )
 
@@ -123,6 +124,9 @@ class ProactiveScheduler:
                         channel_id=channel_id,
                     )
 
+                    # Get system timezone for message storage
+                    user_tz = await get_user_timezone()
+
                     await episodic.store_message(
                         episodic.EpisodicMessage(
                             content=result.content,
@@ -130,7 +134,7 @@ class ProactiveScheduler:
                             channel_id=result.channel.id,
                             is_bot=True,
                             is_proactive=True,
-                            user_timezone="UTC",  # Proactive messages use UTC by default
+                            user_timezone=user_tz,
                         )
                     )
 

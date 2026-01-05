@@ -7,7 +7,6 @@ import json
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 import structlog
 
@@ -482,53 +481,3 @@ async def _mirror_extraction_to_dream(
 
     except Exception:
         logger.exception("Failed to mirror extraction results to dream channel")
-
-
-async def get_user_timezone(user_id: str) -> str:
-    """Get user's timezone from user_config table.
-
-    Args:
-        user_id: Discord user ID
-
-    Returns:
-        IANA timezone string (e.g., 'America/New_York'), defaults to 'UTC' if not set
-    """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT timezone FROM user_config WHERE user_id = $1
-            """,
-            user_id,
-        )
-        return row["timezone"] if row else "UTC"
-
-
-async def set_user_timezone(user_id: str, timezone: str) -> None:
-    """Set user's timezone in user_config table.
-
-    Args:
-        user_id: Discord user ID
-        timezone: IANA timezone string (e.g., 'America/New_York')
-
-    Raises:
-        ValueError: If timezone is invalid
-    """
-    # Validate timezone
-    try:
-        ZoneInfo(timezone)
-    except Exception as e:
-        msg = f"Invalid timezone: {timezone}"
-        raise ValueError(msg) from e
-
-    async with db_pool.pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO user_config (user_id, timezone, updated_at)
-            VALUES ($1, $2, now())
-            ON CONFLICT (user_id)
-            DO UPDATE SET timezone = EXCLUDED.timezone, updated_at = now()
-            """,
-            user_id,
-            timezone,
-        )
-        logger.info("User timezone updated", user_id=user_id, timezone=timezone)

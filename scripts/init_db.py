@@ -64,26 +64,6 @@ async def init_database() -> None:
         """
         )
 
-        print("Creating user_config table...")
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS user_config (
-                user_id TEXT PRIMARY KEY,
-                timezone TEXT NOT NULL DEFAULT 'UTC',
-                created_at TIMESTAMPTZ DEFAULT now(),
-                updated_at TIMESTAMPTZ DEFAULT now()
-            );
-        """
-        )
-
-        print("Creating user_config indexes...")
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_user_config_timezone
-            ON user_config (timezone);
-        """
-        )
-
         print("Creating message_extractions table...")
         await conn.execute(
             """
@@ -304,7 +284,8 @@ async def init_database() -> None:
             ('scheduler_max_interval', '1440'),
             ('dreaming_min_uses', '10'),
             ('dreaming_min_confidence', '0.7'),
-            ('dreaming_enabled', 'true')
+            ('dreaming_enabled', 'true'),
+            ('user_timezone', 'UTC')
             ON CONFLICT (metric_key) DO NOTHING
             """
         )
