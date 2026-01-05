@@ -235,7 +235,10 @@ BEGIN
 END $$;
 
 -- 8. Drop pgvector extension (no longer needed)
-DROP EXTENSION IF EXISTS vector CASCADE;
+-- NOTE: Commented out due to missing library files in some deployments
+-- If you need to drop the extension, do it manually after ensuring pgvector is installed:
+-- DROP EXTENSION IF EXISTS vector CASCADE;
+-- For now, the extension remains but is unused (entities table has no embedding column)
 
 -- Comments for documentation
 COMMENT ON TABLE message_extractions IS
