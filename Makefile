@@ -130,13 +130,19 @@ migrate: ## Run database migrations
 setup-local-model: ## Download and setup FunctionGemma-270M for local extraction
 	@echo "Setting up local extraction model..."
 	@mkdir -p models
-	@if [ -f models/functiongemma-270m-q4_k_m.gguf ]; then \
+	@if [ -f models/functiongemma-270m-q4_k_m.gguf ] && [ -s models/functiongemma-270m-q4_k_m.gguf ]; then \
 		echo "✓ Model already exists at models/functiongemma-270m-q4_k_m.gguf"; \
 	else \
-		echo "Downloading FunctionGemma-270M (4-bit quantized, ~200MB)..."; \
+		echo "Downloading FunctionGemma-270M (4-bit quantized, ~240MB)..."; \
+		rm -f models/functiongemma-270m-q4_k_m.gguf; \
 		wget --progress=bar:force \
-			https://huggingface.co/google/functiongemma-270m-gguf/resolve/main/functiongemma-270m-q4_k_m.gguf \
-			-O models/functiongemma-270m-q4_k_m.gguf || { echo "✗ Download failed"; exit 1; }; \
+			https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q4_K_M.gguf \
+			-O models/functiongemma-270m-q4_k_m.gguf || { echo "✗ Download failed"; rm -f models/functiongemma-270m-q4_k_m.gguf; exit 1; }; \
+		if [ ! -s models/functiongemma-270m-q4_k_m.gguf ]; then \
+			echo "✗ Downloaded file is empty"; \
+			rm -f models/functiongemma-270m-q4_k_m.gguf; \
+			exit 1; \
+		fi; \
 		echo "✓ Model downloaded successfully"; \
 	fi
 	@echo ""
