@@ -83,7 +83,7 @@ async def extract_query_structure(
         raise ValueError(msg)
 
     # 2. Render prompt with message content and context
-    rendered_prompt = prompt_template.template.format(
+    rendered_prompt = prompt_template.safe_format(
         message_content=message_content,
         context=context if context else "(No additional context)",
     )

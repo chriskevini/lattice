@@ -161,7 +161,7 @@ async def _normalize_with_llm(
         raise ValueError(msg)
 
     # Render prompt
-    rendered_prompt = prompt_template.template.format(
+    rendered_prompt = prompt_template.safe_format(
         entity_mention=entity_mention,
         message_context=message_context or "(No context provided)",
         existing_entities=json.dumps(existing_entities),

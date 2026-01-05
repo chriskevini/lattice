@@ -202,7 +202,7 @@ async def generate_response(
         if key in template_placeholders
     }
 
-    filled_prompt = prompt_template.template.format(**filtered_params)
+    filled_prompt = prompt_template.safe_format(**filtered_params)
 
     logger.debug(
         "Filled prompt for generation",

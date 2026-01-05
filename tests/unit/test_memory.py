@@ -213,6 +213,68 @@ class TestPromptTemplate:
         assert prompt.version == 3
         assert prompt.active is False
 
+    def test_safe_format_basic(self) -> None:
+        """Test safe_format with simple substitution."""
+        prompt = PromptTemplate(prompt_key="test", template="Hello {name}!")
+        result = prompt.safe_format(name="World")
+        assert result == "Hello World!"
+
+    def test_safe_format_preserves_unknown_placeholders(self) -> None:
+        """Test safe_format preserves placeholders that aren't provided."""
+        prompt = PromptTemplate(
+            prompt_key="test",
+            template="Hello {name}! Example: {example_placeholder}",
+        )
+        result = prompt.safe_format(name="World")
+        assert result == "Hello World! Example: {example_placeholder}"
+
+    def test_safe_format_multiple_variables(self) -> None:
+        """Test safe_format with multiple known and unknown placeholders."""
+        prompt = PromptTemplate(
+            prompt_key="test",
+            template="Message: {content}\nContext: {context}\nExample: {yesterday_date}",
+        )
+        result = prompt.safe_format(content="Hello", context="Test")
+        assert result == "Message: Hello\nContext: Test\nExample: {yesterday_date}"
+
+    def test_safe_format_no_placeholders(self) -> None:
+        """Test safe_format with template that has no placeholders."""
+        prompt = PromptTemplate(
+            prompt_key="test", template="This is a static template."
+        )
+        result = prompt.safe_format()
+        assert result == "This is a static template."
+
+    def test_safe_format_nested_braces(self) -> None:
+        """Test safe_format with JSON examples containing nested braces."""
+        prompt = PromptTemplate(
+            prompt_key="test",
+            template='Respond: {instruction}\nFormat: {{"key": "{value}"}}',
+        )
+        result = prompt.safe_format(instruction="Be helpful")
+        # The JSON example braces should be preserved
+        assert result == 'Respond: Be helpful\nFormat: {{"key": "{value}"}}'
+
+    def test_safe_format_real_query_extraction_example(self) -> None:
+        """Test safe_format with real-world QUERY_EXTRACTION template snippet."""
+        template_snippet = (
+            "User Message: {message_content}\n"
+            "Context: {context}\n"
+            "Example: 'what did I do yesterday?' → "
+            "'What activities did the user complete on {yesterday_date}?'"
+        )
+        prompt = PromptTemplate(prompt_key="test", template=template_snippet)
+        result = prompt.safe_format(
+            message_content="test message", context="test context"
+        )
+        expected = (
+            "User Message: test message\n"
+            "Context: test context\n"
+            "Example: 'what did I do yesterday?' → "
+            "'What activities did the user complete on {yesterday_date}?'"
+        )
+        assert result == expected
+
 
 class TestProceduralMemoryFunctions:
     """Tests for procedural memory functions."""
