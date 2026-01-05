@@ -29,10 +29,10 @@ class GraphTraversal:
         predicate_filter: set[str] | None = None,
         max_hops: int | None = None,
     ) -> list[dict[str, Any]]:
-        """BFS traversal starting from a stable_fact.
+        """BFS traversal starting from an entity.
 
         Args:
-            fact_id: Starting node UUID
+            fact_id: Starting entity UUID
             predicate_filter: Optional set of predicates to follow (None = all)
             max_hops: Maximum traversal depth (defaults to self.max_depth)
 
@@ -49,15 +49,15 @@ class GraphTraversal:
                     SELECT
                         t.id,
                         t.subject_id,
-                        s.content AS subject_content,
+                        s.name AS subject_content,
                         t.predicate,
                         t.object_id,
-                        o.content AS object_content,
+                        o.name AS object_content,
                         1 AS depth,
                         ARRAY[t.object_id] AS visited
                     FROM semantic_triples t
-                    JOIN stable_facts s ON t.subject_id = s.id
-                    JOIN stable_facts o ON t.object_id = o.id
+                    JOIN entities s ON t.subject_id = s.id
+                    JOIN entities o ON t.object_id = o.id
                     WHERE t.subject_id = $1
                       AND ($2 IS NULL OR t.predicate = ANY($2))
 
@@ -66,15 +66,15 @@ class GraphTraversal:
                     SELECT
                         t.id,
                         t.subject_id,
-                        s.content AS subject_content,
+                        s.name AS subject_content,
                         t.predicate,
                         t.object_id,
-                        o.content AS object_content,
+                        o.name AS object_content,
                         traversal.depth + 1,
                         traversal.visited || t.object_id
                     FROM semantic_triples t
-                    JOIN stable_facts s ON t.subject_id = s.id
-                    JOIN stable_facts o ON t.object_id = o.id
+                    JOIN entities s ON t.subject_id = s.id
+                    JOIN entities o ON t.object_id = o.id
                     JOIN traversal ON t.subject_id = traversal.object_id
                     WHERE traversal.depth < $3
                       AND NOT t.object_id = ANY(traversal.visited)
@@ -108,14 +108,14 @@ class GraphTraversal:
             return await conn.fetch(
                 """
                 SELECT
-                    s.content AS subject,
+                    s.name AS subject,
                     t.predicate,
-                    o.content AS object,
+                    o.name AS object,
                     t.created_at
                 FROM semantic_triples t
-                JOIN stable_facts s ON t.subject_id = s.id
-                JOIN stable_facts o ON t.object_id = o.id
-                WHERE s.content ILIKE $1 OR o.content ILIKE $1
+                JOIN entities s ON t.subject_id = s.id
+                JOIN entities o ON t.object_id = o.id
+                WHERE s.name ILIKE $1 OR o.name ILIKE $1
                 ORDER BY t.created_at DESC
                 LIMIT $2
                 """,

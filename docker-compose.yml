@@ -1,7 +1,7 @@
 services:
-  # PostgreSQL with pgvector extension
+  # PostgreSQL 16
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16-alpine
     container_name: lattice-postgres
     env_file:
       - .env
