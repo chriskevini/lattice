@@ -6,15 +6,17 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
+> **⚠️ NOTE**: Semantic memory architecture is being rewritten. See [Issue #61](https://github.com/chriskevini/lattice/issues/61) for the graph-first approach replacing vector embeddings with query extraction.
+
 ---
 
 ## 🌟 Key Features
 
 - **ENGRAM Memory Framework**: Three-tier neuro-symbolic system (Episodic, Semantic, Procedural).
-- **Context Archetypes**: Dynamic retrieval scaling based on real-time semantic classification.
+- **Query Extraction**: FunctionGemma-270M structured message analysis (replacing context archetypes).
 - **Dreaming Cycle**: Self-optimization loop where AI proposes logic updates for human approval.
 - **Resource-First Design**: Native support for low-memory environments via streaming and pooling.
-- **Hybrid Retrieval**: Unified search across temporal logs, vector embeddings, and relationship graphs.
+- **Graph-First Retrieval**: Unified search across temporal logs and relationship graphs.
 - **Invisible Alignment**: Non-intrusive feedback loops using Discord's native UI elements.
 
 ---
@@ -25,11 +27,11 @@ Lattice operates on the principle that **logic is data**. By moving prompts and 
 
 ### Memory Tiers
 1.  **Episodic ([`raw_messages`](#1-episodic-memory-raw_messages))**: Immutable, time-ordered interaction log.
-2.  **Semantic ([`stable_facts`](#2-semantic-memory-stable_facts) + [`semantic_triples`](#3-semantic-relationships-semantic_triples))**: Vectorized knowledge and Subject-Predicate-Object graphs.
+2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_triples`](#3-semantic-relationships-semantic_triples))**: Graph-first knowledge with query extraction (replacing vector-based facts).
 3.  **Procedural ([`prompt_registry`](#4-procedural-memory-prompt_registry))**: Versioned templates and behavioral strategies.
 
 ### Unified Pipeline
-`Ingestion → Short-Circuit → Archetype Analysis → Hybrid Retrieval → Generation → Consolidation`
+`Ingestion → Short-Circuit → Query Extraction → Graph Retrieval → Generation → Consolidation`
 
 For a deep dive into the technical implementation, see **[AGENTS.md](AGENTS.md)**.
 
@@ -55,12 +57,12 @@ make run            # Start the orchestrator
 ## ⚙️ Configuration
 
 ### Hardware Limits
-Lattice enforces strict bounds to stay within 2GB RAM. These are controlled via `context_archetypes` in the DB, but capped by environment variables:
+Lattice enforces strict bounds to stay within 2GB RAM:
 ```env
 MAX_EPISODIC_CONTEXT_TURNS=20
-MAX_VECTOR_SEARCH_LIMIT=15
 MAX_TRIPLE_DEPTH=3
 ```
+_(Note: Vector search limits removed in Issue #61's graph-first architecture)_
 
 ### Discord Channels
 - **`DISCORD_MAIN_CHANNEL_ID`**: The public face. Conversations are stored here.
@@ -82,8 +84,20 @@ CREATE TABLE raw_messages (
 );
 ```
 
-### 2. Semantic Memory: `stable_facts`
-Knowledge with 384-dimensional vector embeddings.
+### 2. Semantic Memory: `entities`
+_(New in Issue #61)_ Named entities without embeddings, using keyword search.
+```sql
+CREATE TABLE entities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,
+    entity_type TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    first_mentioned TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### 2a. Legacy: `stable_facts`
+_(Being phased out)_ Knowledge with 384-dimensional vector embeddings.
 ```sql
 CREATE TABLE stable_facts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,12 +111,15 @@ WITH (m = 16, ef_construction = 64);
 ```
 
 ### 3. Semantic Relationships: `semantic_triples`
-The graph layer connecting facts.
+The graph layer connecting entities with temporal validity.
 ```sql
 CREATE TABLE semantic_triples (
-    subject_id UUID REFERENCES stable_facts(id) ON DELETE CASCADE,
+    subject_id UUID REFERENCES entities(id) ON DELETE CASCADE,
     predicate TEXT NOT NULL,
-    object_id UUID REFERENCES stable_facts(id) ON DELETE CASCADE
+    object_id UUID REFERENCES entities(id) ON DELETE CASCADE,
+    valid_from TIMESTAMPTZ DEFAULT now(),
+    valid_until TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}'::jsonb
 );
 ```
 
