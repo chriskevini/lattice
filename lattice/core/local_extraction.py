@@ -91,7 +91,7 @@ class LocalExtractionModel:
                 self._model,
                 prompt,
                 temperature=temperature,
-                max_tokens=512,
+                # No max_tokens - JSON completion is naturally short
                 stop=["```", "\n\n\n"],
             )
             latency_ms = int((time.monotonic() - start_time) * 1000)

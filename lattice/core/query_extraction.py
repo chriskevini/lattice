@@ -83,7 +83,7 @@ async def extract_query_structure(
         raise ValueError(msg)
 
     # 2. Render prompt with message content and context
-    rendered_prompt = prompt_template.template.format(
+    rendered_prompt = prompt_template.safe_format(
         message_content=message_content,
         context=context if context else "(No additional context)",
     )
@@ -107,7 +107,7 @@ async def extract_query_structure(
         result = await llm_client.complete(
             prompt=rendered_prompt,
             temperature=prompt_template.temperature,
-            max_tokens=500,  # Extraction responses are compact
+            # No max_tokens - let model complete naturally (JSON is ~50-200 tokens)
         )
         raw_response = result.content
 

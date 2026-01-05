@@ -8,6 +8,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -111,7 +112,7 @@ async def resolve_entity(
     )
 
 
-async def _find_existing_entity(name: str) -> dict | None:
+async def _find_existing_entity(name: str) -> dict[str, Any] | None:
     """Find an existing entity by case-insensitive name match.
 
     Args:
@@ -161,7 +162,7 @@ async def _normalize_with_llm(
         raise ValueError(msg)
 
     # Render prompt
-    rendered_prompt = prompt_template.template.format(
+    rendered_prompt = prompt_template.safe_format(
         entity_mention=entity_mention,
         message_context=message_context or "(No context provided)",
         existing_entities=json.dumps(existing_entities),
@@ -172,7 +173,7 @@ async def _normalize_with_llm(
     result = await llm_client.complete(
         prompt=rendered_prompt,
         temperature=prompt_template.temperature,
-        max_tokens=200,  # Normalization responses are compact
+        # No max_tokens - entity names are naturally short (~5-20 tokens)
     )
 
     logger.info(
@@ -275,10 +276,10 @@ async def _create_entity(canonical_name: str) -> uuid.UUID:
             msg = f"Failed to create or retrieve entity: {canonical_name}"
             raise Exception(msg)
 
-        return row["id"]
+        return uuid.UUID(str(row["id"]))
 
 
-async def get_entity_by_id(entity_id: uuid.UUID) -> dict | None:
+async def get_entity_by_id(entity_id: uuid.UUID) -> dict[str, Any] | None:
     """Retrieve an entity by its ID.
 
     Args:
@@ -309,7 +310,7 @@ async def get_entity_by_id(entity_id: uuid.UUID) -> dict | None:
         }
 
 
-async def get_entity_by_name(name: str) -> dict | None:
+async def get_entity_by_name(name: str) -> dict[str, Any] | None:
     """Retrieve an entity by its canonical name (case-insensitive).
 
     Args:
