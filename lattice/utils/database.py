@@ -133,4 +133,35 @@ async def set_next_check_at(dt: datetime) -> None:
     await set_system_health("next_check_at", dt.isoformat())
 
 
+async def get_user_timezone() -> str:
+    """Get system-wide user timezone.
+
+    Returns:
+        IANA timezone string (e.g., 'America/New_York'), defaults to 'UTC'
+    """
+    return await get_system_health("user_timezone") or "UTC"
+
+
+async def set_user_timezone(timezone: str) -> None:
+    """Set system-wide user timezone.
+
+    Args:
+        timezone: IANA timezone string (e.g., 'America/New_York')
+
+    Raises:
+        ValueError: If timezone is invalid
+    """
+    from zoneinfo import ZoneInfo
+
+    # Validate timezone
+    try:
+        ZoneInfo(timezone)
+    except Exception as e:
+        msg = f"Invalid timezone: {timezone}"
+        raise ValueError(msg) from e
+
+    await set_system_health("user_timezone", timezone)
+    logger.info("System timezone updated", timezone=timezone)
+
+
 db_pool = DatabasePool()

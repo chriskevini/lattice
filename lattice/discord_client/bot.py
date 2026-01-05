@@ -22,7 +22,13 @@ from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
 from lattice.memory import episodic, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.dreaming import DreamingScheduler
-from lattice.utils.database import db_pool, get_system_health, set_next_check_at
+from lattice.utils.database import (
+    db_pool,
+    get_system_health,
+    get_user_timezone,
+    set_next_check_at,
+    set_user_timezone,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -65,6 +71,9 @@ class LatticeBot(commands.Bot):
         self._scheduler: ProactiveScheduler | None = None
         self._dreaming_scheduler: DreamingScheduler | None = None
 
+        # Cache user timezone in memory (single-user system)
+        self._user_timezone: str = "UTC"
+
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
         logger.info("Bot setup starting")
@@ -104,6 +113,10 @@ class LatticeBot(commands.Bot):
 
             # Setup commands
             await setup_commands(self)
+
+            # Load user timezone from system_health (cached for performance)
+            self._user_timezone = await get_user_timezone()
+            logger.info("User timezone loaded", timezone=self._user_timezone)
 
             # Start proactive scheduler
             self._scheduler = ProactiveScheduler(
@@ -194,6 +207,7 @@ class LatticeBot(commands.Bot):
                 content=message.content,
                 discord_message_id=message.id,
                 channel_id=message.channel.id,
+                timezone=self._user_timezone,
             )
 
             # Extract structured query information
@@ -306,6 +320,7 @@ class LatticeBot(commands.Bot):
                     channel_id=bot_msg.channel.id,
                     is_proactive=False,
                     generation_metadata=generation_metadata,
+                    timezone=self._user_timezone,
                 )
 
                 # Store prompt audit for each bot message
@@ -503,3 +518,27 @@ async def setup_commands(bot: LatticeBot) -> None:
                 await ctx.send(f"❌ **Dreaming cycle failed:** {e}")
         else:
             await ctx.send("❌ **Dreaming scheduler not initialized.**")
+
+    @bot.command(name="timezone")  # type: ignore[arg-type]
+    @commands.has_permissions(administrator=True)
+    async def set_timezone_cmd(
+        ctx: commands.Context[LatticeBot], timezone: str
+    ) -> None:
+        """Set the user's timezone for conversation timestamps.
+
+        Usage: !timezone America/New_York
+
+        Args:
+            ctx: Command context
+            timezone: IANA timezone identifier (e.g., America/New_York, Europe/London)
+        """
+        try:
+            await set_user_timezone(timezone)
+            # Update cached timezone immediately
+            bot._user_timezone = timezone  # noqa: SLF001
+            await ctx.send(f"✅ Timezone set to: {timezone}")
+            logger.info(
+                "Timezone changed via command", timezone=timezone, user=ctx.author.name
+            )
+        except ValueError as e:
+            await ctx.send(f"❌ Invalid timezone: {e}")

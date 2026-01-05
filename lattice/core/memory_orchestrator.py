@@ -21,6 +21,7 @@ async def store_user_message(
     content: str,
     discord_message_id: int,
     channel_id: int,
+    timezone: str = "UTC",
 ) -> UUID:
     """Store a user message in episodic memory.
 
@@ -28,6 +29,7 @@ async def store_user_message(
         content: Message content
         discord_message_id: Discord's unique message ID
         channel_id: Discord channel ID
+        timezone: IANA timezone string (e.g., 'America/New_York')
 
     Returns:
         UUID of the stored episodic message
@@ -36,7 +38,7 @@ async def store_user_message(
         Semantic facts are extracted asynchronously via consolidation,
         not stored directly from raw messages to avoid redundancy.
     """
-    # Store in episodic memory only
+    # Store in episodic memory with provided timezone
     # Semantic extraction happens later via consolidate_message_async()
     user_message_id = await episodic.store_message(
         episodic.EpisodicMessage(
@@ -44,6 +46,7 @@ async def store_user_message(
             discord_message_id=discord_message_id,
             channel_id=channel_id,
             is_bot=False,
+            user_timezone=timezone,
         )
     )
 
@@ -56,6 +59,7 @@ async def store_bot_message(
     channel_id: int,
     is_proactive: bool = False,
     generation_metadata: dict[str, Any] | None = None,
+    timezone: str = "UTC",
 ) -> UUID:
     """Store a bot message in episodic memory.
 
@@ -65,6 +69,7 @@ async def store_bot_message(
         channel_id: Discord channel ID
         is_proactive: Whether the bot initiated this message
         generation_metadata: LLM generation metadata
+        timezone: IANA timezone string (e.g., 'America/New_York')
 
     Returns:
         UUID of the stored episodic message
@@ -77,6 +82,7 @@ async def store_bot_message(
             is_bot=True,
             is_proactive=is_proactive,
             generation_metadata=generation_metadata,
+            user_timezone=timezone,
         )
     )
 

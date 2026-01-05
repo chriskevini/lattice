@@ -1,6 +1,6 @@
 """Episodic memory module - handles raw_messages table.
 
-Stores immutable conversation history with timestamp-based retrieval.
+Stores immutable conversation history with timestamp-based retrieval and timezone tracking.
 """
 
 import json
@@ -33,6 +33,7 @@ class EpisodicMessage:
         message_id: UUID | None = None,
         timestamp: datetime | None = None,
         generation_metadata: dict[str, Any] | None = None,
+        user_timezone: str | None = None,
     ) -> None:
         """Initialize an episodic message.
 
@@ -45,6 +46,7 @@ class EpisodicMessage:
             message_id: Internal UUID (auto-generated if None)
             timestamp: Message timestamp (defaults to now)
             generation_metadata: LLM generation metadata (model, tokens, etc.)
+            user_timezone: IANA timezone for this message (e.g., 'America/New_York')
         """
         self.content = content
         self.discord_message_id = discord_message_id
@@ -54,6 +56,7 @@ class EpisodicMessage:
         self.message_id = message_id
         self.timestamp = timestamp or datetime.now(UTC)
         self.generation_metadata = generation_metadata
+        self.user_timezone = user_timezone or "UTC"
 
     @property
     def role(self) -> str:
@@ -77,9 +80,9 @@ async def store_message(message: EpisodicMessage) -> UUID:
         row = await conn.fetchrow(
             """
             INSERT INTO raw_messages (
-                discord_message_id, channel_id, content, is_bot, is_proactive, generation_metadata
+                discord_message_id, channel_id, content, is_bot, is_proactive, generation_metadata, user_timezone
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
             """,
             message.discord_message_id,
@@ -90,6 +93,7 @@ async def store_message(message: EpisodicMessage) -> UUID:
             json.dumps(message.generation_metadata)
             if message.generation_metadata
             else None,
+            message.user_timezone,
         )
 
         message_id = cast("UUID", row["id"])
@@ -121,7 +125,7 @@ async def get_recent_messages(
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp
+                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
                 FROM raw_messages
                 WHERE channel_id = $1
                 ORDER BY timestamp DESC
@@ -134,7 +138,7 @@ async def get_recent_messages(
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp
+                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
                 FROM raw_messages
                 ORDER BY timestamp DESC
                 LIMIT $1
@@ -151,6 +155,7 @@ async def get_recent_messages(
             is_bot=row["is_bot"],
             is_proactive=row["is_proactive"],
             timestamp=row["timestamp"],
+            user_timezone=row["user_timezone"] or "UTC",
         )
         for row in reversed(rows)
     ]

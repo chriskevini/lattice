@@ -98,6 +98,7 @@ class TestEpisodicMemoryFunctions:
                     "is_bot": True,
                     "is_proactive": False,
                     "timestamp": datetime(2024, 1, 1, 10, 5, 0, tzinfo=UTC),
+                    "user_timezone": "UTC",
                 },
                 {
                     "id": UUID("11111111-1111-1111-1111-111111111111"),
@@ -107,6 +108,7 @@ class TestEpisodicMemoryFunctions:
                     "is_bot": False,
                     "is_proactive": False,
                     "timestamp": datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
+                    "user_timezone": "UTC",
                 },
             ]
         )

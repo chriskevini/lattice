@@ -58,7 +58,8 @@ async def init_database() -> None:
                 is_bot BOOLEAN DEFAULT false,
                 is_proactive BOOLEAN DEFAULT false,
                 generation_metadata JSONB,
-                timestamp TIMESTAMPTZ DEFAULT now()
+                timestamp TIMESTAMPTZ DEFAULT now(),
+                user_timezone TEXT
             );
         """
         )
@@ -283,7 +284,8 @@ async def init_database() -> None:
             ('scheduler_max_interval', '1440'),
             ('dreaming_min_uses', '10'),
             ('dreaming_min_confidence', '0.7'),
-            ('dreaming_enabled', 'true')
+            ('dreaming_enabled', 'true'),
+            ('user_timezone', 'UTC')
             ON CONFLICT (metric_key) DO NOTHING
             """
         )

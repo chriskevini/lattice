@@ -5,6 +5,7 @@ Handles prompt formatting, LLM generation, and message splitting for Discord.
 
 import re
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
@@ -182,8 +183,20 @@ async def generate_response(
         )
 
     def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
-        ts = msg.timestamp.strftime("%Y-%m-%d %H:%M")
-        return f"[{ts}] {msg.role}: {msg.content}"
+        # Convert UTC timestamp to user's local timezone
+        try:
+            user_tz = ZoneInfo(msg.user_timezone)
+            local_ts = msg.timestamp.astimezone(user_tz)
+            ts_str = local_ts.strftime("%Y-%m-%d %H:%M")
+        except (ZoneInfoNotFoundError, ValueError, KeyError) as e:
+            # Fallback to UTC if timezone conversion fails
+            logger.warning(
+                "Timezone conversion failed",
+                timezone=msg.user_timezone,
+                error=str(e),
+            )
+            ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M UTC")
+        return f"[{ts_str}] {msg.role}: {msg.content}"
 
     # Use full episodic_limit instead of hardcoded [-5:]
     episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages)
