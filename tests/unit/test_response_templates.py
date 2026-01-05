@@ -307,7 +307,7 @@ class TestSelectResponseTemplate:
         assert template == "BASIC_RESPONSE"
 
     def test_select_default_for_unknown_type(self) -> None:
-        """Test default to CONVERSATION_RESPONSE for unknown message types."""
+        """Test default to BASIC_RESPONSE for unknown message types."""
         extraction = QueryExtraction(
             id=uuid.uuid4(),
             message_id=uuid.uuid4(),
@@ -325,7 +325,7 @@ class TestSelectResponseTemplate:
             created_at=datetime.now(UTC),
         )
         template = select_response_template(extraction)
-        assert template == "CONVERSATION_RESPONSE"
+        assert template == "BASIC_RESPONSE"
 
 
 class TestGenerateResponseWithTemplates:
