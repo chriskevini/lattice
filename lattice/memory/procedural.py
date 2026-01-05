@@ -3,6 +3,8 @@
 Stores evolving templates and strategies for bot behavior.
 """
 
+from typing import Any
+
 import structlog
 
 from lattice.utils.database import db_pool
@@ -36,6 +38,40 @@ class PromptTemplate:
         self.temperature = temperature
         self.version = version
         self.active = active
+
+    def safe_format(self, **kwargs: Any) -> str:
+        """Safely format template, escaping unknown placeholders.
+
+        This method prevents KeyError when templates contain example placeholders
+        (like {yesterday_date} in documentation) that aren't meant to be substituted.
+
+        Only the provided kwargs are substituted. All other {placeholder} patterns
+        are preserved as literals in the output.
+
+        Args:
+            **kwargs: Variables to substitute in the template
+
+        Returns:
+            Formatted template with unknown placeholders preserved
+
+        Example:
+            >>> template = PromptTemplate(
+            ...     "test",
+            ...     "Hello {name}! Example: {example_var}"
+            ... )
+            >>> template.safe_format(name="World")
+            'Hello World! Example: {example_var}'
+        """
+        # First, escape ALL braces by doubling them
+        escaped = self.template.replace("{", "{{").replace("}", "}}")
+
+        # Then, un-escape only the kwargs we're actually substituting
+        for key in kwargs:
+            # Replace {{key}} back to {key} so format() can substitute it
+            escaped = escaped.replace("{{" + key + "}}", "{" + key + "}")
+
+        # Now format() will only substitute the un-escaped placeholders
+        return escaped.format(**kwargs)
 
 
 async def get_prompt(prompt_key: str) -> PromptTemplate | None:

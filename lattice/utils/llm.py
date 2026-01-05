@@ -157,8 +157,23 @@ class LLMClient:
         usage = response.usage
         cost_usd = getattr(usage, "cost", None) if usage else None
 
+        # Debug logging for empty content issue
+        message_content = response.choices[0].message.content
+        if message_content is None or message_content == "":
+            logger.error(
+                f"LLM returned empty content - model={response.model}, "
+                f"content_is_none={message_content is None}, "
+                f"content_is_empty={message_content == ''}, "
+                f"finish_reason={response.choices[0].finish_reason if response.choices else None}, "
+                f"prompt_tokens={usage.prompt_tokens if usage else 0}, "
+                f"completion_tokens={usage.completion_tokens if usage else 0}, "
+                f"total_tokens={usage.total_tokens if usage else 0}, "
+                f"max_tokens_requested={max_tokens}, "
+                f"prompt_preview={prompt[:200]}"
+            )
+
         return GenerationResult(
-            content=response.choices[0].message.content or "",
+            content=message_content or "",
             model=response.model,
             provider=getattr(response, "provider", None),
             prompt_tokens=usage.prompt_tokens if usage else 0,

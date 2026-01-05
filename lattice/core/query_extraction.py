@@ -2,6 +2,11 @@
 
 This module provides the query extraction service for Issue #61 Phase 2.
 It parses user messages into structured JSONB for routing and retrieval.
+
+Extraction Strategy (Phase 5):
+    1. Try local FunctionGemma-270M model (if configured and available)
+    2. Fallback to OpenRouter API if local fails or unavailable
+    3. Store extraction with metadata about which method was used
 """
 
 import json
@@ -11,6 +16,7 @@ from datetime import UTC, datetime
 
 import structlog
 
+from lattice.core.local_extraction import extract_with_local_model
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.llm import get_llm_client
@@ -39,6 +45,7 @@ class QueryExtraction:
     continuation: bool
     rendered_prompt: str
     raw_response: str
+    extraction_method: str  # "local" or "api"
     created_at: datetime
 
 
@@ -49,12 +56,13 @@ async def extract_query_structure(
 ) -> QueryExtraction:
     """Extract structured information from a user message.
 
-    This function:
+    This function (Phase 5):
     1. Fetches the QUERY_EXTRACTION prompt template
     2. Renders the prompt with message content and context
-    3. Calls OpenRouter LLM to extract structured data
-    4. Parses JSON response into extraction fields
-    5. Stores extraction in message_extractions table
+    3. Tries local FunctionGemma-270M model first (if available)
+    4. Falls back to OpenRouter API if local fails or unavailable
+    5. Parses JSON response into extraction fields
+    6. Stores extraction in message_extractions table with method metadata
 
     Args:
         message_id: UUID of the message being extracted
@@ -75,7 +83,7 @@ async def extract_query_structure(
         raise ValueError(msg)
 
     # 2. Render prompt with message content and context
-    rendered_prompt = prompt_template.template.format(
+    rendered_prompt = prompt_template.safe_format(
         message_content=message_content,
         context=context if context else "(No additional context)",
     )
@@ -86,24 +94,32 @@ async def extract_query_structure(
         message_length=len(message_content),
     )
 
-    # 3. Call LLM
-    llm_client = get_llm_client()
-    result = await llm_client.complete(
-        prompt=rendered_prompt,
-        temperature=prompt_template.temperature,
-        max_tokens=500,  # Extraction responses are compact
+    # 3. Try local model first (Phase 5)
+    raw_response = await extract_with_local_model(
+        rendered_prompt, temperature=prompt_template.temperature
     )
+    extraction_method = "local" if raw_response else "api"
 
-    raw_response = result.content
-    logger.info(
-        "LLM extraction completed",
-        message_id=str(message_id),
-        model=result.model,
-        tokens=result.total_tokens,
-        latency_ms=result.latency_ms,
-    )
+    # 4. Fallback to API if local unavailable/failed
+    if raw_response is None:
+        logger.info("Using API fallback for extraction")
+        llm_client = get_llm_client()
+        result = await llm_client.complete(
+            prompt=rendered_prompt,
+            temperature=prompt_template.temperature,
+            # No max_tokens - let model complete naturally (JSON is ~50-200 tokens)
+        )
+        raw_response = result.content
 
-    # 4. Parse JSON response
+        logger.info(
+            "API extraction completed",
+            message_id=str(message_id),
+            model=result.model,
+            tokens=result.total_tokens,
+            latency_ms=result.latency_ms,
+        )
+
+    # 5. Parse JSON response
     try:
         # Handle markdown code blocks if present
         content = raw_response.strip()
@@ -117,6 +133,7 @@ async def extract_query_structure(
         logger.error(
             "Failed to parse extraction JSON",
             message_id=str(message_id),
+            extraction_method=extraction_method,
             raw_response=raw_response[:200],
             error=str(e),
         )
@@ -135,9 +152,12 @@ async def extract_query_structure(
         msg = f"Invalid message_type: {message_type}. Must be one of {VALID_MESSAGE_TYPES}"
         raise ValueError(msg)
 
-    # 5. Store extraction in database
+    # 6. Store extraction in database (with extraction_method metadata)
     now = datetime.now(UTC)
     extraction_id = uuid.uuid4()
+
+    # Add extraction_method to the JSONB for future analysis
+    extraction_data["_extraction_method"] = extraction_method
     extraction_jsonb = json.dumps(extraction_data)
 
     async with db_pool.pool.acquire() as conn:
@@ -165,6 +185,7 @@ async def extract_query_structure(
         message_id=str(message_id),
         message_type=extraction_data["message_type"],
         entity_count=len(extraction_data["entities"]),
+        extraction_method=extraction_method,
     )
 
     return QueryExtraction(
@@ -180,6 +201,7 @@ async def extract_query_structure(
         continuation=extraction_data["continuation"],
         rendered_prompt=rendered_prompt,
         raw_response=raw_response,
+        extraction_method=extraction_method,
         created_at=now,
     )
 
@@ -221,6 +243,7 @@ async def get_extraction(extraction_id: uuid.UUID) -> QueryExtraction | None:
             continuation=extraction_data["continuation"],
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
+            extraction_method=extraction_data.get("_extraction_method", "api"),
             created_at=row["created_at"],
         )
 
@@ -264,5 +287,6 @@ async def get_message_extraction(message_id: uuid.UUID) -> QueryExtraction | Non
             continuation=extraction_data["continuation"],
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
+            extraction_method=extraction_data.get("_extraction_method", "api"),
             created_at=row["created_at"],
         )

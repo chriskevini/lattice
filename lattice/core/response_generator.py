@@ -20,6 +20,66 @@ logger = structlog.get_logger(__name__)
 # Maximum number of graph triples to include in prompt context
 MAX_GRAPH_TRIPLES = 10
 
+# Canonical list of available template placeholders
+# These are populated by response_generator during prompt rendering
+AVAILABLE_PLACEHOLDERS = {
+    # Core context (always available)
+    "episodic_context": "Recent conversation history with timestamps",
+    "semantic_context": "Relevant facts and graph relationships",
+    "user_message": "The user's current message",
+    # Extraction fields (available when extraction succeeds)
+    "entities": "Comma-separated list of extracted entities",
+    "query": "Reformulated query for factual questions",
+    "activity": "Activity name for activity_update messages",
+    "time_constraint": "Deadline or time reference (ISO8601 or description)",
+    "urgency": "Urgency level: high/medium/low/normal",
+    "continuation": "yes/no - whether message continues previous topic",
+}
+
+
+def get_available_placeholders() -> dict[str, str]:
+    """Return canonical list of placeholders available for templates.
+
+    This function provides a programmatic way for other components (like the
+    Dreaming Cycle optimizer) to discover which placeholders are valid for
+    use in prompt templates.
+
+    Returns:
+        Dictionary mapping placeholder names to their descriptions.
+
+    Note:
+        Future enhancement: Load this from a database table to allow runtime
+        extensibility. For now, this is a hardcoded registry to prevent the
+        optimizer from proposing unusable placeholders.
+    """
+    return AVAILABLE_PLACEHOLDERS.copy()
+
+
+def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
+    """Validate that all placeholders in template are available.
+
+    This should be called when the Dreaming Cycle proposes a new template,
+    to prevent approval of templates with placeholders we can't populate.
+
+    Args:
+        template: The template text to validate
+
+    Returns:
+        Tuple of (is_valid, unknown_placeholders)
+        - is_valid: True if all placeholders are known
+        - unknown_placeholders: List of placeholder names not in AVAILABLE_PLACEHOLDERS
+
+    Example:
+        >>> validate_template_placeholders("Hello {user_message}!")
+        (True, [])
+        >>> validate_template_placeholders("Hello {unknown_var}!")
+        (False, ["unknown_var"])
+    """
+    template_placeholders = set(re.findall(r"\{(\w+)\}", template))
+    known_placeholders = set(AVAILABLE_PLACEHOLDERS.keys())
+    unknown = list(template_placeholders - known_placeholders)
+    return (len(unknown) == 0, unknown)
+
 
 def select_response_template(extraction: "QueryExtraction | None") -> str:
     """Select the appropriate response template based on message type.
@@ -37,7 +97,7 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
         - QUERY_RESPONSE: For factual queries and information requests
         - ACTIVITY_RESPONSE: For activity updates and progress reports
         - CONVERSATION_RESPONSE: For general conversational messages
-        - BASIC_RESPONSE: Fallback for legacy code paths
+        - BASIC_RESPONSE: Fallback when extraction unavailable
 
     Note:
         During Issue #61 Phase 2, this enables message-type-specific response
@@ -45,7 +105,7 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
         Dreaming Cycle based on user feedback patterns.
     """
     if extraction is None:
-        # Legacy path: No extraction available, use basic template
+        # No extraction available, use basic fallback template
         return "BASIC_RESPONSE"
 
     template_map = {
@@ -55,8 +115,8 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
         "conversation": "CONVERSATION_RESPONSE",
     }
 
-    # Default to conversation template for unknown message types
-    return template_map.get(extraction.message_type, "CONVERSATION_RESPONSE")
+    # Default to BASIC_RESPONSE for unknown message types (general-purpose fallback)
+    return template_map.get(extraction.message_type, "BASIC_RESPONSE")
 
 
 async def generate_response(
@@ -202,7 +262,7 @@ async def generate_response(
         if key in template_placeholders
     }
 
-    filled_prompt = prompt_template.template.format(**filtered_params)
+    filled_prompt = prompt_template.safe_format(**filtered_params)
 
     logger.debug(
         "Filled prompt for generation",

@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 import structlog
 
+from lattice.core.response_generator import validate_template_placeholders
 from lattice.dreaming.analyzer import (
     PromptMetrics,
     get_feedback_with_context,
@@ -34,7 +35,6 @@ LLM_PROPOSAL_TIMEOUT = 120.0  # 2 minutes
 # The minimum feedback threshold (10) in analyzer ensures we have enough data
 MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
 DETAILED_SAMPLES_COUNT = 3  # Number of samples with full rendered prompts
-LLM_MAX_TOKENS = 2000
 
 
 def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]:
@@ -117,6 +117,11 @@ def _parse_llm_response(
 def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
     """Validate required fields and types in proposal data.
 
+    This validation includes:
+    1. Required field presence
+    2. Type correctness
+    3. Placeholder validity (prevents proposing unusable templates)
+
     Args:
         data: Parsed proposal data dictionary
 
@@ -148,6 +153,11 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
         float(data["confidence"])
     except (ValueError, TypeError):
         return f"Invalid confidence type: expected float-convertible, got {type(data['confidence']).__name__}"
+
+    # Validate template placeholders (prevents proposing templates with unavailable placeholders)
+    is_valid, unknown = validate_template_placeholders(data["proposed_template"])
+    if not is_valid:
+        return f"Proposed template contains unknown placeholders: {unknown}. Use only available placeholders from the canonical list."
 
     return None
 
@@ -208,7 +218,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     experience_cases = _format_experience_cases(detailed_samples, lightweight_samples)
 
     # Format the optimization prompt using database template
-    optimization_prompt = optimization_prompt_template.template.format(
+    optimization_prompt = optimization_prompt_template.safe_format(
         current_template=prompt_template.template,
         total_uses=metrics.total_uses,
         feedback_rate=f"{metrics.feedback_rate:.1%}",
@@ -225,7 +235,7 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
             llm_client.complete(
                 prompt=optimization_prompt,
                 temperature=0.7,
-                max_tokens=LLM_MAX_TOKENS,
+                # No max_tokens - proposals need full reasoning (typically 500-1500 tokens)
             ),
             timeout=LLM_PROPOSAL_TIMEOUT,
         )
