@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from lattice.core.query_extraction import QueryExtraction
-from lattice.core.response_generator import generate_response, select_response_template
+from lattice.core.response_generator import (
+    generate_response,
+    get_available_placeholders,
+    select_response_template,
+    validate_template_placeholders,
+)
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
 from lattice.memory.semantic import StableFact
@@ -181,6 +186,88 @@ def mock_generation_result() -> GenerationResult:
         latency_ms=600,
         temperature=0.7,
     )
+
+
+class TestPlaceholderRegistry:
+    """Tests for placeholder registry and validation."""
+
+    def test_get_available_placeholders(self) -> None:
+        """Test retrieving the canonical placeholder list."""
+        placeholders = get_available_placeholders()
+
+        # Check core placeholders are present
+        assert "episodic_context" in placeholders
+        assert "semantic_context" in placeholders
+        assert "user_message" in placeholders
+
+        # Check extraction placeholders are present
+        assert "entities" in placeholders
+        assert "query" in placeholders
+        assert "activity" in placeholders
+
+        # Check descriptions exist
+        assert isinstance(placeholders["user_message"], str)
+        assert len(placeholders["user_message"]) > 0
+
+    def test_validate_template_with_known_placeholders(self) -> None:
+        """Test validation succeeds for templates with known placeholders."""
+        template = "Hello {user_message}! Context: {episodic_context}"
+        is_valid, unknown = validate_template_placeholders(template)
+
+        assert is_valid is True
+        assert unknown == []
+
+    def test_validate_template_with_unknown_placeholders(self) -> None:
+        """Test validation fails for templates with unknown placeholders."""
+        template = "Hello {user_message}! Unknown: {fake_var} and {another_fake}"
+        is_valid, unknown = validate_template_placeholders(template)
+
+        assert is_valid is False
+        assert "fake_var" in unknown
+        assert "another_fake" in unknown
+        assert "user_message" not in unknown
+
+    def test_validate_template_with_no_placeholders(self) -> None:
+        """Test validation succeeds for static templates."""
+        template = "This is a static template with no placeholders."
+        is_valid, unknown = validate_template_placeholders(template)
+
+        assert is_valid is True
+        assert unknown == []
+
+    def test_validate_template_with_extraction_placeholders(self) -> None:
+        """Test validation succeeds for extraction-specific placeholders."""
+        template = (
+            "Query: {query}\n"
+            "Entities: {entities}\n"
+            "Activity: {activity}\n"
+            "Urgency: {urgency}"
+        )
+        is_valid, unknown = validate_template_placeholders(template)
+
+        assert is_valid is True
+        assert unknown == []
+
+    def test_placeholder_registry_completeness(self) -> None:
+        """Test that registry includes all placeholders used in generate_response."""
+        # These are the placeholders that generate_response() actually populates
+        expected_placeholders = {
+            "episodic_context",
+            "semantic_context",
+            "user_message",
+            "entities",
+            "query",
+            "activity",
+            "time_constraint",
+            "urgency",
+            "continuation",
+        }
+
+        available = set(get_available_placeholders().keys())
+
+        # All expected placeholders should be documented
+        missing = expected_placeholders - available
+        assert missing == set(), f"Missing placeholders in registry: {missing}"
 
 
 class TestSelectResponseTemplate:
