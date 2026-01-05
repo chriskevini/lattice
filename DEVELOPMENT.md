@@ -289,11 +289,11 @@ uv sync
 - Check connection pool size (should be 2-5)
 - Verify vector search limits (max 15 results)
 - Profile with `memory_profiler` or `tracemalloc`
-- Consider reducing embedding batch size
+- Consider reducing batch sizes for processing
 
-### Slow Vector Search
-- Check HNSW index exists: `\d stable_facts` in psql
-- Verify index parameters: m=16, ef_construction=64
+### Graph Traversal Performance
+- Check entity table structure: `\d entities` in psql
+- Verify graph indexes exist on semantic_triples
 - Analyze query plan: `EXPLAIN ANALYZE SELECT ...`
 - Consider increasing `effective_cache_size` in PostgreSQL
 
@@ -373,17 +373,19 @@ async def test_memory_usage_under_2gb():
 
 ## Debugging Queries
 
-### Vector Search Debugging
+### Graph Query Debugging
 
 ```sql
--- Check embedding quality
-SELECT content, embedding <=> $1::vector AS distance
-FROM stable_facts
-ORDER BY distance
-LIMIT 5;
+-- Check entity relationships
+SELECT s.name AS subject, t.predicate, o.name AS object
+FROM semantic_triples t
+JOIN entities s ON t.subject_id = s.id
+JOIN entities o ON t.object_id = o.id
+ORDER BY t.created_at DESC
+LIMIT 10;
 
 -- Analyze index stats
-SELECT * FROM pg_indexes WHERE tablename = 'stable_facts';
+SELECT * FROM pg_indexes WHERE tablename IN ('entities', 'semantic_triples');
 ```
 
 ### Temporal Chain Debugging

@@ -135,26 +135,105 @@ ON activity_logs USING gin (metadata);
 
 -- 5. Migrate data from stable_facts to entities (if stable_facts exists)
 -- This preserves any existing entity data before dropping the table
+-- Handle duplicate entity names by consolidating references
 DO $$
+DECLARE
+    duplicate_count INT;
+    entities_migrated INT;
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'stable_facts') THEN
+        -- Check for duplicate entity names
+        SELECT COUNT(*) INTO duplicate_count
+        FROM (
+            SELECT content FROM stable_facts
+            GROUP BY content
+            HAVING COUNT(*) > 1
+        ) dups;
+
+        IF duplicate_count > 0 THEN
+            RAISE NOTICE 'Found % duplicate entity names, consolidating references...', duplicate_count;
+
+            -- For each duplicate name, update semantic_triples to use the earliest ID
+            -- This consolidates all references to point to a single canonical entity
+            UPDATE semantic_triples st
+            SET subject_id = (
+                SELECT MIN(id) FROM stable_facts sf
+                WHERE sf.content = (SELECT content FROM stable_facts WHERE id = st.subject_id)
+            )
+            WHERE subject_id IN (
+                SELECT id FROM stable_facts
+                WHERE content IN (
+                    SELECT content FROM stable_facts
+                    GROUP BY content HAVING COUNT(*) > 1
+                )
+                AND id NOT IN (
+                    SELECT MIN(id) FROM stable_facts
+                    GROUP BY content
+                )
+            );
+
+            UPDATE semantic_triples st
+            SET object_id = (
+                SELECT MIN(id) FROM stable_facts sf
+                WHERE sf.content = (SELECT content FROM stable_facts WHERE id = st.object_id)
+            )
+            WHERE object_id IN (
+                SELECT id FROM stable_facts
+                WHERE content IN (
+                    SELECT content FROM stable_facts
+                    GROUP BY content HAVING COUNT(*) > 1
+                )
+                AND id NOT IN (
+                    SELECT MIN(id) FROM stable_facts
+                    GROUP BY content
+                )
+            );
+
+            RAISE NOTICE 'Consolidated duplicate entity references';
+        END IF;
+
         -- Migrate stable_facts to entities, preserving IDs for semantic_triples FK integrity
+        -- After consolidation, ON CONFLICT DO NOTHING is safe (only canonical IDs remain in use)
         INSERT INTO entities (id, name, entity_type, first_mentioned)
         SELECT id, content, entity_type, created_at
         FROM stable_facts
-        ON CONFLICT (name) DO NOTHING;  -- Skip duplicates
+        ON CONFLICT (name) DO NOTHING;
 
-        RAISE NOTICE 'Migrated % entities from stable_facts', (SELECT COUNT(*) FROM entities);
+        SELECT COUNT(*) INTO entities_migrated FROM entities;
+        RAISE NOTICE 'Migrated % entities from stable_facts', entities_migrated;
     END IF;
 END $$;
 
 -- 6. Drop legacy stable_facts table and its indexes
 -- This table stored useless embeddings on bare entity names and is no longer used
--- CASCADE will handle any remaining FK constraints
+-- CASCADE will drop old FK constraints from semantic_triples
 DROP INDEX IF EXISTS stable_facts_embedding_idx;
 DROP TABLE IF EXISTS stable_facts CASCADE;
 
--- 7. Drop pgvector extension (no longer needed)
+-- 7. Recreate foreign key constraints from semantic_triples to entities
+-- This restores referential integrity after dropping stable_facts
+DO $$
+BEGIN
+    -- Drop old constraints if they exist (they may have been removed by CASCADE)
+    ALTER TABLE semantic_triples
+        DROP CONSTRAINT IF EXISTS semantic_triples_subject_id_fkey;
+    
+    ALTER TABLE semantic_triples
+        DROP CONSTRAINT IF EXISTS semantic_triples_object_id_fkey;
+    
+    -- Add new constraints pointing to entities table
+    ALTER TABLE semantic_triples
+        ADD CONSTRAINT semantic_triples_subject_id_fkey
+        FOREIGN KEY (subject_id) REFERENCES entities(id) ON DELETE CASCADE;
+    
+    ALTER TABLE semantic_triples
+        ADD CONSTRAINT semantic_triples_object_id_fkey
+        FOREIGN KEY (object_id) REFERENCES entities(id) ON DELETE CASCADE;
+    
+    RAISE NOTICE 'Recreated foreign key constraints from semantic_triples to entities';
+END $$;
+
+-- 8. Drop pgvector extension (no longer needed)
 DROP EXTENSION IF EXISTS vector CASCADE;
 
 -- Comments for documentation
