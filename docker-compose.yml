@@ -24,6 +24,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Set to true to enable local extraction model support
+        INCLUDE_LOCAL_EXTRACTION: ${INCLUDE_LOCAL_EXTRACTION:-false}
     container_name: lattice-bot
     depends_on:
       postgres:
@@ -40,8 +43,8 @@ services:
       - ./lattice:/app/lattice
       - ./scripts:/app/scripts
       - ./tests:/app/tests
-      # Persist model cache
-      - model_cache:/app/models
+      # Mount local models directory (for local extraction)
+      - ./models:/app/models
       # Persist logs
       - ./logs:/app/logs
     restart: unless-stopped
@@ -59,6 +62,4 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-  model_cache:
     driver: local

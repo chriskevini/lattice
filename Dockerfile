@@ -1,6 +1,9 @@
 # Multi-stage build for optimal image size
 FROM python:3.12-slim as builder
 
+# Build argument to optionally include local extraction model support
+ARG INCLUDE_LOCAL_EXTRACTION=false
+
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -12,9 +15,15 @@ COPY pyproject.toml uv.lock* README.md ./
 COPY lattice/ ./lattice/
 COPY scripts/ ./scripts/
 
-# Install UV and sync dependencies
+# Install UV and sync dependencies (conditionally include local-extraction)
 RUN pip install --no-cache-dir uv && \
-    uv sync --no-dev && \
+    if [ "$INCLUDE_LOCAL_EXTRACTION" = "true" ]; then \
+        echo "Installing with local extraction support..."; \
+        uv sync --no-dev --extra local-extraction; \
+    else \
+        echo "Installing without local extraction support..."; \
+        uv sync --no-dev; \
+    fi && \
     cp -r .venv /opt/venv && \
     rm -rf .venv /root/.cache/uv
 

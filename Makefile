@@ -147,7 +147,13 @@ setup-local-model: ## Download and setup FunctionGemma-270M for local extraction
 	fi
 	@echo ""
 	@echo "Installing optional dependencies..."
-	@uv pip install -e ".[local-extraction]"
+	@if [ -n "$$VIRTUAL_ENV" ] || uv venv --help >/dev/null 2>&1 && [ -d .venv ]; then \
+		uv pip install -e ".[local-extraction]"; \
+	else \
+		echo "⚠ No virtual environment detected. Skipping Python package installation."; \
+		echo "   For Docker deployments, dependencies will be installed during image build."; \
+		echo "   For local development, run 'make install' first to create a venv."; \
+	fi
 	@echo ""
 	@echo "Configuring .env..."
 	@if [ ! -f .env ]; then \
@@ -166,10 +172,20 @@ setup-local-model: ## Download and setup FunctionGemma-270M for local extraction
 		echo "LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf" >> .env; \
 		echo "✓ Added LOCAL_EXTRACTION_MODEL_PATH to .env"; \
 	fi
+	@if grep -q "^INCLUDE_LOCAL_EXTRACTION=" .env; then \
+		sed -i 's|^INCLUDE_LOCAL_EXTRACTION=.*|INCLUDE_LOCAL_EXTRACTION=true|' .env; \
+	elif grep -q "^# INCLUDE_LOCAL_EXTRACTION=" .env; then \
+		sed -i 's|^# INCLUDE_LOCAL_EXTRACTION=.*|INCLUDE_LOCAL_EXTRACTION=true|' .env; \
+	else \
+		echo "INCLUDE_LOCAL_EXTRACTION=true" >> .env; \
+	fi
+	@echo "✓ Enabled INCLUDE_LOCAL_EXTRACTION for Docker builds"
 	@echo ""
 	@echo "✅ Setup complete!"
 	@echo ""
-	@echo "Next step: Restart bot with: make docker-restart"
+	@echo "Next steps:"
+	@echo "  For Docker deployment: make docker-rebuild"
+	@echo "  (This rebuilds the image with local-extraction support)"
 	@echo ""
 	@echo "Benefits:"
 	@echo "  - Lower API costs (extraction runs locally)"

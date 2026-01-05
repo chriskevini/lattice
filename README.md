@@ -72,17 +72,40 @@ Lattice supports running FunctionGemma-270M locally for low-latency query extrac
 - Privacy: Extraction happens on-device
 - Automatic fallback to OpenRouter if unavailable
 
-**Setup:**
+**Quick Setup (One Command):**
 ```bash
-# Install optional dependencies
+make setup-local-model
+```
+
+This will:
+1. Download the model (~240MB, 4-bit quantized)
+2. Configure `.env` automatically
+3. Set up Docker build args (if using Docker)
+
+**For Docker Deployment:**
+After running `make setup-local-model`, rebuild the image:
+```bash
+make docker-rebuild
+```
+
+**Manual Setup (Advanced):**
+```bash
+# Install optional dependencies (local development only)
 uv pip install -e ".[local-extraction]"
 
-# Download model (4-bit quantized, ~200MB)
+# Download model
 mkdir -p models
-wget https://huggingface.co/google/functiongemma-270m-gguf/resolve/main/functiongemma-270m-q4_k_m.gguf -O models/functiongemma-270m-q4_k_m.gguf
+wget https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q4_K_M.gguf \
+  -O models/functiongemma-270m-q4_k_m.gguf
 
 # Configure in .env
 LOCAL_EXTRACTION_MODEL_PATH=./models/functiongemma-270m-q4_k_m.gguf
+INCLUDE_LOCAL_EXTRACTION=true  # For Docker builds
+```
+
+**Verification:**
+```bash
+make check-local-model
 ```
 
 **Memory Management:**
