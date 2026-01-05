@@ -1,7 +1,8 @@
 """Proactive scheduler for initiating contact with users.
 
 A simple scheduler that wakes up at scheduled times and uses AI to decide
-whether to send a proactive message.
+whether to send a proactive message. Updates active hours daily based on
+message patterns to respect user's natural schedule.
 """
 
 import asyncio
@@ -14,6 +15,7 @@ import structlog
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.discord_client.dream import DreamMirrorBuilder
 from lattice.memory import episodic
+from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.triggers import (
     decide_proactive,
     get_current_interval,
@@ -31,6 +33,7 @@ from lattice.utils.database import (
 logger = structlog.get_logger(__name__)
 
 DEFAULT_CHECK_INTERVAL_MINUTES = 15
+ACTIVE_HOURS_UPDATE_INTERVAL_HOURS = 24  # Update active hours daily
 
 
 class ProactiveScheduler:
@@ -54,6 +57,7 @@ class ProactiveScheduler:
         self.dream_channel_id = dream_channel_id
         self._running: bool = False
         self._scheduler_task: asyncio.Task[None] | None = None
+        self._active_hours_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start the scheduler loop."""
@@ -66,12 +70,15 @@ class ProactiveScheduler:
             await set_next_check_at(initial_check)
 
         self._scheduler_task = asyncio.create_task(self._scheduler_loop())
+        self._active_hours_task = asyncio.create_task(self._active_hours_loop())
 
     async def stop(self) -> None:
         """Stop the scheduler."""
         self._running = False
         if self._scheduler_task:
             await self._scheduler_task
+        if self._active_hours_task:
+            await self._active_hours_task
         logger.info("Stopping proactive scheduler")
 
     async def _scheduler_loop(self) -> None:
@@ -90,6 +97,31 @@ class ProactiveScheduler:
             except Exception:
                 logger.exception("Error in scheduler loop")
                 await asyncio.sleep(self.check_interval * 60)
+
+    async def _active_hours_loop(self) -> None:
+        """Periodic loop to update active hours from message patterns."""
+        # Wait a bit on startup to let bot initialize
+        await asyncio.sleep(60)
+
+        while self._running:
+            try:
+                # Update active hours
+                result = await update_active_hours()
+                logger.info(
+                    "Periodic active hours update",
+                    start_hour=result["start_hour"],
+                    end_hour=result["end_hour"],
+                    confidence=result["confidence"],
+                    sample_size=result["sample_size"],
+                )
+
+                # Sleep for 24 hours
+                await asyncio.sleep(ACTIVE_HOURS_UPDATE_INTERVAL_HOURS * 3600)
+
+            except Exception:
+                logger.exception("Error in active hours update loop")
+                # Retry in 1 hour on error
+                await asyncio.sleep(3600)
 
     async def _run_proactive_check(self) -> None:
         """Run a proactive check using AI decision."""

@@ -285,7 +285,11 @@ async def init_database() -> None:
             ('dreaming_min_uses', '10'),
             ('dreaming_min_confidence', '0.7'),
             ('dreaming_enabled', 'true'),
-            ('user_timezone', 'UTC')
+            ('user_timezone', 'UTC'),
+            ('active_hours_start', '9'),
+            ('active_hours_end', '21'),
+            ('active_hours_confidence', '0.0'),
+            ('active_hours_last_updated', NOW()::TEXT)
             ON CONFLICT (metric_key) DO NOTHING
             """
         )
