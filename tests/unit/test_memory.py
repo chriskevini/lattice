@@ -170,6 +170,14 @@ class TestStableFact:
         result = await search_similar_facts(query="   ", limit=5)
         assert result == []
 
+    @pytest.mark.asyncio
+    async def test_search_similar_facts_stub_returns_empty(self) -> None:
+        """Test that valid queries return empty list during refactor."""
+        # Stub implementation always returns empty list during Issue #61 refactor
+        result = await search_similar_facts(query="what does alice like", limit=5)
+        assert result == []
+        assert isinstance(result, list)
+
 
 # NOTE: Additional semantic memory function tests removed during Issue #61 refactor
 # Semantic memory is being rewritten with graph-first architecture

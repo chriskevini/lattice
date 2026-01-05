@@ -1,13 +1,19 @@
-"""Database utilities for Lattice.
+"""Database connection and pool management.
 
-Provides connection pooling and common database operations.
+Provides async PostgreSQL connection pooling with pgvector support.
+
+Note:
+    pgvector dependency is maintained for backward compatibility with the
+    existing database schema (stable_facts.embedding column). This will be
+    removed in Phase 1 of Issue #61 when the embedding column is dropped
+    during the graph-first architecture migration.
 """
 
 import os
 from datetime import datetime
 
 import asyncpg
-import pgvector.asyncpg
+import pgvector.asyncpg  # Temporary: Will be removed in Issue #61 Phase 1
 import structlog
 
 
@@ -80,6 +86,12 @@ class DatabasePool:
 
 async def setup_connection(conn: asyncpg.Connection) -> None:
     """Set up a database connection with pgvector type support.
+
+    Note:
+        pgvector registration is maintained for backward compatibility
+        with existing database schema (stable_facts.embedding column).
+        Will be removed in Phase 1 of Issue #61 when the embedding
+        column is dropped during schema migration.
 
     Args:
         conn: The asyncpg connection to set up
