@@ -194,6 +194,7 @@ class LatticeBot(commands.Bot):
                 content=message.content,
                 discord_message_id=message.id,
                 channel_id=message.channel.id,
+                user_id=str(message.author.id),
             )
 
             # Extract structured query information
@@ -306,6 +307,7 @@ class LatticeBot(commands.Bot):
                     channel_id=bot_msg.channel.id,
                     is_proactive=False,
                     generation_metadata=generation_metadata,
+                    user_id=str(message.author.id),
                 )
 
                 # Store prompt audit for each bot message

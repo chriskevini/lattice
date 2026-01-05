@@ -130,6 +130,7 @@ class ProactiveScheduler:
                             channel_id=result.channel.id,
                             is_bot=True,
                             is_proactive=True,
+                            user_timezone="UTC",  # Proactive messages use UTC by default
                         )
                     )
 

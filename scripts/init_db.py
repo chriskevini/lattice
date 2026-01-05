@@ -58,8 +58,29 @@ async def init_database() -> None:
                 is_bot BOOLEAN DEFAULT false,
                 is_proactive BOOLEAN DEFAULT false,
                 generation_metadata JSONB,
-                timestamp TIMESTAMPTZ DEFAULT now()
+                timestamp TIMESTAMPTZ DEFAULT now(),
+                user_timezone TEXT
             );
+        """
+        )
+
+        print("Creating user_config table...")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_config (
+                user_id TEXT PRIMARY KEY,
+                timezone TEXT NOT NULL DEFAULT 'UTC',
+                created_at TIMESTAMPTZ DEFAULT now(),
+                updated_at TIMESTAMPTZ DEFAULT now()
+            );
+        """
+        )
+
+        print("Creating user_config indexes...")
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_user_config_timezone
+            ON user_config (timezone);
         """
         )
 

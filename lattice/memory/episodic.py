@@ -1,12 +1,13 @@
 """Episodic memory module - handles raw_messages table.
 
-Stores immutable conversation history with timestamp-based retrieval.
+Stores immutable conversation history with timestamp-based retrieval and timezone tracking.
 """
 
 import json
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import structlog
 
@@ -33,6 +34,7 @@ class EpisodicMessage:
         message_id: UUID | None = None,
         timestamp: datetime | None = None,
         generation_metadata: dict[str, Any] | None = None,
+        user_timezone: str | None = None,
     ) -> None:
         """Initialize an episodic message.
 
@@ -45,6 +47,7 @@ class EpisodicMessage:
             message_id: Internal UUID (auto-generated if None)
             timestamp: Message timestamp (defaults to now)
             generation_metadata: LLM generation metadata (model, tokens, etc.)
+            user_timezone: IANA timezone for this message (e.g., 'America/New_York')
         """
         self.content = content
         self.discord_message_id = discord_message_id
@@ -54,6 +57,7 @@ class EpisodicMessage:
         self.message_id = message_id
         self.timestamp = timestamp or datetime.now(UTC)
         self.generation_metadata = generation_metadata
+        self.user_timezone = user_timezone or "UTC"
 
     @property
     def role(self) -> str:
@@ -77,9 +81,9 @@ async def store_message(message: EpisodicMessage) -> UUID:
         row = await conn.fetchrow(
             """
             INSERT INTO raw_messages (
-                discord_message_id, channel_id, content, is_bot, is_proactive, generation_metadata
+                discord_message_id, channel_id, content, is_bot, is_proactive, generation_metadata, user_timezone
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
             """,
             message.discord_message_id,
@@ -90,6 +94,7 @@ async def store_message(message: EpisodicMessage) -> UUID:
             json.dumps(message.generation_metadata)
             if message.generation_metadata
             else None,
+            message.user_timezone,
         )
 
         message_id = cast("UUID", row["id"])
@@ -121,7 +126,7 @@ async def get_recent_messages(
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp
+                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
                 FROM raw_messages
                 WHERE channel_id = $1
                 ORDER BY timestamp DESC
@@ -134,7 +139,7 @@ async def get_recent_messages(
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp
+                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
                 FROM raw_messages
                 ORDER BY timestamp DESC
                 LIMIT $1
@@ -151,6 +156,7 @@ async def get_recent_messages(
             is_bot=row["is_bot"],
             is_proactive=row["is_proactive"],
             timestamp=row["timestamp"],
+            user_timezone=row["user_timezone"] or "UTC",
         )
         for row in reversed(rows)
     ]
@@ -476,3 +482,53 @@ async def _mirror_extraction_to_dream(
 
     except Exception:
         logger.exception("Failed to mirror extraction results to dream channel")
+
+
+async def get_user_timezone(user_id: str) -> str:
+    """Get user's timezone from user_config table.
+
+    Args:
+        user_id: Discord user ID
+
+    Returns:
+        IANA timezone string (e.g., 'America/New_York'), defaults to 'UTC' if not set
+    """
+    async with db_pool.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT timezone FROM user_config WHERE user_id = $1
+            """,
+            user_id,
+        )
+        return row["timezone"] if row else "UTC"
+
+
+async def set_user_timezone(user_id: str, timezone: str) -> None:
+    """Set user's timezone in user_config table.
+
+    Args:
+        user_id: Discord user ID
+        timezone: IANA timezone string (e.g., 'America/New_York')
+
+    Raises:
+        ValueError: If timezone is invalid
+    """
+    # Validate timezone
+    try:
+        ZoneInfo(timezone)
+    except Exception as e:
+        msg = f"Invalid timezone: {timezone}"
+        raise ValueError(msg) from e
+
+    async with db_pool.pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO user_config (user_id, timezone, updated_at)
+            VALUES ($1, $2, now())
+            ON CONFLICT (user_id)
+            DO UPDATE SET timezone = EXCLUDED.timezone, updated_at = now()
+            """,
+            user_id,
+            timezone,
+        )
+        logger.info("User timezone updated", user_id=user_id, timezone=timezone)
