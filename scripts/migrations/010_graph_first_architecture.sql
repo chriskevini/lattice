@@ -197,6 +197,7 @@ BEGIN
         INSERT INTO entities (id, name, entity_type, first_mentioned)
         SELECT id, content, entity_type, created_at
         FROM stable_facts
+        WHERE content IS NOT NULL  -- Defensive filter (source schema has NOT NULL, but be explicit)
         ON CONFLICT (name) DO NOTHING;
 
         SELECT COUNT(*) INTO entities_migrated FROM entities;
@@ -217,19 +218,19 @@ BEGIN
     -- Drop old constraints if they exist (they may have been removed by CASCADE)
     ALTER TABLE semantic_triples
         DROP CONSTRAINT IF EXISTS semantic_triples_subject_id_fkey;
-    
+
     ALTER TABLE semantic_triples
         DROP CONSTRAINT IF EXISTS semantic_triples_object_id_fkey;
-    
+
     -- Add new constraints pointing to entities table
     ALTER TABLE semantic_triples
         ADD CONSTRAINT semantic_triples_subject_id_fkey
         FOREIGN KEY (subject_id) REFERENCES entities(id) ON DELETE CASCADE;
-    
+
     ALTER TABLE semantic_triples
         ADD CONSTRAINT semantic_triples_object_id_fkey
         FOREIGN KEY (object_id) REFERENCES entities(id) ON DELETE CASCADE;
-    
+
     RAISE NOTICE 'Recreated foreign key constraints from semantic_triples to entities';
 END $$;
 
