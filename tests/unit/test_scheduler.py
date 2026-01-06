@@ -1,5 +1,6 @@
 """Unit tests for scheduler components."""
 
+import os
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,6 +16,11 @@ from lattice.scheduler.triggers import (
     ProactiveDecision,
     decide_proactive,
     format_message,
+    get_conversation_context,
+    get_current_interval,
+    get_default_channel_id,
+    get_objectives_context,
+    set_current_interval,
 )
 
 
@@ -108,6 +114,359 @@ class TestDecideProactive:
             result = await decide_proactive()
             assert result.action == "wait"
             assert "prompt not found" in result.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_decide_proactive_with_llm_exception(self) -> None:
+        """Test that LLM exceptions are handled gracefully."""
+        mock_prompt = MagicMock()
+        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.temperature = 0.7
+
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock(side_effect=Exception("LLM service unavailable"))
+
+        with (
+            patch(
+                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
+            ),
+            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
+            patch(
+                "lattice.scheduler.triggers.get_conversation_context",
+                return_value="No recent conversation history.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_objectives_context",
+                return_value="No active objectives.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+            ),
+            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+        ):
+            result = await decide_proactive()
+            assert result.action == "wait"
+            assert "LLM call failed" in result.reason
+            assert result.channel_id == 12345
+
+    @pytest.mark.asyncio
+    async def test_decide_proactive_with_json_parse_error(self) -> None:
+        """Test that invalid JSON from LLM is handled gracefully."""
+        mock_prompt = MagicMock()
+        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.temperature = 0.7
+
+        mock_result = MagicMock()
+        mock_result.content = "This is not valid JSON"
+        mock_result.model = "gpt-4"
+        mock_result.provider = "openai"
+        mock_result.prompt_tokens = 100
+        mock_result.completion_tokens = 50
+        mock_result.cost_usd = 0.01
+        mock_result.latency_ms = 500
+
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock(return_value=mock_result)
+
+        with (
+            patch(
+                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
+            ),
+            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
+            patch(
+                "lattice.scheduler.triggers.get_conversation_context",
+                return_value="No recent conversation history.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_objectives_context",
+                return_value="No active objectives.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+            ),
+            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+        ):
+            result = await decide_proactive()
+            assert result.action == "wait"
+            assert "Failed to parse AI response" in result.reason
+            assert result.channel_id == 12345
+
+    @pytest.mark.asyncio
+    async def test_decide_proactive_with_invalid_action(self) -> None:
+        """Test that invalid action from LLM defaults to wait."""
+        mock_prompt = MagicMock()
+        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.temperature = 0.7
+        mock_prompt.version = 1
+
+        mock_result = MagicMock()
+        mock_result.content = (
+            '{"action": "invalid_action", "reason": "Testing invalid action"}'
+        )
+        mock_result.model = "gpt-4"
+        mock_result.provider = "openai"
+        mock_result.prompt_tokens = 100
+        mock_result.completion_tokens = 50
+        mock_result.cost_usd = 0.01
+        mock_result.latency_ms = 500
+
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock(return_value=mock_result)
+
+        with (
+            patch(
+                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
+            ),
+            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
+            patch(
+                "lattice.scheduler.triggers.get_conversation_context",
+                return_value="No recent conversation history.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_objectives_context",
+                return_value="No active objectives.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+            ),
+            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+        ):
+            result = await decide_proactive()
+            assert result.action == "wait"
+            assert result.reason == "Testing invalid action"
+
+    @pytest.mark.asyncio
+    async def test_decide_proactive_with_message_action(self) -> None:
+        """Test successful message action from LLM."""
+        mock_prompt = MagicMock()
+        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.temperature = 0.7
+        mock_prompt.version = 1
+
+        mock_result = MagicMock()
+        mock_result.content = '{"action": "message", "content": "Hey! How is the project going?", "reason": "User mentioned deadline approaching"}'
+        mock_result.model = "gpt-4"
+        mock_result.provider = "openai"
+        mock_result.prompt_tokens = 100
+        mock_result.completion_tokens = 50
+        mock_result.cost_usd = 0.01
+        mock_result.latency_ms = 500
+
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock(return_value=mock_result)
+
+        with (
+            patch(
+                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
+            ),
+            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
+            patch(
+                "lattice.scheduler.triggers.get_conversation_context",
+                return_value="[2024-01-01 12:00] USER: Need to finish project by Friday",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_objectives_context",
+                return_value="User goals:\n- Complete project by Friday (pending)",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+            ),
+            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+        ):
+            result = await decide_proactive()
+            assert result.action == "message"
+            assert result.content == "Hey! How is the project going?"
+            assert result.reason == "User mentioned deadline approaching"
+            assert result.channel_id == 12345
+            assert result.model == "gpt-4"
+            assert result.provider == "openai"
+            assert result.template_version == 1
+
+    @pytest.mark.asyncio
+    async def test_decide_proactive_with_empty_content(self) -> None:
+        """Test that empty content in message action defaults to wait."""
+        mock_prompt = MagicMock()
+        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.temperature = 0.7
+        mock_prompt.version = 1
+
+        mock_result = MagicMock()
+        mock_result.content = (
+            '{"action": "message", "content": "   ", "reason": "Testing empty content"}'
+        )
+        mock_result.model = "gpt-4"
+        mock_result.provider = "openai"
+        mock_result.prompt_tokens = 100
+        mock_result.completion_tokens = 50
+        mock_result.cost_usd = 0.01
+        mock_result.latency_ms = 500
+
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock(return_value=mock_result)
+
+        with (
+            patch(
+                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
+            ),
+            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
+            patch(
+                "lattice.scheduler.triggers.get_conversation_context",
+                return_value="No recent conversation history.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_objectives_context",
+                return_value="No active objectives.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+            ),
+            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+        ):
+            result = await decide_proactive()
+            assert result.action == "wait"
+            assert result.content is None
+
+
+class TestGetCurrentInterval:
+    """Tests for get_current_interval function."""
+
+    @pytest.mark.asyncio
+    async def test_get_current_interval_with_value_set(self) -> None:
+        """Test retrieving current interval when set in system_health."""
+        with patch(
+            "lattice.scheduler.triggers.get_system_health",
+            side_effect=lambda key: {"scheduler_current_interval": "30"}.get(key),
+        ):
+            result = await get_current_interval()
+            assert result == 30
+
+    @pytest.mark.asyncio
+    async def test_get_current_interval_with_no_value(self) -> None:
+        """Test retrieving current interval falls back to base when not set."""
+        with patch(
+            "lattice.scheduler.triggers.get_system_health",
+            side_effect=lambda key: {
+                "scheduler_base_interval": "20",
+                "scheduler_current_interval": None,
+            }.get(key),
+        ):
+            result = await get_current_interval()
+            assert result == 20
+
+
+class TestSetCurrentInterval:
+    """Tests for set_current_interval function."""
+
+    @pytest.mark.asyncio
+    async def test_set_current_interval(self) -> None:
+        """Test setting current interval in system_health."""
+        with patch("lattice.scheduler.triggers.set_system_health") as mock_set_health:
+            await set_current_interval(45)
+            mock_set_health.assert_called_once_with("scheduler_current_interval", "45")
+
+
+class TestGetConversationContext:
+    """Tests for get_conversation_context function."""
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_context_with_no_messages(self) -> None:
+        """Test conversation context when no messages exist."""
+        with patch(
+            "lattice.scheduler.triggers.get_recent_messages",
+            return_value=[],
+        ):
+            result = await get_conversation_context()
+            assert result == "No recent conversation history."
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_context_with_messages(self) -> None:
+        """Test conversation context with messages."""
+        messages = [
+            EpisodicMessage(
+                content="Hello!",
+                discord_message_id=1,
+                channel_id=12345,
+                is_bot=False,
+                timestamp=datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
+            ),
+            EpisodicMessage(
+                content="Hi there!",
+                discord_message_id=2,
+                channel_id=12345,
+                is_bot=True,
+                timestamp=datetime(2024, 1, 1, 10, 1, 0, tzinfo=UTC),
+            ),
+        ]
+        with patch(
+            "lattice.scheduler.triggers.get_recent_messages",
+            return_value=messages,
+        ):
+            result = await get_conversation_context()
+            assert "[2024-01-01 10:00] USER: Hello!" in result
+            assert "[2024-01-01 10:01] ASSISTANT: Hi there!" in result
+
+
+class TestGetObjectivesContext:
+    """Tests for get_objectives_context function."""
+
+    @pytest.mark.asyncio
+    async def test_get_objectives_context_with_no_objectives(self) -> None:
+        """Test objectives context when no objectives exist."""
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+
+        with patch("lattice.scheduler.triggers.db_pool") as mock_pool:
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+            result = await get_objectives_context()
+            assert result == "No active objectives."
+
+    @pytest.mark.asyncio
+    async def test_get_objectives_context_with_objectives(self) -> None:
+        """Test objectives context with objectives."""
+        objectives = [
+            {"description": "Complete project by Friday", "status": "pending"},
+            {"description": "Review documentation", "status": "pending"},
+        ]
+
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=objectives)
+
+        with patch("lattice.scheduler.triggers.db_pool") as mock_pool:
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+            result = await get_objectives_context()
+            assert "User goals:" in result
+            assert "Complete project by Friday (pending)" in result
+            assert "Review documentation (pending)" in result
+
+
+class TestGetDefaultChannelId:
+    """Tests for get_default_channel_id function."""
+
+    @pytest.mark.asyncio
+    async def test_get_default_channel_id_with_env_var(self) -> None:
+        """Test retrieving channel ID from environment variable."""
+        with patch.dict(os.environ, {"DISCORD_MAIN_CHANNEL_ID": "123456789"}):
+            result = await get_default_channel_id()
+            assert result == 123456789
+
+    @pytest.mark.asyncio
+    async def test_get_default_channel_id_without_env_var(self) -> None:
+        """Test retrieving channel ID when env var is not set."""
+        with patch.dict(os.environ, {}, clear=True):
+            result = await get_default_channel_id()
+            assert result is None
 
 
 class TestAdaptiveActiveHours:
