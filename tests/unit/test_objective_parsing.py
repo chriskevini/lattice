@@ -186,6 +186,23 @@ class TestParseObjectives:
         assert result[1]["saliency"] == 0.0
         assert result[2]["saliency"] == 0.7
 
+    def test_parse_integer_saliency(self) -> None:
+        """Test saliency with integer value is converted to float."""
+        raw_output = json.dumps(
+            [
+                {"description": "Integer saliency", "saliency": 1},
+                {"description": "Another integer", "saliency": 0},
+            ]
+        )
+
+        result = parse_objectives(raw_output)
+
+        assert len(result) == 2
+        assert result[0]["saliency"] == 1.0
+        assert isinstance(result[0]["saliency"], float)
+        assert result[1]["saliency"] == 0.0
+        assert isinstance(result[1]["saliency"], float)
+
     def test_parse_default_status(self) -> None:
         """Test parsing objective without status uses default 'pending'."""
         raw_output = json.dumps([{"description": "Task", "saliency": 0.5}])
