@@ -161,6 +161,124 @@ async def get_recent_messages(
     ]
 
 
+async def upsert_entity(
+    name: str,
+    entity_type: str | None = None,
+) -> UUID:
+    """Get or create entity by name.
+
+    Args:
+        name: Entity name
+        entity_type: Optional entity type
+
+    Returns:
+        UUID of entity
+
+    Raises:
+        Exception: If database operation fails
+    """
+    # Normalize entity name for matching (case-insensitive)
+    normalized_name = name.lower().strip()
+
+    async with db_pool.pool.acquire() as conn:
+        # Try to find existing entity
+        row = await conn.fetchrow(
+            """
+            SELECT id FROM entities WHERE LOWER(name) = $1
+            """,
+            normalized_name,
+        )
+
+        if row:
+            return cast("UUID", row["id"])
+
+        # Create new entity (use original casing for storage)
+        row = await conn.fetchrow(
+            """
+            INSERT INTO entities (name, entity_type)
+            VALUES ($1, $2)
+            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+            RETURNING id
+            """,
+            name,
+            entity_type,
+        )
+
+        if not row:
+            raise ValueError(f"Failed to create entity: {name}")
+
+        entity_id = cast("UUID", row["id"])
+        logger.info("Created entity", name=name, entity_id=str(entity_id))
+        return entity_id
+
+
+async def store_semantic_triples(
+    message_id: UUID,
+    triples: list[dict[str, str]],
+) -> None:
+    """Store extracted triples in semantic_triples table.
+
+    Args:
+        message_id: UUID of origin message (for origin_id FK)
+        triples: List of {"subject": str, "predicate": str, "object": str}
+
+    Raises:
+        Exception: If database operation fails
+    """
+    if not triples:
+        return
+
+    async with db_pool.pool.acquire() as conn, conn.transaction():
+        for triple in triples:
+            subject = triple.get("subject", "").strip()
+            predicate = triple.get("predicate", "").strip()
+            obj = triple.get("object", "").strip()
+
+            # Skip invalid triples
+            if not (subject and predicate and obj):
+                logger.warning(
+                    "Skipping invalid triple",
+                    triple=triple,
+                )
+                continue
+
+            try:
+                # Upsert entities for subject and object
+                subject_id = await upsert_entity(name=subject)
+                object_id = await upsert_entity(name=obj)
+
+                # Insert triple with origin_id link
+                await conn.execute(
+                    """
+                    INSERT INTO semantic_triples (
+                        subject_id, predicate, object_id, origin_id
+                    )
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    subject_id,
+                    predicate,
+                    object_id,
+                    message_id,
+                )
+
+                logger.debug(
+                    "Stored semantic triple",
+                    subject=subject,
+                    predicate=predicate,
+                    object=obj,
+                    message_id=str(message_id),
+                )
+
+            except Exception:
+                logger.exception(
+                    "Failed to store triple",
+                    triple=triple,
+                    message_id=str(message_id),
+                )
+                # Continue with next triple instead of failing entire batch
+
+
 async def consolidate_message(
     message_id: UUID,
     content: str,
@@ -234,13 +352,14 @@ async def consolidate_message(
     triples = parse_triples(result.content)
     logger.info("Parsed triples", count=len(triples) if triples else 0)
 
-    # TODO: Consolidation is temporarily disabled during Issue #61 refactor
-    # Will be reimplemented with query extraction + graph-first architecture
-    logger.debug(
-        "Skipping triple consolidation (disabled during Issue #61 refactor)",
-        message_id=str(message_id),
-        triple_count=len(triples) if triples else 0,
-    )
+    # Store semantic triples (re-enabled after Issue #61 completion via #87)
+    if triples:
+        await store_semantic_triples(message_id, triples)
+        logger.info(
+            "Stored semantic triples",
+            message_id=str(message_id),
+            count=len(triples),
+        )
 
     objectives = await extract_objectives(message_id, content, context)
     if objectives:
