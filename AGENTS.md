@@ -61,22 +61,22 @@ make check-all      # Lint, type-check, and test
 7. **Consolidation**: Async extraction of entities, triples, and activities.
 
 ### [Query Extraction System](#query-extraction-system)
-Uses Google Gemini Flash 1.5 API to extract **2 essential fields** from messages:
+Extracts **2 essential fields** from messages:
 - **Message Type**: `goal`, `question`, `activity_update`, `conversation`
   - Determines which response template to use
-  - `goal` (formerly "declaration"): User states an objective or deadline
-  - `question` (formerly "query"): User asks for information
+  - `goal`: User states an objective or deadline
+  - `question`: User asks for information
 - **Entities**: Array of named entities referenced in the message
   - Used for entity-driven graph traversal (see [Context Strategy](#context-strategy))
   - Example: `["lattice project", "Friday", "PostgreSQL"]`
 
-**Design Philosophy (Migration 019)**:
+**Design Philosophy**:
 - Removed unused fields: predicates, time_constraint, activity, query, urgency, continuation
 - Modern LLMs can infer this information naturally from the user message
 - Simpler extraction = more reliable, faster, easier to maintain
 
 ### [Context Strategy](#context-strategy)
-**Entity-Driven Adaptive Retrieval** (Design D):
+**Entity-Driven Adaptive Retrieval**:
 
 Always retrieves **15 recent messages** (generous conversation history), but graph traversal is adaptive:
 - **No entities**: `triple_depth=0` (self-contained messages like greetings, simple activities)
