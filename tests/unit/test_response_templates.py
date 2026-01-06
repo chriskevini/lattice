@@ -704,3 +704,235 @@ class TestGenerateResponseWithTemplates:
             assert "Entities: None" in rendered_prompt
             assert "Activity: N/A" in rendered_prompt
             assert "Query: N/A" in rendered_prompt
+
+    @pytest.mark.asyncio
+    async def test_filter_current_message_from_episodic_context(
+        self,
+        mock_semantic_facts: list[StableFact],
+        mock_basic_template: PromptTemplate,
+    ) -> None:
+        """Test that current user message is filtered from episodic context."""
+        user_message_content = "What's the weather?"
+        user_discord_id = 9999999999
+
+        # Create conversation including the current message
+        recent_messages = [
+            EpisodicMessage(
+                content="Hello!",
+                discord_message_id=1111111111,
+                channel_id=123,
+                is_bot=False,
+                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+            ),
+            EpisodicMessage(
+                content="Hi there!",
+                discord_message_id=2222222222,
+                channel_id=123,
+                is_bot=True,
+                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=UTC),
+            ),
+            EpisodicMessage(
+                content=user_message_content,  # Current message (should be filtered)
+                discord_message_id=user_discord_id,
+                channel_id=123,
+                is_bot=False,
+                timestamp=datetime(2026, 1, 5, 10, 2, tzinfo=UTC),
+            ),
+        ]
+
+        mock_result = GenerationResult(
+            content="It's sunny!",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_basic_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message=user_message_content,
+                semantic_facts=mock_semantic_facts,
+                recent_messages=recent_messages,
+                user_discord_message_id=user_discord_id,
+            )
+
+            # Verify current message is NOT in episodic context
+            # Count occurrences of the message content in rendered prompt
+            message_occurrences = rendered_prompt.count(user_message_content)
+
+            # Should appear exactly once (in {user_message} placeholder)
+            # NOT in episodic_context
+            assert message_occurrences == 1, (
+                f"Expected user message to appear exactly once, "
+                f"but found {message_occurrences} occurrences"
+            )
+
+            # Verify previous messages ARE in episodic context
+            assert "Hello!" in rendered_prompt
+            assert "Hi there!" in rendered_prompt
+
+    @pytest.mark.asyncio
+    async def test_handle_duplicate_message_content(
+        self,
+        mock_semantic_facts: list[StableFact],
+        mock_basic_template: PromptTemplate,
+    ) -> None:
+        """Test that ID-based filtering handles duplicate message content correctly."""
+        duplicate_content = "What's the weather?"
+
+        # User sends same message twice
+        recent_messages = [
+            EpisodicMessage(
+                content="Hello!",
+                discord_message_id=1111111111,
+                channel_id=123,
+                is_bot=False,
+                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+            ),
+            EpisodicMessage(
+                content=duplicate_content,  # First time asking
+                discord_message_id=2222222222,
+                channel_id=123,
+                is_bot=False,
+                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=UTC),
+            ),
+            EpisodicMessage(
+                content="It's sunny!",
+                discord_message_id=3333333333,
+                channel_id=123,
+                is_bot=True,
+                timestamp=datetime(2026, 1, 5, 10, 2, tzinfo=UTC),
+            ),
+            EpisodicMessage(
+                content=duplicate_content,  # Asking again (current message)
+                discord_message_id=4444444444,
+                channel_id=123,
+                is_bot=False,
+                timestamp=datetime(2026, 1, 5, 10, 3, tzinfo=UTC),
+            ),
+        ]
+
+        mock_result = GenerationResult(
+            content="Still sunny!",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_basic_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message=duplicate_content,
+                semantic_facts=mock_semantic_facts,
+                recent_messages=recent_messages,
+                user_discord_message_id=4444444444,  # Current message ID
+            )
+
+            # Count occurrences of duplicate content in rendered prompt
+            message_occurrences = rendered_prompt.count(duplicate_content)
+
+            # Should appear exactly TWICE:
+            # 1. Once in episodic_context (the first time at 10:01)
+            # 2. Once in {user_message} placeholder (current message)
+            # NOT three times (which would happen with buggy content-based filtering)
+            assert message_occurrences == 2, (
+                f"Expected duplicate message to appear twice "
+                f"(once in history, once as current), "
+                f"but found {message_occurrences} occurrences"
+            )
+
+            # Verify the first instance is still in context
+            assert "Hello!" in rendered_prompt
+            assert "It's sunny!" in rendered_prompt
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_content_filtering_without_message_id(
+        self,
+        mock_semantic_facts: list[StableFact],
+        mock_basic_template: PromptTemplate,
+    ) -> None:
+        """Test backward compatibility: content-based filtering when ID not provided."""
+        user_message_content = "What's the weather?"
+
+        recent_messages = [
+            EpisodicMessage(
+                content="Hello!",
+                discord_message_id=1111111111,
+                channel_id=123,
+                is_bot=False,
+                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+            ),
+            EpisodicMessage(
+                content=user_message_content,  # Should be filtered by content
+                discord_message_id=2222222222,
+                channel_id=123,
+                is_bot=False,
+                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=UTC),
+            ),
+        ]
+
+        mock_result = GenerationResult(
+            content="It's sunny!",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_basic_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            # Don't pass user_discord_message_id (backward compatibility test)
+            result, rendered_prompt, context_info = await generate_response(
+                user_message=user_message_content,
+                semantic_facts=mock_semantic_facts,
+                recent_messages=recent_messages,
+                # user_discord_message_id=None (implicit)
+            )
+
+            # Should still filter by content (fallback behavior)
+            message_occurrences = rendered_prompt.count(user_message_content)
+            assert message_occurrences == 1
+
+            # Previous messages should be preserved
+            assert "Hello!" in rendered_prompt

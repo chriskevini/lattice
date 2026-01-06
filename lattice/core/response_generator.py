@@ -126,6 +126,7 @@ async def generate_response(
     recent_messages: list[episodic.EpisodicMessage],
     graph_triples: list[dict[str, Any]] | None = None,
     extraction: "QueryExtraction | None" = None,
+    user_discord_message_id: int | None = None,
 ) -> tuple[GenerationResult, str, dict[str, Any]]:
     """Generate a response using the appropriate prompt template.
 
@@ -145,6 +146,8 @@ async def generate_response(
         graph_triples: Related facts from graph traversal
         extraction: Query extraction with message type and structured fields.
                    If None, uses BASIC_RESPONSE template for backward compatibility.
+        user_discord_message_id: Discord message ID to exclude from episodic context.
+                                If None, falls back to content-based filtering.
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
@@ -198,8 +201,23 @@ async def generate_response(
             ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M UTC")
         return f"[{ts_str}] {msg.role}: {msg.content}"
 
-    # Use full episodic_limit instead of hardcoded [-5:]
-    episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages)
+    # Exclude the current user message from episodic context to avoid duplication
+    # The current message is explicitly provided in {user_message} placeholder
+    if user_discord_message_id is not None:
+        # Filter by Discord message ID (more reliable, handles duplicate content)
+        filtered_messages = [
+            msg
+            for msg in recent_messages
+            if msg.discord_message_id != user_discord_message_id
+        ]
+    else:
+        # Fallback: filter by content and role (for backward compatibility)
+        filtered_messages = [
+            msg for msg in recent_messages if msg.is_bot or msg.content != user_message
+        ]
+    episodic_context = "\n".join(
+        format_with_timestamp(msg) for msg in filtered_messages
+    )
 
     seen_facts = set()
     unique_facts = []
