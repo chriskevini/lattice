@@ -214,6 +214,24 @@ class TestAdaptiveActiveHours:
             assert await is_within_active_hours(outside_time) is False
 
     @pytest.mark.asyncio
+    async def test_is_within_active_hours_defaults_to_now(self) -> None:
+        """Test active hours check defaults to current time when not specified."""
+        with (
+            patch(
+                "lattice.scheduler.adaptive.get_system_health",
+                side_effect=lambda key: {
+                    "active_hours_start": "0",  # Midnight
+                    "active_hours_end": "24",  # End of day (wraps to 0) - covers whole day
+                }.get(key),
+            ),
+            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+        ):
+            # Call without specifying check_time (should use datetime.now())
+            result = await is_within_active_hours()
+            # With 0-24 range (wraps), should always be within hours
+            assert result is True
+
+    @pytest.mark.asyncio
     async def test_update_active_hours_stores_result(self) -> None:
         """Test that update_active_hours calculates and stores result."""
         mock_result = {
