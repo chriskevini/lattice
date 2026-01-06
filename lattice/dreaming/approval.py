@@ -9,6 +9,8 @@ from typing import Any
 import discord
 import structlog
 
+# Import compatibility layer first to ensure DesignerView exists
+from lattice.discord_client import dream  # noqa: F401
 from lattice.discord_client.dream import PromptViewView
 from lattice.dreaming.proposer import (
     OptimizationProposal,
@@ -21,7 +23,7 @@ from lattice.dreaming.proposer import (
 logger = structlog.get_logger(__name__)
 
 
-class TemplateComparisonView(discord.ui.DesignerView):
+class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defined]
     """V2 component view showing full templates side-by-side with approval buttons.
 
     Uses Pycord V2 components: Section + TextDisplay for organized, scrollable
@@ -136,9 +138,9 @@ class TemplateComparisonView(discord.ui.DesignerView):
         """
         formatted = f"```\n{content}\n```" if code_block else content
         display: Any = discord.ui.TextDisplay(content=f"{title}\n\n{formatted}")
-        separator: Any = discord.ui.Separator(
-            divider=True,
-            spacing=discord.SeparatorSpacingSize.small,
+        separator: Any = discord.ui.Separator(  # type: ignore[call-arg]
+            divider=True,  # type: ignore[call-arg]
+            spacing=discord.SeparatorSpacingSize.small,  # type: ignore[attr-defined]
         )
         return [display, separator]
 

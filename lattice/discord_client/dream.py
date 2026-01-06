@@ -15,13 +15,67 @@ from lattice.memory import prompt_audits, user_feedback
 
 logger = structlog.get_logger(__name__)
 
+# Compatibility: DesignerView and Components V2 features only in py-cord 2.7.0+
+# For older versions or testing, fall back to regular View and mock V2 components
+if not hasattr(discord.ui, "DesignerView"):
+    discord.ui.DesignerView = discord.ui.View  # type: ignore[attr-defined, misc, assignment]
+if not hasattr(discord.ui, "TextDisplay"):
+    # Mock TextDisplay for older versions - inherits from Button to be a valid Item
+    class TextDisplay(discord.ui.Button):  # type: ignore[no-redef, misc]
+        """Mock TextDisplay for py-cord < 2.7.0."""
+
+        def __init__(self, content: str) -> None:
+            """Initialize mock text display."""
+            super().__init__(
+                label=content[:80], disabled=True, style=discord.ButtonStyle.secondary
+            )
+            self.content = content
+
+        def _is_v2(self) -> bool:
+            """Return False to avoid v2 detection in py-cord 2.6.x."""
+            return False
+
+    discord.ui.TextDisplay = TextDisplay  # type: ignore[attr-defined, misc, assignment]
+if not hasattr(discord.ui, "InputText"):
+    discord.ui.InputText = discord.ui.TextInput  # type: ignore[attr-defined, misc, assignment]
+if not hasattr(discord, "InputTextStyle"):
+    discord.InputTextStyle = discord.TextStyle  # type: ignore[attr-defined, misc, assignment]
+if not hasattr(discord.ui, "Separator"):
+    # Mock Separator for older versions - inherits from Button to be a valid Item
+    class Separator(discord.ui.Button):  # type: ignore[no-redef, misc]
+        """Mock Separator for py-cord < 2.7.0."""
+
+        def __init__(self, divider: bool = False, spacing: Any = None) -> None:
+            """Initialize mock separator."""
+            super().__init__(
+                label="---", disabled=True, style=discord.ButtonStyle.secondary
+            )
+            self.divider = divider
+            self.spacing = spacing
+
+        def _is_v2(self) -> bool:
+            """Return False to avoid v2 detection in py-cord 2.6.x."""
+            return False
+
+    discord.ui.Separator = Separator  # type: ignore[attr-defined, misc, assignment]
+if not hasattr(discord, "SeparatorSpacingSize"):
+    # Mock SeparatorSpacingSize for older versions
+    class SeparatorSpacingSize:  # type: ignore[no-redef]
+        """Mock SeparatorSpacingSize for py-cord < 2.7.0."""
+
+        small = "small"
+        medium = "medium"
+        large = "large"
+
+    discord.SeparatorSpacingSize = SeparatorSpacingSize()  # type: ignore[attr-defined, misc, assignment]
+
 # Discord modal text input limit
 MODAL_TEXT_LIMIT = 4000
 MODAL_TEXT_SAFE_LIMIT = 3900  # Leave room for truncation message
 MAX_DISPLAY_ITEMS = 5  # Maximum items to display in extraction mirrors
 
 
-class PromptViewView(discord.ui.DesignerView):
+class PromptViewView(discord.ui.DesignerView):  # type: ignore[name-defined, misc]
     """View for displaying full rendered prompts with TextDisplay (Components V2)."""
 
     def __init__(self, rendered_prompt: str) -> None:
@@ -55,9 +109,9 @@ class FeedbackModal(discord.ui.Modal):
 
         # Sentiment input - pre-filled with "negative" (user can change)
         self.add_item(
-            discord.ui.InputText(
+            discord.ui.InputText(  # type: ignore[attr-defined]
                 label="Sentiment",
-                style=discord.InputTextStyle.short,
+                style=discord.InputTextStyle.short,  # type: ignore[attr-defined]
                 value="negative",
                 placeholder="Type: positive or negative",
                 required=True,
@@ -67,9 +121,9 @@ class FeedbackModal(discord.ui.Modal):
 
         # Comments - REQUIRED
         self.add_item(
-            discord.ui.InputText(
+            discord.ui.InputText(  # type: ignore[attr-defined]
                 label="Comments (Required)",
-                style=discord.InputTextStyle.paragraph,
+                style=discord.InputTextStyle.paragraph,  # type: ignore[attr-defined]
                 placeholder="Provide details about what could be improved...",
                 required=True,
                 max_length=1000,
@@ -160,7 +214,7 @@ class FeedbackModal(discord.ui.Modal):
         )
 
 
-class DreamMirrorView(discord.ui.DesignerView):
+class DreamMirrorView(discord.ui.DesignerView):  # type: ignore[name-defined, misc]
     """Interactive view for dream channel mirrors with buttons (Components V2)."""
 
     def __init__(

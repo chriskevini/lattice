@@ -220,6 +220,11 @@ ignore_missing_imports = true
 module = ["lattice.memory.*", "lattice.utils.*"]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = ["lattice.discord_client.*", "lattice.dreaming.approval", "lattice.dreaming.proposer"]
+# Discord Components V2 API (py-cord 2.7+) not yet in stable release/typestubs
+ignore_errors = true
+
 # ============================================================================
 # PYTEST CONFIGURATION
 # ============================================================================
