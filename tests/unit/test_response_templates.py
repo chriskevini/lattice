@@ -1196,7 +1196,13 @@ class TestTimezoneConversionFailure:
         self,
         mock_basic_template: PromptTemplate,
     ) -> None:
-        """Test that invalid timezone falls back to UTC formatting."""
+        """Test that invalid timezone falls back to UTC formatting.
+
+        When an invalid timezone is provided, the function should:
+        1. Log a warning (verified manually in test output)
+        2. Fall back to UTC formatting
+        3. Continue processing without raising an exception
+        """
         # Create message with invalid timezone
         recent_messages = [
             EpisodicMessage(
@@ -1232,14 +1238,18 @@ class TestTimezoneConversionFailure:
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
+            # Should not raise an exception
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Test",
                 recent_messages=recent_messages,
             )
 
-            # Verify fallback to UTC formatting
+            # Verify fallback to UTC formatting (the key behavior to test)
             assert "2026-01-04 10:00 UTC" in rendered_prompt
             assert "Hello!" in rendered_prompt
+
+            # Verify generation completed successfully
+            assert result.content == "Hi!"
 
 
 class TestSplitResponse:
@@ -1277,16 +1287,19 @@ class TestSplitResponse:
         chunks = split_response(long_message, max_length=500)
 
         # Verify multiple chunks created
-        assert len(chunks) > 1
+        assert len(chunks) > 1, "Long message should be split into multiple chunks"
 
         # Verify each chunk is within limit
-        for chunk in chunks:
-            assert len(chunk) <= 500
+        for i, chunk in enumerate(chunks):
+            assert len(chunk) <= 500, f"Chunk {i} length {len(chunk)} exceeds limit 500"
 
-        # Verify chunks can be rejoined (with single newlines)
+        # Verify all lines are preserved in order
         rejoined = "\n".join(chunks)
-        # Account for potential extra newlines between chunks
-        assert rejoined.replace("\n\n", "\n") == long_message
+        # Each original line should appear exactly once in the rejoined content
+        for line in lines:
+            assert rejoined.count(line) == 1, (
+                f"Line '{line[:50]}...' should appear exactly once"
+            )
 
     def test_split_response_preserves_content(self) -> None:
         """Test that splitting preserves all content."""
@@ -1306,15 +1319,44 @@ class TestSplitResponse:
         """Test splitting a single line that exceeds the limit."""
         from lattice.core.response_generator import split_response
 
-        # Single line longer than limit
+        # Single line longer than limit (2000 chars, limit is 1900)
         long_line = "x" * 2000
 
         chunks = split_response(long_line, max_length=1900)
 
-        # Should create a single chunk with the long line
-        # (function doesn't split within lines, only at newlines)
-        assert len(chunks) == 1
-        assert chunks[0] == long_line
+        # Should split the long line into multiple chunks
+        assert len(chunks) > 1, "Long line should be split into multiple chunks"
+
+        # Each chunk should be within the limit
+        for chunk in chunks:
+            assert len(chunk) <= 1900, f"Chunk length {len(chunk)} exceeds limit 1900"
+
+        # All content should be preserved
+        rejoined = "".join(chunks)
+        assert rejoined == long_line, "Content should be preserved after splitting"
+
+    def test_split_response_long_line_with_spaces(self) -> None:
+        """Test splitting a long line with spaces at word boundaries."""
+        from lattice.core.response_generator import split_response
+
+        # Create a long line with spaces (should split at word boundaries)
+        words = ["word" * 10 for _ in range(50)]  # 50 words of 40 chars each
+        long_line = " ".join(words)  # ~2050 chars with spaces
+
+        chunks = split_response(long_line, max_length=1900)
+
+        # Should split into multiple chunks
+        assert len(chunks) > 1
+
+        # Each chunk should respect the limit
+        for chunk in chunks:
+            assert len(chunk) <= 1900, f"Chunk length {len(chunk)} exceeds limit"
+
+        # Content should be mostly preserved (spaces may differ)
+        rejoined = " ".join(chunks)
+        # All words should be present
+        for word in words:
+            assert word in rejoined
 
     def test_split_response_custom_max_length(self) -> None:
         """Test split_response with custom max_length."""

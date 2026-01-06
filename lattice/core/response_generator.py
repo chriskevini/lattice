@@ -282,12 +282,15 @@ async def generate_response(
 def split_response(response: str, max_length: int = 1900) -> list[str]:
     """Split a response at newlines to fit within Discord's 2000 char limit.
 
+    If a single line exceeds max_length, it will be split mid-line at word
+    boundaries to ensure no chunk exceeds the limit.
+
     Args:
         response: The full response to split
         max_length: Maximum length per chunk (default 1900 for safety margin)
 
     Returns:
-        List of response chunks split at newlines
+        List of response chunks split at newlines (and mid-line if necessary)
     """
     if len(response) <= max_length:
         return [response]
@@ -299,6 +302,38 @@ def split_response(response: str, max_length: int = 1900) -> list[str]:
 
     for line in lines:
         line_length = len(line) + 1  # +1 for newline
+
+        # If single line exceeds max_length, split it at word boundaries
+        if len(line) > max_length:
+            # Flush current chunk first
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+                current_chunk = []
+                current_length = 0
+
+            # Split the long line into smaller chunks
+            words = line.split(" ")
+            temp_line = ""
+
+            for word in words:
+                # If single word exceeds limit, hard split it
+                if len(word) > max_length:
+                    if temp_line:
+                        chunks.append(temp_line)
+                        temp_line = ""
+                    # Split word into max_length chunks
+                    for i in range(0, len(word), max_length):
+                        chunks.append(word[i : i + max_length])
+                elif len(temp_line) + len(word) + 1 <= max_length:
+                    temp_line = f"{temp_line} {word}".strip()
+                else:
+                    chunks.append(temp_line)
+                    temp_line = word
+
+            if temp_line:
+                chunks.append(temp_line)
+            continue
+
         if current_length + line_length <= max_length:
             current_chunk.append(line)
             current_length += line_length
