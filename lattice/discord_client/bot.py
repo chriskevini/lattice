@@ -493,7 +493,7 @@ async def setup_commands(bot: LatticeBot) -> None:
 
         if bot._dreaming_scheduler:  # noqa: SLF001
             try:
-                result = await bot._dreaming_scheduler._run_dreaming_cycle()  # noqa: SLF001
+                result = await bot._dreaming_scheduler._run_dreaming_cycle(force=True)  # noqa: SLF001
 
                 # Create summary embed
                 if result["status"] == "success":

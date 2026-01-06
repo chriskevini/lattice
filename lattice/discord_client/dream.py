@@ -121,8 +121,17 @@ class FeedbackModal(discord.ui.Modal):
         )
         feedback_id = await user_feedback.store_feedback(feedback)
 
-        # Link feedback to prompt audit
-        await prompt_audits.link_feedback_to_audit(self.bot_message_id, feedback_id)
+        # Link feedback to prompt audit (use audit_id directly since dream_discord_message_id may be null)
+        if self.audit_id:
+            linked = await prompt_audits.link_feedback_to_audit_by_id(
+                self.audit_id, feedback_id
+            )
+            if not linked:
+                logger.warning(
+                    "Failed to link feedback to audit",
+                    audit_id=str(self.audit_id),
+                    feedback_id=str(feedback_id),
+                )
 
         # React to the bot's message with appropriate emoji
         emoji = {"positive": "👍", "negative": "👎"}[sentiment]
@@ -408,11 +417,17 @@ class DreamMirrorView(discord.ui.DesignerView):
             )
             feedback_id = await user_feedback.store_feedback(feedback)
 
-            # Link feedback to prompt audit
-            if interaction.message is not None:
-                await prompt_audits.link_feedback_to_audit(
-                    interaction.message.id, feedback_id
+            # Link feedback to prompt audit (use audit_id directly since dream_discord_message_id may be null)
+            if self.audit_id:
+                linked = await prompt_audits.link_feedback_to_audit_by_id(
+                    self.audit_id, feedback_id
                 )
+                if not linked:
+                    logger.warning(
+                        "Failed to link feedback to audit",
+                        audit_id=str(self.audit_id),
+                        feedback_id=str(feedback_id),
+                    )
 
             await interaction.response.send_message(
                 "👍 **Positive** feedback recorded!",
@@ -478,11 +493,17 @@ class DreamMirrorView(discord.ui.DesignerView):
             )
             feedback_id = await user_feedback.store_feedback(feedback)
 
-            # Link feedback to prompt audit
-            if interaction.message is not None:
-                await prompt_audits.link_feedback_to_audit(
-                    interaction.message.id, feedback_id
+            # Link feedback to prompt audit (use audit_id directly since dream_discord_message_id may be null)
+            if self.audit_id:
+                linked = await prompt_audits.link_feedback_to_audit_by_id(
+                    self.audit_id, feedback_id
                 )
+                if not linked:
+                    logger.warning(
+                        "Failed to link feedback to audit",
+                        audit_id=str(self.audit_id),
+                        feedback_id=str(feedback_id),
+                    )
 
             await interaction.response.send_message(
                 "👎 **Negative** feedback recorded!",

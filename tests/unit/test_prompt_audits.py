@@ -10,6 +10,7 @@ from lattice.memory.prompt_audits import (
     get_audit_by_dream_message,
     get_audits_with_feedback,
     link_feedback_to_audit,
+    link_feedback_to_audit_by_id,
     store_prompt_audit,
     update_audit_dream_message,
 )
@@ -159,6 +160,53 @@ class TestLinkFeedbackToAudit:
             result = await link_feedback_to_audit(
                 dream_discord_message_id=999999999,
                 feedback_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            )
+
+            assert result is False
+
+
+class TestLinkFeedbackToAuditById:
+    """Tests for link_feedback_to_audit_by_id function."""
+
+    @pytest.mark.asyncio
+    async def test_link_feedback_to_audit_by_id_success(self) -> None:
+        """Test successfully linking feedback to audit by audit_id."""
+        mock_conn = MagicMock()
+        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
+
+        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+            result = await link_feedback_to_audit_by_id(
+                audit_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                feedback_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            )
+
+            assert result is True
+            mock_conn.execute.assert_called_once()
+            call_args = mock_conn.execute.call_args
+            assert "UPDATE prompt_audits" in call_args[0][0]
+            assert call_args[0][1] == UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+            assert call_args[0][2] == UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+    @pytest.mark.asyncio
+    async def test_link_feedback_to_audit_by_id_not_found(self) -> None:
+        """Test linking feedback when audit not found."""
+        mock_conn = MagicMock()
+        mock_conn.execute = AsyncMock(return_value="UPDATE 0")
+
+        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
+            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+            result = await link_feedback_to_audit_by_id(
+                audit_id=UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                feedback_id=UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
             )
 
             assert result is False
