@@ -164,12 +164,14 @@ async def get_recent_messages(
 async def upsert_entity(
     name: str,
     entity_type: str | None = None,
+    conn: Any | None = None,
 ) -> UUID:
     """Get or create entity by name.
 
     Args:
         name: Entity name
         entity_type: Optional entity type
+        conn: Optional connection to use (for transactions)
 
     Returns:
         UUID of entity
@@ -180,9 +182,9 @@ async def upsert_entity(
     # Normalize entity name for matching (case-insensitive)
     normalized_name = name.lower().strip()
 
-    async with db_pool.pool.acquire() as conn:
+    async def _upsert(c: Any) -> UUID:
         # Try to find existing entity
-        row = await conn.fetchrow(
+        row = await c.fetchrow(
             """
             SELECT id FROM entities WHERE LOWER(name) = $1
             """,
@@ -193,7 +195,7 @@ async def upsert_entity(
             return cast("UUID", row["id"])
 
         # Create new entity (use original casing for storage)
-        row = await conn.fetchrow(
+        row = await c.fetchrow(
             """
             INSERT INTO entities (name, entity_type)
             VALUES ($1, $2)
@@ -210,6 +212,12 @@ async def upsert_entity(
         entity_id = cast("UUID", row["id"])
         logger.info("Created entity", name=name, entity_id=str(entity_id))
         return entity_id
+
+    if conn:
+        return await _upsert(conn)
+    else:
+        async with db_pool.pool.acquire() as c:
+            return await _upsert(c)
 
 
 async def store_semantic_triples(
@@ -243,9 +251,9 @@ async def store_semantic_triples(
                 continue
 
             try:
-                # Upsert entities for subject and object
-                subject_id = await upsert_entity(name=subject)
-                object_id = await upsert_entity(name=obj)
+                # Upsert entities for subject and object (using transaction connection)
+                subject_id = await upsert_entity(name=subject, conn=conn)
+                object_id = await upsert_entity(name=obj, conn=conn)
 
                 # Insert triple with origin_id link
                 await conn.execute(
