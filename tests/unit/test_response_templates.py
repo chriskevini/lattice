@@ -1130,3 +1130,213 @@ class TestExtractionFieldsNotInPrompts:
             # Verify extraction metadata is in context_info for analytics
             assert context_info["template"] == "GOAL_RESPONSE"
             assert context_info["extraction_id"] == str(mock_extraction_declaration.id)
+
+
+class TestNoTemplateFound:
+    """Tests for error handling when no templates are available."""
+
+    @pytest.mark.asyncio
+    async def test_generate_response_no_template_found(
+        self,
+        mock_recent_messages: list[EpisodicMessage],
+    ) -> None:
+        """Test fallback response when no templates are available in database."""
+        extraction = QueryExtraction(
+            id=uuid.uuid4(),
+            message_id=uuid.uuid4(),
+            message_type="goal",
+            entities=["test"],
+            rendered_prompt="test",
+            raw_response="test",
+            extraction_method="api",
+            created_at=datetime.now(UTC),
+        )
+
+        with patch(
+            "lattice.core.response_generator.procedural.get_prompt"
+        ) as mock_get_prompt:
+            # Simulate both template lookups returning None
+            mock_get_prompt.return_value = None
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message="Test message",
+                recent_messages=mock_recent_messages,
+                extraction=extraction,
+            )
+
+            # Verify fallback response is returned
+            assert (
+                result.content
+                == "I'm still initializing. Please try again in a moment."
+            )
+            assert result.model == "unknown"
+            assert result.provider is None
+            assert result.prompt_tokens == 0
+            assert result.completion_tokens == 0
+            assert result.total_tokens == 0
+            assert result.cost_usd is None
+            assert result.latency_ms == 0
+            assert result.temperature == 0.0
+
+            # Verify empty rendered prompt and context info
+            assert rendered_prompt == ""
+            assert context_info == {}
+
+            # Verify both templates were tried
+            assert mock_get_prompt.call_count == 2
+            mock_get_prompt.assert_any_call("GOAL_RESPONSE")
+            mock_get_prompt.assert_any_call("BASIC_RESPONSE")
+
+
+class TestTimezoneConversionFailure:
+    """Tests for timezone conversion error handling."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_timezone_falls_back_to_utc(
+        self,
+        mock_basic_template: PromptTemplate,
+    ) -> None:
+        """Test that invalid timezone falls back to UTC formatting."""
+        # Create message with invalid timezone
+        recent_messages = [
+            EpisodicMessage(
+                content="Hello!",
+                discord_message_id=1234567890,
+                channel_id=123,
+                is_bot=False,
+                user_timezone="Invalid/Timezone",  # Invalid timezone
+                timestamp=datetime(2026, 1, 4, 10, 0, tzinfo=UTC),
+            ),
+        ]
+
+        mock_result = GenerationResult(
+            content="Hi!",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_basic_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message="Test",
+                recent_messages=recent_messages,
+            )
+
+            # Verify fallback to UTC formatting
+            assert "2026-01-04 10:00 UTC" in rendered_prompt
+            assert "Hello!" in rendered_prompt
+
+
+class TestSplitResponse:
+    """Tests for split_response function."""
+
+    def test_split_response_short_message(self) -> None:
+        """Test that short messages are not split."""
+        from lattice.core.response_generator import split_response
+
+        short_message = "This is a short message."
+        chunks = split_response(short_message, max_length=1900)
+
+        assert len(chunks) == 1
+        assert chunks[0] == short_message
+
+    def test_split_response_exact_limit(self) -> None:
+        """Test message exactly at the limit."""
+        from lattice.core.response_generator import split_response
+
+        # Create a message exactly 1900 chars
+        message = "a" * 1900
+        chunks = split_response(message, max_length=1900)
+
+        assert len(chunks) == 1
+        assert chunks[0] == message
+
+    def test_split_response_long_message_with_newlines(self) -> None:
+        """Test that long messages are split at newlines."""
+        from lattice.core.response_generator import split_response
+
+        # Create a message that exceeds the limit with newlines
+        lines = [f"Line {i}: " + ("x" * 100) for i in range(30)]
+        long_message = "\n".join(lines)
+
+        chunks = split_response(long_message, max_length=500)
+
+        # Verify multiple chunks created
+        assert len(chunks) > 1
+
+        # Verify each chunk is within limit
+        for chunk in chunks:
+            assert len(chunk) <= 500
+
+        # Verify chunks can be rejoined (with single newlines)
+        rejoined = "\n".join(chunks)
+        # Account for potential extra newlines between chunks
+        assert rejoined.replace("\n\n", "\n") == long_message
+
+    def test_split_response_preserves_content(self) -> None:
+        """Test that splitting preserves all content."""
+        from lattice.core.response_generator import split_response
+
+        lines = ["First line", "Second line", "Third line", "Fourth line"]
+        message = "\n".join(lines)
+
+        chunks = split_response(message, max_length=20)
+
+        # Verify all lines are present in some chunk
+        all_content = "\n".join(chunks)
+        for line in lines:
+            assert line in all_content
+
+    def test_split_response_single_long_line(self) -> None:
+        """Test splitting a single line that exceeds the limit."""
+        from lattice.core.response_generator import split_response
+
+        # Single line longer than limit
+        long_line = "x" * 2000
+
+        chunks = split_response(long_line, max_length=1900)
+
+        # Should create a single chunk with the long line
+        # (function doesn't split within lines, only at newlines)
+        assert len(chunks) == 1
+        assert chunks[0] == long_line
+
+    def test_split_response_custom_max_length(self) -> None:
+        """Test split_response with custom max_length."""
+        from lattice.core.response_generator import split_response
+
+        lines = [f"Line {i}" for i in range(10)]
+        message = "\n".join(lines)
+
+        chunks = split_response(message, max_length=30)
+
+        # Verify chunks respect custom limit
+        for chunk in chunks:
+            assert len(chunk) <= 30
+
+        # Verify content is preserved
+        assert all(f"Line {i}" in "\n".join(chunks) for i in range(10))
+
+    def test_split_response_empty_message(self) -> None:
+        """Test split_response with empty message."""
+        from lattice.core.response_generator import split_response
+
+        chunks = split_response("", max_length=1900)
+
+        assert len(chunks) == 1
+        assert chunks[0] == ""
