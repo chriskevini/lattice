@@ -201,9 +201,7 @@ async def generate_response(
     # Exclude the current user message from episodic context to avoid duplication
     # The current message is explicitly provided in {user_message} placeholder
     filtered_messages = [
-        msg
-        for msg in recent_messages
-        if not (msg.content == user_message and not msg.is_bot)
+        msg for msg in recent_messages if msg.is_bot or msg.content != user_message
     ]
     episodic_context = "\n".join(
         format_with_timestamp(msg) for msg in filtered_messages
