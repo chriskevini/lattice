@@ -49,7 +49,7 @@ class TestQueryExtractionPipeline:
 
             extraction_llm = AsyncMock()
             extraction_llm.complete.return_value = GenerationResult(
-                content='{"message_type":"declaration","entities":["lattice project"],"predicates":["need to finish"],"time_constraint":"2026-01-10T23:59:59Z","activity":null,"query":null,"urgency":"high","continuation":false}',
+                content='{"message_type":"goal","entities":["lattice project","Friday"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=100,
@@ -67,14 +67,8 @@ class TestQueryExtractionPipeline:
                 "id": uuid.uuid4(),
                 "message_id": message_id,
                 "extraction": {
-                    "message_type": "declaration",
-                    "entities": ["lattice project"],
-                    "predicates": ["need to finish"],
-                    "time_constraint": "2026-01-10T23:59:59Z",
-                    "activity": None,
-                    "query": None,
-                    "urgency": "high",
-                    "continuation": False,
+                    "message_type": "goal",
+                    "entities": ["lattice project", "Friday"],
                 },
                 "prompt_key": "QUERY_EXTRACTION",
                 "prompt_version": 1,
@@ -85,13 +79,7 @@ class TestQueryExtractionPipeline:
             # Setup response generation mocks
             response_template = PromptTemplate(
                 prompt_key="GOAL_RESPONSE",
-                template=(
-                    "Context: {episodic_context}\n"
-                    "User: {user_message}\n"
-                    "Entities: {entities}\n"
-                    "Time: {time_constraint}\n"
-                    "Urgency: {urgency}"
-                ),
+                template=("Context: {episodic_context}\nUser: {user_message}"),
                 temperature=0.7,
                 version=1,
                 active=True,
@@ -121,10 +109,8 @@ class TestQueryExtractionPipeline:
 
             # Verify extraction
             assert extraction is not None
-            assert extraction.message_type == "declaration"
+            assert extraction.message_type == "goal"
             assert "lattice project" in extraction.entities
-            assert extraction.time_constraint == "2026-01-10T23:59:59Z"
-            assert extraction.urgency == "high"
 
             # Execute pipeline: Generate response with extraction
             mock_recent_messages = [
@@ -164,9 +150,7 @@ class TestQueryExtractionPipeline:
             assert context_info["extraction_id"] == str(extraction.id)
 
             # Verify template placeholders were filled correctly
-            assert "lattice project" in rendered_prompt
-            assert "2026-01-10T23:59:59Z" in rendered_prompt
-            assert "high" in rendered_prompt
+            assert "lattice project" in rendered_prompt or "Friday" in rendered_prompt
 
     @pytest.mark.asyncio
     async def test_pipeline_extraction_failure_fallback(self) -> None:
@@ -289,7 +273,7 @@ class TestQueryExtractionPipeline:
 
             extraction_llm = AsyncMock()
             extraction_llm.complete.return_value = GenerationResult(
-                content='{"message_type":"query","entities":["project"],"predicates":["deadline"],"time_constraint":null,"activity":null,"query":"When is the project deadline?","urgency":null,"continuation":false}',
+                content='{"message_type":"question","entities":["project","deadline"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=80,
@@ -306,14 +290,8 @@ class TestQueryExtractionPipeline:
                 "id": uuid.uuid4(),
                 "message_id": message_id,
                 "extraction": {
-                    "message_type": "query",
-                    "entities": ["project"],
-                    "predicates": ["deadline"],
-                    "time_constraint": None,
-                    "activity": None,
-                    "query": "When is the project deadline?",
-                    "urgency": None,
-                    "continuation": False,
+                    "message_type": "question",
+                    "entities": ["project", "deadline"],
                 },
                 "prompt_key": "QUERY_EXTRACTION",
                 "prompt_version": 1,
@@ -321,10 +299,10 @@ class TestQueryExtractionPipeline:
             }
             mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            # Setup QUERY_RESPONSE template
+            # Setup QUESTION_RESPONSE template
             query_template = PromptTemplate(
-                prompt_key="QUERY_RESPONSE",
-                template="Context: {episodic_context}\nQuery: {query}\nEntities: {entities}",
+                prompt_key="QUESTION_RESPONSE",
+                template="Context: {episodic_context}\nUser: {user_message}",
                 temperature=0.5,
                 version=1,
                 active=True,
@@ -353,8 +331,7 @@ class TestQueryExtractionPipeline:
             )
 
             # Verify query extraction
-            assert extraction.message_type == "query"
-            assert extraction.query == "When is the project deadline?"
+            assert extraction.message_type == "question"
 
             # Generate response
             mock_recent_messages = [
@@ -379,7 +356,6 @@ class TestQueryExtractionPipeline:
                 extraction=extraction,
             )
 
-            # Verify QUERY_RESPONSE template was used
-            assert context_info["template"] == "QUERY_RESPONSE"
-            assert "When is the project deadline?" in rendered_prompt
-            assert result.temperature == 0.5  # QUERY_RESPONSE uses lower temperature
+            # Verify QUESTION_RESPONSE template was used
+            assert context_info["template"] == "QUESTION_RESPONSE"
+            assert result.temperature == 0.5  # QUESTION_RESPONSE uses lower temperature

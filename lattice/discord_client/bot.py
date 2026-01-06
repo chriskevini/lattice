@@ -16,6 +16,11 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, query_extraction, response_generator
+from lattice.core.context_strategy import (
+    EPISODIC_LIMIT,
+    NO_ENTITY_TRIPLE_DEPTH,
+    WITH_ENTITY_TRIPLE_DEPTH,
+)
 from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
@@ -261,15 +266,22 @@ class LatticeBot(commands.Bot):
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
-            # Retrieve context including graph traversal from extracted entities
+            # Determine context limits based on extraction (Design D: entity-driven)
+            # Always fetch 15 messages, but only traverse graph if entities present
+            if extraction and extraction.entities:
+                triple_depth = WITH_ENTITY_TRIPLE_DEPTH
+            else:
+                triple_depth = NO_ENTITY_TRIPLE_DEPTH
+
+            # Retrieve context using determined limits
             (
                 recent_messages,
                 graph_triples,
             ) = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,
-                episodic_limit=10,
-                triple_depth=1,
+                episodic_limit=EPISODIC_LIMIT,
+                triple_depth=triple_depth,
                 entity_names=extraction.entities if extraction else None,
             )
 
@@ -335,7 +347,7 @@ class LatticeBot(commands.Bot):
                     completion_tokens=response_result.completion_tokens,
                     cost_usd=response_result.cost_usd,
                     latency_ms=response_result.latency_ms,
-                    context_config=context_info,
+                    # context_config removed in Design D (not used by Dreaming Cycle)
                 )
 
                 # Mirror to dream channel with new UI

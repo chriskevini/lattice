@@ -24,14 +24,8 @@ def mock_extraction_declaration() -> QueryExtraction:
     return QueryExtraction(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
-        message_type="declaration",
-        entities=["lattice project"],
-        predicates=["need to finish"],
-        time_constraint="2026-01-10T23:59:59Z",
-        activity=None,
-        query=None,
-        urgency="high",
-        continuation=False,
+        message_type="goal",
+        entities=["lattice project", "Friday"],
         rendered_prompt="test prompt",
         raw_response="test response",
         extraction_method="api",
@@ -45,14 +39,8 @@ def mock_extraction_query() -> QueryExtraction:
     return QueryExtraction(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
-        message_type="query",
-        entities=["lattice project"],
-        predicates=["deadline"],
-        time_constraint=None,
-        activity=None,
-        query="When is the lattice project deadline?",
-        urgency=None,
-        continuation=False,
+        message_type="question",
+        entities=["lattice project", "deadline"],
         rendered_prompt="test prompt",
         raw_response="test response",
         extraction_method="api",
@@ -68,12 +56,6 @@ def mock_extraction_activity() -> QueryExtraction:
         message_id=uuid.uuid4(),
         message_type="activity_update",
         entities=["coding"],
-        predicates=["spent time"],
-        time_constraint=None,
-        activity="coding",
-        query=None,
-        urgency=None,
-        continuation=False,
         rendered_prompt="test prompt",
         raw_response="test response",
         extraction_method="api",
@@ -89,12 +71,6 @@ def mock_extraction_conversation() -> QueryExtraction:
         message_id=uuid.uuid4(),
         message_type="conversation",
         entities=["tea"],
-        predicates=[],
-        time_constraint=None,
-        activity=None,
-        query=None,
-        urgency=None,
-        continuation=True,
         rendered_prompt="test prompt",
         raw_response="test response",
         extraction_method="api",
@@ -127,16 +103,13 @@ def mock_recent_messages() -> list[EpisodicMessage]:
 
 @pytest.fixture
 def mock_prompt_template() -> PromptTemplate:
-    """Create a mock prompt template with extraction fields."""
+    """Create a mock prompt template."""
     return PromptTemplate(
         prompt_key="GOAL_RESPONSE",
         template=(
             "Context: {episodic_context}\n"
             "Semantic: {semantic_context}\n"
-            "User: {user_message}\n"
-            "Entities: {entities}\n"
-            "Time: {time_constraint}\n"
-            "Urgency: {urgency}"
+            "User: {user_message}"
         ),
         temperature=0.7,
         version=1,
@@ -188,11 +161,6 @@ class TestPlaceholderRegistry:
         assert "semantic_context" in placeholders
         assert "user_message" in placeholders
 
-        # Check extraction placeholders are present
-        assert "entities" in placeholders
-        assert "query" in placeholders
-        assert "activity" in placeholders
-
         # Check descriptions exist
         assert isinstance(placeholders["user_message"], str)
         assert len(placeholders["user_message"]) > 0
@@ -224,31 +192,20 @@ class TestPlaceholderRegistry:
         assert unknown == []
 
     def test_validate_template_with_extraction_placeholders(self) -> None:
-        """Test validation succeeds for extraction-specific placeholders."""
-        template = (
-            "Query: {query}\n"
-            "Entities: {entities}\n"
-            "Activity: {activity}\n"
-            "Urgency: {urgency}"
-        )
+        """Test validation succeeds for core placeholders only (Design D)."""
+        template = "Context: {episodic_context}\nUser: {user_message}"
         is_valid, unknown = validate_template_placeholders(template)
 
         assert is_valid is True
         assert unknown == []
 
     def test_placeholder_registry_completeness(self) -> None:
-        """Test that registry includes all placeholders used in generate_response."""
+        """Test that registry includes core placeholders only (Design D)."""
         # These are the placeholders that generate_response() actually populates
         expected_placeholders = {
             "episodic_context",
             "semantic_context",
             "user_message",
-            "entities",
-            "query",
-            "activity",
-            "time_constraint",
-            "urgency",
-            "continuation",
         }
 
         available = set(get_available_placeholders().keys())
@@ -271,9 +228,9 @@ class TestSelectResponseTemplate:
     def test_select_query_response(
         self, mock_extraction_query: QueryExtraction
     ) -> None:
-        """Test selection of QUERY_RESPONSE for query message type."""
+        """Test selection of QUESTION_RESPONSE for question message type."""
         template = select_response_template(mock_extraction_query)
-        assert template == "QUERY_RESPONSE"
+        assert template == "QUESTION_RESPONSE"
 
     def test_select_activity_response(
         self, mock_extraction_activity: QueryExtraction
@@ -301,12 +258,6 @@ class TestSelectResponseTemplate:
             message_id=uuid.uuid4(),
             message_type="unknown_type",  # Invalid type
             entities=[],
-            predicates=[],
-            time_constraint=None,
-            activity=None,
-            query=None,
-            urgency=None,
-            continuation=False,
             rendered_prompt="test",
             raw_response="test",
             extraction_method="api",
@@ -349,9 +300,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_prompt.assert_called_once_with("GOAL_RESPONSE")
 
             # Verify extraction fields in rendered prompt
-            assert "lattice project" in rendered_prompt
-            assert "2026-01-10T23:59:59Z" in rendered_prompt
-            assert "high" in rendered_prompt
+            assert "I need to finish the lattice project by Friday" in rendered_prompt
 
             # Verify context info includes extraction
             assert context_info["template"] == "GOAL_RESPONSE"
@@ -369,13 +318,8 @@ class TestGenerateResponseWithTemplates:
     ) -> None:
         """Test response generation with query extraction."""
         mock_template = PromptTemplate(
-            prompt_key="QUERY_RESPONSE",
-            template=(
-                "Context: {episodic_context}\n"
-                "User: {user_message}\n"
-                "Query: {query}\n"
-                "Entities: {entities}"
-            ),
+            prompt_key="QUESTION_RESPONSE",
+            template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.5,
             version=1,
             active=True,
@@ -399,10 +343,10 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify template selection
-            mock_get_prompt.assert_called_once_with("QUERY_RESPONSE")
+            mock_get_prompt.assert_called_once_with("QUESTION_RESPONSE")
 
-            # Verify query field in rendered prompt
-            assert "When is the lattice project deadline?" in rendered_prompt
+            # User message should be in prompt
+            assert "When is the lattice deadline?" in rendered_prompt
 
             # Verify temperature from template is used
             mock_client.complete.assert_called_once()
@@ -419,12 +363,7 @@ class TestGenerateResponseWithTemplates:
         """Test response generation with activity update extraction."""
         mock_template = PromptTemplate(
             prompt_key="ACTIVITY_RESPONSE",
-            template=(
-                "Context: {episodic_context}\n"
-                "User: {user_message}\n"
-                "Activity: {activity}\n"
-                "Entities: {entities}"
-            ),
+            template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.7,
             version=1,
             active=True,
@@ -450,8 +389,8 @@ class TestGenerateResponseWithTemplates:
             # Verify template selection
             mock_get_prompt.assert_called_once_with("ACTIVITY_RESPONSE")
 
-            # Verify activity field in rendered prompt
-            assert "coding" in rendered_prompt
+            # User message should be in prompt
+            assert "Spent 3 hours coding today" in rendered_prompt
 
     @pytest.mark.asyncio
     async def test_generate_with_conversation_extraction(
@@ -463,12 +402,7 @@ class TestGenerateResponseWithTemplates:
         """Test response generation with conversation extraction."""
         mock_template = PromptTemplate(
             prompt_key="CONVERSATION_RESPONSE",
-            template=(
-                "Context: {episodic_context}\n"
-                "User: {user_message}\n"
-                "Continuation: {continuation}\n"
-                "Entities: {entities}"
-            ),
+            template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.7,
             version=1,
             active=True,
@@ -494,8 +428,8 @@ class TestGenerateResponseWithTemplates:
             # Verify template selection
             mock_get_prompt.assert_called_once_with("CONVERSATION_RESPONSE")
 
-            # Verify continuation field in rendered prompt
-            assert "yes" in rendered_prompt  # continuation=True -> "yes"
+            # User message should be in prompt
+            assert "Just made some tea" in rendered_prompt
 
     @pytest.mark.asyncio
     async def test_generate_without_extraction_legacy(
@@ -604,8 +538,8 @@ class TestGenerateResponseWithTemplates:
             assert "lattice project has deadline Friday" in rendered_prompt
             assert "user working on lattice project" in rendered_prompt
 
-            # Verify context info includes graph count
-            assert context_info["graph"] == 2
+            # Verify context info includes template
+            assert context_info["template"] == "QUESTION_RESPONSE"
 
     @pytest.mark.asyncio
     async def test_generate_empty_extraction_fields(
@@ -618,12 +552,6 @@ class TestGenerateResponseWithTemplates:
             message_id=uuid.uuid4(),
             message_type="conversation",
             entities=[],  # Empty list
-            predicates=[],
-            time_constraint=None,
-            activity=None,
-            query=None,
-            urgency=None,
-            continuation=False,
             rendered_prompt="test",
             raw_response="test",
             extraction_method="api",
@@ -632,12 +560,7 @@ class TestGenerateResponseWithTemplates:
 
         mock_template = PromptTemplate(
             prompt_key="CONVERSATION_RESPONSE",
-            template=(
-                "Context: {episodic_context}\n"
-                "Entities: {entities}\n"
-                "Activity: {activity}\n"
-                "Query: {query}"
-            ),
+            template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.7,
             version=1,
             active=True,
@@ -672,10 +595,8 @@ class TestGenerateResponseWithTemplates:
                 extraction=extraction,
             )
 
-            # Verify empty fields are handled gracefully
-            assert "Entities: None" in rendered_prompt
-            assert "Activity: N/A" in rendered_prompt
-            assert "Query: N/A" in rendered_prompt
+            # Verify empty fields are handled gracefully (no extraction fields in Design D)
+            assert "Hello" in rendered_prompt
 
     @pytest.mark.asyncio
     async def test_filter_current_message_from_episodic_context(

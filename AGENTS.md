@@ -55,18 +55,44 @@ make check-all      # Lint, type-check, and test
 1. **Ingestion**: Message or proactive trigger.
 2. **Short-Circuit**: North Star or feedback detection.
 3. **Logging**: Episodic storage.
-4. **Query Extraction**: Structured message analysis (message type, entities, predicates, temporal constraints).
-5. **Retrieval**: Hybrid (Recency + Graph Traversal + Context-Aware).
+4. **Query Extraction**: Simplified 2-field extraction (message type, entities).
+5. **Retrieval**: Entity-driven adaptive context (see [Context Strategy](#context-strategy)).
 6. **Generation**: `prompt_registry` template execution.
 7. **Consolidation**: Async extraction of entities, triples, and activities.
 
 ### [Query Extraction System](#query-extraction-system)
-Uses FunctionGemma-270M (or API fallback) to extract structured data from messages:
-- **Message Type**: declaration, query, activity_update, conversation
-- **Entities**: Named entities referenced in the message
-- **Predicates**: Relationships and attributes
-- **Temporal Constraints**: Deadlines, time references
-- **Evolvability**: Extraction schema evolves via Dreaming Cycle (append-only).
+Extracts **2 essential fields** from messages:
+- **Message Type**: `goal`, `question`, `activity_update`, `conversation`
+  - Determines which response template to use
+  - `goal`: User states an objective or deadline
+  - `question`: User asks for information
+- **Entities**: Array of named entities referenced in the message
+  - Used for entity-driven graph traversal (see [Context Strategy](#context-strategy))
+  - Example: `["lattice project", "Friday", "PostgreSQL"]`
+
+**Design Philosophy**:
+- Removed unused fields: predicates, time_constraint, activity, query, urgency, continuation
+- Modern LLMs can infer this information naturally from the user message
+- Simpler extraction = more reliable, faster, easier to maintain
+
+### [Context Strategy](#context-strategy)
+**Entity-Driven Adaptive Retrieval**:
+
+Always retrieves **15 recent messages** (generous conversation history), but graph traversal is adaptive:
+- **No entities**: `triple_depth=0` (self-contained messages like greetings, simple activities)
+- **Has entities**: `triple_depth=2` (deep graph traversal for multi-hop relationships)
+
+**Constants** (`lattice/core/context_strategy.py`):
+```python
+EPISODIC_LIMIT = 15              # Always fetch 15 messages
+NO_ENTITY_TRIPLE_DEPTH = 0       # Skip graph for self-contained messages
+WITH_ENTITY_TRIPLE_DEPTH = 2     # Deep traversal when entities present
+```
+
+**Rationale**:
+- Conversation history is cheap and always useful
+- Graph traversal is expensive; only do it when entities provide starting points
+- Depth=2 finds multi-hop relationships (e.g., project → deadline → date)
 
 ### [Memory Optimization](#memory-optimization)
 - **Streaming**: Use async generators for large message sets.

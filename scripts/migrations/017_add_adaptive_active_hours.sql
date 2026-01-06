@@ -7,13 +7,13 @@
 -- start_hour and end_hour are in user's local timezone (0-23)
 -- Default to 9 AM - 9 PM if not calculated yet
 
-INSERT INTO system_health (key, value, last_updated)
+INSERT INTO system_health (metric_key, metric_value)
 VALUES
-    ('active_hours_start', '9', NOW()),
-    ('active_hours_end', '21', NOW()),
-    ('active_hours_confidence', '0.0', NOW()),
-    ('active_hours_last_updated', NOW()::TEXT, NOW())
-ON CONFLICT (key) DO NOTHING;
+    ('active_hours_start', '9'),
+    ('active_hours_end', '21'),
+    ('active_hours_confidence', '0.0'),
+    ('active_hours_last_updated', NOW()::TEXT)
+ON CONFLICT (metric_key) DO NOTHING;
 
 -- Note: No schema changes needed
 -- All data stored in existing system_health key-value table
