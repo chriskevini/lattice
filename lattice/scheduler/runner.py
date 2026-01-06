@@ -14,7 +14,7 @@ import structlog
 
 from lattice.core.pipeline import UnifiedPipeline
 from lattice.discord_client.dream import DreamMirrorBuilder
-from lattice.memory import episodic
+from lattice.memory import episodic, prompt_audits
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.triggers import (
     decide_proactive,
@@ -159,7 +159,7 @@ class ProactiveScheduler:
                     # Get system timezone for message storage
                     user_tz = await get_user_timezone()
 
-                    await episodic.store_message(
+                    message_id = await episodic.store_message(
                         episodic.EpisodicMessage(
                             content=result.content,
                             discord_message_id=result.id,
@@ -170,10 +170,36 @@ class ProactiveScheduler:
                         )
                     )
 
+                    # Store prompt audit for proactive message
+                    audit_id = None
+                    if decision.rendered_prompt:
+                        audit_id = await prompt_audits.store_prompt_audit(
+                            prompt_key="PROACTIVE_DECISION",
+                            rendered_prompt=decision.rendered_prompt,
+                            response_content=result.content,
+                            main_discord_message_id=result.id,
+                            template_version=decision.template_version,
+                            message_id=message_id,
+                            model=decision.model,
+                            provider=decision.provider,
+                            prompt_tokens=decision.prompt_tokens,
+                            completion_tokens=decision.completion_tokens,
+                            cost_usd=decision.cost_usd,
+                            latency_ms=decision.latency_ms,
+                        )
+                        logger.info(
+                            "Stored prompt audit for proactive message",
+                            audit_id=str(audit_id),
+                        )
+
                     # Mirror to dream channel
                     await self._mirror_proactive_to_dream(
                         bot_message=result,
                         reasoning=decision.reason or "No specific reason provided",
+                        audit_id=audit_id,
+                        prompt_key="PROACTIVE_DECISION",
+                        template_version=decision.template_version or 1,
+                        rendered_prompt=decision.rendered_prompt,
                     )
 
                     # Reset to base interval after successful message
@@ -213,12 +239,20 @@ class ProactiveScheduler:
         self,
         bot_message: discord.Message,
         reasoning: str,
+        audit_id: Any | None = None,
+        prompt_key: str | None = None,
+        template_version: int | None = None,
+        rendered_prompt: str | None = None,
     ) -> None:
         """Mirror proactive message to dream channel.
 
         Args:
             bot_message: The bot's proactive message
             reasoning: AI reasoning for sending the message
+            audit_id: UUID of prompt audit record
+            prompt_key: Template key used for generation
+            template_version: Version of template used
+            rendered_prompt: Full rendered prompt sent to LLM
         """
         if not self.dream_channel_id:
             logger.debug("Dream channel not configured, skipping proactive mirror")
@@ -233,14 +267,16 @@ class ProactiveScheduler:
             return
 
         try:
-            # Build embed and view
-            # TODO: Proactive messages don't currently generate audit records
-            # Once they do, pass audit_id, prompt_key, version, and rendered_prompt here
+            # Build embed and view with audit info
             embed, view = DreamMirrorBuilder.build_proactive_mirror(
                 bot_message=bot_message.content,
                 main_message_url=bot_message.jump_url,
                 reasoning=reasoning,
                 main_message_id=bot_message.id,
+                audit_id=audit_id,
+                prompt_key=prompt_key,
+                template_version=template_version,
+                rendered_prompt=rendered_prompt,
             )
 
             # Send to dream channel

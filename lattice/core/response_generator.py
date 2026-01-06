@@ -267,6 +267,7 @@ async def generate_response(
     # Build context info for audit (removed context_config in Design D)
     context_info = {
         "template": template_name,
+        "template_version": prompt_template.version,
         "extraction_id": str(extraction.id) if extraction else None,
     }
 

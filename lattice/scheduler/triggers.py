@@ -28,6 +28,15 @@ class ProactiveDecision:
     content: str | None
     reason: str
     channel_id: int | None = None
+    # Generation metadata for audit trail
+    rendered_prompt: str | None = None
+    template_version: int | None = None
+    model: str | None = None
+    provider: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cost_usd: float | None = None
+    latency_ms: int | None = None
 
 
 async def get_current_interval() -> int:
@@ -180,6 +189,15 @@ async def decide_proactive() -> ProactiveDecision:
             content=content,
             reason=decision.get("reason", "No reason provided"),
             channel_id=channel_id,
+            # Capture generation metadata for audit trail
+            rendered_prompt=prompt,
+            template_version=prompt_template.version,
+            model=result.model,
+            provider=result.provider,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            cost_usd=result.cost_usd,
+            latency_ms=result.latency_ms,
         )
 
     except json.JSONDecodeError:

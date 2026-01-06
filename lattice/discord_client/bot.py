@@ -340,8 +340,9 @@ class LatticeBot(commands.Bot):
                 "extraction_id": context_info.get("extraction_id"),
             }
 
-            # Get template key from context_info (defaults to BASIC_RESPONSE for backward compat)
+            # Get template key and version from context_info (defaults to BASIC_RESPONSE for backward compat)
             template_key = context_info.get("template", "BASIC_RESPONSE")
+            template_version = context_info.get("template_version", 1)
 
             # Store episodic messages and prompt audits
             for bot_msg in bot_messages:
@@ -360,7 +361,7 @@ class LatticeBot(commands.Bot):
                     rendered_prompt=rendered_prompt,
                     response_content=bot_msg.content,
                     main_discord_message_id=bot_msg.id,
-                    template_version=1,  # TODO: Get from prompt_registry
+                    template_version=template_version,
                     message_id=message_id,
                     model=response_result.model,
                     provider=response_result.provider,
@@ -380,7 +381,7 @@ class LatticeBot(commands.Bot):
                     audit_id=audit_id,
                     performance={
                         "prompt_key": template_key,
-                        "version": 1,
+                        "version": template_version,
                         "model": response_result.model,
                         "latency_ms": response_result.latency_ms,
                         "cost_usd": response_result.cost_usd or 0,

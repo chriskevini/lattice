@@ -610,6 +610,10 @@ class DreamMirrorBuilder:
         main_message_url: str,
         reasoning: str,
         main_message_id: int,
+        audit_id: UUID | None = None,
+        prompt_key: str | None = None,
+        template_version: int | None = None,
+        rendered_prompt: str | None = None,
     ) -> tuple[discord.Embed, DreamMirrorView]:
         """Build a proactive message mirror.
 
@@ -618,6 +622,10 @@ class DreamMirrorBuilder:
             main_message_url: Jump URL to main channel message
             reasoning: AI reasoning for sending proactive message
             main_message_id: Discord message ID in main channel
+            audit_id: Prompt audit ID for transparency
+            prompt_key: Prompt template key used
+            template_version: Template version
+            rendered_prompt: Full rendered prompt for inspection
 
         Returns:
             Tuple of (embed, view) for the proactive mirror message
@@ -648,21 +656,32 @@ class DreamMirrorBuilder:
             inline=False,
         )
 
+        # Add performance info if available
+        if prompt_key and template_version:
+            embed.add_field(
+                name="⚙️ TEMPLATE",
+                value=f"```\n{prompt_key} v{template_version}\n```",
+                inline=False,
+            )
+
         embed.set_footer(text=f"Message ID: {main_message_id}")
 
-        # Proactive messages don't have audit_id or rendered prompt yet
-        # Create view with message ID only - buttons will be disabled
+        # Create view with audit data if available
         view = DreamMirrorView(
             message_id=main_message_id,
+            audit_id=audit_id,
+            rendered_prompt=rendered_prompt,
         )
-        # Disable buttons since no audit data - need to access the ActionRow's buttons
-        for item in view.children:
-            if isinstance(item, discord.ui.Button):
-                item.disabled = True
-            elif hasattr(item, "children"):  # ActionRow has children (buttons)
-                for button in item.children:
-                    if isinstance(button, discord.ui.Button):
-                        button.disabled = True
+
+        # Disable buttons if no audit data
+        if not audit_id:
+            for item in view.children:
+                if isinstance(item, discord.ui.Button):
+                    item.disabled = True
+                elif hasattr(item, "children"):  # ActionRow has children (buttons)
+                    for button in item.children:
+                        if isinstance(button, discord.ui.Button):
+                            button.disabled = True
 
         return embed, view
 
