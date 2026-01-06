@@ -26,23 +26,26 @@ logger = structlog.get_logger(__name__)
 
 
 # Valid message types for extraction validation
-VALID_MESSAGE_TYPES = {"declaration", "query", "activity_update", "conversation"}
+# Updated in Design D: declaration→goal, query→question
+VALID_MESSAGE_TYPES = {"goal", "question", "activity_update", "conversation"}
 
 
 @dataclass
 class QueryExtraction:
-    """Represents a structured extraction from a user message."""
+    """Represents a structured extraction from a user message.
+
+    As of Design D (migration 019), simplified to 2 core fields:
+    - message_type: For response template selection (goal|question|activity_update|conversation)
+    - entities: For graph traversal starting points
+
+    Removed fields: predicates, time_constraint, activity, query, urgency, continuation
+    (These were extracted but unused in response generation)
+    """
 
     id: uuid.UUID
     message_id: uuid.UUID
-    message_type: str
-    entities: list[str]
-    predicates: list[str]
-    time_constraint: str | None
-    activity: str | None
-    query: str | None
-    urgency: str | None
-    continuation: bool
+    message_type: str  # goal | question | activity_update | conversation
+    entities: list[str]  # Entity mentions for graph traversal
     rendered_prompt: str
     raw_response: str
     extraction_method: str  # Always "api" (local extraction removed)
@@ -98,7 +101,7 @@ async def extract_query_structure(
     result = await llm_client.complete(
         prompt=rendered_prompt,
         temperature=prompt_template.temperature,
-        # No max_tokens - let model complete naturally (JSON is ~50-200 tokens)
+        # No max_tokens - let model complete naturally (JSON is ~50-100 tokens now)
     )
     raw_response = result.content
     extraction_method = "api"
@@ -131,8 +134,8 @@ async def extract_query_structure(
         )
         raise
 
-    # Validate required fields
-    required_fields = ["message_type", "entities", "predicates", "continuation"]
+    # Validate required fields (simplified to 2 fields in Design D)
+    required_fields = ["message_type", "entities"]
     for field in required_fields:
         if field not in extraction_data:
             msg = f"Missing required field in extraction: {field}"
@@ -185,12 +188,6 @@ async def extract_query_structure(
         message_id=message_id,
         message_type=extraction_data["message_type"],
         entities=extraction_data["entities"],
-        predicates=extraction_data["predicates"],
-        time_constraint=extraction_data.get("time_constraint"),
-        activity=extraction_data.get("activity"),
-        query=extraction_data.get("query"),
-        urgency=extraction_data.get("urgency"),
-        continuation=extraction_data["continuation"],
         rendered_prompt=rendered_prompt,
         raw_response=raw_response,
         extraction_method=extraction_method,
@@ -227,12 +224,6 @@ async def get_extraction(extraction_id: uuid.UUID) -> QueryExtraction | None:
             message_id=row["message_id"],
             message_type=extraction_data["message_type"],
             entities=extraction_data["entities"],
-            predicates=extraction_data["predicates"],
-            time_constraint=extraction_data.get("time_constraint"),
-            activity=extraction_data.get("activity"),
-            query=extraction_data.get("query"),
-            urgency=extraction_data.get("urgency"),
-            continuation=extraction_data["continuation"],
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
             extraction_method=extraction_data.get("_extraction_method", "api"),
@@ -271,12 +262,6 @@ async def get_message_extraction(message_id: uuid.UUID) -> QueryExtraction | Non
             message_id=row["message_id"],
             message_type=extraction_data["message_type"],
             entities=extraction_data["entities"],
-            predicates=extraction_data["predicates"],
-            time_constraint=extraction_data.get("time_constraint"),
-            activity=extraction_data.get("activity"),
-            query=extraction_data.get("query"),
-            urgency=extraction_data.get("urgency"),
-            continuation=extraction_data["continuation"],
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
             extraction_method=extraction_data.get("_extraction_method", "api"),

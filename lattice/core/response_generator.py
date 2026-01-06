@@ -94,24 +94,23 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
 
     Returns:
         Template name to use for response generation:
-        - GOAL_RESPONSE: For declarations, goals, and time-sensitive tasks
-        - QUERY_RESPONSE: For factual queries and information requests
+        - GOAL_RESPONSE: For goals, commitments, and intentions
+        - QUESTION_RESPONSE: For factual questions and information requests
         - ACTIVITY_RESPONSE: For activity updates and progress reports
         - CONVERSATION_RESPONSE: For general conversational messages
         - BASIC_RESPONSE: Fallback when extraction unavailable
 
     Note:
-        During Issue #61 Phase 2, this enables message-type-specific response
-        generation. Each template can later be independently optimized via the
-        Dreaming Cycle based on user feedback patterns.
+        Updated in Design D: declaration→goal, query→question
+        Each template can be independently optimized via the Dreaming Cycle.
     """
     if extraction is None:
         # No extraction available, use basic fallback template
         return "BASIC_RESPONSE"
 
     template_map = {
-        "declaration": "GOAL_RESPONSE",
-        "query": "QUERY_RESPONSE",
+        "goal": "GOAL_RESPONSE",
+        "question": "QUESTION_RESPONSE",
         "activity_update": "ACTIVITY_RESPONSE",
         "conversation": "CONVERSATION_RESPONSE",
     }
@@ -245,31 +244,13 @@ async def generate_response(
         "user_message": user_message,
     }
 
-    # Add extraction-specific fields if available
-    # NOTE: As of migration 018 (2026-01-05), extraction fields are NOT included in
-    # specialized templates (GOAL_RESPONSE, QUERY_RESPONSE, etc.) to avoid redundancy.
-    # Modern LLMs can extract this information naturally from the user message.
-    # We still populate these fields for:
-    #   1. Backward compatibility with older/custom templates
-    #   2. Internal routing and analytics (extraction still runs, just not shown to LLM)
-    #   3. Potential future use (Dreaming Cycle may re-introduce in evolved templates)
-    # The filtering logic below ensures unused placeholders are excluded from prompts.
-    if extraction:
-        template_params.update(
-            {
-                "entities": ", ".join(extraction.entities)
-                if extraction.entities
-                else "None",
-                "query": extraction.query or "N/A",
-                "activity": extraction.activity or "N/A",
-                "time_constraint": extraction.time_constraint or "None specified",
-                "urgency": extraction.urgency or "normal",
-                "continuation": "yes" if extraction.continuation else "no",
-            }
-        )
+    # Note: As of Design D (migration 019), extraction is simplified to 2 fields:
+    # - message_type (for template selection)
+    # - entities (for graph traversal)
+    # We no longer extract or pass unused fields to templates.
+    # Modern LLMs can extract needed information naturally from the user message.
 
     # Only pass parameters that the template actually uses
-    # This allows backward compatibility and automatically excludes extraction fields
     template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
     filtered_params = {
         key: value
@@ -286,10 +267,8 @@ async def generate_response(
         extraction_available=extraction is not None,
     )
 
-    # Build context info for audit
+    # Build context info for audit (removed context_config in Design D)
     context_info = {
-        "episodic": len(recent_messages),
-        "graph": len(graph_triples) if graph_triples else 0,
         "template": template_name,
         "extraction_id": str(extraction.id) if extraction else None,
     }
