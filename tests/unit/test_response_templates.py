@@ -936,3 +936,320 @@ class TestGenerateResponseWithTemplates:
 
             # Previous messages should be preserved
             assert "Hello!" in rendered_prompt
+
+
+class TestExtractionFieldsNotInPrompts:
+    """Tests to verify extraction fields are not included in specialized templates.
+
+    As of migration 018 (2026-01-05), extraction fields should be excluded from
+    prompts sent to the LLM to avoid redundancy. Modern LLMs can extract this
+    information naturally from the user message.
+    """
+
+    @pytest.mark.asyncio
+    async def test_goal_response_no_extraction_fields(
+        self,
+        mock_extraction_declaration: QueryExtraction,
+        mock_recent_messages: list[EpisodicMessage],
+        mock_semantic_facts: list[StableFact],
+    ) -> None:
+        """Test GOAL_RESPONSE template does not include extraction fields in prompt."""
+        # Use the actual template from migration 018 (no extraction section)
+        mock_template = PromptTemplate(
+            prompt_key="GOAL_RESPONSE",
+            template=(
+                "You are a warm, supportive AI companion.\n\n"
+                "## Context\n"
+                "**Recent conversation history:**\n{episodic_context}\n\n"
+                "**Relevant facts from past conversations:**\n{semantic_context}\n\n"
+                "**User message:** {user_message}\n\n"
+                "## Your Task\n"
+                "The user has declared a goal. Respond naturally."
+            ),
+            temperature=0.7,
+            version=2,
+            active=True,
+        )
+
+        mock_result = GenerationResult(
+            content="Got it!",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message="I need to finish the lattice project by Friday",
+                semantic_facts=mock_semantic_facts,
+                recent_messages=mock_recent_messages,
+                extraction=mock_extraction_declaration,
+            )
+
+            # Verify extraction fields are NOT in the rendered prompt
+            assert "Extracted information:" not in rendered_prompt
+            assert "Entities mentioned:" not in rendered_prompt
+            assert "Time constraint:" not in rendered_prompt
+            assert "Urgency:" not in rendered_prompt
+
+            # Verify core fields ARE present
+            assert "I need to finish the lattice project by Friday" in rendered_prompt
+            assert "Your Task" in rendered_prompt
+
+    @pytest.mark.asyncio
+    async def test_query_response_no_extraction_fields(
+        self,
+        mock_extraction_query: QueryExtraction,
+        mock_recent_messages: list[EpisodicMessage],
+        mock_semantic_facts: list[StableFact],
+    ) -> None:
+        """Test QUERY_RESPONSE template does not include extraction fields in prompt."""
+        mock_template = PromptTemplate(
+            prompt_key="QUERY_RESPONSE",
+            template=(
+                "You are a helpful AI companion.\n\n"
+                "## Context\n"
+                "**Recent conversation history:**\n{episodic_context}\n\n"
+                "**Relevant facts from past conversations:**\n{semantic_context}\n\n"
+                "**User message:** {user_message}\n\n"
+                "## Your Task\n"
+                "Answer the query directly."
+            ),
+            temperature=0.5,
+            version=2,
+            active=True,
+        )
+
+        mock_result = GenerationResult(
+            content="The deadline is Friday.",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.5,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message="When is the lattice deadline?",
+                semantic_facts=mock_semantic_facts,
+                recent_messages=mock_recent_messages,
+                extraction=mock_extraction_query,
+            )
+
+            # Verify extraction fields are NOT in the rendered prompt
+            assert "Extracted information:" not in rendered_prompt
+            assert "Query reformulation:" not in rendered_prompt
+            assert "Entities mentioned:" not in rendered_prompt
+
+            # Verify core fields ARE present
+            assert "When is the lattice deadline?" in rendered_prompt
+
+    @pytest.mark.asyncio
+    async def test_activity_response_no_extraction_fields(
+        self,
+        mock_extraction_activity: QueryExtraction,
+        mock_recent_messages: list[EpisodicMessage],
+        mock_semantic_facts: list[StableFact],
+    ) -> None:
+        """Test ACTIVITY_RESPONSE template does not include extraction fields."""
+        mock_template = PromptTemplate(
+            prompt_key="ACTIVITY_RESPONSE",
+            template=(
+                "You are a friendly AI companion.\n\n"
+                "## Context\n"
+                "**Recent conversation history:**\n{episodic_context}\n\n"
+                "**Relevant facts from past conversations:**\n{semantic_context}\n\n"
+                "**User message:** {user_message}\n\n"
+                "## Your Task\n"
+                "Acknowledge the activity update naturally."
+            ),
+            temperature=0.7,
+            version=2,
+            active=True,
+        )
+
+        mock_result = GenerationResult(
+            content="Nice session!",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message="Spent 3 hours coding today",
+                semantic_facts=mock_semantic_facts,
+                recent_messages=mock_recent_messages,
+                extraction=mock_extraction_activity,
+            )
+
+            # Verify extraction fields are NOT in the rendered prompt
+            assert "Extracted information:" not in rendered_prompt
+            assert "Activity:" not in rendered_prompt
+            assert "Entities mentioned:" not in rendered_prompt
+
+            # Verify core fields ARE present
+            assert "Spent 3 hours coding today" in rendered_prompt
+
+    @pytest.mark.asyncio
+    async def test_conversation_response_no_extraction_fields(
+        self,
+        mock_extraction_conversation: QueryExtraction,
+        mock_recent_messages: list[EpisodicMessage],
+        mock_semantic_facts: list[StableFact],
+    ) -> None:
+        """Test CONVERSATION_RESPONSE template does not include extraction fields."""
+        mock_template = PromptTemplate(
+            prompt_key="CONVERSATION_RESPONSE",
+            template=(
+                "You are a warm AI companion.\n\n"
+                "## Context\n"
+                "**Recent conversation history:**\n{episodic_context}\n\n"
+                "**Relevant facts from past conversations:**\n{semantic_context}\n\n"
+                "**User message:** {user_message}\n\n"
+                "## Your Task\n"
+                "Engage naturally in conversation."
+            ),
+            temperature=0.7,
+            version=2,
+            active=True,
+        )
+
+        mock_result = GenerationResult(
+            content="Nice! What kind?",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message="Just made some tea",
+                semantic_facts=mock_semantic_facts,
+                recent_messages=mock_recent_messages,
+                extraction=mock_extraction_conversation,
+            )
+
+            # Verify extraction fields are NOT in the rendered prompt
+            assert "Extracted information:" not in rendered_prompt
+            assert "Is continuation:" not in rendered_prompt
+            assert "Entities mentioned:" not in rendered_prompt
+
+            # Verify core fields ARE present
+            assert "Just made some tea" in rendered_prompt
+
+    @pytest.mark.asyncio
+    async def test_extraction_data_still_populated_internally(
+        self,
+        mock_extraction_declaration: QueryExtraction,
+        mock_recent_messages: list[EpisodicMessage],
+        mock_semantic_facts: list[StableFact],
+    ) -> None:
+        """Test that extraction data is still available for routing/analytics.
+
+        Even though extraction fields aren't shown to the LLM, they should still
+        be populated internally for template selection and analytics purposes.
+        """
+        mock_template = PromptTemplate(
+            prompt_key="GOAL_RESPONSE",
+            template="User: {user_message}",  # Minimal template, no extraction fields
+            temperature=0.7,
+            version=2,
+            active=True,
+        )
+
+        mock_result = GenerationResult(
+            content="Got it!",
+            model="test",
+            provider="test",
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+        )
+
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+        ):
+            mock_get_prompt.return_value = mock_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_result
+            mock_get_client.return_value = mock_client
+
+            result, rendered_prompt, context_info = await generate_response(
+                user_message="I need to finish the lattice project by Friday",
+                semantic_facts=mock_semantic_facts,
+                recent_messages=mock_recent_messages,
+                extraction=mock_extraction_declaration,
+            )
+
+            # Verify extraction was used for template selection
+            mock_get_prompt.assert_called_once_with("GOAL_RESPONSE")
+
+            # Verify extraction metadata is in context_info for analytics
+            assert context_info["template"] == "GOAL_RESPONSE"
+            assert context_info["extraction_id"] == str(mock_extraction_declaration.id)

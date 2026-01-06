@@ -270,6 +270,14 @@ async def generate_response(
     }
 
     # Add extraction-specific fields if available
+    # NOTE: As of migration 018 (2026-01-05), extraction fields are NOT included in
+    # specialized templates (GOAL_RESPONSE, QUERY_RESPONSE, etc.) to avoid redundancy.
+    # Modern LLMs can extract this information naturally from the user message.
+    # We still populate these fields for:
+    #   1. Backward compatibility with older/custom templates
+    #   2. Internal routing and analytics (extraction still runs, just not shown to LLM)
+    #   3. Potential future use (Dreaming Cycle may re-introduce in evolved templates)
+    # The filtering logic below ensures unused placeholders are excluded from prompts.
     if extraction:
         template_params.update(
             {
@@ -285,7 +293,7 @@ async def generate_response(
         )
 
     # Only pass parameters that the template actually uses
-    # This allows backward compatibility with BASIC_RESPONSE template
+    # This allows backward compatibility and automatically excludes extraction fields
     template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
     filtered_params = {
         key: value
