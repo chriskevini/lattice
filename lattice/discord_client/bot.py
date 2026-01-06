@@ -16,7 +16,11 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, query_extraction, response_generator
-from lattice.core.context_strategy import compute_context_limits
+from lattice.core.context_strategy import (
+    EPISODIC_LIMIT,
+    NO_ENTITY_TRIPLE_DEPTH,
+    WITH_ENTITY_TRIPLE_DEPTH,
+)
 from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
@@ -262,18 +266,22 @@ class LatticeBot(commands.Bot):
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
-            # Compute context limits based on extraction (Design D: entity-driven)
-            limits = compute_context_limits(extraction)
+            # Determine context limits based on extraction (Design D: entity-driven)
+            # Always fetch 15 messages, but only traverse graph if entities present
+            if extraction and extraction.entities:
+                triple_depth = WITH_ENTITY_TRIPLE_DEPTH
+            else:
+                triple_depth = NO_ENTITY_TRIPLE_DEPTH
 
-            # Retrieve context using computed limits
+            # Retrieve context using determined limits
             (
                 recent_messages,
                 graph_triples,
             ) = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,
-                episodic_limit=limits.episodic_limit,
-                triple_depth=limits.triple_depth,
+                episodic_limit=EPISODIC_LIMIT,
+                triple_depth=triple_depth,
                 entity_names=extraction.entities if extraction else None,
             )
 

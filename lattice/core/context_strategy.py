@@ -1,65 +1,23 @@
-"""Context strategy module - determines retrieval limits based on extraction.
+"""Context strategy constants for Design D: Entity-driven context optimization.
 
-This module implements Design D: Entity-driven context optimization.
 Strategy:
-- Always provide generous conversation history (15 messages)
-- Only traverse graph when entities are mentioned (expensive operation)
+- Always provide generous conversation history (15 messages - cheap, always helpful)
+- Only traverse graph when entities are mentioned (expensive, targeted operation)
 - Use depth=2 for thorough relationship exploration when entities present
+
+Since there are only two possible configurations, we use constants instead of
+a computed dataclass.
 """
 
-from dataclasses import dataclass
+# Always fetch 15 messages (cheap operation, always provides good context)
+EPISODIC_LIMIT = 15
 
-from lattice.core.query_extraction import QueryExtraction
+# Graph traversal settings when NO entities are present
+# (self-contained messages: greetings, reactions, simple activities)
+NO_ENTITY_TRIPLE_DEPTH = 0
+NO_ENTITY_MAX_TRIPLES = 0
 
-
-@dataclass
-class ContextLimits:
-    """Limits for context retrieval."""
-
-    episodic_limit: int
-    triple_depth: int
-    max_triples: int
-
-
-def compute_context_limits(extraction: QueryExtraction | None) -> ContextLimits:
-    """Compute context retrieval limits based on extracted entities.
-
-    Strategy:
-    - Always provide 15 messages for conversation history (cheap, always helpful)
-    - Only traverse graph when entities are mentioned (expensive, targeted)
-    - Use depth=2 for thorough exploration (finds multi-hop relationships)
-
-    Args:
-        extraction: Query extraction result (None if extraction failed)
-
-    Returns:
-        ContextLimits with episodic_limit, triple_depth, max_triples
-
-    Examples:
-        >>> compute_context_limits(None)
-        ContextLimits(episodic_limit=15, triple_depth=0, max_triples=0)
-
-        >>> extraction = QueryExtraction(..., entities=[])
-        >>> compute_context_limits(extraction)
-        ContextLimits(episodic_limit=15, triple_depth=0, max_triples=0)
-
-        >>> extraction = QueryExtraction(..., entities=["lattice project", "Friday"])
-        >>> compute_context_limits(extraction)
-        ContextLimits(episodic_limit=15, triple_depth=2, max_triples=20)
-    """
-    if extraction is None or not extraction.entities:
-        # No entities: self-contained message (greetings, reactions, simple activities)
-        # Skip graph traversal (no starting points)
-        return ContextLimits(
-            episodic_limit=15,
-            triple_depth=0,
-            max_triples=0,
-        )
-
-    # Has entities: traverse graph for semantic connections
-    # Use depth=2 to find multi-hop relationships (e.g., project -> deadline -> date)
-    return ContextLimits(
-        episodic_limit=15,
-        triple_depth=2,
-        max_triples=20,
-    )
+# Graph traversal settings when entities ARE present
+# (depth=2 finds multi-hop relationships, e.g., project -> deadline -> date)
+WITH_ENTITY_TRIPLE_DEPTH = 2
+WITH_ENTITY_MAX_TRIPLES = 20
