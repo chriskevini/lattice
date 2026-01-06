@@ -198,8 +198,16 @@ async def generate_response(
             ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M UTC")
         return f"[{ts_str}] {msg.role}: {msg.content}"
 
-    # Use full episodic_limit instead of hardcoded [-5:]
-    episodic_context = "\n".join(format_with_timestamp(msg) for msg in recent_messages)
+    # Exclude the current user message from episodic context to avoid duplication
+    # The current message is explicitly provided in {user_message} placeholder
+    filtered_messages = [
+        msg
+        for msg in recent_messages
+        if not (msg.content == user_message and not msg.is_bot)
+    ]
+    episodic_context = "\n".join(
+        format_with_timestamp(msg) for msg in filtered_messages
+    )
 
     seen_facts = set()
     unique_facts = []
