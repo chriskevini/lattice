@@ -152,7 +152,6 @@ class TestQueryExtractionPipeline:
                 context_info,
             ) = await response_generator.generate_response(
                 user_message=message_content,
-                semantic_facts=[],
                 recent_messages=mock_recent_messages,
                 graph_triples=[],
                 extraction=extraction,
@@ -247,10 +246,9 @@ class TestQueryExtractionPipeline:
                 context_info,
             ) = await response_generator.generate_response(
                 user_message=message_content,
-                semantic_facts=[],
                 recent_messages=mock_recent_messages,
                 graph_triples=[],
-                extraction=extraction,  # None
+                extraction=extraction,
             )
 
             # Verify fallback to BASIC_RESPONSE
@@ -376,7 +374,6 @@ class TestQueryExtractionPipeline:
                 context_info,
             ) = await response_generator.generate_response(
                 user_message=message_content,
-                semantic_facts=[],
                 recent_messages=mock_recent_messages,
                 graph_triples=[],
                 extraction=extraction,

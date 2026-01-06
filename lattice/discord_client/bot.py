@@ -261,19 +261,16 @@ class LatticeBot(commands.Bot):
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
-            # Retrieve context
-            # Retrieve context including graph traversal
+            # Retrieve context including graph traversal from extracted entities
             (
-                semantic_facts,
                 recent_messages,
                 graph_triples,
             ) = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,
-                semantic_limit=5,
-                semantic_threshold=0.7,
                 episodic_limit=10,
                 triple_depth=1,
+                entity_names=extraction.entities if extraction else None,
             )
 
             # Generate response with extraction for template selection
@@ -283,7 +280,6 @@ class LatticeBot(commands.Bot):
                 context_info,
             ) = await response_generator.generate_response(
                 user_message=message.content,
-                semantic_facts=semantic_facts,
                 recent_messages=recent_messages,
                 graph_triples=graph_triples,
                 extraction=extraction,

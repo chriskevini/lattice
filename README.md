@@ -6,8 +6,6 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-> **⚠️ NOTE**: Semantic memory architecture is being rewritten. See [Issue #61](https://github.com/chriskevini/lattice/issues/61) for the graph-first approach replacing vector embeddings with query extraction.
-
 ---
 
 ## 🌟 Key Features
@@ -27,7 +25,7 @@ Lattice operates on the principle that **logic is data**. By moving prompts and 
 
 ### Memory Tiers
 1.  **Episodic ([`raw_messages`](#1-episodic-memory-raw_messages))**: Immutable, time-ordered interaction log.
-2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_triples`](#3-semantic-relationships-semantic_triples))**: Graph-first knowledge with query extraction (replacing vector-based facts).
+2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_triples`](#3-semantic-relationships-semantic_triples))**: Graph-based knowledge using query extraction.
 3.  **Procedural ([`prompt_registry`](#4-procedural-memory-prompt_registry))**: Versioned templates and behavioral strategies.
 
 ### Unified Pipeline
@@ -62,7 +60,6 @@ Lattice enforces strict bounds to stay within 2GB RAM:
 MAX_EPISODIC_CONTEXT_TURNS=20
 MAX_TRIPLE_DEPTH=3
 ```
-_(Note: Vector search limits removed in Issue #61's graph-first architecture)_
 
 ### Discord Channels
 - **`DISCORD_MAIN_CHANNEL_ID`**: The public face. Conversations are stored here.
@@ -85,7 +82,7 @@ CREATE TABLE raw_messages (
 ```
 
 ### 2. Semantic Memory: `entities`
-_(New in Issue #61)_ Named entities without embeddings, using keyword search.
+Named entities without embeddings, using keyword search.
 ```sql
 CREATE TABLE entities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

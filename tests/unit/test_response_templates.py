@@ -15,7 +15,6 @@ from lattice.core.response_generator import (
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
-from lattice.memory.semantic import StableFact
 from lattice.utils.llm import GenerationResult
 
 
@@ -122,17 +121,6 @@ def mock_recent_messages() -> list[EpisodicMessage]:
             is_bot=True,
             message_id=uuid.uuid4(),
             timestamp=datetime(2026, 1, 4, 10, 1, tzinfo=UTC),
-        ),
-    ]
-
-
-@pytest.fixture
-def mock_semantic_facts() -> list[StableFact]:
-    """Create mock semantic facts for context."""
-    return [
-        StableFact(
-            content="User is working on lattice project",
-            fact_id=uuid.uuid4(),
         ),
     ]
 
@@ -336,7 +324,6 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: GenerationResult,
     ) -> None:
@@ -354,7 +341,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="I need to finish the lattice project by Friday",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
             )
@@ -379,7 +365,6 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
         mock_generation_result: GenerationResult,
     ) -> None:
         """Test response generation with query extraction."""
@@ -409,7 +394,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="When is the lattice deadline?",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_query,
             )
@@ -430,7 +414,6 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_activity: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
         mock_generation_result: GenerationResult,
     ) -> None:
         """Test response generation with activity update extraction."""
@@ -460,7 +443,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Spent 3 hours coding today",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_activity,
             )
@@ -476,7 +458,6 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_conversation: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
         mock_generation_result: GenerationResult,
     ) -> None:
         """Test response generation with conversation extraction."""
@@ -506,7 +487,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Just made some tea",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_conversation,
             )
@@ -521,7 +501,6 @@ class TestGenerateResponseWithTemplates:
     async def test_generate_without_extraction_legacy(
         self,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
         mock_basic_template: PromptTemplate,
         mock_generation_result: GenerationResult,
     ) -> None:
@@ -539,7 +518,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Hello",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=None,
             )
@@ -555,7 +533,6 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
         mock_basic_template: PromptTemplate,
         mock_generation_result: GenerationResult,
     ) -> None:
@@ -574,7 +551,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Test message",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
             )
@@ -589,7 +565,6 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: GenerationResult,
     ) -> None:
@@ -620,7 +595,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="When is the deadline?",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 graph_triples=graph_triples,
                 extraction=mock_extraction_query,
@@ -637,7 +611,6 @@ class TestGenerateResponseWithTemplates:
     async def test_generate_empty_extraction_fields(
         self,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
     ) -> None:
         """Test handling of extraction with empty/None fields."""
         extraction = QueryExtraction(
@@ -695,7 +668,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Hello",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=extraction,
             )
@@ -708,7 +680,6 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_filter_current_message_from_episodic_context(
         self,
-        mock_semantic_facts: list[StableFact],
         mock_basic_template: PromptTemplate,
     ) -> None:
         """Test that current user message is filtered from episodic context."""
@@ -765,7 +736,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message=user_message_content,
-                semantic_facts=mock_semantic_facts,
                 recent_messages=recent_messages,
                 user_discord_message_id=user_discord_id,
             )
@@ -788,7 +758,6 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_handle_duplicate_message_content(
         self,
-        mock_semantic_facts: list[StableFact],
         mock_basic_template: PromptTemplate,
     ) -> None:
         """Test that ID-based filtering handles duplicate message content correctly."""
@@ -851,7 +820,6 @@ class TestGenerateResponseWithTemplates:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message=duplicate_content,
-                semantic_facts=mock_semantic_facts,
                 recent_messages=recent_messages,
                 user_discord_message_id=4444444444,  # Current message ID
             )
@@ -876,7 +844,6 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_fallback_to_content_filtering_without_message_id(
         self,
-        mock_semantic_facts: list[StableFact],
         mock_basic_template: PromptTemplate,
     ) -> None:
         """Test backward compatibility: content-based filtering when ID not provided."""
@@ -925,7 +892,6 @@ class TestGenerateResponseWithTemplates:
             # Don't pass user_discord_message_id (backward compatibility test)
             result, rendered_prompt, context_info = await generate_response(
                 user_message=user_message_content,
-                semantic_facts=mock_semantic_facts,
                 recent_messages=recent_messages,
                 # user_discord_message_id=None (implicit)
             )
@@ -951,7 +917,6 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
     ) -> None:
         """Test GOAL_RESPONSE template does not include extraction fields in prompt."""
         # Use the actual template from migration 018 (no extraction section)
@@ -996,7 +961,6 @@ class TestExtractionFieldsNotInPrompts:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="I need to finish the lattice project by Friday",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
             )
@@ -1016,7 +980,6 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
     ) -> None:
         """Test QUERY_RESPONSE template does not include extraction fields in prompt."""
         mock_template = PromptTemplate(
@@ -1060,7 +1023,6 @@ class TestExtractionFieldsNotInPrompts:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="When is the lattice deadline?",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_query,
             )
@@ -1078,7 +1040,6 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_activity: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
     ) -> None:
         """Test ACTIVITY_RESPONSE template does not include extraction fields."""
         mock_template = PromptTemplate(
@@ -1122,7 +1083,6 @@ class TestExtractionFieldsNotInPrompts:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Spent 3 hours coding today",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_activity,
             )
@@ -1140,7 +1100,6 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_conversation: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
     ) -> None:
         """Test CONVERSATION_RESPONSE template does not include extraction fields."""
         mock_template = PromptTemplate(
@@ -1184,7 +1143,6 @@ class TestExtractionFieldsNotInPrompts:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="Just made some tea",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_conversation,
             )
@@ -1202,7 +1160,6 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_semantic_facts: list[StableFact],
     ) -> None:
         """Test that extraction data is still available for routing/analytics.
 
@@ -1242,7 +1199,6 @@ class TestExtractionFieldsNotInPrompts:
 
             result, rendered_prompt, context_info = await generate_response(
                 user_message="I need to finish the lattice project by Friday",
-                semantic_facts=mock_semantic_facts,
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
             )

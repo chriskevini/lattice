@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
-from lattice.memory import episodic, procedural, semantic
+from lattice.memory import episodic, procedural
 from lattice.utils.llm import GenerationResult, get_llm_client
 
 if TYPE_CHECKING:
@@ -122,7 +122,6 @@ def select_response_template(extraction: "QueryExtraction | None") -> str:
 
 async def generate_response(
     user_message: str,
-    semantic_facts: list[semantic.StableFact],
     recent_messages: list[episodic.EpisodicMessage],
     graph_triples: list[dict[str, Any]] | None = None,
     extraction: "QueryExtraction | None" = None,
@@ -131,23 +130,16 @@ async def generate_response(
     """Generate a response using the appropriate prompt template.
 
     Selects template based on extracted message type and populates it with
-    context from episodic memory, semantic memory, and graph traversal.
-
-    Note:
-        During Issue #61 refactor, semantic_facts will typically be empty
-        as vector-based semantic search is disabled. The bot relies primarily
-        on episodic context (recent messages) until the new query extraction
-        system is fully integrated.
+    context from episodic memory and graph traversal.
 
     Args:
         user_message: The user's message
-        semantic_facts: Relevant facts from semantic memory (stubbed during refactor)
         recent_messages: Recent conversation history
         graph_triples: Related facts from graph traversal
         extraction: Query extraction with message type and structured fields.
                    If None, uses BASIC_RESPONSE template for backward compatibility.
         user_discord_message_id: Discord message ID to exclude from episodic context.
-                                If None, falls back to content-based filtering.
+                                If None falls back to content-based filtering.
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
@@ -219,20 +211,8 @@ async def generate_response(
         format_with_timestamp(msg) for msg in filtered_messages
     )
 
-    seen_facts = set()
-    unique_facts = []
-    for fact in semantic_facts:
-        if fact.content not in seen_facts:
-            unique_facts.append(fact)
-            seen_facts.add(fact.content)
-
-    # Format semantic context with optional graph relationships
+    # Format graph triples as relationships for semantic context
     semantic_lines = []
-    if unique_facts:
-        semantic_lines.append("Relevant facts you remember:")
-        semantic_lines.extend([f"- {fact.content}" for fact in unique_facts])
-
-    # Format graph triples as relationships
     if graph_triples:
         relationships = []
         for triple in graph_triples[:MAX_GRAPH_TRIPLES]:
@@ -243,10 +223,7 @@ async def generate_response(
                 relationships.append(f"{subject} {predicate} {obj}")
 
         if relationships:
-            if semantic_lines:
-                semantic_lines.append("\nRelated knowledge:")
-            else:
-                semantic_lines.append("Related knowledge:")
+            semantic_lines.append("Relevant knowledge from past conversations:")
             semantic_lines.extend([f"- {rel}" for rel in relationships])
 
     semantic_context = (
@@ -259,7 +236,6 @@ async def generate_response(
         semantic_context_preview=semantic_context[:200],
         user_message=user_message[:100],
         template_name=template_name,
-        note="Semantic facts empty during Issue #61 refactor",
     )
 
     # Build template parameters from extraction if available
@@ -313,8 +289,7 @@ async def generate_response(
     # Build context info for audit
     context_info = {
         "episodic": len(recent_messages),
-        "semantic": len(semantic_facts),
-        "graph": len(graph_triples),
+        "graph": len(graph_triples) if graph_triples else 0,
         "template": template_name,
         "extraction_id": str(extraction.id) if extraction else None,
     }

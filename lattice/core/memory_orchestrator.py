@@ -1,6 +1,6 @@
 """Memory orchestration module for coordinating memory operations.
 
-Handles storing and retrieving from episodic and semantic memory.
+Handles storing and retrieving from episodic memory and graph triples.
 """
 
 import asyncio
@@ -9,7 +9,7 @@ from uuid import UUID
 
 import structlog
 
-from lattice.memory import episodic, semantic
+from lattice.memory import episodic
 from lattice.memory.graph import GraphTraversal
 from lattice.utils.database import db_pool
 
@@ -38,8 +38,6 @@ async def store_user_message(
         Semantic facts are extracted asynchronously via consolidation,
         not stored directly from raw messages to avoid redundancy.
     """
-    # Store in episodic memory with provided timezone
-    # Semantic extraction happens later via consolidate_message_async()
     user_message_id = await episodic.store_message(
         episodic.EpisodicMessage(
             content=content,
@@ -90,88 +88,77 @@ async def store_bot_message(
 async def retrieve_context(
     query: str,
     channel_id: int,
-    semantic_limit: int = 5,
-    semantic_threshold: float = 0.7,
     episodic_limit: int = 10,
     triple_depth: int = 1,
+    entity_names: list[str] | None = None,
 ) -> tuple[
-    list[semantic.StableFact],
     list[episodic.EpisodicMessage],
     list[dict[str, Any]],
 ]:
     """Retrieve relevant context from memory.
 
-    Note:
-        Semantic search is currently stubbed out during Issue #61 refactor.
-        The function returns empty semantic facts list until the graph-first
-        architecture is implemented.
+    Retrieves recent messages and performs graph traversal from extracted entities.
 
     Args:
-        query: Query text for semantic search
+        query: Query text (used for logging)
         channel_id: Discord channel ID for episodic search
-        semantic_limit: Maximum semantic facts to retrieve (currently unused)
-        semantic_threshold: Minimum similarity threshold (currently unused)
         episodic_limit: Maximum recent messages to retrieve
         triple_depth: Maximum depth for graph traversal (0 = disabled)
+        entity_names: Entity names to traverse graph from (from query extraction)
 
     Returns:
-        Tuple of (semantic_facts, recent_messages, graph_triples)
+        Tuple of (recent_messages, graph_triples)
     """
-    # Retrieve semantic facts and recent messages in parallel
-    # Note: semantic.search_similar_facts currently returns [] (stubbed)
-    semantic_facts, recent_messages = await asyncio.gather(
-        semantic.search_similar_facts(
-            query=query,
-            limit=semantic_limit,
-            similarity_threshold=semantic_threshold,
-        ),
-        episodic.get_recent_messages(
-            channel_id=channel_id,
-            limit=episodic_limit,
-        ),
+    recent_messages = await episodic.get_recent_messages(
+        channel_id=channel_id,
+        limit=episodic_limit,
     )
 
     logger.debug(
         "Context retrieved",
-        semantic_facts=len(semantic_facts),
         recent_messages=len(recent_messages),
-        note="Semantic search stubbed during Issue #61 refactor",
     )
 
-    # Traverse graph from semantic facts if depth > 0
     graph_triples: list[dict[str, Any]] = []
-    if triple_depth > 0 and semantic_facts:
+    if triple_depth > 0 and entity_names:
         if db_pool.is_initialized():
             traverser = GraphTraversal(db_pool.pool, max_depth=triple_depth)
 
-            # Traverse from each semantic fact in parallel
             traverse_tasks = [
-                traverser.traverse_from_fact(fact.fact_id, max_hops=triple_depth)
-                for fact in semantic_facts
-                if fact.fact_id
+                traverser.find_entity_relationships(entity_name, limit=10)
+                for entity_name in entity_names
             ]
 
             if traverse_tasks:
                 traverse_results = await asyncio.gather(*traverse_tasks)
-                # Flatten results and deduplicate by triple ID
                 seen_triple_ids = set()
                 for result in traverse_results:
                     for triple in result:
-                        triple_id = triple.get("id")
-                        if triple_id and triple_id not in seen_triple_ids:
-                            graph_triples.append(triple)
-                            seen_triple_ids.add(triple_id)
+                        triple_key = (
+                            triple.get("subject"),
+                            triple.get("predicate"),
+                            triple.get("object"),
+                        )
+                        if triple_key not in seen_triple_ids:
+                            graph_triples.append(
+                                {
+                                    "subject_content": triple.get("subject"),
+                                    "predicate": triple.get("predicate"),
+                                    "object_content": triple.get("object"),
+                                }
+                            )
+                            seen_triple_ids.add(triple_key)
 
                 logger.debug(
                     "Graph traversal completed",
                     depth=triple_depth,
-                    facts_explored=len(semantic_facts),
+                    entities_explored=len(entity_names),
                     triples_found=len(graph_triples),
                 )
         else:
             logger.warning("Database pool not initialized, skipping graph traversal")
 
-    return semantic_facts, recent_messages, graph_triples
+    return recent_messages, graph_triples
 
 
 async def consolidate_message_async(
