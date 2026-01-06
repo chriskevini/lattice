@@ -57,6 +57,43 @@ class TestBuildSourceMap:
         result = build_source_map(messages, guild_id=999)
         assert result == {}
 
+    def test_uses_env_var_when_guild_id_none(self, monkeypatch) -> None:
+        """Test that DISCORD_GUILD_ID env var is used when guild_id is None."""
+        monkeypatch.setenv("DISCORD_GUILD_ID", "777")
+        msg_uuid = uuid4()
+        messages = [
+            EpisodicMessage(
+                content="Test",
+                discord_message_id=111,
+                channel_id=222,
+                is_bot=False,
+                message_id=msg_uuid,
+            )
+        ]
+
+        result = build_source_map(messages, guild_id=None)
+
+        assert len(result) == 1
+        assert result[msg_uuid] == "https://discord.com/channels/777/222/111"
+
+    def test_returns_empty_when_no_guild_id_or_env(self, monkeypatch) -> None:
+        """Test returns empty dict when guild_id is None and env var not set."""
+        monkeypatch.delenv("DISCORD_GUILD_ID", raising=False)
+        msg_uuid = uuid4()
+        messages = [
+            EpisodicMessage(
+                content="Test",
+                discord_message_id=111,
+                channel_id=222,
+                is_bot=False,
+                message_id=msg_uuid,
+            )
+        ]
+
+        result = build_source_map(messages, guild_id=None)
+
+        assert result == {}
+
 
 class TestInjectSourceLinks:
     """Tests for inject_source_links function."""
@@ -168,3 +205,34 @@ class TestInjectSourceLinks:
 
         # Should only have 1 link since URLs are deduplicated
         assert result.count("https://discord.com/channels/1/2/3") == 1
+
+    def test_empty_triple_origins(self) -> None:
+        """Test with empty triple_origins set returns original response."""
+        source_map = {uuid4(): "https://discord.com/channels/1/2/3"}
+        response = "Test response."
+
+        result = inject_source_links(response, source_map, set())
+
+        assert result == response
+
+    def test_all_empty_sentences(self) -> None:
+        """Test response with sentence-like punctuation still gets links."""
+        origin_id = uuid4()
+        source_map = {origin_id: "https://discord.com/channels/1/2/3"}
+        response = "... . ."  # Has periods but minimal content
+
+        result = inject_source_links(response, source_map, {origin_id})
+
+        # Implementation injects link as long as there are sentence parts
+        assert "[🔗]" in result
+
+    def test_no_source_urls_after_filtering(self) -> None:
+        """Test when no origin_ids match source_map."""
+        origin_id = uuid4()
+        other_id = uuid4()
+        source_map = {other_id: "https://discord.com/channels/1/2/3"}
+        response = "Test response."
+
+        result = inject_source_links(response, source_map, {origin_id})
+
+        assert result == response
