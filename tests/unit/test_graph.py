@@ -95,35 +95,19 @@ class TestParseTriples:
         assert result[0]["object"] == "TECHNOLOGY"
 
 
-@pytest.mark.skip(reason="Async fixture issues with db_pool mocking - needs fix")
 class TestGraphTraversal:
     """Tests for GraphTraversal class."""
 
-    @pytest.fixture
-    async def db_pool(self) -> MagicMock:
-        """Create mock database pool."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
-        return mock_pool
-
-    @pytest.fixture
-    async def traverser(self, db_pool: MagicMock) -> GraphTraversal:
-        """Create GraphTraversal instance with mock pool."""
-        return GraphTraversal(db_pool, max_depth=3)
-
     @pytest.mark.asyncio
-    async def test_traverse_from_fact_single_hop(
-        self,
-        traverser: GraphTraversal,
-        db_pool: MagicMock,
-    ) -> None:
+    async def test_traverse_from_fact_single_hop(self) -> None:
         """Test single-hop traversal returns direct relationships."""
         fact1_id = uuid4()
         fact2_id = uuid4()
 
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
+        # Create mock pool and connection
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "id": uuid4(),
@@ -137,7 +121,11 @@ class TestGraphTraversal:
                 }
             ]
         )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+        # Create traverser with mock pool
+        traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_fact(fact1_id, max_hops=1)
 
         assert len(result) == 1
@@ -146,17 +134,16 @@ class TestGraphTraversal:
         assert result[0]["object_content"] == "Company X"
 
     @pytest.mark.asyncio
-    async def test_traverse_from_fact_multi_hop(
-        self,
-        traverser: GraphTraversal,
-        db_pool: MagicMock,
-    ) -> None:
+    async def test_traverse_from_fact_multi_hop(self) -> None:
         """Test multi-hop traversal discovers indirect relationships."""
         alice_id = uuid4()
         company_x_id = uuid4()
         company_y_id = uuid4()
 
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
+        # Create mock pool and connection
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "id": uuid4(),
@@ -180,21 +167,24 @@ class TestGraphTraversal:
                 },
             ]
         )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+        # Create traverser with mock pool
+        traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_fact(alice_id, max_hops=2)
 
         assert len(result) == 2
 
     @pytest.mark.asyncio
-    async def test_traverse_with_predicate_filter(
-        self,
-        traverser: GraphTraversal,
-        db_pool: MagicMock,
-    ) -> None:
+    async def test_traverse_with_predicate_filter(self) -> None:
         """Test predicate filtering restricts traversal."""
         alice_id = uuid4()
 
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
+        # Create mock pool and connection
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "id": uuid4(),
@@ -208,7 +198,11 @@ class TestGraphTraversal:
                 }
             ]
         )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+        # Create traverser with mock pool
+        traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_fact(
             alice_id, predicate_filter={"works_at"}, max_hops=2
         )
@@ -217,13 +211,12 @@ class TestGraphTraversal:
         assert result[0]["predicate"] == "works_at"
 
     @pytest.mark.asyncio
-    async def test_find_entity_relationships(
-        self,
-        traverser: GraphTraversal,
-        db_pool: MagicMock,
-    ) -> None:
+    async def test_find_entity_relationships(self) -> None:
         """Test finding all relationships involving an entity."""
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
+        # Create mock pool and connection
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "Company X",
@@ -233,21 +226,28 @@ class TestGraphTraversal:
                 }
             ]
         )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+        # Create traverser with mock pool
+        traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_entity_relationships("Company X", limit=10)
 
         assert len(result) == 1
         assert result[0]["predicate"] == "acquired"
 
     @pytest.mark.asyncio
-    async def test_empty_result(
-        self, traverser: GraphTraversal, db_pool: MagicMock
-    ) -> None:
+    async def test_empty_result(self) -> None:
         """Test traversal returns empty list when no relationships exist."""
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
-            return_value=[]
-        )
+        # Create mock pool and connection
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+        # Create traverser with mock pool
+        traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_fact(uuid4())
 
         assert result == []
