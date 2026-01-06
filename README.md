@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-> **⚠️ NOTE**: Semantic memory architecture is being rewritten. See [Issue #61](https://github.com/chriskevini/lattice/issues/61) for the graph-first approach replacing vector embeddings with query extraction.
+> **📌 NOTE**: Semantic memory rewrite complete (Issue #61). Graph-first architecture with query extraction is now the standard approach.
 
 ---
 
