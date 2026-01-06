@@ -1358,6 +1358,70 @@ class TestSplitResponse:
         for word in words:
             assert word in rejoined
 
+    def test_split_response_long_line_after_normal_lines(self) -> None:
+        """Test that accumulated normal lines are flushed before processing a long line.
+
+        This tests lines 310-312: when current_chunk has accumulated normal lines,
+        and then a long line is encountered, the current_chunk should be flushed
+        before handling the long line.
+        """
+        from lattice.core.response_generator import split_response
+
+        # Create message with normal lines followed by a long line
+        lines = ["Normal line 1", "Normal line 2", "x" * 2000]
+        text = "\n".join(lines)
+
+        chunks = split_response(text, max_length=100)
+
+        # Should create multiple chunks
+        assert len(chunks) > 1
+
+        # First chunk should contain both normal lines together
+        assert "Normal line 1" in chunks[0]
+        assert "Normal line 2" in chunks[0]
+
+        # Remaining chunks should be the split long line
+        # Each chunk should respect the limit
+        for chunk in chunks:
+            assert len(chunk) <= 100, f"Chunk length {len(chunk)} exceeds limit 100"
+
+        # Verify long line was split and all content preserved
+        rejoined_long_line = "".join(chunks[1:])
+        assert rejoined_long_line == "x" * 2000
+
+    def test_split_response_super_long_word_after_normal_words(self) -> None:
+        """Test that temp_line is flushed before hard-splitting a super-long word.
+
+        This tests lines 322-323: when temp_line has accumulated normal words,
+        and then a super-long word (exceeding max_length) is encountered,
+        temp_line should be flushed before hard-splitting the long word.
+        """
+        from lattice.core.response_generator import split_response
+
+        # Create a single line with normal words followed by a super-long word
+        words = ["hello", "world", "x" * 2000]  # Last word exceeds limit
+        long_line = " ".join(words)
+
+        chunks = split_response(long_line, max_length=100)
+
+        # Should create multiple chunks
+        assert len(chunks) > 1
+
+        # First chunk should contain the normal words together
+        assert chunks[0] == "hello world"
+
+        # Remaining chunks should be the hard-split super-long word
+        # Each should be exactly 100 chars (except possibly the last)
+        for chunk in chunks[1:-1]:  # All but last
+            assert len(chunk) == 100, f"Chunk length {len(chunk)} should be exactly 100"
+
+        # Last chunk should be <= 100
+        assert len(chunks[-1]) <= 100
+
+        # Verify super-long word was split and all content preserved
+        rejoined_word = "".join(chunks[1:])
+        assert rejoined_word == "x" * 2000
+
     def test_split_response_custom_max_length(self) -> None:
         """Test split_response with custom max_length."""
         from lattice.core.response_generator import split_response
