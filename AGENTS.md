@@ -6,8 +6,6 @@
 - **Stack**: Python 3.12+, PostgreSQL 15+, discord.py.
 - **Core Goal**: Total evolvability via metadata-driven logic.
 
-> **📌 ARCHITECTURE**: The semantic memory system uses query extraction with graph-first architecture (Issue #61). Legacy vector-based semantic search has been removed.
-
 ---
 
 ## 🏗️ [Core Architecture](#core-architecture)
@@ -79,7 +77,6 @@ Uses FunctionGemma-270M (or API fallback) to extract structured data from messag
 ## 📚 [Resources](#resources)
 - **[README.md](README.md)**: Installation, [Database Schema](README.md#database-schema), and Config.
 - **[DEVELOPMENT.md](DEVELOPMENT.md)**: Setup and troubleshooting.
-- **[Issue #61](https://github.com/chriskevini/lattice/issues/61)**: Current roadmap - Graph-first semantic memory rewrite.
 - **[docs/roadmap.md](docs/roadmap.md)**: Roadmap status and archive links.
 
 ---
