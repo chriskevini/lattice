@@ -102,7 +102,7 @@ class GraphTraversal:
             limit: Maximum number of results
 
         Returns:
-            List of triples involving the entity
+            List of triples involving the entity (includes origin_id for source attribution)
         """
         async with self.db_pool.acquire() as conn:
             return await conn.fetch(
@@ -111,7 +111,8 @@ class GraphTraversal:
                     s.name AS subject,
                     t.predicate,
                     o.name AS object,
-                    t.created_at
+                    t.created_at,
+                    t.origin_id
                 FROM semantic_triples t
                 JOIN entities s ON t.subject_id = s.id
                 JOIN entities o ON t.object_id = o.id
