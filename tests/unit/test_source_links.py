@@ -11,7 +11,7 @@ class TestBuildSourceMap:
 
     def test_empty_inputs(self) -> None:
         """Test with no messages or triples."""
-        result = build_source_map([], [], guild_id=123456789)
+        result = build_source_map([], guild_id=123456789)
         assert result == {}
 
     def test_maps_recent_messages(self) -> None:
@@ -36,7 +36,7 @@ class TestBuildSourceMap:
             ),
         ]
 
-        result = build_source_map(messages, [], guild_id=999)
+        result = build_source_map(messages, guild_id=999)
 
         assert len(result) == 2
         assert result[msg1_uuid] == "https://discord.com/channels/999/222/111"
@@ -54,7 +54,7 @@ class TestBuildSourceMap:
             )
         ]
 
-        result = build_source_map(messages, [], guild_id=999)
+        result = build_source_map(messages, guild_id=999)
         assert result == {}
 
 

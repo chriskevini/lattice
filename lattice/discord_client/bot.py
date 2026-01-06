@@ -305,7 +305,6 @@ class LatticeBot(commands.Bot):
                 # Build source map from recent messages
                 source_map = build_source_map(
                     recent_messages=recent_messages,
-                    graph_triples=graph_triples,
                     guild_id=message.guild.id,
                 )
                 # Collect origin IDs from triples that were used

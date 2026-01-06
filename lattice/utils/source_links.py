@@ -2,7 +2,6 @@
 
 import os
 import re
-from typing import Any
 from uuid import UUID
 
 from lattice.memory.episodic import EpisodicMessage
@@ -10,14 +9,12 @@ from lattice.memory.episodic import EpisodicMessage
 
 def build_source_map(
     recent_messages: list[EpisodicMessage],
-    graph_triples: list[dict[str, Any]],
     guild_id: int | None = None,
 ) -> dict[UUID, str]:
     """Build map of message UUIDs to Discord jump URLs.
 
     Args:
         recent_messages: Recent conversation messages with Discord IDs
-        graph_triples: Graph triples with origin_id references
         guild_id: Discord guild ID (defaults to DISCORD_GUILD_ID env var)
 
     Returns:
