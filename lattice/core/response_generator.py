@@ -28,13 +28,10 @@ AVAILABLE_PLACEHOLDERS = {
     "episodic_context": "Recent conversation history with timestamps",
     "semantic_context": "Relevant facts and graph relationships",
     "user_message": "The user's current message",
-    # Extraction fields (available when extraction succeeds)
-    "entities": "Comma-separated list of extracted entities",
-    "query": "Reformulated query for factual questions",
-    "activity": "Activity name for activity_update messages",
-    "time_constraint": "Deadline or time reference (ISO8601 or description)",
-    "urgency": "Urgency level: high/medium/low/normal",
-    "continuation": "yes/no - whether message continues previous topic",
+    # Note: As of Design D (migration 019), extraction fields (entities, query, etc.)
+    # are no longer passed to templates. Query extraction is used only for:
+    # 1. Template selection (message_type routing)
+    # 2. Context strategy (entity-driven retrieval limits)
 }
 
 
