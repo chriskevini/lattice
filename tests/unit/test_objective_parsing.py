@@ -3,8 +3,6 @@
 import json
 import logging
 
-import pytest
-
 from lattice.utils.objective_parsing import parse_objectives
 
 
