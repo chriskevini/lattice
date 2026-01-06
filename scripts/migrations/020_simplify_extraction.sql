@@ -1,4 +1,5 @@
--- Migration: 019_simplify_extraction.sql
+-- Migration: 020_simplify_extraction.sql
+-- Dependencies: Requires migration 012 (extraction_infrastructure)
 -- Description: Simplify extraction to 2 fields and rename query→question
 -- Author: system
 -- Date: 2026-01-06
