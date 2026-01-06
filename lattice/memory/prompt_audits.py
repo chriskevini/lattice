@@ -236,6 +236,11 @@ async def link_feedback_to_audit(
 async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> bool:
     """Link feedback to prompt audit via audit UUID.
 
+    Unlike link_feedback_to_audit(), this function looks up audits by their internal UUID
+    rather than dream_discord_message_id. This is necessary because extraction audits
+    (TRIPLE_EXTRACTION, OBJECTIVE_EXTRACTION) don't get mirrored to the dream channel,
+    so they have NULL for dream_discord_message_id.
+
     Args:
         audit_id: UUID of the prompt audit entry
         feedback_id: UUID of the feedback entry
