@@ -12,7 +12,6 @@ from lattice.memory.episodic import (
     store_message,
 )
 from lattice.memory.procedural import PromptTemplate, get_prompt, store_prompt
-from lattice.memory.semantic import StableFact, search_similar_facts
 
 
 class TestEpisodicMessage:
@@ -124,66 +123,6 @@ class TestEpisodicMemoryFunctions:
             assert len(messages) == 2
             assert messages[0].content == "First message"
             assert messages[0].timestamp < messages[1].timestamp
-
-
-class TestStableFact:
-    """Tests for the StableFact dataclass."""
-
-    def test_stable_fact_init_defaults(self) -> None:
-        """Test StableFact initialization with default values."""
-        fact = StableFact(content="Test fact content")
-
-        assert fact.content == "Test fact content"
-        assert fact.fact_id is None
-        assert fact.embedding is None
-        assert fact.origin_id is None
-        assert fact.entity_type is None
-
-    def test_stable_fact_init_with_values(self) -> None:
-        """Test StableFact initialization with all values."""
-        fact_id = UUID("12345678-1234-5678-1234-567812345678")
-        origin_id = UUID("87654321-4321-8765-4321-876543218765")
-        embedding = [0.1, 0.2, 0.3, 0.4]
-
-        fact = StableFact(
-            content="User prefers dark mode",
-            fact_id=fact_id,
-            embedding=embedding,
-            origin_id=origin_id,
-            entity_type="preference",
-        )
-
-        assert fact.fact_id == fact_id
-        assert fact.embedding == embedding
-        assert fact.origin_id == origin_id
-        assert fact.entity_type == "preference"
-
-    @pytest.mark.asyncio
-    async def test_search_similar_facts_empty_query(self) -> None:
-        """Test that empty query returns empty list."""
-        # Stub implementation always returns empty list
-        result = await search_similar_facts(query="", limit=5)
-        assert result == []
-
-    @pytest.mark.asyncio
-    async def test_search_similar_facts_whitespace_query(self) -> None:
-        """Test that whitespace query returns empty list."""
-        # Stub implementation always returns empty list
-        result = await search_similar_facts(query="   ", limit=5)
-        assert result == []
-
-    @pytest.mark.asyncio
-    async def test_search_similar_facts_stub_returns_empty(self) -> None:
-        """Test that valid queries return empty list during refactor."""
-        # Stub implementation always returns empty list during Issue #61 refactor
-        result = await search_similar_facts(query="what does alice like", limit=5)
-        assert result == []
-        assert isinstance(result, list)
-
-
-# NOTE: Additional semantic memory function tests removed during Issue #61 refactor
-# Semantic memory is being rewritten with graph-first architecture
-# New tests will be added in Phase 1 of Issue #61
 
 
 class TestPromptTemplate:

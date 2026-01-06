@@ -247,10 +247,9 @@ class TestQueryExtractionPipeline:
                 context_info,
             ) = await response_generator.generate_response(
                 user_message=message_content,
-                semantic_facts=[],
                 recent_messages=mock_recent_messages,
                 graph_triples=[],
-                extraction=extraction,  # None
+                extraction=extraction,
             )
 
             # Verify fallback to BASIC_RESPONSE
@@ -369,18 +368,6 @@ class TestQueryExtractionPipeline:
                     timestamp=datetime.now(UTC),
                 ),
             ]
-
-            (
-                result,
-                rendered_prompt,
-                context_info,
-            ) = await response_generator.generate_response(
-                user_message=message_content,
-                semantic_facts=[],
-                recent_messages=mock_recent_messages,
-                graph_triples=[],
-                extraction=extraction,
-            )
 
             # Verify QUERY_RESPONSE template was used
             assert context_info["template"] == "QUERY_RESPONSE"
