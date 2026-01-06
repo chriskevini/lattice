@@ -347,54 +347,54 @@ class TestValidateTemplate:
     def test_validate_template_valid(self) -> None:
         """Test validation of valid template."""
         from lattice.dreaming.proposer import validate_template
-        
+
         template = "You are a helpful assistant. Context: {context}"
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
-        
+
         assert is_valid
         assert error is None
 
     def test_validate_template_too_long(self) -> None:
         """Test validation fails for overly long template."""
         from lattice.dreaming.proposer import validate_template, MAX_TEMPLATE_LENGTH
-        
+
         template = "x" * (MAX_TEMPLATE_LENGTH + 1)
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
-        
+
         assert not is_valid
         assert "exceeds maximum length" in error
 
     def test_validate_template_unbalanced_braces(self) -> None:
         """Test validation fails for unbalanced braces."""
         from lattice.dreaming.proposer import validate_template
-        
+
         template = "Context: {context"
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
-        
+
         assert not is_valid
         assert "unbalanced braces" in error
 
     def test_validate_template_missing_placeholders(self) -> None:
         """Test validation fails for missing required placeholders."""
         from lattice.dreaming.proposer import validate_template
-        
+
         template = "You are {role} but have no context"
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
-        
+
         assert not is_valid
         assert "missing context/message placeholders" in error
 
     def test_validate_template_with_valid_placeholders(self) -> None:
         """Test validation passes with various valid placeholders."""
         from lattice.dreaming.proposer import validate_template
-        
+
         templates = [
             "Message: {message}",
             "Context: {context}",
             "Conversation: {conversation}",
             "Objective: {objective}",
         ]
-        
+
         for template in templates:
             is_valid, error = validate_template(template, "BASIC_RESPONSE")
             assert is_valid, f"Failed for template: {template}"
@@ -403,20 +403,20 @@ class TestValidateTemplate:
     def test_validate_template_non_basic_response_key(self) -> None:
         """Test validation skips placeholder check for other prompt keys."""
         from lattice.dreaming.proposer import validate_template
-        
+
         template = "You are {role}"
         is_valid, error = validate_template(template, "OTHER_PROMPT")
-        
+
         assert is_valid
         assert error is None
 
     def test_validate_template_no_braces(self) -> None:
         """Test validation passes for template with no braces."""
         from lattice.dreaming.proposer import validate_template
-        
+
         template = "You are a helpful assistant."
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
-        
+
         assert is_valid
         assert error is None
 
@@ -427,10 +427,10 @@ class TestParseAndValidateProposalFields:
     def test_parse_llm_response_valid_json(self) -> None:
         """Test parsing valid JSON response."""
         from lattice.dreaming.proposer import _parse_llm_response
-        
+
         response = '{"proposed_template": "test", "confidence": 0.8}'
         data, error = _parse_llm_response(response, "TEST_KEY")
-        
+
         assert data is not None
         assert error is None
         assert data["proposed_template"] == "test"
@@ -438,10 +438,10 @@ class TestParseAndValidateProposalFields:
     def test_parse_llm_response_invalid_json(self) -> None:
         """Test parsing invalid JSON returns error."""
         from lattice.dreaming.proposer import _parse_llm_response
-        
+
         response = "not valid json"
         data, error = _parse_llm_response(response, "TEST_KEY")
-        
+
         assert data is None
         assert error is not None
         assert "JSON parse error" in error
@@ -449,26 +449,26 @@ class TestParseAndValidateProposalFields:
     def test_validate_proposal_fields_valid(self) -> None:
         """Test validation of valid proposal data."""
         from lattice.dreaming.proposer import _validate_proposal_fields
-        
+
         data = {
             "proposed_template": "test template",
             "changes": [{"issue": "x", "fix": "y", "why": "z"}],
             "expected_improvements": "better",
             "confidence": 0.85,
         }
-        
+
         error = _validate_proposal_fields(data)
         assert error is None
 
     def test_validate_proposal_fields_missing_fields(self) -> None:
         """Test validation fails with missing required fields."""
         from lattice.dreaming.proposer import _validate_proposal_fields
-        
+
         data = {
             "proposed_template": "test",
             # Missing changes, expected_improvements, confidence
         }
-        
+
         error = _validate_proposal_fields(data)
         assert error is not None
         assert "Missing required fields" in error
@@ -476,25 +476,25 @@ class TestParseAndValidateProposalFields:
     def test_validate_proposal_fields_invalid_confidence_type(self) -> None:
         """Test validation fails with non-numeric confidence."""
         from lattice.dreaming.proposer import _validate_proposal_fields
-        
+
         data = {
             "proposed_template": "test",
             "changes": [],
             "expected_improvements": "better",
             "confidence": "high",  # Should be number
         }
-        
+
         error = _validate_proposal_fields(data)
         assert error is not None
         from lattice.dreaming.proposer import _validate_proposal_fields
-        
+
         data = {
             "proposed_template": "test",
             "changes": "not a list",
             "expected_improvements": "better",
             "confidence": 0.8,
         }
-        
+
         error = _validate_proposal_fields(data)
         assert error is not None
         assert "list" in error.lower()
@@ -502,14 +502,14 @@ class TestParseAndValidateProposalFields:
     def test_validate_proposal_fields_invalid_template_type(self) -> None:
         """Test validation fails with non-string template."""
         from lattice.dreaming.proposer import _validate_proposal_fields
-        
+
         data = {
             "proposed_template": 123,  # Should be string
             "changes": [],
             "expected_improvements": "better",
             "confidence": 0.8,
         }
-        
+
         error = _validate_proposal_fields(data)
         assert error is not None
         assert "str" in error
