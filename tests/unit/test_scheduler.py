@@ -238,15 +238,17 @@ class TestDecideProactive:
             assert result.reason == "Testing invalid action"
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_message_action(self) -> None:
-        """Test successful message action from LLM."""
+    async def test_decide_proactive_with_empty_content(self) -> None:
+        """Test that empty content in message action defaults to wait."""
         mock_prompt = MagicMock()
         mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
         mock_result = MagicMock()
-        mock_result.content = '{"action": "message", "content": "Hey! How is the project going?", "reason": "User mentioned deadline approaching"}'
+        mock_result.content = (
+            '{"action": "message", "content": "   ", "reason": "Testing empty content"}'
+        )
         mock_result.model = "gpt-4"
         mock_result.provider = "openai"
         mock_result.prompt_tokens = 100
@@ -264,11 +266,11 @@ class TestDecideProactive:
             patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.scheduler.triggers.get_conversation_context",
-                return_value="[2024-01-01 12:00] USER: Need to finish project by Friday",
+                return_value="No recent conversation history.",
             ),
             patch(
                 "lattice.scheduler.triggers.get_objectives_context",
-                return_value="User goals:\n- Complete project by Friday (pending)",
+                return_value="No active objectives.",
             ),
             patch(
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
@@ -277,17 +279,55 @@ class TestDecideProactive:
             patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
         ):
             result = await decide_proactive()
-            assert result.action == "message"
-            assert result.content == "Hey! How is the project going?"
-            assert result.reason == "User mentioned deadline approaching"
-            assert result.channel_id == 12345
-            assert result.model == "gpt-4"
-            assert result.provider == "openai"
-            assert result.template_version == 1
+            assert result.action == "wait"
+            assert result.content is None
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_empty_content(self) -> None:
-        """Test that empty content in message action defaults to wait."""
+    async def test_decide_proactive_with_literal_empty_string(self) -> None:
+        """Test that literal empty string content defaults to wait."""
+        mock_prompt = MagicMock()
+        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.temperature = 0.7
+        mock_prompt.version = 1
+
+        mock_result = MagicMock()
+        mock_result.content = '{"action": "message", "content": "", "reason": "Testing literal empty string"}'
+        mock_result.model = "gpt-4"
+        mock_result.provider = "openai"
+        mock_result.prompt_tokens = 100
+        mock_result.completion_tokens = 50
+        mock_result.cost_usd = 0.01
+        mock_result.latency_ms = 500
+
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock(return_value=mock_result)
+
+        with (
+            patch(
+                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
+            ),
+            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
+            patch(
+                "lattice.scheduler.triggers.get_conversation_context",
+                return_value="No recent conversation history.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_objectives_context",
+                return_value="No active objectives.",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+            ),
+            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+        ):
+            result = await decide_proactive()
+            assert result.action == "wait"
+            assert result.content is None
+
+    @pytest.mark.asyncio
+    async def test_decide_proactive_with_missing_content(self) -> None:
+        """Test that missing content field defaults to wait."""
         mock_prompt = MagicMock()
         mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
@@ -295,7 +335,7 @@ class TestDecideProactive:
 
         mock_result = MagicMock()
         mock_result.content = (
-            '{"action": "message", "content": "   ", "reason": "Testing empty content"}'
+            '{"action": "message", "reason": "Testing missing content"}'
         )
         mock_result.model = "gpt-4"
         mock_result.provider = "openai"

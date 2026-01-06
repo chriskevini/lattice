@@ -177,12 +177,17 @@ async def decide_proactive() -> ProactiveDecision:
             action = "wait"
 
         content = decision.get("content")
-        if action == "message" and content:
-            content = str(content).strip()
-            if len(content) == 0:
-                logger.warning("Empty content from LLM, skipping message")
+        if action == "message":
+            if content is None or content == "":
+                logger.warning("Missing or empty content from LLM, skipping message")
                 action = "wait"
                 content = None
+            else:
+                content = str(content).strip()
+                if len(content) == 0:
+                    logger.warning("Empty content from LLM, skipping message")
+                    action = "wait"
+                    content = None
 
         return ProactiveDecision(
             action=action,
