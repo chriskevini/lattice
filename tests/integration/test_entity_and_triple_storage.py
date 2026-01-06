@@ -1,9 +1,22 @@
-"""Integration tests for entity and semantic triple storage."""
+"""Integration tests for entity and semantic triple storage.
+
+These tests require a real database connection and are skipped in CI.
+To run locally, set DATABASE_URL environment variable.
+"""
+
+import os
 
 import pytest
 
 from lattice.memory import episodic
 from lattice.utils.database import db_pool
+
+
+# Skip all tests if DATABASE_URL not set (CI environment)
+pytestmark = pytest.mark.skipif(
+    not os.getenv("DATABASE_URL"),
+    reason="DATABASE_URL not set - requires real database for integration tests",
+)
 
 
 @pytest.mark.integration
