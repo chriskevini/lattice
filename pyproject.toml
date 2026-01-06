@@ -237,6 +237,9 @@ addopts = [
     "--cov-report=html",
     "--cov-report=xml",
 ]
+markers = [
+    "integration: marks tests as integration tests (require DATABASE_URL)",
+]
 
 # ============================================================================
 # COVERAGE CONFIGURATION
