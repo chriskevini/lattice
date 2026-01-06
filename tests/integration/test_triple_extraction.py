@@ -19,37 +19,25 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     loop.close()
 
 
-@pytest.mark.skip(reason="Async fixture issues with db_pool mocking - needs fix")
 class TestMultiHopReasoningIntegration:
-    """Integration tests for multi-hop graph traversal."""
+    """Integration tests for multi-hop graph traversal.
 
-    @pytest.fixture
-    async def db_pool(self) -> MagicMock:
-        """Create mock database pool."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
-        return mock_pool
-
-    @pytest.fixture
-    async def traverser(self, db_pool: MagicMock) -> GraphTraversal:
-        """Create GraphTraversal instance with mock pool."""
-        return GraphTraversal(db_pool, max_depth=3)
+    Note: Uses mocked database connections to test traversal logic.
+    Real database integration is covered by test_entity_and_triple_storage.py.
+    """
 
     @pytest.mark.asyncio
-    async def test_three_hop_reasoning_chain(
-        self,
-        traverser: GraphTraversal,
-        db_pool: MagicMock,
-    ) -> None:
+    async def test_three_hop_reasoning_chain(self) -> None:
         """Test three-hop reasoning through graph traversal."""
         alice_id = uuid4()
         acme_id = uuid4()
         techcorp_id = uuid4()
         industry_id = uuid4()
 
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
+        # Create mock pool and connection
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "id": uuid4(),
@@ -83,7 +71,11 @@ class TestMultiHopReasoningIntegration:
                 },
             ]
         )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+        # Create traverser with mock pool
+        traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_fact(alice_id, max_hops=3)
 
         assert len(result) == 3
@@ -95,15 +87,14 @@ class TestMultiHopReasoningIntegration:
         assert result[2]["predicate"] == "in"
 
     @pytest.mark.asyncio
-    async def test_filtered_multi_hop_traversal(
-        self,
-        traverser: GraphTraversal,
-        db_pool: MagicMock,
-    ) -> None:
+    async def test_filtered_multi_hop_traversal(self) -> None:
         """Test multi-hop traversal with predicate filter."""
         alice_id = uuid4()
 
-        db_pool.acquire.return_value.__aenter__.return_value.fetch = AsyncMock(
+        # Create mock pool and connection
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "id": uuid4(),
@@ -117,7 +108,11 @@ class TestMultiHopReasoningIntegration:
                 }
             ]
         )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+        # Create traverser with mock pool
+        traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_fact(
             alice_id, predicate_filter={"works_at", "likes"}, max_hops=2
         )
