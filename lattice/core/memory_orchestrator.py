@@ -145,6 +145,7 @@ async def retrieve_context(
                                     "subject_content": triple.get("subject"),
                                     "predicate": triple.get("predicate"),
                                     "object_content": triple.get("object"),
+                                    "origin_id": triple.get("origin_id"),
                                 }
                             )
                             seen_triple_ids.add(triple_key)

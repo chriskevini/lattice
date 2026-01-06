@@ -28,6 +28,7 @@ from lattice.memory import episodic, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
+from lattice.utils.source_links import build_source_map, inject_source_links
 from lattice.utils.database import (
     db_pool,
     get_system_health,
@@ -298,10 +299,30 @@ class LatticeBot(commands.Bot):
                 user_discord_message_id=message.id,
             )
 
+            # Inject source links from graph triples
+            response_content = response_result.content
+            if graph_triples and message.guild:
+                # Build source map from recent messages
+                source_map = build_source_map(
+                    recent_messages=recent_messages,
+                    guild_id=message.guild.id,
+                )
+                # Collect origin IDs from triples that were used
+                triple_origins = {
+                    triple["origin_id"]
+                    for triple in graph_triples
+                    if triple.get("origin_id") is not None
+                }
+                # Inject links at sentence boundaries
+                response_content = inject_source_links(
+                    response=response_content,
+                    source_map=source_map,
+                    triple_origins=triple_origins,
+                    max_links=3,
+                )
+
             # Split response for Discord length limits
-            response_messages = response_generator.split_response(
-                response_result.content
-            )
+            response_messages = response_generator.split_response(response_content)
             bot_messages: list[discord.Message] = []
             for msg in response_messages:
                 bot_msg = await message.channel.send(msg)
