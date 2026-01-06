@@ -1,6 +1,6 @@
 """User feedback module - handles user_feedback table.
 
-Stores out-of-band feedback from users via quote/reply mechanisms.
+Stores feedback submitted via Discord buttons and modals in the dream channel.
 """
 
 from datetime import UTC, datetime
@@ -15,12 +15,8 @@ from lattice.utils.database import db_pool
 logger = structlog.get_logger(__name__)
 
 
-SALUTE_EMOJI = "🫡"
-WASTEBASKET_EMOJI = "🗑️"
-
-
 class UserFeedback:
-    """Represents user feedback stored out-of-band."""
+    """Represents user feedback submitted via dream channel buttons/modals."""
 
     def __init__(
         self,
