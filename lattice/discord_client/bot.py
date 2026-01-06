@@ -287,6 +287,7 @@ class LatticeBot(commands.Bot):
                 recent_messages=recent_messages,
                 graph_triples=graph_triples,
                 extraction=extraction,
+                user_discord_message_id=message.id,
             )
 
             # Split response for Discord length limits
