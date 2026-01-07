@@ -46,6 +46,7 @@ make check-all      # Lint, type-check, and test
 - **Quality**: Enforced via Ruff (linting/formatting) and Mypy.
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) required.
 - **Rendered Prompt Storage**: Always store the fully rendered prompt sent to LLM (not just ingredients). Enables auditability and Dreaming Cycle optimization.
+- **Testing**: Write tests for all new features. See [TESTING.md](docs/TESTING.md) for guidelines on mock completeness, type correctness, and common pitfalls.
 
 ---
 
@@ -103,6 +104,7 @@ WITH_ENTITY_TRIPLE_DEPTH = 2     # Deep traversal when entities present
 ## 📚 [Resources](#resources)
 - **[README.md](README.md)**: Installation, [Database Schema](README.md#database-schema), and Config.
 - **[DEVELOPMENT.md](DEVELOPMENT.md)**: Setup and troubleshooting.
+- **[TESTING.md](docs/TESTING.md)**: Testing guidelines and best practices.
 - **[docs/roadmap.md](docs/roadmap.md)**: Roadmap status and archive links.
 
 ---
