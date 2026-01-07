@@ -1213,9 +1213,7 @@ class TestLatticeBot:
                     # Verify retrieve_context was called with triple_depth=0 (extraction was None)
                     mock_memory.retrieve_context.assert_called_once()
                     call_args = mock_memory.retrieve_context.call_args
-                    assert (
-                        call_args.kwargs["triple_depth"] == 0
-                    )  # NO_ENTITY_TRIPLE_DEPTH
+                    assert call_args.kwargs["triple_depth"] == 0
                     assert call_args.kwargs["entity_names"] is None
 
     # ============================================================================

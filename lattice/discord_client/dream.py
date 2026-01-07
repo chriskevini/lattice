@@ -572,20 +572,18 @@ class DreamMirrorBuilder:
             inline=False,
         )
 
-        # Context & Performance
-        episodic = context_info.get("episodic", 0)
-        semantic = context_info.get("semantic", 0)
-        graph = context_info.get("graph", 0)
         latency = performance.get("latency_ms", 0)
         cost = performance.get("cost_usd", 0)
 
-        context_line = (
-            f"{episodic}E • {semantic}S • {graph}G | ⚡{latency}ms | ${cost:.4f}"
+        embed.add_field(
+            name="📊 PERFORMANCE",
+            value=f"⚡{latency}ms | ${cost:.4f}",
+            inline=False,
         )
 
         embed.add_field(
-            name="📊 CONTEXT & PERFORMANCE",
-            value=f"{context_line}\n🔗 [JUMP TO MAIN]({main_message_url})",
+            name="🔗 LINK",
+            value=f"[JUMP TO MAIN]({main_message_url})",
             inline=False,
         )
 
