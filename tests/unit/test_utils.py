@@ -112,6 +112,22 @@ class TestDatabasePool:
                 assert pool._pool == mock_pool
 
     @pytest.mark.asyncio
+    async def test_initialize_invalid_pool_size_format(self) -> None:
+        """Test that initialize raises ValueError for non-numeric pool sizes."""
+        pool = DatabasePool()
+
+        with patch.dict(
+            os.environ,
+            {
+                "DATABASE_URL": "postgresql://test",
+                "DB_POOL_MIN_SIZE": "invalid",
+            },
+            clear=True,
+        ):
+            with pytest.raises(ValueError, match="invalid literal for int()"):
+                await pool.initialize()
+
+    @pytest.mark.asyncio
     async def test_close_when_initialized(self) -> None:
         """Test that close properly closes the pool when initialized."""
         pool = DatabasePool()
@@ -236,6 +252,16 @@ class TestNextCheckAtFunctions:
             await set_next_check_at(test_dt)
 
             mock_set.assert_called_once_with("next_check_at", test_dt.isoformat())
+
+    @pytest.mark.asyncio
+    async def test_get_next_check_at_invalid_format(self) -> None:
+        """Test get_next_check_at raises ValueError for invalid datetime format."""
+        with patch(
+            "lattice.utils.database.get_system_health",
+            return_value="not-a-valid-datetime",
+        ):
+            with pytest.raises(ValueError, match="Invalid isoformat string"):
+                await get_next_check_at()
 
 
 class TestUserTimezoneFunctions:
