@@ -39,7 +39,7 @@ class TestEntityExtractionPipeline:
             from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
-                prompt_key="QUERY_EXTRACTION",
+                prompt_key="ENTITY_EXTRACTION",
                 template="Extract: {message_content}\nContext: {context}",
                 temperature=0.2,
                 version=1,
@@ -59,7 +59,7 @@ class TestEntityExtractionPipeline:
                 latency_ms=500,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="QUERY_EXTRACTION",
+                prompt_key="ENTITY_EXTRACTION",
             )
             mock_llm_client.return_value = extraction_llm
 
@@ -71,7 +71,7 @@ class TestEntityExtractionPipeline:
                 "extraction": {
                     "entities": ["lattice project", "Friday"],
                 },
-                "prompt_key": "QUERY_EXTRACTION",
+                "prompt_key": "ENTITY_EXTRACTION",
                 "prompt_version": 1,
                 "created_at": datetime.now(UTC),
             }
@@ -104,7 +104,7 @@ class TestEntityExtractionPipeline:
             mock_resp_llm_client.return_value = response_llm
 
             # Execute pipeline: Extract query structure
-            extraction = await entity_extraction.extract_query_structure(
+            extraction = await entity_extraction.extract_entities(
                 message_id=message_id,
                 message_content=message_content,
                 context="Previous message context",
@@ -208,7 +208,7 @@ class TestEntityExtractionPipeline:
             # Attempt extraction (should fail gracefully)
             extraction = None
             try:
-                extraction = await entity_extraction.extract_query_structure(
+                extraction = await entity_extraction.extract_entities(
                     message_id=uuid.uuid4(),
                     message_content=message_content,
                     context="",
@@ -269,7 +269,7 @@ class TestEntityExtractionPipeline:
             from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
-                prompt_key="QUERY_EXTRACTION",
+                prompt_key="ENTITY_EXTRACTION",
                 template="Extract: {message_content}",
                 temperature=0.2,
                 version=1,
@@ -289,7 +289,7 @@ class TestEntityExtractionPipeline:
                 latency_ms=400,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="QUERY_EXTRACTION",
+                prompt_key="ENTITY_EXTRACTION",
             )
             mock_llm_client.return_value = extraction_llm
 
@@ -300,7 +300,7 @@ class TestEntityExtractionPipeline:
                 "extraction": {
                     "entities": ["project", "deadline"],
                 },
-                "prompt_key": "QUERY_EXTRACTION",
+                "prompt_key": "ENTITY_EXTRACTION",
                 "prompt_version": 1,
                 "created_at": datetime.now(UTC),
             }
@@ -333,7 +333,7 @@ class TestEntityExtractionPipeline:
             mock_resp_llm_client.return_value = response_llm
 
             # Extract query
-            extraction = await entity_extraction.extract_query_structure(
+            extraction = await entity_extraction.extract_entities(
                 message_id=message_id,
                 message_content=message_content,
                 context="",
