@@ -129,6 +129,12 @@ async def extract_entities(
             msg = f"Missing required field in extraction: {field}"
             raise ValueError(msg)
 
+    # Validate entities field is a list
+    entities_value = extraction_data.get("entities")
+    if not isinstance(entities_value, list):
+        msg = f"Invalid entities field: expected list, got {type(entities_value).__name__}"
+        raise ValueError(msg)
+
     # 5. Store extraction in database
     now = datetime.now(UTC)
     extraction_id = uuid.uuid4()

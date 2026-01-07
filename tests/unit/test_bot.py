@@ -509,7 +509,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -628,7 +627,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -751,7 +749,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -879,7 +876,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=recent_msgs)
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "activity_update"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -993,7 +989,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "conversation"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -1090,7 +1085,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "conversation"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result

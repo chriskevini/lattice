@@ -340,8 +340,8 @@ class LatticeBot(commands.Bot):
                 "extraction_id": context_info.get("extraction_id"),
             }
 
-            # Get template key and version from context_info (defaults to BASIC_RESPONSE for backward compat)
-            template_key = context_info.get("template", "BASIC_RESPONSE")
+            # Get template key and version from context_info (defaults to UNIFIED_RESPONSE for backward compat)
+            template_key = context_info.get("template", "UNIFIED_RESPONSE")
             template_version = context_info.get("template_version", 1)
 
             # Store episodic messages and prompt audits
