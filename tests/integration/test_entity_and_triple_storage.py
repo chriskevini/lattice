@@ -10,6 +10,7 @@ import pytest
 
 from lattice.memory import episodic
 from lattice.utils.database import db_pool
+from lattice.utils.triple_parsing import parse_triples
 
 
 # Skip all tests if DATABASE_URL not set (CI environment)
@@ -149,7 +150,7 @@ class TestTripleStorage:
                 message_id,
             )
 
-            assert rows[0]["count"] >= 2  # May have more from previous tests
+            assert rows[0]["count"] == 2
 
     @pytest.mark.asyncio
     async def test_store_triple_with_normalized_predicate(self) -> None:
@@ -165,8 +166,14 @@ class TestTripleStorage:
         )
         message_id = await episodic.store_message(message)
 
-        # Use synonym predicate
-        triples = [{"subject": "Bob", "predicate": "loves", "object": "pizza"}]
+        # Parse triples to normalize predicates (mimics actual pipeline)
+        # parse_triples() normalizes "loves" → "likes"
+        raw_output = '[{"subject": "Bob", "predicate": "loves", "object": "pizza"}]'
+        triples = parse_triples(raw_output)
+
+        assert len(triples) == 1
+        assert triples[0]["predicate"] == "likes"  # Verify normalization happened
+
         await episodic.store_semantic_triples(message_id, triples)
 
         # Verify predicate was normalized to "likes"

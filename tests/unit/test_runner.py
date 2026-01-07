@@ -210,6 +210,36 @@ class TestProactiveScheduler:
             assert call_count == 2
 
     @pytest.mark.asyncio
+    async def test_scheduler_loop_handles_none_next_check(self) -> None:
+        """Test scheduler loop handles None from get_next_check_at gracefully."""
+        mock_bot = MagicMock()
+        scheduler = ProactiveScheduler(bot=mock_bot)
+        scheduler._running = True
+
+        call_count = 0
+
+        async def get_next_check_side_effect() -> datetime | None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # First call returns None
+            scheduler._running = False
+            return datetime.now(UTC) + timedelta(hours=1)
+
+        with (
+            patch(
+                "lattice.scheduler.runner.get_next_check_at",
+                side_effect=get_next_check_side_effect,
+            ),
+            patch("asyncio.sleep", AsyncMock()),
+        ):
+            # Should not raise, should handle None gracefully
+            await scheduler._scheduler_loop()
+
+            # Should have called get_next_check_at twice (once None, once valid)
+            assert call_count == 2
+
+    @pytest.mark.asyncio
     async def test_active_hours_loop_updates_periodically(self) -> None:
         """Test active hours loop updates periodically."""
         mock_bot = MagicMock()
