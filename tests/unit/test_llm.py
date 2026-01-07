@@ -375,9 +375,10 @@ class TestLLMClientOpenRouter:
 
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
             with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                # Should raise IndexError when trying to access choices[0]
-                with pytest.raises(IndexError):
-                    await client._openrouter_complete("test", 0.7, None)
+                # Should return empty GenerationResult instead of raising IndexError
+                result = await client._openrouter_complete("test", 0.7, None)
+                assert result.content == ""
+                assert result.model == "test-model"
 
     @pytest.mark.asyncio
     async def test_openrouter_complete_cost_as_string(self) -> None:

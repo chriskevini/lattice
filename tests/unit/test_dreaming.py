@@ -486,7 +486,6 @@ class TestParseAndValidateProposalFields:
 
         error = _validate_proposal_fields(data)
         assert error is not None
-        from lattice.dreaming.proposer import _validate_proposal_fields
 
         data = {
             "proposed_template": "test",
