@@ -160,7 +160,7 @@ async def decide_proactive() -> ProactiveDecision:
             prompt,
             temperature=prompt_template.temperature,
         )
-    except Exception as e:
+    except (ValueError, ImportError) as e:
         logger.exception("LLM call failed")
         return ProactiveDecision(
             action="wait",

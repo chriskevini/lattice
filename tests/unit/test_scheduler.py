@@ -123,7 +123,7 @@ class TestDecideProactive:
         mock_prompt.temperature = 0.7
 
         mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(side_effect=Exception("LLM service unavailable"))
+        mock_llm.complete = AsyncMock(side_effect=ValueError("LLM service unavailable"))
 
         with (
             patch(

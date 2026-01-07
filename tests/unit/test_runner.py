@@ -192,7 +192,7 @@ class TestProactiveScheduler:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("Test exception")
+                raise OSError("Test exception")
             # Stop after handling exception
             scheduler._running = False
             return datetime.now(UTC) + timedelta(hours=1)
@@ -285,7 +285,7 @@ class TestProactiveScheduler:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("Test exception")
+                raise OSError("Test exception")
             scheduler._running = False
             return {
                 "start_hour": 9,

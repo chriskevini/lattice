@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import asyncpg
 import pytest
 
 from lattice.memory.episodic import (
@@ -637,7 +638,7 @@ class TestStoreSemanticTriples:
                 mock_upsert.side_effect = [
                     subject_id,
                     object_id,
-                    Exception("Entity upsert failed"),
+                    asyncpg.PostgresError("Entity upsert failed"),
                 ]
 
                 await store_semantic_triples(message_id, triples)
@@ -661,7 +662,9 @@ class TestStoreSemanticTriples:
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         # First execute succeeds, second fails
-        mock_conn.execute = AsyncMock(side_effect=[None, Exception("DB error")])
+        mock_conn.execute = AsyncMock(
+            side_effect=[None, asyncpg.PostgresError("DB error")]
+        )
 
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool

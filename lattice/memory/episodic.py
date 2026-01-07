@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
+import asyncpg
+import discord
 import structlog
 
 from lattice.memory.procedural import get_prompt
@@ -278,7 +280,7 @@ async def store_semantic_triples(
                     message_id=str(message_id),
                 )
 
-            except Exception:
+            except (asyncpg.PostgresError, ValueError, KeyError):
                 logger.exception(
                     "Failed to store triple",
                     triple=triple,
@@ -606,5 +608,5 @@ async def _mirror_extraction_to_dream(
             objectives_count=len(objectives),
         )
 
-    except Exception:
+    except discord.DiscordException:
         logger.exception("Failed to mirror extraction results to dream channel")
