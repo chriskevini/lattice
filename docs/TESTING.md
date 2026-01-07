@@ -310,7 +310,7 @@ Without `DATABASE_URL`, integration tests are automatically skipped.
 
 - [README.md](../README.md): Project overview and quick start
 - [AGENTS.md](AGENTS.md): Development workflow and architecture
-- [DEVELOPMENT.md](../DEVELOPMENT.md): Setup and troubleshooting
+- [DEVELOPMENT.md](DEVELOPMENT.md): Setup and troubleshooting
 
 ---
 

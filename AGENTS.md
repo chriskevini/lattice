@@ -3,7 +3,7 @@
 ## 📌 Project Overview
 **Lattice** is an Adaptive Memory Orchestrator—a self-evolving Discord companion using the **ENGRAM** neuro-symbolic memory framework.
 - **Constraints**: 2GB RAM / 1vCPU.
-- **Stack**: Python 3.12+, PostgreSQL 15+, discord.py.
+- **Stack**: Python 3.12+, PostgreSQL 15+, py-cord 2.7+.
 - **Core Goal**: Total evolvability via metadata-driven logic.
 
 ---
@@ -91,9 +91,8 @@ Always retrieves **15 recent messages** (generous conversation history), but gra
 
 ## 📚 [Resources](#resources)
 - **[README.md](README.md)**: Installation, [Database Schema](README.md#database-schema), and Config.
-- **[DEVELOPMENT.md](DEVELOPMENT.md)**: Setup and troubleshooting.
+- **[DEVELOPMENT.md](docs/DEVELOPMENT.md)**: Setup and troubleshooting.
 - **[TESTING.md](docs/TESTING.md)**: Testing guidelines and best practices.
-- **[docs/roadmap.md](docs/roadmap.md)**: Roadmap status and archive links.
 
 ---
 
