@@ -2,8 +2,27 @@
 
 import pytest
 import discord
+from unittest.mock import patch
 
 from lattice.discord_client.dream import DreamMirrorBuilder
+
+
+@pytest.fixture(autouse=True)
+def patch_discord_v2_check():
+    """Patch discord.py to allow v2 items in regular View for testing."""
+    original_add_item = discord.ui.View.add_item
+
+    def patched_add_item(self, item):
+        if hasattr(item, "_is_v2") and item._is_v2():
+            if len(self._children) >= 25:
+                raise ValueError("maximum number of children exceeded")
+            item._view = self
+            self._children.append(item)
+            return self
+        return original_add_item(self, item)
+
+    with patch.object(discord.ui.View, "add_item", patched_add_item):
+        yield
 
 
 class TestDreamMirrorBuilder:
