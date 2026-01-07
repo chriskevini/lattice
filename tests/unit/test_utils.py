@@ -128,6 +128,26 @@ class TestDatabasePool:
                 await pool.initialize()
 
     @pytest.mark.asyncio
+    async def test_initialize_when_already_initialized(self) -> None:
+        """Test that re-initializing pool replaces existing pool."""
+        pool = DatabasePool()
+        first_mock_pool = AsyncMock()
+        second_mock_pool = AsyncMock()
+
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://test"}, clear=True):
+            with patch(
+                "lattice.utils.database.asyncpg.create_pool",
+                new=AsyncMock(side_effect=[first_mock_pool, second_mock_pool]),
+            ):
+                # First initialization
+                await pool.initialize()
+                assert pool._pool == first_mock_pool
+
+                # Second initialization replaces the pool
+                await pool.initialize()
+                assert pool._pool == second_mock_pool
+
+    @pytest.mark.asyncio
     async def test_close_when_initialized(self) -> None:
         """Test that close properly closes the pool when initialized."""
         pool = DatabasePool()
