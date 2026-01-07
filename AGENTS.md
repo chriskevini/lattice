@@ -61,19 +61,14 @@ make check-all      # Lint, type-check, and test
 6. **Generation**: `prompt_registry` template execution.
 7. **Consolidation**: Async extraction of entities, triples, and activities.
 
-### [Query Extraction System](#query-extraction-system)
-Extracts **2 essential fields** from messages:
-- **Message Type**: `goal`, `question`, `activity_update`, `conversation`
-  - Determines which response template to use
-  - `goal`: User states an objective or deadline
-  - `question`: User asks for information
+### [Entity Extraction System](#entity-extraction-system)
+Extracts entity mentions from messages for graph traversal:
 - **Entities**: Array of named entities referenced in the message
   - Used for entity-driven graph traversal (see [Context Strategy](#context-strategy))
   - Example: `["lattice project", "Friday", "PostgreSQL"]`
 
 **Design Philosophy**:
-- Removed unused fields: predicates, time_constraint, activity, query, urgency, continuation
-- Modern LLMs can infer this information naturally from the user message
+- Message intent (questions, goals, activities) is inferred naturally by the UNIFIED_RESPONSE template
 - Simpler extraction = more reliable, faster, easier to maintain
 
 ### [Context Strategy](#context-strategy)

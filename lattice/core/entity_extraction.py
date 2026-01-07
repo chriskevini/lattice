@@ -36,6 +36,7 @@ class EntityExtraction:
 
 
 # Type alias for backward compatibility
+# TODO: Remove in v2.0 - use EntityExtraction instead
 QueryExtraction = EntityExtraction
 
 

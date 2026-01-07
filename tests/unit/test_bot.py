@@ -422,16 +422,31 @@ class TestLatticeBot:
 
                 mock_extraction_result = MagicMock()
                 mock_extraction_result.id = extraction_id
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = ["weather"]
-                mock_extraction.extract_query_structure = AsyncMock(
+                mock_extraction.extract_entities = AsyncMock(
                     return_value=mock_extraction_result
                 )
 
                 mock_memory.retrieve_context = AsyncMock(return_value=([], []))
 
+                mock_response_obj = MagicMock()
+                mock_response_obj.content = "It's sunny today!"
+                mock_response_obj.model = "gpt-4"
+                mock_response_obj.provider = "openai"
+                mock_response_obj.temperature = 0.7
+                mock_response_obj.prompt_tokens = 100
+                mock_response_obj.completion_tokens = 50
+                mock_response_obj.total_tokens = 150
+                mock_response_obj.cost_usd = 0.01
+                mock_response_obj.latency_ms = 500
+
                 mock_response.generate_response = AsyncMock(
-                    return_value=("It's sunny today!", "prompt", {})
+                    return_value=(
+                        mock_response_obj,
+                        "rendered_prompt",
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
+                        str(uuid4()),
+                    )
                 )
 
                 with patch.object(message.channel, "send", AsyncMock()) as mock_send:
@@ -439,7 +454,7 @@ class TestLatticeBot:
 
                     # Verify pipeline steps
                     mock_memory.store_user_message.assert_called_once()
-                    mock_extraction.extract_query_structure.assert_called_once()
+                    mock_extraction.extract_entities.assert_called_once()
                     mock_response.generate_response.assert_called_once()
                     mock_send.assert_called_once()
 
@@ -1188,7 +1203,7 @@ class TestLatticeBot:
                 # Extraction with empty entities
                 mock_extraction_result = MagicMock()
                 mock_extraction_result.entities = []  # Empty entities
-                mock_extraction.extract_query_structure = AsyncMock(
+                mock_extraction.extract_entities = AsyncMock(
                     return_value=mock_extraction_result
                 )
 

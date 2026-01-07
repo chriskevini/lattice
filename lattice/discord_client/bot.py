@@ -233,21 +233,20 @@ class LatticeBot(commands.Bot):
                     [f"{msg.content}" for msg in recent_msgs_for_context[-3:]]
                 )
 
-                extraction = await entity_extraction.extract_query_structure(
+                extraction = await entity_extraction.extract_entities(
                     message_id=user_message_id,
                     message_content=message.content,
                     context=context_str,
                 )
 
-                # Validate extraction structure
-                if extraction and extraction.entities is not None:
+                if extraction:
                     logger.info(
                         "Entity extraction completed",
                         entity_count=len(extraction.entities),
                         extraction_id=str(extraction.id),
                     )
                 else:
-                    logger.warning("Extraction returned invalid structure")
+                    logger.warning("Extraction failed")
                     extraction = None
 
             except Exception as e:
@@ -283,7 +282,7 @@ class LatticeBot(commands.Bot):
                 channel_id=message.channel.id,
                 episodic_limit=15,  # EPISODIC_LIMIT
                 triple_depth=triple_depth,
-                entity_names=extraction.entities if extraction else None,
+                entity_names=extraction.entities if extraction else [],
             )
 
             # Generate response with extraction for template selection
