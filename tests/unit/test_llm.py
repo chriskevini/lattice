@@ -8,6 +8,16 @@ import pytest
 from lattice.utils.llm import GenerationResult, LLMClient, get_llm_client
 
 
+@pytest.fixture(autouse=True)
+def reset_llm_client():
+    """Reset global LLM client before and after each test for isolation."""
+    import lattice.utils.llm
+
+    lattice.utils.llm._llm_client = None
+    yield
+    lattice.utils.llm._llm_client = None
+
+
 class TestGenerationResult:
     """Tests for GenerationResult dataclass."""
 
@@ -145,9 +155,12 @@ class TestLLMClientOpenRouter:
         """Test that OpenRouter mode raises ValueError if API key not set."""
         client = LLMClient(provider="openrouter")
 
+        mock_openai_module = MagicMock()
+
         with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="OPENROUTER_API_KEY not set"):
-                await client._openrouter_complete("test", 0.7, None)
+            with patch.dict("sys.modules", {"openai": mock_openai_module}):
+                with pytest.raises(ValueError, match="OPENROUTER_API_KEY not set"):
+                    await client._openrouter_complete("test", 0.7, None)
 
     @pytest.mark.asyncio
     async def test_openrouter_complete_success(self) -> None:
@@ -337,6 +350,70 @@ class TestLLMClientOpenRouter:
                 # But create should be called twice
                 assert mock_openai_client.chat.completions.create.call_count == 2
 
+    @pytest.mark.asyncio
+    async def test_openrouter_complete_empty_choices_list(self) -> None:
+        """Test OpenRouter handles empty choices list gracefully."""
+        client = LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 10
+        mock_usage.completion_tokens = 0
+        mock_usage.total_tokens = 10
+
+        mock_response = MagicMock()
+        mock_response.model = "test-model"
+        mock_response.usage = mock_usage
+        mock_response.choices = []  # Empty choices list
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
+            with patch.dict("sys.modules", {"openai": mock_openai_module}):
+                # Should raise IndexError when trying to access choices[0]
+                with pytest.raises(IndexError):
+                    await client._openrouter_complete("test", 0.7, None)
+
+    @pytest.mark.asyncio
+    async def test_openrouter_complete_cost_as_string(self) -> None:
+        """Test OpenRouter handles cost as string value."""
+        client = LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 10
+        mock_usage.completion_tokens = 20
+        mock_usage.total_tokens = 30
+        mock_usage.cost = "0.001"  # Cost as string instead of float
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "test response"
+
+        mock_response = MagicMock()
+        mock_response.model = "test-model"
+        mock_response.usage = mock_usage
+        mock_response.choices = [mock_choice]
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
+            with patch.dict("sys.modules", {"openai": mock_openai_module}):
+                result = await client._openrouter_complete("test", 0.7, None)
+
+                # Should convert string cost to float
+                assert result.cost_usd == 0.001
+                assert isinstance(result.cost_usd, float)
+
 
 class TestLLMClientComplete:
     """Tests for the main complete() interface."""
@@ -382,11 +459,6 @@ class TestGetLLMClient:
 
     def test_get_llm_client_creates_instance(self) -> None:
         """Test that get_llm_client creates a client instance."""
-        # Reset global client
-        import lattice.utils.llm
-
-        lattice.utils.llm._llm_client = None
-
         with patch.dict(os.environ, {"LLM_PROVIDER": "placeholder"}, clear=True):
             client = get_llm_client()
 
@@ -395,11 +467,6 @@ class TestGetLLMClient:
 
     def test_get_llm_client_reuses_instance(self) -> None:
         """Test that get_llm_client returns same instance on subsequent calls."""
-        # Reset global client
-        import lattice.utils.llm
-
-        lattice.utils.llm._llm_client = None
-
         with patch.dict(os.environ, {"LLM_PROVIDER": "placeholder"}, clear=True):
             client1 = get_llm_client()
             client2 = get_llm_client()
@@ -408,11 +475,6 @@ class TestGetLLMClient:
 
     def test_get_llm_client_uses_env_var(self) -> None:
         """Test that get_llm_client uses LLM_PROVIDER environment variable."""
-        # Reset global client
-        import lattice.utils.llm
-
-        lattice.utils.llm._llm_client = None
-
         with patch.dict(os.environ, {"LLM_PROVIDER": "openrouter"}, clear=True):
             client = get_llm_client()
 
@@ -420,11 +482,6 @@ class TestGetLLMClient:
 
     def test_get_llm_client_defaults_to_placeholder(self) -> None:
         """Test that get_llm_client defaults to placeholder when env var not set."""
-        # Reset global client
-        import lattice.utils.llm
-
-        lattice.utils.llm._llm_client = None
-
         with patch.dict(os.environ, {}, clear=True):
             client = get_llm_client()
 
