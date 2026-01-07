@@ -6,7 +6,7 @@ Stores immutable conversation history with timestamp-based retrieval and timezon
 import json
 from datetime import UTC, datetime
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import asyncpg
 import discord
@@ -588,13 +588,14 @@ async def _mirror_extraction_to_dream(
 
     try:
         # Build embed and view with full audit data for transparency
+        # Only show audit view if we have a real audit_id
         embed, view = AuditViewBuilder.build_extraction_audit(
             user_message=user_message,
             main_message_url=main_message_url,
             triples=triples,
             objectives=objectives,
             prompt_key=prompt_key or "TRIPLE_EXTRACTION",
-            audit_id=audit_id or uuid4(),
+            audit_id=audit_id,
             rendered_prompt=rendered_prompt,
         )
 

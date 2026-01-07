@@ -8,7 +8,7 @@ message patterns to respect user's natural schedule.
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import discord
 import structlog
@@ -252,7 +252,7 @@ class ProactiveScheduler:
         self,
         bot_message: discord.Message,
         reasoning: str,
-        audit_id: Any | None = None,
+        audit_id: UUID | None = None,
         prompt_key: str | None = None,
         template_version: int | None = None,
         rendered_prompt: str | None = None,
@@ -281,6 +281,7 @@ class ProactiveScheduler:
 
         try:
             # Build embed and view with audit info
+            # Only show audit view if we have a real audit_id
             embed, view = AuditViewBuilder.build_proactive_audit(
                 reasoning=reasoning,
                 bot_message=bot_message.content,
@@ -288,7 +289,7 @@ class ProactiveScheduler:
                 prompt_key=prompt_key or "PROACTIVE_DECISION",
                 version=template_version or 1,
                 confidence=0.5,
-                audit_id=audit_id or uuid4(),
+                audit_id=audit_id,
                 rendered_prompt=rendered_prompt,
             )
 

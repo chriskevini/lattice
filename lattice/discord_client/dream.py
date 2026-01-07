@@ -414,7 +414,7 @@ class AuditViewBuilder:
         version: int,
         latency_ms: int,
         cost_usd: float | None,
-        audit_id: UUID,
+        audit_id: UUID | None,
         rendered_prompt: str,
     ) -> tuple[discord.Embed, AuditView]:
         """Build REACTIVE audit - user message + bot response.
@@ -479,7 +479,7 @@ class AuditViewBuilder:
         prompt_key: str,
         version: int,
         confidence: float,
-        audit_id: UUID,
+        audit_id: UUID | None,
         rendered_prompt: str | None = None,
     ) -> tuple[discord.Embed, AuditView]:
         """Build PROACTIVE audit - bot-initiated check-in.
@@ -542,7 +542,7 @@ class AuditViewBuilder:
         triples: list[dict[str, str]],
         objectives: list[dict[str, Any]],
         prompt_key: str,
-        audit_id: UUID,
+        audit_id: UUID | None,
         rendered_prompt: str | None = None,
     ) -> tuple[discord.Embed, AuditView]:
         """Build EXTRACTION audit - internal semantic analysis.
@@ -618,7 +618,7 @@ class AuditViewBuilder:
         prompt_key: str,
         confidence: float,
         latency_ms: int,
-        audit_id: UUID,
+        audit_id: UUID | None,
         rendered_prompt: str | None = None,
     ) -> tuple[discord.Embed, AuditView]:
         """Build REASONING audit - internal decision/analysis LLM call.
