@@ -324,11 +324,6 @@ if message.reference and message.reference.resolved.author.bot:
 async def send_message(content: str) -> None:
     await channel.send(content)
 
-# ✅ North Star detection
-if is_north_star_declaration(message.content):
-    await upsert_north_star_fact(message)
-    await message.reply("Noted 🌟")
-    return
 ```
 
 ## Testing Patterns
