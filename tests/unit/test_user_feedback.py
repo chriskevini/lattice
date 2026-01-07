@@ -137,6 +137,7 @@ class TestGetFeedbackByUserMessage:
         mock_row = {
             "id": feedback_id,
             "content": "Found feedback",
+            "sentiment": "positive",
             "referenced_discord_message_id": 11111,
             "user_discord_message_id": 22222,
             "created_at": created_at,
@@ -155,12 +156,14 @@ class TestGetFeedbackByUserMessage:
             assert result is not None
             assert result.content == "Found feedback"
             assert result.feedback_id == feedback_id
+            assert result.sentiment == "positive"
             assert result.referenced_discord_message_id == 11111
             assert result.user_discord_message_id == 22222
             assert result.created_at == created_at
 
-            # Verify query
+            # Verify query includes sentiment
             call_args = mock_conn.fetchrow.call_args
+            assert "sentiment" in call_args[0][0]
             assert "WHERE user_discord_message_id = $1" in call_args[0][0]
             assert call_args[0][1] == 22222
 
@@ -178,6 +181,35 @@ class TestGetFeedbackByUserMessage:
             result = await get_feedback_by_user_message(99999)
 
             assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_feedback_with_null_sentiment(self) -> None:
+        """Test retrieving feedback with None sentiment."""
+        feedback_id = uuid4()
+        created_at = datetime(2026, 1, 6, 10, 0, 0, tzinfo=UTC)
+
+        mock_row = {
+            "id": feedback_id,
+            "content": "Feedback without sentiment",
+            "sentiment": None,
+            "referenced_discord_message_id": 11111,
+            "user_discord_message_id": 22222,
+            "created_at": created_at,
+        }
+
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+            mock_db_pool.pool = mock_pool
+
+            result = await get_feedback_by_user_message(22222)
+
+            assert result is not None
+            assert result.content == "Feedback without sentiment"
+            assert result.sentiment is None
 
 
 class TestDeleteFeedback:
@@ -238,6 +270,7 @@ class TestGetAllFeedback:
             {
                 "id": id2,
                 "content": "Second feedback",
+                "sentiment": "negative",
                 "referenced_discord_message_id": 222,
                 "user_discord_message_id": 444,
                 "created_at": time2,
@@ -245,6 +278,7 @@ class TestGetAllFeedback:
             {
                 "id": id1,
                 "content": "First feedback",
+                "sentiment": "positive",
                 "referenced_discord_message_id": 111,
                 "user_discord_message_id": 333,
                 "created_at": time1,
@@ -265,14 +299,17 @@ class TestGetAllFeedback:
             # Verify first result (newest)
             assert results[0].feedback_id == id2
             assert results[0].content == "Second feedback"
+            assert results[0].sentiment == "negative"
             assert results[0].created_at == time2
             # Verify second result
             assert results[1].feedback_id == id1
             assert results[1].content == "First feedback"
+            assert results[1].sentiment == "positive"
             assert results[1].created_at == time1
 
-            # Verify query includes ORDER BY
+            # Verify query includes sentiment and ORDER BY
             call_args = mock_conn.fetch.call_args
+            assert "sentiment" in call_args[0][0]
             assert "ORDER BY created_at DESC" in call_args[0][0]
 
     @pytest.mark.asyncio
