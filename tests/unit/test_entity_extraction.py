@@ -1,4 +1,7 @@
-"""Unit tests for query extraction module."""
+"""Unit tests for entity extraction module.
+
+Renamed from test_query_extraction.py to match entity_extraction.py module.
+"""
 
 import json
 import uuid
@@ -7,8 +10,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from lattice.core.query_extraction import (
-    QueryExtraction,
+from lattice.core.entity_extraction import (
+    EntityExtraction,
     extract_query_structure,
     get_extraction,
     get_message_extraction,
@@ -22,19 +25,18 @@ def mock_prompt_template() -> PromptTemplate:
     """Create a mock QUERY_EXTRACTION prompt template."""
     return PromptTemplate(
         prompt_key="QUERY_EXTRACTION",
-        template="Extract structured data from: {message_content}\nContext: {context}",
+        template="Extract entities from: {message_content}\nContext: {context}",
         temperature=0.2,
-        version=2,  # Updated in Design D
+        version=2,
         active=True,
     )
 
 
 @pytest.fixture
 def mock_llm_response() -> str:
-    """Create a mock LLM response with valid extraction JSON (Design D: 2 fields)."""
+    """Create a mock LLM response with valid extraction JSON."""
     return json.dumps(
         {
-            "message_type": "goal",
             "entities": ["lattice project", "Friday"],
         }
     )
@@ -47,8 +49,8 @@ def mock_generation_result(mock_llm_response: str) -> GenerationResult:
         content=mock_llm_response,
         model="anthropic/claude-3.5-sonnet",
         provider="anthropic",
-        prompt_tokens=50,  # Reduced (simpler prompt)
-        completion_tokens=20,  # Reduced (simpler output)
+        prompt_tokens=50,
+        completion_tokens=20,
         total_tokens=70,
         cost_usd=0.0005,
         latency_ms=300,
@@ -56,19 +58,18 @@ def mock_generation_result(mock_llm_response: str) -> GenerationResult:
     )
 
 
-class TestQueryExtraction:
-    """Tests for the QueryExtraction dataclass."""
+class TestEntityExtraction:
+    """Tests for the EntityExtraction dataclass."""
 
-    def test_query_extraction_init(self) -> None:
-        """Test QueryExtraction initialization (Design D: simplified to 2 fields)."""
+    def test_entity_extraction_init(self) -> None:
+        """Test EntityExtraction initialization."""
         extraction_id = uuid.uuid4()
         message_id = uuid.uuid4()
         now = datetime.now()
 
-        extraction = QueryExtraction(
+        extraction = EntityExtraction(
             id=extraction_id,
             message_id=message_id,
-            message_type="goal",
             entities=["lattice project", "Friday"],
             rendered_prompt="test prompt",
             raw_response="test response",
@@ -76,9 +77,6 @@ class TestQueryExtraction:
             created_at=now,
         )
 
-        assert extraction.id == extraction_id
-        assert extraction.message_id == message_id
-        assert extraction.message_type == "goal"
         assert extraction.entities == ["lattice project", "Friday"]
         assert extraction.rendered_prompt == "test prompt"
         assert extraction.raw_response == "test response"
@@ -100,13 +98,13 @@ class TestExtractQueryStructure:
 
         with (
             patch(
-                "lattice.core.query_extraction.get_prompt",
+                "lattice.core.entity_extraction.get_prompt",
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.query_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_llm_client",
             ) as mock_llm_client,
-            patch("lattice.core.query_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=mock_generation_result)
@@ -122,7 +120,6 @@ class TestExtractQueryStructure:
             )
 
             assert extraction.message_id == message_id
-            assert extraction.message_type == "goal"
             assert extraction.entities == ["lattice project", "Friday"]
             assert extraction.extraction_method == "api"
 
@@ -132,7 +129,7 @@ class TestExtractQueryStructure:
         message_id = uuid.uuid4()
 
         with patch(
-            "lattice.core.query_extraction.get_prompt",
+            "lattice.core.entity_extraction.get_prompt",
             return_value=None,
         ):
             with pytest.raises(ValueError, match="QUERY_EXTRACTION prompt template"):
@@ -163,11 +160,11 @@ class TestExtractQueryStructure:
 
         with (
             patch(
-                "lattice.core.query_extraction.get_prompt",
+                "lattice.core.entity_extraction.get_prompt",
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.query_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_llm_client",
             ) as mock_llm_client,
         ):
             mock_client = AsyncMock()
@@ -189,7 +186,7 @@ class TestExtractQueryStructure:
         message_id = uuid.uuid4()
 
         incomplete_response = GenerationResult(
-            content=json.dumps({"message_type": "goal"}),  # Missing entities
+            content="{}",  # Missing entities
             model="test",
             provider=None,
             prompt_tokens=0,
@@ -202,11 +199,11 @@ class TestExtractQueryStructure:
 
         with (
             patch(
-                "lattice.core.query_extraction.get_prompt",
+                "lattice.core.entity_extraction.get_prompt",
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.query_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_llm_client",
             ) as mock_llm_client,
         ):
             mock_client = AsyncMock()
@@ -214,50 +211,6 @@ class TestExtractQueryStructure:
             mock_llm_client.return_value = mock_client
 
             with pytest.raises(ValueError, match="Missing required field"):
-                await extract_query_structure(
-                    message_id=message_id,
-                    message_content="Test message",
-                )
-
-    @pytest.mark.asyncio
-    async def test_extract_query_structure_invalid_message_type(
-        self,
-        mock_prompt_template: PromptTemplate,
-    ) -> None:
-        """Test extraction with invalid message type."""
-        message_id = uuid.uuid4()
-
-        invalid_type_response = GenerationResult(
-            content=json.dumps(
-                {
-                    "message_type": "invalid_type",
-                    "entities": [],
-                }
-            ),
-            model="test",
-            provider=None,
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
-            cost_usd=None,
-            latency_ms=0,
-            temperature=0.0,
-        )
-
-        with (
-            patch(
-                "lattice.core.query_extraction.get_prompt",
-                return_value=mock_prompt_template,
-            ),
-            patch(
-                "lattice.core.query_extraction.get_llm_client",
-            ) as mock_llm_client,
-        ):
-            mock_client = AsyncMock()
-            mock_client.complete = AsyncMock(return_value=invalid_type_response)
-            mock_llm_client.return_value = mock_client
-
-            with pytest.raises(ValueError, match="Invalid message_type"):
                 await extract_query_structure(
                     message_id=message_id,
                     message_content="Test message",
@@ -272,9 +225,7 @@ class TestExtractQueryStructure:
         message_id = uuid.uuid4()
 
         markdown_response = GenerationResult(
-            content="```json\n"
-            + json.dumps({"message_type": "goal", "entities": []})
-            + "\n```",
+            content="```json\n" + json.dumps({"entities": []}) + "\n```",
             model="test",
             provider=None,
             prompt_tokens=0,
@@ -287,13 +238,13 @@ class TestExtractQueryStructure:
 
         with (
             patch(
-                "lattice.core.query_extraction.get_prompt",
+                "lattice.core.entity_extraction.get_prompt",
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.query_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_llm_client",
             ) as mock_llm_client,
-            patch("lattice.core.query_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=markdown_response)
@@ -307,7 +258,6 @@ class TestExtractQueryStructure:
                 message_content="Test message",
             )
 
-            assert extraction.message_type == "goal"
             assert extraction.entities == []
 
 
@@ -324,7 +274,6 @@ class TestGetExtraction:
             "id": extraction_id,
             "message_id": message_id,
             "extraction": {
-                "message_type": "question",
                 "entities": ["Alice", "yesterday"],
             },
             "rendered_prompt": "test prompt",
@@ -332,7 +281,7 @@ class TestGetExtraction:
             "created_at": datetime.now(),
         }
 
-        with patch("lattice.core.query_extraction.db_pool") as mock_db_pool:
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
@@ -341,7 +290,6 @@ class TestGetExtraction:
 
             assert extraction is not None
             assert extraction.id == extraction_id
-            assert extraction.message_type == "question"
             assert extraction.entities == ["Alice", "yesterday"]
 
     @pytest.mark.asyncio
@@ -349,7 +297,7 @@ class TestGetExtraction:
         """Test retrieving a non-existent extraction."""
         extraction_id = uuid.uuid4()
 
-        with patch("lattice.core.query_extraction.db_pool") as mock_db_pool:
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=None)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
@@ -372,7 +320,6 @@ class TestGetMessageExtraction:
             "id": extraction_id,
             "message_id": message_id,
             "extraction": {
-                "message_type": "activity_update",
                 "entities": [],
             },
             "rendered_prompt": "test prompt",
@@ -380,7 +327,7 @@ class TestGetMessageExtraction:
             "created_at": datetime.now(),
         }
 
-        with patch("lattice.core.query_extraction.db_pool") as mock_db_pool:
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
@@ -389,7 +336,6 @@ class TestGetMessageExtraction:
 
             assert extraction is not None
             assert extraction.message_id == message_id
-            assert extraction.message_type == "activity_update"
             assert extraction.entities == []
 
     @pytest.mark.asyncio
@@ -397,7 +343,7 @@ class TestGetMessageExtraction:
         """Test retrieving a non-existent message extraction."""
         message_id = uuid.uuid4()
 
-        with patch("lattice.core.query_extraction.db_pool") as mock_db_pool:
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=None)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn

@@ -16,7 +16,7 @@ import discord
 import structlog
 from discord.ext import commands
 
-from lattice.core import memory_orchestrator, query_extraction, response_generator
+from lattice.core import memory_orchestrator, entity_extraction, response_generator
 from lattice.discord_client.dream import AuditViewBuilder, AuditView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
@@ -233,31 +233,29 @@ class LatticeBot(commands.Bot):
                     [f"{msg.content}" for msg in recent_msgs_for_context[-3:]]
                 )
 
-                extraction = await query_extraction.extract_query_structure(
+                extraction = await entity_extraction.extract_entities(
                     message_id=user_message_id,
                     message_content=message.content,
                     context=context_str,
                 )
 
-                # Validate extraction structure
-                if extraction and extraction.message_type:
+                if extraction:
                     logger.info(
-                        "Query extraction completed",
-                        message_type=extraction.message_type,
-                        entities=extraction.entities,
+                        "Entity extraction completed",
+                        entity_count=len(extraction.entities),
                         extraction_id=str(extraction.id),
                     )
                 else:
-                    logger.warning("Extraction returned invalid structure")
+                    logger.warning("Extraction failed")
                     extraction = None
 
             except Exception as e:
                 logger.warning(
-                    "Query extraction failed, continuing without extraction",
+                    "Entity extraction failed, continuing without extraction",
                     error=str(e),
                     message_preview=message.content[:50],
                 )
-                # Continue processing without extraction - templates will fall back to BASIC_RESPONSE
+                # Continue processing without extraction - templates will use UNIFIED_RESPONSE
 
             # Update scheduler interval
             base_interval = int(
@@ -284,7 +282,7 @@ class LatticeBot(commands.Bot):
                 channel_id=message.channel.id,
                 episodic_limit=15,  # EPISODIC_LIMIT
                 triple_depth=triple_depth,
-                entity_names=extraction.entities if extraction else None,
+                entity_names=extraction.entities if extraction else [],
             )
 
             # Generate response with extraction for template selection
@@ -342,8 +340,8 @@ class LatticeBot(commands.Bot):
                 "extraction_id": context_info.get("extraction_id"),
             }
 
-            # Get template key and version from context_info (defaults to BASIC_RESPONSE for backward compat)
-            template_key = context_info.get("template", "BASIC_RESPONSE")
+            # Get template key and version from context_info (defaults to UNIFIED_RESPONSE for backward compat)
+            template_key = context_info.get("template", "UNIFIED_RESPONSE")
             template_version = context_info.get("template_version", 1)
 
             # Store episodic messages and prompt audits
@@ -466,7 +464,7 @@ class LatticeBot(commands.Bot):
             user_message=user_message,
             bot_response=bot_message.content,
             main_message_url=bot_message.jump_url,
-            prompt_key=performance.get("prompt_key", "BASIC_RESPONSE"),
+            prompt_key=performance.get("prompt_key", "UNIFIED_RESPONSE"),
             version=performance.get("version", 1),
             latency_ms=latency_ms,
             cost_usd=cost_usd,

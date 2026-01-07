@@ -6,11 +6,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from lattice.core.query_extraction import QueryExtraction
+from lattice.core.entity_extraction import EntityExtraction
 from lattice.core.response_generator import (
     generate_response,
     get_available_placeholders,
-    select_response_template,
     validate_template_placeholders,
 )
 from lattice.memory.episodic import EpisodicMessage
@@ -18,13 +17,16 @@ from lattice.memory.procedural import PromptTemplate
 from lattice.utils.llm import AuditResult
 
 
+# Type alias for backward compatibility in tests
+QueryExtraction = EntityExtraction
+
+
 @pytest.fixture
-def mock_extraction_declaration() -> QueryExtraction:
-    """Create a mock QueryExtraction for declaration message type."""
-    return QueryExtraction(
+def mock_extraction_declaration() -> EntityExtraction:
+    """Create a mock EntityExtraction for goal message type."""
+    return EntityExtraction(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
-        message_type="goal",
         entities=["lattice project", "Friday"],
         rendered_prompt="test prompt",
         raw_response="test response",
@@ -34,13 +36,12 @@ def mock_extraction_declaration() -> QueryExtraction:
 
 
 @pytest.fixture
-def mock_extraction_query() -> QueryExtraction:
-    """Create a mock QueryExtraction for query message type."""
-    return QueryExtraction(
+def mock_extraction_query() -> EntityExtraction:
+    """Create a mock EntityExtraction for question message type."""
+    return EntityExtraction(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
-        message_type="question",
-        entities=["lattice project", "deadline"],
+        entities=["lattice", "deadline"],
         rendered_prompt="test prompt",
         raw_response="test response",
         extraction_method="api",
@@ -49,12 +50,11 @@ def mock_extraction_query() -> QueryExtraction:
 
 
 @pytest.fixture
-def mock_extraction_activity() -> QueryExtraction:
-    """Create a mock QueryExtraction for activity_update message type."""
-    return QueryExtraction(
+def mock_extraction_activity() -> EntityExtraction:
+    """Create a mock EntityExtraction for activity_update message type."""
+    return EntityExtraction(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
-        message_type="activity_update",
         entities=["coding"],
         rendered_prompt="test prompt",
         raw_response="test response",
@@ -64,12 +64,11 @@ def mock_extraction_activity() -> QueryExtraction:
 
 
 @pytest.fixture
-def mock_extraction_conversation() -> QueryExtraction:
-    """Create a mock QueryExtraction for conversation message type."""
-    return QueryExtraction(
+def mock_extraction_conversation() -> EntityExtraction:
+    """Create a mock EntityExtraction for conversation message type."""
+    return EntityExtraction(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
-        message_type="conversation",
         entities=["tea"],
         rendered_prompt="test prompt",
         raw_response="test response",
@@ -103,25 +102,9 @@ def mock_recent_messages() -> list[EpisodicMessage]:
 
 @pytest.fixture
 def mock_prompt_template() -> PromptTemplate:
-    """Create a mock prompt template."""
+    """Create a mock UNIFIED_RESPONSE template."""
     return PromptTemplate(
-        prompt_key="GOAL_RESPONSE",
-        template=(
-            "Context: {episodic_context}\n"
-            "Semantic: {semantic_context}\n"
-            "User: {user_message}"
-        ),
-        temperature=0.7,
-        version=1,
-        active=True,
-    )
-
-
-@pytest.fixture
-def mock_basic_template() -> PromptTemplate:
-    """Create a mock BASIC_RESPONSE template without extraction fields."""
-    return PromptTemplate(
-        prompt_key="BASIC_RESPONSE",
+        prompt_key="UNIFIED_RESPONSE",
         template=(
             "Context: {episodic_context}\n"
             "Semantic: {semantic_context}\n"
@@ -147,7 +130,7 @@ def mock_generation_result() -> AuditResult:
         latency_ms=600,
         temperature=0.7,
         audit_id=None,
-        prompt_key="GOAL_RESPONSE",
+        prompt_key="UNIFIED_RESPONSE",
     )
 
 
@@ -217,56 +200,49 @@ class TestPlaceholderRegistry:
         assert missing == set(), f"Missing placeholders in registry: {missing}"
 
 
-class TestSelectResponseTemplate:
-    """Tests for select_response_template function."""
+class TestUnifiedResponseTemplate:
+    """Tests verifying UNIFIED_RESPONSE is used for all message types.
 
-    def test_select_goal_response(
-        self, mock_extraction_declaration: QueryExtraction
+    Since the refactor removed select_response_template() and always uses
+    UNIFIED_RESPONSE, these tests verify the integration point where the
+    template is selected in generate_response().
+    """
+
+    @pytest.mark.asyncio
+    async def test_generate_response_uses_unified_template_for_goal(
+        self,
+        mock_extraction_declaration: EntityExtraction,
+        mock_recent_messages: list[EpisodicMessage],
+        mock_generation_result: AuditResult,
     ) -> None:
-        """Test selection of GOAL_RESPONSE for declaration message type."""
-        template = select_response_template(mock_extraction_declaration)
-        assert template == "GOAL_RESPONSE"
+        """Test that UNIFIED_RESPONSE is selected for goal-type messages."""
+        with (
+            patch(
+                "lattice.core.response_generator.procedural.get_prompt"
+            ) as mock_get_prompt,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
+        ):
+            mock_template = PromptTemplate(
+                prompt_key="UNIFIED_RESPONSE",
+                template="Context: {episodic_context}\nUser: {user_message}",
+                temperature=0.7,
+                version=1,
+                active=True,
+            )
+            mock_get_prompt.return_value = mock_template
+            mock_client = AsyncMock()
+            mock_client.complete.return_value = mock_generation_result
+            mock_get_client.return_value = mock_client
 
-    def test_select_query_response(
-        self, mock_extraction_query: QueryExtraction
-    ) -> None:
-        """Test selection of QUESTION_RESPONSE for question message type."""
-        template = select_response_template(mock_extraction_query)
-        assert template == "QUESTION_RESPONSE"
+            await generate_response(
+                user_message="I need to finish the lattice project by Friday",
+                recent_messages=mock_recent_messages,
+                extraction=mock_extraction_declaration,
+            )
 
-    def test_select_activity_response(
-        self, mock_extraction_activity: QueryExtraction
-    ) -> None:
-        """Test selection of ACTIVITY_RESPONSE for activity_update message type."""
-        template = select_response_template(mock_extraction_activity)
-        assert template == "ACTIVITY_RESPONSE"
-
-    def test_select_conversation_response(
-        self, mock_extraction_conversation: QueryExtraction
-    ) -> None:
-        """Test selection of CONVERSATION_RESPONSE for conversation message type."""
-        template = select_response_template(mock_extraction_conversation)
-        assert template == "CONVERSATION_RESPONSE"
-
-    def test_select_basic_response_none_extraction(self) -> None:
-        """Test fallback to BASIC_RESPONSE when extraction is None."""
-        template = select_response_template(None)
-        assert template == "BASIC_RESPONSE"
-
-    def test_select_default_for_unknown_type(self) -> None:
-        """Test default to BASIC_RESPONSE for unknown message types."""
-        extraction = QueryExtraction(
-            id=uuid.uuid4(),
-            message_id=uuid.uuid4(),
-            message_type="unknown_type",  # Invalid type
-            entities=[],
-            rendered_prompt="test",
-            raw_response="test",
-            extraction_method="api",
-            created_at=datetime.now(UTC),
-        )
-        template = select_response_template(extraction)
-        assert template == "BASIC_RESPONSE"
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
 
 class TestGenerateResponseWithTemplates:
@@ -282,14 +258,14 @@ class TestGenerateResponseWithTemplates:
         lattice.utils.llm._auditing_client = None
 
     @pytest.mark.asyncio
-    async def test_generate_with_declaration_extraction(
+    async def test_generate_with_goal_extraction(
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
     ) -> None:
-        """Test response generation with declaration extraction."""
+        """Test response generation with goal extraction."""
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
@@ -310,28 +286,28 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify template selection
-            mock_get_prompt.assert_called_once_with("GOAL_RESPONSE")
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
             # Verify extraction fields in rendered prompt
             assert "I need to finish the lattice project by Friday" in rendered_prompt
 
             # Verify context info includes extraction
-            assert context_info["template"] == "GOAL_RESPONSE"
+            assert context_info["template"] == "UNIFIED_RESPONSE"
             assert context_info["extraction_id"] == str(mock_extraction_declaration.id)
 
             # Verify result
             assert result == mock_generation_result
 
     @pytest.mark.asyncio
-    async def test_generate_with_query_extraction(
+    async def test_generate_with_entity_extraction(
         self,
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
     ) -> None:
-        """Test response generation with query extraction."""
+        """Test response generation with entity extraction."""
         mock_template = PromptTemplate(
-            prompt_key="QUESTION_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.5,
             version=1,
@@ -358,7 +334,7 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify template selection
-            mock_get_prompt.assert_called_once_with("QUESTION_RESPONSE")
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
             # User message should be in prompt
             assert "When is the lattice deadline?" in rendered_prompt
@@ -377,7 +353,7 @@ class TestGenerateResponseWithTemplates:
     ) -> None:
         """Test response generation with activity update extraction."""
         mock_template = PromptTemplate(
-            prompt_key="ACTIVITY_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.7,
             version=1,
@@ -404,21 +380,20 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify template selection
-            mock_get_prompt.assert_called_once_with("ACTIVITY_RESPONSE")
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
             # User message should be in prompt
             assert "Spent 3 hours coding today" in rendered_prompt
 
     @pytest.mark.asyncio
-    async def test_generate_with_conversation_extraction(
+    async def test_generate_with_none_extraction(
         self,
-        mock_extraction_conversation: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
     ) -> None:
-        """Test response generation with conversation extraction."""
+        """Test response generation without extraction."""
         mock_template = PromptTemplate(
-            prompt_key="CONVERSATION_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.7,
             version=1,
@@ -439,46 +414,13 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info, _ = await generate_response(
-                user_message="Just made some tea",
-                recent_messages=mock_recent_messages,
-                extraction=mock_extraction_conversation,
-            )
-
-            # Verify template selection
-            mock_get_prompt.assert_called_once_with("CONVERSATION_RESPONSE")
-
-            # User message should be in prompt
-            assert "Just made some tea" in rendered_prompt
-
-    @pytest.mark.asyncio
-    async def test_generate_without_extraction_legacy(
-        self,
-        mock_recent_messages: list[EpisodicMessage],
-        mock_basic_template: PromptTemplate,
-        mock_generation_result: AuditResult,
-    ) -> None:
-        """Test backward compatibility when extraction is None."""
-        with (
-            patch(
-                "lattice.core.response_generator.procedural.get_prompt"
-            ) as mock_get_prompt,
-            patch(
-                "lattice.core.response_generator.get_auditing_llm_client"
-            ) as mock_get_client,
-        ):
-            mock_get_prompt.return_value = mock_basic_template
-            mock_client = AsyncMock()
-            mock_client.complete.return_value = mock_generation_result
-            mock_get_client.return_value = mock_client
-
-            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Hello",
                 recent_messages=mock_recent_messages,
                 extraction=None,
             )
 
-            # Verify BASIC_RESPONSE is used for backward compatibility
-            mock_get_prompt.assert_called_once_with("BASIC_RESPONSE")
+            # Verify UNIFIED_RESPONSE is used
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
             # Verify context info shows no extraction
             assert context_info["extraction_id"] is None
@@ -488,10 +430,10 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_basic_template: PromptTemplate,
+        mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
     ) -> None:
-        """Test fallback to BASIC_RESPONSE when selected template doesn't exist."""
+        """Test fallback to UNIFIED_RESPONSE when template doesn't exist."""
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
@@ -500,8 +442,8 @@ class TestGenerateResponseWithTemplates:
                 "lattice.core.response_generator.get_auditing_llm_client"
             ) as mock_get_client,
         ):
-            # First call returns None (template not found), second call returns basic template
-            mock_get_prompt.side_effect = [None, mock_basic_template]
+            # Template lookup returns None (simulating template not found)
+            mock_get_prompt.return_value = None
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
@@ -512,10 +454,8 @@ class TestGenerateResponseWithTemplates:
                 extraction=mock_extraction_declaration,
             )
 
-            # Verify both templates were tried
-            assert mock_get_prompt.call_count == 2
-            mock_get_prompt.assert_any_call("GOAL_RESPONSE")
-            mock_get_prompt.assert_any_call("BASIC_RESPONSE")
+            # Verify UNIFIED_RESPONSE was tried once
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
     @pytest.mark.asyncio
     async def test_generate_with_graph_triples(
@@ -564,7 +504,7 @@ class TestGenerateResponseWithTemplates:
             assert "user working on lattice project" in rendered_prompt
 
             # Verify context info includes template
-            assert context_info["template"] == "QUESTION_RESPONSE"
+            assert context_info["template"] == "UNIFIED_RESPONSE"
 
     @pytest.mark.asyncio
     async def test_generate_empty_extraction_fields(
@@ -572,10 +512,9 @@ class TestGenerateResponseWithTemplates:
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test handling of extraction with empty/None fields."""
-        extraction = QueryExtraction(
+        extraction = EntityExtraction(
             id=uuid.uuid4(),
             message_id=uuid.uuid4(),
-            message_type="conversation",
             entities=[],  # Empty list
             rendered_prompt="test",
             raw_response="test",
@@ -584,7 +523,7 @@ class TestGenerateResponseWithTemplates:
         )
 
         mock_template = PromptTemplate(
-            prompt_key="CONVERSATION_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template=("Context: {episodic_context}\nUser: {user_message}"),
             temperature=0.7,
             version=1,
@@ -602,7 +541,7 @@ class TestGenerateResponseWithTemplates:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -630,7 +569,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_filter_current_message_from_episodic_context(
         self,
-        mock_basic_template: PromptTemplate,
+        mock_prompt_template: PromptTemplate,
     ) -> None:
         """Test that current user message is filtered from episodic context."""
         user_message_content = "What's the weather?"
@@ -672,7 +611,7 @@ class TestGenerateResponseWithTemplates:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -683,7 +622,7 @@ class TestGenerateResponseWithTemplates:
                 "lattice.core.response_generator.get_auditing_llm_client"
             ) as mock_get_client,
         ):
-            mock_get_prompt.return_value = mock_basic_template
+            mock_get_prompt.return_value = mock_prompt_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
@@ -712,7 +651,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_handle_duplicate_message_content(
         self,
-        mock_basic_template: PromptTemplate,
+        mock_prompt_template: PromptTemplate,
     ) -> None:
         """Test that ID-based filtering handles duplicate message content correctly."""
         duplicate_content = "What's the weather?"
@@ -760,7 +699,7 @@ class TestGenerateResponseWithTemplates:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -771,7 +710,7 @@ class TestGenerateResponseWithTemplates:
                 "lattice.core.response_generator.get_auditing_llm_client"
             ) as mock_get_client,
         ):
-            mock_get_prompt.return_value = mock_basic_template
+            mock_get_prompt.return_value = mock_prompt_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
@@ -802,7 +741,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_fallback_to_content_filtering_without_message_id(
         self,
-        mock_basic_template: PromptTemplate,
+        mock_prompt_template: PromptTemplate,
     ) -> None:
         """Test backward compatibility: content-based filtering when ID not provided."""
         user_message_content = "What's the weather?"
@@ -835,7 +774,7 @@ class TestGenerateResponseWithTemplates:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -846,7 +785,7 @@ class TestGenerateResponseWithTemplates:
                 "lattice.core.response_generator.get_auditing_llm_client"
             ) as mock_get_client,
         ):
-            mock_get_prompt.return_value = mock_basic_template
+            mock_get_prompt.return_value = mock_prompt_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
@@ -880,10 +819,10 @@ class TestExtractionFieldsNotInPrompts:
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
-        """Test GOAL_RESPONSE template does not include extraction fields in prompt."""
+        """Test UNIFIED_RESPONSE template does not include extraction fields in prompt."""
         # Use the actual template from migration 018 (no extraction section)
         mock_template = PromptTemplate(
-            prompt_key="GOAL_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template=(
                 "You are a warm, supportive AI companion.\n\n"
                 "## Context\n"
@@ -909,7 +848,7 @@ class TestExtractionFieldsNotInPrompts:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -975,7 +914,7 @@ class TestExtractionFieldsNotInPrompts:
             latency_ms=100,
             temperature=0.5,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -1011,9 +950,9 @@ class TestExtractionFieldsNotInPrompts:
         mock_extraction_activity: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
-        """Test ACTIVITY_RESPONSE template does not include extraction fields."""
+        """Test UNIFIED_RESPONSE template does not include extraction fields."""
         mock_template = PromptTemplate(
-            prompt_key="ACTIVITY_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template=(
                 "You are a friendly AI companion.\n\n"
                 "## Context\n"
@@ -1021,7 +960,7 @@ class TestExtractionFieldsNotInPrompts:
                 "**Relevant facts from past conversations:**\n{semantic_context}\n\n"
                 "**User message:** {user_message}\n\n"
                 "## Your Task\n"
-                "Acknowledge the activity update naturally."
+                "Respond naturally based on the user's message."
             ),
             temperature=0.7,
             version=2,
@@ -1039,7 +978,7 @@ class TestExtractionFieldsNotInPrompts:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -1103,7 +1042,7 @@ class TestExtractionFieldsNotInPrompts:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -1145,7 +1084,7 @@ class TestExtractionFieldsNotInPrompts:
         be populated internally for template selection and analytics purposes.
         """
         mock_template = PromptTemplate(
-            prompt_key="GOAL_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template="User: {user_message}",  # Minimal template, no extraction fields
             temperature=0.7,
             version=2,
@@ -1163,7 +1102,7 @@ class TestExtractionFieldsNotInPrompts:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -1186,10 +1125,10 @@ class TestExtractionFieldsNotInPrompts:
             )
 
             # Verify extraction was used for template selection
-            mock_get_prompt.assert_called_once_with("GOAL_RESPONSE")
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
             # Verify extraction metadata is in context_info for analytics
-            assert context_info["template"] == "GOAL_RESPONSE"
+            assert context_info["template"] == "UNIFIED_RESPONSE"
             assert context_info["extraction_id"] == str(mock_extraction_declaration.id)
 
 
@@ -1202,10 +1141,9 @@ class TestNoTemplateFound:
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test fallback response when no templates are available in database."""
-        extraction = QueryExtraction(
+        extraction = EntityExtraction(
             id=uuid.uuid4(),
             message_id=uuid.uuid4(),
-            message_type="goal",
             entities=["test"],
             rendered_prompt="test",
             raw_response="test",
@@ -1216,7 +1154,7 @@ class TestNoTemplateFound:
         with patch(
             "lattice.core.response_generator.procedural.get_prompt"
         ) as mock_get_prompt:
-            # Simulate both template lookups returning None
+            # Simulate template lookup returning None
             mock_get_prompt.return_value = None
 
             result, rendered_prompt, context_info, _ = await generate_response(
@@ -1243,10 +1181,8 @@ class TestNoTemplateFound:
             assert rendered_prompt == ""
             assert context_info == {}
 
-            # Verify both templates were tried
-            assert mock_get_prompt.call_count == 2
-            mock_get_prompt.assert_any_call("GOAL_RESPONSE")
-            mock_get_prompt.assert_any_call("BASIC_RESPONSE")
+            # Verify UNIFIED_RESPONSE was tried once
+            mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
 
 class TestTimezoneConversionFailure:
@@ -1255,7 +1191,7 @@ class TestTimezoneConversionFailure:
     @pytest.mark.asyncio
     async def test_invalid_timezone_falls_back_to_utc(
         self,
-        mock_basic_template: PromptTemplate,
+        mock_prompt_template: PromptTemplate,
     ) -> None:
         """Test that invalid timezone falls back to UTC formatting.
 
@@ -1287,7 +1223,7 @@ class TestTimezoneConversionFailure:
             latency_ms=100,
             temperature=0.7,
             audit_id=None,
-            prompt_key="BASIC_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         with (
@@ -1298,7 +1234,7 @@ class TestTimezoneConversionFailure:
                 "lattice.core.response_generator.get_auditing_llm_client"
             ) as mock_get_client,
         ):
-            mock_get_prompt.return_value = mock_basic_template
+            mock_get_prompt.return_value = mock_prompt_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client

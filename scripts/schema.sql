@@ -59,7 +59,6 @@ CREATE TABLE IF NOT EXISTS message_extractions (
     raw_response TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_extractions_message_type ON message_extractions((extraction->>'message_type'));
 CREATE INDEX IF NOT EXISTS idx_extractions_entities ON message_extractions USING gin((extraction->'entities'));
 CREATE INDEX IF NOT EXISTS idx_extractions_created_at ON message_extractions(created_at DESC);
 

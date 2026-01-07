@@ -196,7 +196,7 @@ class TestPromptTemplate:
         # The JSON example braces should be preserved
         assert result == 'Respond: Be helpful\nFormat: {{"key": "{value}"}}'
 
-    def test_safe_format_real_query_extraction_example(self) -> None:
+    def test_safe_format_real_entity_extraction_example(self) -> None:
         """Test safe_format with real-world QUERY_EXTRACTION template snippet."""
         template_snippet = (
             "User Message: {message_content}\n"

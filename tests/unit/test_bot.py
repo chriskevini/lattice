@@ -333,7 +333,9 @@ class TestLatticeBot:
                 ),
                 patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -392,7 +394,9 @@ class TestLatticeBot:
                 ),
                 patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -418,16 +422,31 @@ class TestLatticeBot:
 
                 mock_extraction_result = MagicMock()
                 mock_extraction_result.id = extraction_id
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = ["weather"]
-                mock_extraction.extract_query_structure = AsyncMock(
+                mock_extraction.extract_entities = AsyncMock(
                     return_value=mock_extraction_result
                 )
 
                 mock_memory.retrieve_context = AsyncMock(return_value=([], []))
 
+                mock_response_obj = MagicMock()
+                mock_response_obj.content = "It's sunny today!"
+                mock_response_obj.model = "gpt-4"
+                mock_response_obj.provider = "openai"
+                mock_response_obj.temperature = 0.7
+                mock_response_obj.prompt_tokens = 100
+                mock_response_obj.completion_tokens = 50
+                mock_response_obj.total_tokens = 150
+                mock_response_obj.cost_usd = 0.01
+                mock_response_obj.latency_ms = 500
+
                 mock_response.generate_response = AsyncMock(
-                    return_value=("It's sunny today!", "prompt", {})
+                    return_value=(
+                        mock_response_obj,
+                        "rendered_prompt",
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
+                        str(uuid4()),
+                    )
                 )
 
                 with patch.object(message.channel, "send", AsyncMock()) as mock_send:
@@ -435,7 +454,7 @@ class TestLatticeBot:
 
                     # Verify pipeline steps
                     mock_memory.store_user_message.assert_called_once()
-                    mock_extraction.extract_query_structure.assert_called_once()
+                    mock_extraction.extract_entities.assert_called_once()
                     mock_response.generate_response.assert_called_once()
                     mock_send.assert_called_once()
 
@@ -470,7 +489,9 @@ class TestLatticeBot:
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -488,7 +509,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -589,7 +609,9 @@ class TestLatticeBot:
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -605,7 +627,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -710,7 +731,9 @@ class TestLatticeBot:
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -726,7 +749,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "question"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -827,7 +849,9 @@ class TestLatticeBot:
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -852,7 +876,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=recent_msgs)
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "activity_update"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -948,7 +971,9 @@ class TestLatticeBot:
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -964,7 +989,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "conversation"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -1041,7 +1065,9 @@ class TestLatticeBot:
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -1059,7 +1085,6 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = "conversation"
                 mock_extraction_result.entities = []
                 mock_extraction.extract_query_structure = AsyncMock(
                     return_value=mock_extraction_result
@@ -1126,8 +1151,8 @@ class TestLatticeBot:
                     mock_memory.store_bot_message.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_message_extraction_invalid_structure(self) -> None:
-        """Test extraction with None message_type is handled."""
+    async def test_on_message_extraction_empty_entities(self) -> None:
+        """Test extraction with empty entities is handled."""
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
@@ -1152,7 +1177,9 @@ class TestLatticeBot:
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
                 patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch("lattice.discord_client.bot.query_extraction") as mock_extraction,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
                 patch("lattice.discord_client.bot.episodic") as mock_episodic,
                 patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
@@ -1167,11 +1194,10 @@ class TestLatticeBot:
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
-                # Invalid extraction with None message_type
+                # Extraction with empty entities
                 mock_extraction_result = MagicMock()
-                mock_extraction_result.message_type = None  # Invalid!
-                mock_extraction_result.entities = []
-                mock_extraction.extract_query_structure = AsyncMock(
+                mock_extraction_result.entities = []  # Empty entities
+                mock_extraction.extract_entities = AsyncMock(
                     return_value=mock_extraction_result
                 )
 
@@ -1186,14 +1212,14 @@ class TestLatticeBot:
                 mock_response_obj.cost_usd = 0.01
                 mock_response_obj.latency_ms = 500
 
-                # With invalid extraction, should use triple_depth=0
+                # With empty entities, should use triple_depth=0
                 mock_memory.retrieve_context = AsyncMock(return_value=([], []))
                 mock_response.generate_response = AsyncMock(
                     return_value=(
                         mock_response_obj,
                         "rendered_prompt",
-                        {"template": "BASIC_RESPONSE", "template_version": 1},
-                        "BASIC_RESPONSE",
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
+                        "UNIFIED_RESPONSE",
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -1217,11 +1243,11 @@ class TestLatticeBot:
                 ):
                     await bot.on_message(message)
 
-                    # Verify retrieve_context was called with triple_depth=0 (extraction was None)
+                    # Verify retrieve_context was called with triple_depth=0 (empty entities)
                     mock_memory.retrieve_context.assert_called_once()
                     call_args = mock_memory.retrieve_context.call_args
                     assert call_args.kwargs["triple_depth"] == 0
-                    assert call_args.kwargs["entity_names"] is None
+                    assert call_args.kwargs["entity_names"] == []
 
     # ============================================================================
     # Phase 2: Dream Channel Mirroring Tests (Lines 438-493)
