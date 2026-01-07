@@ -15,8 +15,7 @@ import structlog
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.llm import get_llm_client
-from lattice.utils.objective_parsing import MIN_SALIENCY_DELTA, parse_objectives
-from lattice.utils.triple_parsing import parse_triples
+from lattice.utils.memory_parsing import MIN_SALIENCY_DELTA, parse_memory_extraction
 
 
 logger = structlog.get_logger(__name__)
@@ -300,7 +299,7 @@ async def consolidate_message(
 ) -> None:
     """Extract semantic triples and objectives from a message asynchronously.
 
-    This function creates its own audit record for the TRIPLE_EXTRACTION prompt.
+    Uses single MEMORY_EXTRACTION LLM call to extract both triples and objectives.
 
     Args:
         message_id: UUID of the stored message
@@ -313,26 +312,26 @@ async def consolidate_message(
     """
     logger.info("Starting consolidation", message_id=str(message_id))
 
-    triple_prompt = await get_prompt("TRIPLE_EXTRACTION")
-    if not triple_prompt:
-        logger.warning("TRIPLE_EXTRACTION prompt not found")
+    memory_prompt = await get_prompt("MEMORY_EXTRACTION")
+    if not memory_prompt:
+        logger.warning("MEMORY_EXTRACTION prompt not found")
         return
 
+    context_text = "\n".join(context[-5:]) if context else content
+
     try:
-        filled_prompt = triple_prompt.template.format(CONTEXT=content)
+        filled_prompt = memory_prompt.template.format(CONTEXT=context_text)
     except KeyError as e:
         logger.error(
-            "Template formatting failed", error=str(e), prompt_key="TRIPLE_EXTRACTION"
+            "Template formatting failed", error=str(e), prompt_key="MEMORY_EXTRACTION"
         )
-        # Fallback: if format fails, it might be due to nested braces in the template
-        # that weren't properly escaped in the DB.
-        filled_prompt = triple_prompt.template.replace("{CONTEXT}", content)
-    logger.info("Calling LLM for triple extraction", message_id=str(message_id))
+        filled_prompt = memory_prompt.template.replace("{CONTEXT}", context_text)
+    logger.info("Calling LLM for memory extraction", message_id=str(message_id))
 
     llm_client = get_llm_client()
     result = await llm_client.complete(
         filled_prompt,
-        temperature=triple_prompt.temperature,
+        temperature=memory_prompt.temperature,
     )
 
     logger.info(
@@ -341,15 +340,14 @@ async def consolidate_message(
         content_preview=result.content[:100],
     )
 
-    # Create audit record for extraction (not the same as BASIC_RESPONSE)
     from lattice.memory import prompt_audits
 
     extraction_audit_id = await prompt_audits.store_prompt_audit(
-        prompt_key="TRIPLE_EXTRACTION",
+        prompt_key="MEMORY_EXTRACTION",
         rendered_prompt=filled_prompt,
         response_content=result.content,
-        main_discord_message_id=main_message_id or 0,  # Fallback if not provided
-        template_version=triple_prompt.version,
+        main_discord_message_id=main_message_id or 0,
+        template_version=memory_prompt.version,
         message_id=message_id,
         model=result.model,
         provider=result.provider,
@@ -359,10 +357,34 @@ async def consolidate_message(
         latency_ms=result.latency_ms,
     )
 
-    triples = parse_triples(result.content)
-    logger.info("Parsed triples", count=len(triples) if triples else 0)
+    extraction = parse_memory_extraction(result.content)
+    triples_raw = extraction.get("triples", [])
+    objectives_raw = extraction.get("objectives", [])
+    triples = [
+        {"subject": t["subject"], "predicate": t["predicate"], "object": t["object"]}
+        for t in triples_raw
+    ]
+    objectives: list[dict[str, str | float]] = [
+        {
+            "description": str(o["description"]),
+            "saliency": float(o["saliency"]),
+            "status": str(o["status"]),
+        }
+        for o in objectives_raw
+    ]
+    objectives = [
+        {
+            "description": o["description"],
+            "saliency": o["saliency"],
+            "status": o["status"],
+        }
+        for o in objectives_raw
+    ]
 
-    # Store semantic triples (re-enabled after Issue #61 completion via #87)
+    logger.info(
+        "Parsed extraction", triple_count=len(triples), objective_count=len(objectives)
+    )
+
     if triples:
         await store_semantic_triples(message_id, triples)
         logger.info(
@@ -371,11 +393,9 @@ async def consolidate_message(
             count=len(triples),
         )
 
-    objectives = await extract_objectives(message_id, content, context)
     if objectives:
         await store_objectives(message_id, objectives)
 
-    # Mirror to dream channel if configured
     if bot and dream_channel_id and main_message_id and main_message_url:
         await _mirror_extraction_to_dream(
             bot=bot,
@@ -385,84 +405,11 @@ async def consolidate_message(
             main_message_id=main_message_id,
             triples=triples or [],
             objectives=objectives or [],
-            audit_id=extraction_audit_id,  # Use extraction audit, not BASIC_RESPONSE
-            prompt_key="TRIPLE_EXTRACTION",
-            version=triple_prompt.version,
+            audit_id=extraction_audit_id,
+            prompt_key="MEMORY_EXTRACTION",
+            version=memory_prompt.version,
             rendered_prompt=filled_prompt,
         )
-
-
-async def extract_objectives(
-    message_id: UUID,
-    content: str,
-    context: list[str] | None = None,
-) -> list[dict[str, str | float]]:
-    """Extract objectives from a message asynchronously.
-
-    Args:
-        message_id: UUID of the stored message
-        content: Message content to extract from
-        context: Recent conversation context for additional context
-
-    Returns:
-        List of extracted objectives with description, saliency, and status
-    """
-    logger.info("Starting objective extraction", message_id=str(message_id))
-
-    objective_prompt = await get_prompt("OBJECTIVE_EXTRACTION")
-    if not objective_prompt:
-        logger.warning("OBJECTIVE_EXTRACTION prompt not found")
-        return []
-
-    context_text = content
-    if context:
-        context_text = "\n".join(context[-5:]) + "\n\nCurrent message:\n" + content
-
-    try:
-        filled_prompt = objective_prompt.template.format(CONTEXT=context_text)
-    except KeyError as e:
-        logger.error(
-            "Template formatting failed",
-            error=str(e),
-            prompt_key="OBJECTIVE_EXTRACTION",
-        )
-        filled_prompt = objective_prompt.template.replace("{CONTEXT}", context_text)
-    logger.info("Calling LLM for objective extraction", message_id=str(message_id))
-
-    llm_client = get_llm_client()
-    result = await llm_client.complete(
-        filled_prompt,
-        temperature=objective_prompt.temperature,
-    )
-
-    logger.info(
-        "LLM response received",
-        message_id=str(message_id),
-        content_preview=result.content[:100],
-    )
-
-    # Create audit record for objective extraction
-    from lattice.memory import prompt_audits
-
-    await prompt_audits.store_prompt_audit(
-        prompt_key="OBJECTIVE_EXTRACTION",
-        rendered_prompt=filled_prompt,
-        response_content=result.content,
-        main_discord_message_id=0,  # Background extraction, no specific message
-        template_version=objective_prompt.version,
-        message_id=message_id,
-        model=result.model,
-        provider=result.provider,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
-        cost_usd=result.cost_usd,
-        latency_ms=result.latency_ms,
-    )
-
-    objectives = parse_objectives(result.content)
-    logger.info("Parsed objectives", count=len(objectives) if objectives else 0)
-
-    return objectives
 
 
 async def store_objectives(

@@ -2,6 +2,9 @@
 
 This module provides entity extraction for graph traversal.
 Extracted entities are used as starting points for multi-hop knowledge retrieval.
+
+Templates:
+- ENTITY_EXTRACTION: Extracts entity mentions for graph traversal (reactive flow)
 """
 
 import json
@@ -37,7 +40,6 @@ class EntityExtraction:
 
 
 # Type alias for backward compatibility
-# TODO: Remove in v2.0 - use EntityExtraction instead
 QueryExtraction: TypeAlias = EntityExtraction
 
 
@@ -46,12 +48,12 @@ async def extract_entities(
     message_content: str,
     context: str = "",
 ) -> QueryExtraction:
-    """Extract structured information from a user message.
+    """Extract entity mentions from a user message.
 
     This function:
-    1. Fetches the QUERY_EXTRACTION prompt template
+    1. Fetches the ENTITY_EXTRACTION prompt template
     2. Renders the prompt with message content and context
-    3. Calls OpenRouter API for extraction
+    3. Calls LLM API for extraction
     4. Parses JSON response into extraction fields
     5. Stores extraction in message_extractions table
 
@@ -61,16 +63,16 @@ async def extract_entities(
         context: Additional context (recent messages, objectives, etc.)
 
     Returns:
-        QueryExtraction object with structured fields
+        EntityExtraction object with structured fields
 
     Raises:
         ValueError: If prompt template not found
         json.JSONDecodeError: If LLM response is not valid JSON
     """
     # 1. Fetch prompt template
-    prompt_template = await get_prompt("QUERY_EXTRACTION")
+    prompt_template = await get_prompt("ENTITY_EXTRACTION")
     if not prompt_template:
-        msg = "QUERY_EXTRACTION prompt template not found in prompt_registry"
+        msg = "ENTITY_EXTRACTION prompt template not found in prompt_registry"
         raise ValueError(msg)
 
     # 2. Render prompt with message content and context
@@ -258,7 +260,3 @@ async def get_message_extraction(message_id: uuid.UUID) -> QueryExtraction | Non
             extraction_method=extraction_data.get("_extraction_method", "api"),
             created_at=row["created_at"],
         )
-
-
-# Backward compatibility alias
-extract_query_structure = extract_entities

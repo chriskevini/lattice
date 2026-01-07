@@ -12,7 +12,7 @@ import pytest
 
 from lattice.core.entity_extraction import (
     EntityExtraction,
-    extract_query_structure,
+    extract_entities,
     get_extraction,
     get_message_extraction,
 )
@@ -22,12 +22,12 @@ from lattice.utils.llm import GenerationResult
 
 @pytest.fixture
 def mock_prompt_template() -> PromptTemplate:
-    """Create a mock QUERY_EXTRACTION prompt template."""
+    """Create a mock ENTITY_EXTRACTION prompt template."""
     return PromptTemplate(
-        prompt_key="QUERY_EXTRACTION",
+        prompt_key="ENTITY_EXTRACTION",
         template="Extract entities from: {message_content}\nContext: {context}",
         temperature=0.2,
-        version=2,
+        version=3,
         active=True,
     )
 
@@ -84,11 +84,11 @@ class TestEntityExtraction:
         assert extraction.created_at == now
 
 
-class TestExtractQueryStructure:
-    """Tests for the extract_query_structure function."""
+class TestExtractEntities:
+    """Tests for the extract_entities function."""
 
     @pytest.mark.asyncio
-    async def test_extract_query_structure_success(
+    async def test_extract_entities_success(
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: GenerationResult,
@@ -113,7 +113,7 @@ class TestExtractQueryStructure:
             mock_conn = AsyncMock()
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            extraction = await extract_query_structure(
+            extraction = await extract_entities(
                 message_id=message_id,
                 message_content="I need to finish the lattice project by Friday",
                 context="Previous context",
@@ -124,7 +124,7 @@ class TestExtractQueryStructure:
             assert extraction.extraction_method == "api"
 
     @pytest.mark.asyncio
-    async def test_extract_query_structure_missing_prompt_template(self) -> None:
+    async def test_extract_entities_missing_prompt_template(self) -> None:
         """Test extraction with missing prompt template."""
         message_id = uuid.uuid4()
 
@@ -132,14 +132,14 @@ class TestExtractQueryStructure:
             "lattice.core.entity_extraction.get_prompt",
             return_value=None,
         ):
-            with pytest.raises(ValueError, match="QUERY_EXTRACTION prompt template"):
-                await extract_query_structure(
+            with pytest.raises(ValueError, match="ENTITY_EXTRACTION prompt template"):
+                await extract_entities(
                     message_id=message_id,
                     message_content="Test message",
                 )
 
     @pytest.mark.asyncio
-    async def test_extract_query_structure_invalid_json(
+    async def test_extract_entities_invalid_json(
         self,
         mock_prompt_template: PromptTemplate,
     ) -> None:
@@ -172,13 +172,13 @@ class TestExtractQueryStructure:
             mock_llm_client.return_value = mock_client
 
             with pytest.raises(json.JSONDecodeError):
-                await extract_query_structure(
+                await extract_entities(
                     message_id=message_id,
                     message_content="Test message",
                 )
 
     @pytest.mark.asyncio
-    async def test_extract_query_structure_missing_required_fields(
+    async def test_extract_entities_missing_required_fields(
         self,
         mock_prompt_template: PromptTemplate,
     ) -> None:
@@ -211,13 +211,13 @@ class TestExtractQueryStructure:
             mock_llm_client.return_value = mock_client
 
             with pytest.raises(ValueError, match="Missing required field"):
-                await extract_query_structure(
+                await extract_entities(
                     message_id=message_id,
                     message_content="Test message",
                 )
 
     @pytest.mark.asyncio
-    async def test_extract_query_structure_handles_markdown_json(
+    async def test_extract_entities_handles_markdown_json(
         self,
         mock_prompt_template: PromptTemplate,
     ) -> None:
@@ -253,7 +253,7 @@ class TestExtractQueryStructure:
             mock_conn = AsyncMock()
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            extraction = await extract_query_structure(
+            extraction = await extract_entities(
                 message_id=message_id,
                 message_content="Test message",
             )
