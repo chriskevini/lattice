@@ -17,7 +17,7 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, query_extraction, response_generator
-from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
+from lattice.discord_client.dream import AuditViewBuilder, AuditView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
 from lattice.memory import episodic, prompt_audits
@@ -140,7 +140,7 @@ class LatticeBot(commands.Bot):
             # Register persistent views for bot restart resilience
             # Note: TemplateComparisonView (DesignerView) doesn't support persistent views
             # Proposals are ephemeral - buttons work only while bot is running
-            self.add_view(DreamMirrorView())  # Dream channel mirrors
+            self.add_view(AuditView())  # Dream channel audits
 
             logger.info("Schedulers started (proactive + dreaming)")
         else:
@@ -292,6 +292,7 @@ class LatticeBot(commands.Bot):
                 response_result,
                 rendered_prompt,
                 context_info,
+                audit_id,
             ) = await response_generator.generate_response(
                 user_message=message.content,
                 recent_messages=recent_messages,
@@ -356,22 +357,24 @@ class LatticeBot(commands.Bot):
                     timezone=self._user_timezone,
                 )
 
-                # Store prompt audit for each bot message
-                audit_id = await prompt_audits.store_prompt_audit(
-                    prompt_key=template_key,
-                    rendered_prompt=rendered_prompt,
-                    response_content=bot_msg.content,
-                    main_discord_message_id=bot_msg.id,
-                    template_version=template_version,
-                    message_id=message_id,
-                    model=response_result.model,
-                    provider=response_result.provider,
-                    prompt_tokens=response_result.prompt_tokens,
-                    completion_tokens=response_result.completion_tokens,
-                    cost_usd=response_result.cost_usd,
-                    latency_ms=response_result.latency_ms,
-                    # context_config removed in Design D (not used by Dreaming Cycle)
-                )
+                # Store prompt audit (handled by AuditingLLMClient during generate_response)
+                # Fallback only if audit_id wasn't returned (e.g., no Discord message ID available)
+                stored_audit_id = audit_id
+                if stored_audit_id is None:
+                    stored_audit_id = await prompt_audits.store_prompt_audit(
+                        prompt_key=template_key,
+                        rendered_prompt=rendered_prompt,
+                        response_content=bot_msg.content,
+                        main_discord_message_id=bot_msg.id,
+                        template_version=template_version,
+                        message_id=message_id,
+                        model=response_result.model,
+                        provider=response_result.provider,
+                        prompt_tokens=response_result.prompt_tokens,
+                        completion_tokens=response_result.completion_tokens,
+                        cost_usd=response_result.cost_usd,
+                        latency_ms=response_result.latency_ms,
+                    )
 
                 # Mirror to dream channel with new UI
                 await self._mirror_to_dream_channel(
@@ -379,7 +382,7 @@ class LatticeBot(commands.Bot):
                     bot_message=bot_msg,
                     rendered_prompt=rendered_prompt,
                     context_info=context_info,
-                    audit_id=audit_id,
+                    audit_id=stored_audit_id,
                     performance={
                         "prompt_key": template_key,
                         "version": template_version,
@@ -457,18 +460,18 @@ class LatticeBot(commands.Bot):
             return None
 
         # Build embed and view using new UI
-        embed, view = DreamMirrorBuilder.build_reactive_mirror(
+        latency_ms = performance.get("latency_ms", 0)
+        cost_usd = performance.get("cost_usd")
+        embed, view = AuditViewBuilder.build_reactive_audit(
             user_message=user_message,
             bot_response=bot_message.content,
             main_message_url=bot_message.jump_url,
             prompt_key=performance.get("prompt_key", "BASIC_RESPONSE"),
             version=performance.get("version", 1),
-            context_info=context_info,
-            performance=performance,
+            latency_ms=latency_ms,
+            cost_usd=cost_usd,
             audit_id=audit_id,
-            main_message_id=bot_message.id,
             rendered_prompt=rendered_prompt,
-            has_feedback=False,
         )
 
         try:

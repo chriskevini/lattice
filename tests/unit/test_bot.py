@@ -358,7 +358,7 @@ class TestLatticeBot:
 
                 mock_memory.retrieve_context = AsyncMock(return_value=([], []))
                 mock_response.generate_response = AsyncMock(
-                    return_value=("Hi there!", "prompt", {})
+                    return_value=("Hi there!", "prompt", {}, "BASIC_RESPONSE")
                 )
 
                 with patch.object(message.channel, "send", AsyncMock()) as mock_send:
@@ -524,6 +524,7 @@ class TestLatticeBot:
                         mock_response_obj,
                         "rendered_prompt",
                         {"template": "BASIC_RESPONSE", "template_version": 1},
+                        None,  # audit_id - None triggers manual storage
                     )
                 )
                 mock_response.split_response = MagicMock(
@@ -627,6 +628,7 @@ class TestLatticeBot:
                         mock_response_obj,
                         "rendered_prompt",
                         {"template": "BASIC_RESPONSE", "template_version": 1},
+                        None,  # audit_id - None triggers manual storage
                     )
                 )
 
@@ -751,6 +753,7 @@ class TestLatticeBot:
                             "template_version": 2,
                             "extraction_id": str(uuid4()),
                         },
+                        None,  # audit_id - None triggers manual storage
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -872,6 +875,7 @@ class TestLatticeBot:
                         mock_response_obj,
                         "rendered_prompt",
                         {"template": "ACTIVITY_RESPONSE", "template_version": 1},
+                        "ACTIVITY_RESPONSE",
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -983,6 +987,7 @@ class TestLatticeBot:
                         mock_response_obj,
                         "rendered_prompt",
                         {"template": "BASIC_RESPONSE", "template_version": 1},
+                        "BASIC_RESPONSE",
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -1089,6 +1094,7 @@ class TestLatticeBot:
                         mock_response_obj,
                         "rendered_prompt",
                         {"template": "BASIC_RESPONSE", "template_version": 1},
+                        "BASIC_RESPONSE",
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -1187,6 +1193,7 @@ class TestLatticeBot:
                         mock_response_obj,
                         "rendered_prompt",
                         {"template": "BASIC_RESPONSE", "template_version": 1},
+                        "BASIC_RESPONSE",
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -1250,12 +1257,12 @@ class TestLatticeBot:
 
             with (
                 patch.object(bot, "get_channel", return_value=mock_dream_channel),
-                patch("lattice.discord_client.bot.DreamMirrorBuilder") as mock_builder,
+                patch("lattice.discord_client.bot.AuditViewBuilder") as mock_builder,
                 patch("lattice.discord_client.bot.prompt_audits") as mock_audits,
             ):
                 mock_embed = MagicMock()
                 mock_view = MagicMock()
-                mock_builder.build_reactive_mirror.return_value = (
+                mock_builder.build_reactive_audit.return_value = (
                     mock_embed,
                     mock_view,
                 )
@@ -1271,8 +1278,8 @@ class TestLatticeBot:
                 )
 
                 # Verify embed and view were built
-                mock_builder.build_reactive_mirror.assert_called_once()
-                call_args = mock_builder.build_reactive_mirror.call_args
+                mock_builder.build_reactive_audit.assert_called_once()
+                call_args = mock_builder.build_reactive_audit.call_args
                 assert call_args.kwargs["user_message"] == "User question"
                 assert call_args.kwargs["bot_response"] == "Bot response"
                 assert call_args.kwargs["audit_id"] == audit_id
@@ -1394,11 +1401,11 @@ class TestLatticeBot:
 
             with (
                 patch.object(bot, "get_channel", return_value=mock_dream_channel),
-                patch("lattice.discord_client.bot.DreamMirrorBuilder") as mock_builder,
+                patch("lattice.discord_client.bot.AuditViewBuilder") as mock_builder,
             ):
                 mock_embed = MagicMock()
                 mock_view = MagicMock()
-                mock_builder.build_reactive_mirror.return_value = (
+                mock_builder.build_reactive_audit.return_value = (
                     mock_embed,
                     mock_view,
                 )

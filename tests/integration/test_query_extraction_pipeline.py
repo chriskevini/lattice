@@ -30,13 +30,13 @@ class TestQueryExtractionPipeline:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
-            patch(
-                "lattice.core.response_generator.get_llm_client"
+            patch.object(
+                response_generator, "get_auditing_llm_client"
             ) as mock_resp_llm_client,
         ):
             # Setup extraction mocks
             from lattice.memory.procedural import PromptTemplate
-            from lattice.utils.llm import GenerationResult
+            from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
                 prompt_key="QUERY_EXTRACTION",
@@ -48,7 +48,7 @@ class TestQueryExtractionPipeline:
             mock_get_prompt.return_value = extraction_template
 
             extraction_llm = AsyncMock()
-            extraction_llm.complete.return_value = GenerationResult(
+            extraction_llm.complete.return_value = AuditResult(
                 content='{"message_type":"goal","entities":["lattice project","Friday"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
@@ -58,6 +58,8 @@ class TestQueryExtractionPipeline:
                 cost_usd=0.001,
                 latency_ms=500,
                 temperature=0.2,
+                audit_id=None,
+                prompt_key="QUERY_EXTRACTION",
             )
             mock_llm_client.return_value = extraction_llm
 
@@ -87,7 +89,7 @@ class TestQueryExtractionPipeline:
             mock_resp_prompt.return_value = response_template
 
             response_llm = AsyncMock()
-            response_llm.complete.return_value = GenerationResult(
+            response_llm.complete.return_value = AuditResult(
                 content="Got it! Friday deadline for lattice. That's coming up quick—how's it looking so far?",
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
@@ -97,6 +99,8 @@ class TestQueryExtractionPipeline:
                 cost_usd=0.002,
                 latency_ms=600,
                 temperature=0.7,
+                audit_id=None,
+                prompt_key="GOAL_RESPONSE",
             )
             mock_resp_llm_client.return_value = response_llm
 
@@ -136,6 +140,7 @@ class TestQueryExtractionPipeline:
                 result,
                 rendered_prompt,
                 context_info,
+                _audit_id,
             ) = await response_generator.generate_response(
                 user_message=message_content,
                 recent_messages=mock_recent_messages,
@@ -162,8 +167,8 @@ class TestQueryExtractionPipeline:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
-            patch(
-                "lattice.core.response_generator.get_llm_client"
+            patch.object(
+                response_generator, "get_auditing_llm_client"
             ) as mock_resp_llm_client,
         ):
             # Setup extraction to fail
@@ -171,7 +176,7 @@ class TestQueryExtractionPipeline:
 
             # Setup response generation to use BASIC_RESPONSE
             from lattice.memory.procedural import PromptTemplate
-            from lattice.utils.llm import GenerationResult
+            from lattice.utils.llm import AuditResult
 
             basic_template = PromptTemplate(
                 prompt_key="BASIC_RESPONSE",
@@ -187,7 +192,7 @@ class TestQueryExtractionPipeline:
             mock_resp_prompt.return_value = basic_template
 
             response_llm = AsyncMock()
-            response_llm.complete.return_value = GenerationResult(
+            response_llm.complete.return_value = AuditResult(
                 content="Hello! How can I help you today?",
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
@@ -197,6 +202,8 @@ class TestQueryExtractionPipeline:
                 cost_usd=0.001,
                 latency_ms=300,
                 temperature=0.7,
+                audit_id=None,
+                prompt_key="BASIC_RESPONSE",
             )
             mock_resp_llm_client.return_value = response_llm
 
@@ -228,6 +235,7 @@ class TestQueryExtractionPipeline:
                 result,
                 rendered_prompt,
                 context_info,
+                _audit_id,
             ) = await response_generator.generate_response(
                 user_message=message_content,
                 recent_messages=mock_recent_messages,
@@ -254,13 +262,13 @@ class TestQueryExtractionPipeline:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
-            patch(
-                "lattice.core.response_generator.get_llm_client"
+            patch.object(
+                response_generator, "get_auditing_llm_client"
             ) as mock_resp_llm_client,
         ):
             # Setup extraction for query type
             from lattice.memory.procedural import PromptTemplate
-            from lattice.utils.llm import GenerationResult
+            from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
                 prompt_key="QUERY_EXTRACTION",
@@ -272,7 +280,7 @@ class TestQueryExtractionPipeline:
             mock_get_prompt.return_value = extraction_template
 
             extraction_llm = AsyncMock()
-            extraction_llm.complete.return_value = GenerationResult(
+            extraction_llm.complete.return_value = AuditResult(
                 content='{"message_type":"question","entities":["project","deadline"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
@@ -282,6 +290,8 @@ class TestQueryExtractionPipeline:
                 cost_usd=0.001,
                 latency_ms=400,
                 temperature=0.2,
+                audit_id=None,
+                prompt_key="QUERY_EXTRACTION",
             )
             mock_llm_client.return_value = extraction_llm
 
@@ -310,7 +320,7 @@ class TestQueryExtractionPipeline:
             mock_resp_prompt.return_value = query_template
 
             response_llm = AsyncMock()
-            response_llm.complete.return_value = GenerationResult(
+            response_llm.complete.return_value = AuditResult(
                 content="The project deadline is Friday, January 10th.",
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
@@ -320,6 +330,8 @@ class TestQueryExtractionPipeline:
                 cost_usd=0.001,
                 latency_ms=350,
                 temperature=0.5,
+                audit_id=None,
+                prompt_key="QUESTION_RESPONSE",
             )
             mock_resp_llm_client.return_value = response_llm
 
@@ -349,6 +361,7 @@ class TestQueryExtractionPipeline:
                 result,
                 rendered_prompt,
                 context_info,
+                _audit_id,
             ) = await response_generator.generate_response(
                 user_message=message_content,
                 recent_messages=mock_recent_messages,

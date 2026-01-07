@@ -5,19 +5,21 @@ Respects adaptive active hours to avoid disturbing users outside their active ti
 """
 
 import json
-import logging
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import UUID
+
+import structlog
 
 from lattice.memory.episodic import EpisodicMessage, get_recent_messages
 from lattice.memory.procedural import get_prompt
 from lattice.scheduler.adaptive import is_within_active_hours
 from lattice.utils.database import db_pool, get_system_health, set_system_health
-from lattice.utils.llm import get_llm_client
+from lattice.utils.llm import get_auditing_llm_client
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -28,7 +30,7 @@ class ProactiveDecision:
     content: str | None
     reason: str
     channel_id: int | None = None
-    # Generation metadata for audit trail
+    audit_id: UUID | None = None
     rendered_prompt: str | None = None
     template_version: int | None = None
     model: str | None = None
@@ -154,10 +156,13 @@ async def decide_proactive() -> ProactiveDecision:
         objectives_context=objectives,
     )
 
-    llm_client = get_llm_client()
+    llm_client = get_auditing_llm_client()
     try:
         result = await llm_client.complete(
-            prompt,
+            prompt=prompt,
+            prompt_key="PROACTIVE_DECISION",
+            template_version=prompt_template.version,
+            main_discord_message_id=0,  # Placeholder since no message exists yet
             temperature=prompt_template.temperature,
         )
     except (ValueError, ImportError) as e:
@@ -194,7 +199,7 @@ async def decide_proactive() -> ProactiveDecision:
             content=content,
             reason=decision.get("reason", "No reason provided"),
             channel_id=channel_id,
-            # Capture generation metadata for audit trail
+            audit_id=result.audit_id,
             rendered_prompt=prompt,
             template_version=prompt_template.version,
             model=result.model,
