@@ -1,13 +1,7 @@
-"""Query extraction module - extracts structured data from user messages.
+"""Entity extraction module - extracts entity mentions from user messages.
 
-This module provides the query extraction service for Issue #61 Phase 2.
-It parses user messages into structured JSONB for routing and retrieval.
-
-Extraction Strategy:
-    - Uses OpenRouter API (Google Gemini Flash 1.5) for extraction
-    - Cost: ~$0.50/month for typical usage
-    - After testing 12+ local alternatives, API proved optimal for 2GB RAM constraint
-    - See docs/local-extraction-investigation.md for analysis
+This module provides entity extraction for graph traversal.
+Extracted entities are used as starting points for multi-hop knowledge retrieval.
 """
 
 import json
@@ -25,34 +19,27 @@ from lattice.utils.llm import get_llm_client
 logger = structlog.get_logger(__name__)
 
 
-# Valid message types for extraction validation
-# Updated in Design D: declaration→goal, query→question
-VALID_MESSAGE_TYPES = {"goal", "question", "activity_update", "conversation"}
-
-
 @dataclass
-class QueryExtraction:
-    """Represents a structured extraction from a user message.
+class EntityExtraction:
+    """Represents entity extraction from a user message.
 
-    As of Design D (migration 019), simplified to 2 core fields:
-    - message_type: For response template selection (goal|question|activity_update|conversation)
-    - entities: For graph traversal starting points
-
-    Removed fields: predicates, time_constraint, activity, query, urgency, continuation
-    (These were extracted but unused in response generation)
+    Extracts entity mentions for graph traversal starting points.
     """
 
     id: uuid.UUID
     message_id: uuid.UUID
-    message_type: str  # goal | question | activity_update | conversation
-    entities: list[str]  # Entity mentions for graph traversal
+    entities: list[str]
     rendered_prompt: str
     raw_response: str
-    extraction_method: str  # Always "api" (local extraction removed)
+    extraction_method: str
     created_at: datetime
 
 
-async def extract_query_structure(
+# Type alias for backward compatibility
+QueryExtraction = EntityExtraction
+
+
+async def extract_entities(
     message_id: uuid.UUID,
     message_content: str,
     context: str = "",
@@ -134,18 +121,12 @@ async def extract_query_structure(
         )
         raise
 
-    # Validate required fields (simplified to 2 fields in Design D)
-    required_fields = ["message_type", "entities"]
+    # Validate required fields (entities only now)
+    required_fields = ["entities"]
     for field in required_fields:
         if field not in extraction_data:
             msg = f"Missing required field in extraction: {field}"
             raise ValueError(msg)
-
-    # Validate message_type is one of the allowed values
-    message_type = extraction_data["message_type"]
-    if message_type not in VALID_MESSAGE_TYPES:
-        msg = f"Invalid message_type: {message_type}. Must be one of {VALID_MESSAGE_TYPES}"
-        raise ValueError(msg)
 
     # 5. Store extraction in database
     now = datetime.now(UTC)
@@ -175,10 +156,9 @@ async def extract_query_structure(
         )
 
     logger.info(
-        "Query extraction stored",
+        "Entity extraction completed",
         extraction_id=str(extraction_id),
         message_id=str(message_id),
-        message_type=extraction_data["message_type"],
         entity_count=len(extraction_data["entities"]),
         extraction_method=extraction_method,
     )
@@ -186,7 +166,6 @@ async def extract_query_structure(
     return QueryExtraction(
         id=extraction_id,
         message_id=message_id,
-        message_type=extraction_data["message_type"],
         entities=extraction_data["entities"],
         rendered_prompt=rendered_prompt,
         raw_response=raw_response,
@@ -219,10 +198,9 @@ async def get_extraction(extraction_id: uuid.UUID) -> QueryExtraction | None:
             return None
 
         extraction_data = row["extraction"]
-        return QueryExtraction(
+        return EntityExtraction(
             id=row["id"],
             message_id=row["message_id"],
-            message_type=extraction_data["message_type"],
             entities=extraction_data["entities"],
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
@@ -257,13 +235,16 @@ async def get_message_extraction(message_id: uuid.UUID) -> QueryExtraction | Non
             return None
 
         extraction_data = row["extraction"]
-        return QueryExtraction(
+        return EntityExtraction(
             id=row["id"],
             message_id=row["message_id"],
-            message_type=extraction_data["message_type"],
             entities=extraction_data["entities"],
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
             extraction_method=extraction_data.get("_extraction_method", "api"),
             created_at=row["created_at"],
         )
+
+
+# Backward compatibility alias
+extract_query_structure = extract_entities

@@ -19,7 +19,7 @@ from lattice.utils.objective_parsing import parse_objectives
 
 
 # NOTE: EmbeddingModel tests removed during Issue #61 refactor
-# Embedding functionality is being replaced with query extraction
+# Embedding functionality is being replaced with entity extraction
 
 
 class TestDatabasePool:

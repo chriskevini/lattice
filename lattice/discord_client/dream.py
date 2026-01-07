@@ -375,18 +375,14 @@ class AuditViewBuilder:
     """Builder for creating concise audit view messages.
 
     Four audit types:
-    - REACTIVE: User message + bot response (GOAL_RESPONSE, QUESTION_RESPONSE, etc.)
+    - REACTIVE: User message + bot response (UNIFIED_RESPONSE)
     - PROACTIVE: Bot-initiated check-in (PROACTIVE_CHECKIN)
     - EXTRACTION: Internal semantic analysis (TRIPLE_EXTRACTION, OBJECTIVE_EXTRACTION)
     - REASONING: Internal decision/analysis (PROACTIVE_DECISION)
     """
 
     _EMOJI_MAP = {
-        "GOAL_RESPONSE": "💬",
-        "QUESTION_RESPONSE": "💬",
-        "ACTIVITY_RESPONSE": "💬",
-        "CONVERSATION_RESPONSE": "💬",
-        "BASIC_RESPONSE": "💬",
+        "UNIFIED_RESPONSE": "💬",
         "PROACTIVE_CHECKIN": "🌟",
         "TRIPLE_EXTRACTION": "🧠",
         "OBJECTIVE_EXTRACTION": "🧠",
@@ -394,11 +390,7 @@ class AuditViewBuilder:
     }
 
     _COLOR_MAP = {
-        "GOAL_RESPONSE": discord.Color.blurple(),
-        "QUESTION_RESPONSE": discord.Color.blue(),
-        "ACTIVITY_RESPONSE": discord.Color.green(),
-        "CONVERSATION_RESPONSE": discord.Color.greyple(),
-        "BASIC_RESPONSE": discord.Color.light_grey(),
+        "UNIFIED_RESPONSE": discord.Color.blurple(),
         "PROACTIVE_CHECKIN": discord.Color.gold(),
         "TRIPLE_EXTRACTION": discord.Color.purple(),
         "OBJECTIVE_EXTRACTION": discord.Color.magenta(),
@@ -423,7 +415,7 @@ class AuditViewBuilder:
             user_message: User's message content
             bot_response: Bot's response content
             main_message_url: Jump URL to main channel message
-            prompt_key: Prompt template key (e.g., GOAL_RESPONSE)
+            prompt_key: Prompt template key (e.g., UNIFIED_RESPONSE)
             version: Template version
             latency_ms: Response latency in milliseconds
             cost_usd: Cost in USD

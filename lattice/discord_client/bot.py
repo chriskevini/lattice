@@ -16,7 +16,7 @@ import discord
 import structlog
 from discord.ext import commands
 
-from lattice.core import memory_orchestrator, query_extraction, response_generator
+from lattice.core import memory_orchestrator, entity_extraction, response_generator
 from lattice.discord_client.dream import AuditViewBuilder, AuditView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
@@ -233,18 +233,17 @@ class LatticeBot(commands.Bot):
                     [f"{msg.content}" for msg in recent_msgs_for_context[-3:]]
                 )
 
-                extraction = await query_extraction.extract_query_structure(
+                extraction = await entity_extraction.extract_query_structure(
                     message_id=user_message_id,
                     message_content=message.content,
                     context=context_str,
                 )
 
                 # Validate extraction structure
-                if extraction and extraction.message_type:
+                if extraction and extraction.entities is not None:
                     logger.info(
-                        "Query extraction completed",
-                        message_type=extraction.message_type,
-                        entities=extraction.entities,
+                        "Entity extraction completed",
+                        entity_count=len(extraction.entities),
                         extraction_id=str(extraction.id),
                     )
                 else:
@@ -253,11 +252,11 @@ class LatticeBot(commands.Bot):
 
             except Exception as e:
                 logger.warning(
-                    "Query extraction failed, continuing without extraction",
+                    "Entity extraction failed, continuing without extraction",
                     error=str(e),
                     message_preview=message.content[:50],
                 )
-                # Continue processing without extraction - templates will fall back to BASIC_RESPONSE
+                # Continue processing without extraction - templates will use UNIFIED_RESPONSE
 
             # Update scheduler interval
             base_interval = int(

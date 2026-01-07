@@ -11,7 +11,7 @@
 ## 🏗️ [Core Architecture](#core-architecture)
 ### [Three-Tier Memory (ENGRAM)](#three-tier-memory-engram)
 1. **[Episodic](#episodic-memory)** (`raw_messages`): Immutable conversation log.
-2. **[Semantic](#semantic-memory)** (`entities` + `semantic_triples`): Graph-first knowledge with query extraction (replacing vector embeddings).
+2. **[Semantic](#semantic-memory)** (`entities` + `semantic_triples`): Graph-first knowledge with entity extraction (replacing vector embeddings).
 3. **[Procedural](#procedural-memory)** (`prompt_registry`): Evolving templates via the [Dreaming Cycle](#dreaming-cycle).
 
 ### [Key Design Principles](#key-design-principles)

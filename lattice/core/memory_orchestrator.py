@@ -104,7 +104,7 @@ async def retrieve_context(
         channel_id: Discord channel ID for episodic search
         episodic_limit: Maximum recent messages to retrieve
         triple_depth: Maximum depth for graph traversal (0 = disabled)
-        entity_names: Entity names to traverse graph from (from query extraction)
+        entity_names: Entity names to traverse graph from (from entity extraction)
 
     Returns:
         Tuple of (recent_messages, graph_triples)

@@ -13,7 +13,7 @@ async def on_message(self, message: discord.Message) -> None:
 
     # Store, extract, retrieve, generate, send
     user_message_id = await memory_orchestrator.store_user_message(...)
-    extraction = await query_extraction.extract_query_structure(...)
+    extraction = await entity_extraction.extract_entities(...)
     recent_messages, graph_triples = await memory_orchestrator.retrieve_context(...)
     response_result, rendered_prompt, context_info = await response_generator.generate_response(...)
 
@@ -41,11 +41,11 @@ Discord.py uses **asyncio** with a single event loop but processes events concur
 ```
 Message 1: "Hello" arrives
   ↓ on_message(msg1) starts
-    ↓ await query_extraction (yielding control)
+    ↓ await entity_extraction (yielding control)
 
 Message 2: "How are you?" arrives
   ↓ on_message(msg2) starts (CONCURRENT with msg1!)
-    ↓ await query_extraction (yielding control)
+    ↓ await entity_extraction (yielding control)
 
 Message 1: Query extraction completes
   ↓ continues to response generation
@@ -266,7 +266,7 @@ triples = parse_triples(result.content)
 logger.info("Parsed triples", count=len(triples) if triples else 0)
 
 # TODO: Consolidation is temporarily disabled during Issue #61 refactor
-# Will be reimplemented with query extraction + graph-first architecture
+# Will be reimplemented with entity extraction + graph-first architecture
 logger.debug(
     "Skipping triple consolidation (disabled during Issue #61 refactor)",
     message_id=str(message_id),
@@ -276,7 +276,7 @@ logger.debug(
 
 ### Issue #61 Status
 
-**Issue #61** was about implementing graph-first architecture with query extraction.
+**Issue #61** was about implementing graph-first architecture with entity extraction.
 
 **Status**: ✅ **CLOSED** (merged in #87)
 

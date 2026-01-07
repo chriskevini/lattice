@@ -25,7 +25,7 @@ Lattice operates on the principle that **logic is data**. By moving prompts and 
 
 ### Memory Tiers
 1.  **Episodic ([`raw_messages`](#1-episodic-memory-raw_messages))**: Immutable, time-ordered interaction log.
-2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_triples`](#3-semantic-relationships-semantic_triples))**: Graph-based knowledge using query extraction.
+2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_triples`](#3-semantic-relationships-semantic_triples))**: Graph-based knowledge using entity extraction.
 3.  **Procedural ([`prompt_registry`](#4-procedural-memory-prompt_registry))**: Versioned templates and behavioral strategies.
 
 ### Unified Pipeline
