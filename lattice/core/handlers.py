@@ -49,7 +49,7 @@ async def handle_north_star(
             goal_preview=goal_content[:50],
         )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.exception("Error handling North Star", error=str(e))
         return False
     else:

@@ -36,6 +36,12 @@ PRIORITY_VERY_HIGH = 0.9
 PRIORITY_HIGH = 0.8
 PRIORITY_MEDIUM = 0.7
 
+# Dreaming cycle defaults (used when not configured in database)
+DREAMING_MIN_USES_DEFAULT = 10
+DREAMING_LOOKBACK_DAYS_DEFAULT = 30
+DREAMING_MIN_CONFIDENCE_DEFAULT = 0.7
+DREAMING_MIN_FEEDBACK_DEFAULT = 10
+
 # Error retry intervals for scheduler loop
 TRANSIENT_ERROR_RETRY_SECONDS = 900  # 15 minutes
 FATAL_ERROR_RETRY_SECONDS = 3600  # 1 hour
@@ -137,7 +143,7 @@ class DreamingScheduler:
             except (asyncpg.PostgresError, discord.DiscordException):
                 logger.exception("Transient error in dreaming scheduler")
                 await asyncio.sleep(TRANSIENT_ERROR_RETRY_SECONDS)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.exception("Fatal error in dreaming scheduler loop")
                 # Fail fast in development, retry in production
                 if os.getenv("ENVIRONMENT") == "development":
@@ -175,10 +181,16 @@ class DreamingScheduler:
         Returns:
             DreamingConfig with all configuration values
         """
-        min_uses = int(await get_system_health("dreaming_min_uses") or "10")
-        lookback_days = int(await get_system_health("dreaming_lookback_days") or "30")
+        min_uses = int(
+            await get_system_health("dreaming_min_uses") or DREAMING_MIN_USES_DEFAULT
+        )
+        lookback_days = int(
+            await get_system_health("dreaming_lookback_days")
+            or DREAMING_LOOKBACK_DAYS_DEFAULT
+        )
         min_confidence = float(
-            await get_system_health("dreaming_min_confidence") or "0.7"
+            await get_system_health("dreaming_min_confidence")
+            or DREAMING_MIN_CONFIDENCE_DEFAULT
         )
         enabled_str = await get_system_health("dreaming_enabled")
         enabled = enabled_str != "false"
@@ -206,7 +218,7 @@ class DreamingScheduler:
 
             # If forced, use 1 as minimum for thresholding
             min_uses = 1 if force else config.min_uses
-            min_feedback = 1 if force else 10  # Standard threshold is 10 feedback items
+            min_feedback = 1 if force else DREAMING_MIN_FEEDBACK_DEFAULT
 
             metrics = await analyze_prompt_effectiveness(
                 min_uses=min_uses,
@@ -358,7 +370,7 @@ class DreamingScheduler:
             logger.info(
                 "Posted proposal to dream channel", prompt_key=proposal.prompt_key
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.exception("Failed to post proposal", prompt_key=proposal.prompt_key)
 
     async def _post_proposals_to_dream_channel(
@@ -402,7 +414,7 @@ class DreamingScheduler:
         if dream_channel:
             try:
                 await dream_channel.send(message)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.exception("Failed to post summary to dream channel")
 
 
