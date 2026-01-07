@@ -5,6 +5,7 @@ Provides async PostgreSQL connection pooling.
 
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfoNotFoundError
 
 import asyncpg
 import structlog
@@ -156,7 +157,7 @@ async def set_user_timezone(timezone: str) -> None:
     # Validate timezone
     try:
         ZoneInfo(timezone)
-    except Exception as e:
+    except ZoneInfoNotFoundError as e:
         msg = f"Invalid timezone: {timezone}"
         raise ValueError(msg) from e
 

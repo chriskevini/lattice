@@ -1390,7 +1390,9 @@ class TestLatticeBot:
             audit_id = uuid4()
 
             mock_dream_channel = AsyncMock(spec=discord.TextChannel)
-            mock_dream_channel.send = AsyncMock(side_effect=Exception("Send failed"))
+            mock_dream_channel.send = AsyncMock(
+                side_effect=discord.DiscordException("Send failed")
+            )
 
             with (
                 patch.object(bot, "get_channel", return_value=mock_dream_channel),

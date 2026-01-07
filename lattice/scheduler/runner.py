@@ -94,7 +94,13 @@ class ProactiveScheduler:
 
                 await self._run_proactive_check()
 
-            except Exception:
+            except (
+                asyncio.CancelledError,
+                OSError,
+                ValueError,
+                KeyError,
+                RuntimeError,
+            ):
                 logger.exception("Error in scheduler loop")
                 await asyncio.sleep(self.check_interval * 60)
 
@@ -118,7 +124,13 @@ class ProactiveScheduler:
                 # Sleep for 24 hours
                 await asyncio.sleep(ACTIVE_HOURS_UPDATE_INTERVAL_HOURS * 3600)
 
-            except Exception:
+            except (
+                asyncio.CancelledError,
+                OSError,
+                ValueError,
+                KeyError,
+                RuntimeError,
+            ):
                 logger.exception("Error in active hours update loop")
                 # Retry in 1 hour on error
                 await asyncio.sleep(3600)

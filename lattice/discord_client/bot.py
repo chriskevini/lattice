@@ -11,6 +11,7 @@ import os
 from typing import Any
 from uuid import UUID
 
+import asyncpg
 import discord
 import structlog
 from discord.ext import commands
@@ -92,7 +93,7 @@ class LatticeBot(commands.Bot):
         try:
             await db_pool.initialize()
             logger.info("Database pool initialized successfully")
-        except Exception:  # noqa: BLE001
+        except (asyncpg.PostgresError, ValueError):
             logger.exception("Failed to initialize database pool")
             raise
 
@@ -255,7 +256,7 @@ class LatticeBot(commands.Bot):
                     logger.warning("Extraction returned invalid structure")
                     extraction = None
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.warning(
                     "Query extraction failed, continuing without extraction",
                     error=str(e),
@@ -407,7 +408,7 @@ class LatticeBot(commands.Bot):
             self._consecutive_failures = 0
             logger.info("Response sent successfully")
 
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self._consecutive_failures += 1
             logger.exception(
                 "Error processing message",
@@ -490,7 +491,7 @@ class LatticeBot(commands.Bot):
                 dream_discord_message_id=dream_msg.id,
             )
             return dream_msg  # noqa: TRY300
-        except Exception:  # noqa: BLE001
+        except discord.DiscordException:
             logger.exception(
                 "Failed to mirror to dream channel",
                 audit_id=audit_id,
