@@ -37,12 +37,42 @@ docker-restart: ## Restart all services
 docker-shell: ## Open shell in bot container
 	docker compose exec bot /bin/bash
 
-docker-db-shell: ## Open PostgreSQL shell
+docker-db-shell: ## Open PostgreSQL shell (interactive)
 	docker compose exec postgres psql -U lattice -d lattice
 
 docker-clean: ## Remove all containers, volumes, and images
 	docker compose down -v
 	docker system prune -f
+
+# ============================================================================
+# Database Query Helpers
+# ============================================================================
+
+db-status: ## Check database connection status
+	docker compose exec postgres pg_isready -U lattice
+
+db-tables: ## List all tables in the database
+	docker compose exec postgres psql -U lattice -d lattice -c "\dt"
+
+db-migrations: ## Show applied migrations
+	docker compose exec postgres psql -U lattice -d lattice -c "SELECT migration_name, applied_at FROM schema_migrations ORDER BY applied_at DESC;"
+
+db-schema: ## Show table schema (default: user_feedback)
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "\d $(table)" 2>/dev/null || echo "Table '$(table)' not found. Use: make db-tables"
+
+db-query: ## Run a SQL query (use: make db-query query="SELECT count(*) FROM user_feedback;")
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "$(query)"
+
+db-feedback: ## Show recent feedback (default: 10 rows)
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "SELECT id, sentiment, content, created_at FROM user_feedback ORDER BY created_at DESC LIMIT $(limit);"
+
+db-dump: ## Dump table to CSV (use: make db-dump table=user_feedback)
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "COPY (SELECT * FROM $(table) ORDER BY created_at DESC LIMIT 100) TO STDOUT WITH CSV HEADER" > $(table).csv
+	@echo "Exported to $(table).csv"
+
+db-backup: ## Create a database backup
+	docker compose exec postgres pg_dump -U lattice lattice > backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@echo "Backup saved to backup_$(shell date +%Y%m%d_%H%M%S).sql"
 
 # ============================================================================
 # Development Commands
@@ -116,9 +146,8 @@ bump-version: ## Bump version using commitizen
 # Database Management
 # ============================================================================
 
-init-db: ## Initialize database schema
+init-db: ## Initialize database schema and seed data
 	uv run python scripts/init_db.py
-	$(MAKE) migrate
 
 migrate: ## Run database migrations
 	uv run python scripts/migrate.py

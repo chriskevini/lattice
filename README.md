@@ -69,78 +69,30 @@ MAX_TRIPLE_DEPTH=3
 
 ## 🗄️ Database Schema
 
-### 1. Episodic Memory: `raw_messages`
-Stores the raw stream of consciousness.
-```sql
-CREATE TABLE raw_messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    discord_message_id BIGINT UNIQUE NOT NULL,
-    content TEXT NOT NULL,
-    is_bot BOOLEAN DEFAULT false,
-    timestamp TIMESTAMPTZ DEFAULT now()
-);
-```
+See [scripts/schema.sql](scripts/schema.sql) for the canonical schema.
 
-### 2. Semantic Memory: `entities`
-Named entities without embeddings, using keyword search.
-```sql
-CREATE TABLE entities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT UNIQUE NOT NULL,
-    entity_type TEXT,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    first_mentioned TIMESTAMPTZ DEFAULT now()
-);
-```
+### Quick Reference
+| Table | Purpose |
+|-------|---------|
+| `raw_messages` | Stored Discord messages |
+| `message_extractions` | Query extraction output |
+| `entities` | Entity registry |
+| `semantic_triples` | Graph relationships |
+| `objectives` | User goals |
+| `prompt_registry` | Prompt templates |
+| `prompt_audits` | LLM call tracking |
+| `dreaming_proposals` | Prompt optimization |
+| `user_feedback` | User feedback |
+| `system_health` | Configuration |
 
-### 3. Semantic Relationships: `semantic_triples`
-The graph layer connecting entities with temporal validity.
-```sql
-CREATE TABLE semantic_triples (
-    subject_id UUID REFERENCES entities(id) ON DELETE CASCADE,
-    predicate TEXT NOT NULL,
-    object_id UUID REFERENCES entities(id) ON DELETE CASCADE,
-    valid_from TIMESTAMPTZ DEFAULT now(),
-    valid_until TIMESTAMPTZ,
-    metadata JSONB DEFAULT '{}'::jsonb
-);
-```
-
-### 4. Procedural Memory: `prompt_registry`
-The behavioral engine.
-```sql
-CREATE TABLE prompt_registry (
-    prompt_key TEXT PRIMARY KEY,
-    template TEXT NOT NULL,
-    version INT DEFAULT 1,
-    active BOOLEAN DEFAULT true
-);
-```
-
----
-
-## 🛠️ Development
-
-### Standards
-- **Strict Typing**: Enforced by Mypy.
-- **Linting**: Enforced by Ruff.
-- **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) required.
-
-### Commands
+### Setup
 ```bash
-make test           # Run suite
-make check-all      # Lint + Type Check + Test
-make commit         # Trigger guided commit flow
+make install        # Install dependencies and pre-commit hooks
+cp .env.example .env # Configure your tokens and DB
+make init-db        # Initialize schema and seed data
+make run            # Start the bot
 ```
 
----
-
-## 🎯 Philosophy
-
-1.  **Radical Simplicity**: Prefer metadata over complex code branches.
-2.  **Hardware Respect**: 2GB RAM is a hard wall; build for it, not around it.
-3.  **Total Transparency**: The bot's "thought process" is always visible in the Dream Channel.
-
----
+**Note:** No migrations needed for fresh setup. All prompt templates are in `scripts/seed.sql`.
 
 **Lattice**: Building adaptive AI through conversation. 🧠✨
