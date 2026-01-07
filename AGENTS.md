@@ -83,13 +83,6 @@ Always retrieves **15 recent messages** (generous conversation history), but gra
 - **No entities**: `triple_depth=0` (self-contained messages like greetings, simple activities)
 - **Has entities**: `triple_depth=2` (deep graph traversal for multi-hop relationships)
 
-**Constants** (`lattice/core/context_strategy.py`):
-```python
-EPISODIC_LIMIT = 15              # Always fetch 15 messages
-NO_ENTITY_TRIPLE_DEPTH = 0       # Skip graph for self-contained messages
-WITH_ENTITY_TRIPLE_DEPTH = 2     # Deep traversal when entities present
-```
-
 **Rationale**:
 - Conversation history is cheap and always useful
 - Graph traversal is expensive; only do it when entities provide starting points
