@@ -464,7 +464,7 @@ class LatticeBot(commands.Bot):
             user_message=user_message,
             bot_response=bot_message.content,
             main_message_url=bot_message.jump_url,
-            prompt_key=performance.get("prompt_key", "BASIC_RESPONSE"),
+            prompt_key=performance.get("prompt_key", "UNIFIED_RESPONSE"),
             version=performance.get("version", 1),
             latency_ms=latency_ms,
             cost_usd=cost_usd,

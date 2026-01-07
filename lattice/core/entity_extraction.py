@@ -8,6 +8,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TypeAlias
 
 import structlog
 
@@ -37,7 +38,7 @@ class EntityExtraction:
 
 # Type alias for backward compatibility
 # TODO: Remove in v2.0 - use EntityExtraction instead
-QueryExtraction = EntityExtraction
+QueryExtraction: TypeAlias = EntityExtraction
 
 
 async def extract_entities(
@@ -79,7 +80,7 @@ async def extract_entities(
     )
 
     logger.info(
-        "Extracting query structure",
+        "Extracting entities",
         message_id=str(message_id),
         message_length=len(message_content),
     )
@@ -134,6 +135,12 @@ async def extract_entities(
     if not isinstance(entities_value, list):
         msg = f"Invalid entities field: expected list, got {type(entities_value).__name__}"
         raise ValueError(msg)
+
+    # Validate all items in entities list are strings (not null)
+    for i, item in enumerate(entities_value):
+        if item is None:
+            msg = f"Invalid entities field: item at index {i} is null, expected string"
+            raise ValueError(msg)
 
     # 5. Store extraction in database
     now = datetime.now(UTC)
