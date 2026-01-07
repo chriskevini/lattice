@@ -61,9 +61,9 @@ class PromptAudit:
 
 async def store_prompt_audit(
     prompt_key: str,
-    rendered_prompt: str,
     response_content: str,
     main_discord_message_id: int,
+    rendered_prompt: str | None = None,
     template_version: int | None = None,
     message_id: UUID | None = None,
     model: str | None = None,
@@ -82,9 +82,9 @@ async def store_prompt_audit(
 
     Args:
         prompt_key: The prompt template key used
-        rendered_prompt: The full rendered prompt sent to LLM
         response_content: The bot's response
         main_discord_message_id: Discord message ID in main channel
+        rendered_prompt: The full rendered prompt sent to LLM (optional for internal LLM calls)
         template_version: Version of the prompt template
         message_id: UUID of the raw_messages entry
         model: LLM model used
@@ -93,7 +93,7 @@ async def store_prompt_audit(
         completion_tokens: Number of completion tokens
         cost_usd: Cost in USD
         latency_ms: Response latency in milliseconds
-        context_config: Context configuration used (episodic, semantic, graph counts)
+        context_config: Context configuration used
         archetype_matched: Archetype that was matched
         archetype_confidence: Confidence score for archetype match
         reasoning: AI reasoning and decision factors

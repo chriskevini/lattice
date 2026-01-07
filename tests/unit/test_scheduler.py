@@ -142,7 +142,10 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+            patch(
+                "lattice.scheduler.triggers.get_auditing_llm_client",
+                return_value=mock_llm,
+            ),
         ):
             result = await decide_proactive()
             assert result.action == "wait"
@@ -185,7 +188,10 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+            patch(
+                "lattice.scheduler.triggers.get_auditing_llm_client",
+                return_value=mock_llm,
+            ),
         ):
             result = await decide_proactive()
             assert result.action == "wait"
@@ -231,7 +237,10 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+            patch(
+                "lattice.scheduler.triggers.get_auditing_llm_client",
+                return_value=mock_llm,
+            ),
         ):
             result = await decide_proactive()
             assert result.action == "wait"
@@ -276,7 +285,10 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+            patch(
+                "lattice.scheduler.triggers.get_auditing_llm_client",
+                return_value=mock_llm,
+            ),
         ):
             result = await decide_proactive()
             assert result.action == "wait"
@@ -319,7 +331,10 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+            patch(
+                "lattice.scheduler.triggers.get_auditing_llm_client",
+                return_value=mock_llm,
+            ),
         ):
             result = await decide_proactive()
             assert result.action == "wait"
@@ -364,7 +379,10 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch("lattice.scheduler.triggers.get_llm_client", return_value=mock_llm),
+            patch(
+                "lattice.scheduler.triggers.get_auditing_llm_client",
+                return_value=mock_llm,
+            ),
         ):
             result = await decide_proactive()
             assert result.action == "wait"

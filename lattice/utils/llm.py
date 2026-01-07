@@ -8,6 +8,7 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,14 @@ class GenerationResult:
     cost_usd: float | None
     latency_ms: int
     temperature: float
+
+
+@dataclass
+class AuditResult(GenerationResult):
+    """Generation result with audit ID for traceability."""
+
+    audit_id: UUID | None = None
+    prompt_key: str | None = None
 
 
 class LLMClient:
@@ -207,6 +216,7 @@ class LLMClient:
 
 
 _llm_client: LLMClient | None = None
+_auditing_client: "AuditingLLMClient | None" = None
 
 
 def get_llm_client() -> LLMClient:
@@ -220,3 +230,98 @@ def get_llm_client() -> LLMClient:
         provider = os.getenv("LLM_PROVIDER", "placeholder")
         _llm_client = LLMClient(provider=provider)
     return _llm_client
+
+
+def get_auditing_llm_client() -> "AuditingLLMClient":
+    """Get or create the global auditing LLM client instance.
+
+    This wrapper automatically audits every LLM call and returns AuditResult
+    with audit_id for traceability.
+
+    Returns:
+        Configured auditing LLM client
+    """
+    global _auditing_client
+    if _auditing_client is None:
+        _auditing_client = AuditingLLMClient()
+    return _auditing_client
+
+
+class AuditingLLMClient:
+    """Wrapper around LLMClient that automatically audits every LLM call.
+
+    Every LLM call is automatically traced to a prompt_audit entry, enabling:
+    - Complete audit trail for analysis
+    - Feedback linkage for Dreaming Cycle
+    - Unified mirror/display generation
+    """
+
+    def __init__(self) -> None:
+        """Initialize the auditing client with underlying LLM client."""
+        self._client = LLMClient()
+
+    async def complete(
+        self,
+        prompt: str,
+        prompt_key: str | None = None,
+        template_version: int | None = None,
+        main_discord_message_id: int | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> AuditResult:
+        """Complete a prompt with automatic audit tracking.
+
+        Args:
+            prompt: The prompt to complete
+            prompt_key: Optional identifier for the prompt template/purpose
+            template_version: Optional version of the template used
+            main_discord_message_id: Discord message ID for audit linkage
+            temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Maximum tokens to generate
+
+        Returns:
+            AuditResult with content, metadata, and audit_id
+        """
+        result = await self._client.complete(
+            prompt=prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        audit_id: UUID | None = None
+        if main_discord_message_id is not None:
+            from lattice.memory import prompt_audits
+
+            audit_id = await prompt_audits.store_prompt_audit(
+                prompt_key=prompt_key or "UNKNOWN",
+                rendered_prompt=prompt,
+                response_content=result.content,
+                main_discord_message_id=main_discord_message_id,
+                template_version=template_version,
+                model=result.model,
+                provider=result.provider,
+                prompt_tokens=result.prompt_tokens,
+                completion_tokens=result.completion_tokens,
+                cost_usd=result.cost_usd,
+                latency_ms=result.latency_ms,
+            )
+            logger.debug(
+                "Audited LLM call",
+                audit_id=str(audit_id),
+                prompt_key=prompt_key,
+                model=result.model,
+            )
+
+        return AuditResult(
+            content=result.content,
+            model=result.model,
+            provider=result.provider,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            total_tokens=result.total_tokens,
+            cost_usd=result.cost_usd,
+            latency_ms=result.latency_ms,
+            temperature=result.temperature,
+            audit_id=audit_id,
+            prompt_key=prompt_key,
+        )

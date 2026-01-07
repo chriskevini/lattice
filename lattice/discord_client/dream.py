@@ -529,7 +529,7 @@ class DreamMirrorBuilder:
         version: int,
         context_info: dict[str, Any],
         performance: dict[str, Any],
-        audit_id: UUID,
+        audit_id: UUID | None,
         main_message_id: int,
         rendered_prompt: str,
         has_feedback: bool = False,

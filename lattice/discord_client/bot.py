@@ -292,6 +292,7 @@ class LatticeBot(commands.Bot):
                 response_result,
                 rendered_prompt,
                 context_info,
+                audit_id,
             ) = await response_generator.generate_response(
                 user_message=message.content,
                 recent_messages=recent_messages,
@@ -356,22 +357,24 @@ class LatticeBot(commands.Bot):
                     timezone=self._user_timezone,
                 )
 
-                # Store prompt audit for each bot message
-                audit_id = await prompt_audits.store_prompt_audit(
-                    prompt_key=template_key,
-                    rendered_prompt=rendered_prompt,
-                    response_content=bot_msg.content,
-                    main_discord_message_id=bot_msg.id,
-                    template_version=template_version,
-                    message_id=message_id,
-                    model=response_result.model,
-                    provider=response_result.provider,
-                    prompt_tokens=response_result.prompt_tokens,
-                    completion_tokens=response_result.completion_tokens,
-                    cost_usd=response_result.cost_usd,
-                    latency_ms=response_result.latency_ms,
-                    # context_config removed in Design D (not used by Dreaming Cycle)
-                )
+                # Store prompt audit (now handled by generate_response via AuditingLLMClient)
+                # Fallback to manual storage if audit_id not returned from generate_response
+                stored_audit_id = audit_id if audit_id is not None else None
+                if stored_audit_id is None:
+                    stored_audit_id = await prompt_audits.store_prompt_audit(
+                        prompt_key=template_key,
+                        rendered_prompt=rendered_prompt,
+                        response_content=bot_msg.content,
+                        main_discord_message_id=bot_msg.id,
+                        template_version=template_version,
+                        message_id=message_id,
+                        model=response_result.model,
+                        provider=response_result.provider,
+                        prompt_tokens=response_result.prompt_tokens,
+                        completion_tokens=response_result.completion_tokens,
+                        cost_usd=response_result.cost_usd,
+                        latency_ms=response_result.latency_ms,
+                    )
 
                 # Mirror to dream channel with new UI
                 await self._mirror_to_dream_channel(
@@ -379,7 +382,7 @@ class LatticeBot(commands.Bot):
                     bot_message=bot_msg,
                     rendered_prompt=rendered_prompt,
                     context_info=context_info,
-                    audit_id=audit_id,
+                    audit_id=stored_audit_id,
                     performance={
                         "prompt_key": template_key,
                         "version": template_version,
