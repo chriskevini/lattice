@@ -15,7 +15,7 @@ from lattice.core.response_generator import (
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
-from lattice.utils.llm import AuditResult, GenerationResult
+from lattice.utils.llm import AuditResult
 
 
 @pytest.fixture
@@ -272,13 +272,22 @@ class TestSelectResponseTemplate:
 class TestGenerateResponseWithTemplates:
     """Tests for generate_response with template selection."""
 
+    @pytest.fixture(autouse=True)
+    def reset_auditing_client(self):
+        """Reset global auditing client before and after each test."""
+        import lattice.utils.llm
+
+        lattice.utils.llm._auditing_client = None
+        yield
+        lattice.utils.llm._auditing_client = None
+
     @pytest.mark.asyncio
     async def test_generate_with_declaration_extraction(
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with declaration extraction."""
         with (
@@ -318,7 +327,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with query extraction."""
         mock_template = PromptTemplate(
@@ -364,7 +373,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_activity: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with activity update extraction."""
         mock_template = PromptTemplate(
@@ -405,7 +414,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_conversation: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with conversation extraction."""
         mock_template = PromptTemplate(
@@ -446,7 +455,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_recent_messages: list[EpisodicMessage],
         mock_basic_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test backward compatibility when extraction is None."""
         with (
@@ -480,7 +489,7 @@ class TestGenerateResponseWithTemplates:
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_basic_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test fallback to BASIC_RESPONSE when selected template doesn't exist."""
         with (
@@ -514,7 +523,7 @@ class TestGenerateResponseWithTemplates:
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation includes graph triples in context."""
         graph_triples = [
@@ -582,7 +591,7 @@ class TestGenerateResponseWithTemplates:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Response",
             model="test",
             provider="test",
@@ -592,6 +601,8 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -650,7 +661,7 @@ class TestGenerateResponseWithTemplates:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="It's sunny!",
             model="test",
             provider="test",
@@ -660,6 +671,8 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -736,7 +749,7 @@ class TestGenerateResponseWithTemplates:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Still sunny!",
             model="test",
             provider="test",
@@ -746,6 +759,8 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -809,7 +824,7 @@ class TestGenerateResponseWithTemplates:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="It's sunny!",
             model="test",
             provider="test",
@@ -819,6 +834,8 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -881,7 +898,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Got it!",
             model="test",
             provider="test",
@@ -891,6 +908,8 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -945,7 +964,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="The deadline is Friday.",
             model="test",
             provider="test",
@@ -955,6 +974,8 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.5,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -1007,7 +1028,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Nice session!",
             model="test",
             provider="test",
@@ -1017,6 +1038,8 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -1069,7 +1092,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Nice! What kind?",
             model="test",
             provider="test",
@@ -1079,6 +1102,8 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -1127,7 +1152,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Got it!",
             model="test",
             provider="test",
@@ -1137,6 +1162,8 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
@@ -1249,7 +1276,7 @@ class TestTimezoneConversionFailure:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Hi!",
             model="test",
             provider="test",
@@ -1259,6 +1286,8 @@ class TestTimezoneConversionFailure:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (

@@ -357,9 +357,9 @@ class LatticeBot(commands.Bot):
                     timezone=self._user_timezone,
                 )
 
-                # Store prompt audit (now handled by generate_response via AuditingLLMClient)
-                # Fallback to manual storage if audit_id not returned from generate_response
-                stored_audit_id = audit_id if audit_id is not None else None
+                # Store prompt audit (handled by AuditingLLMClient during generate_response)
+                # Fallback only if audit_id wasn't returned (e.g., no Discord message ID available)
+                stored_audit_id = audit_id
                 if stored_audit_id is None:
                     stored_audit_id = await prompt_audits.store_prompt_audit(
                         prompt_key=template_key,

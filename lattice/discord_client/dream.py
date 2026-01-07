@@ -132,8 +132,8 @@ class FeedbackModal(discord.ui.Modal):
                     self.bot_message_id
                 )
                 await bot_message.add_reaction(emoji)
-        except Exception:
-            logger.exception("Failed to add reaction to bot message")
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            logger.warning("Failed to add reaction to bot message")
 
         await interaction.response.send_message(
             f"{emoji} **{sentiment.title()}** feedback recorded!",
