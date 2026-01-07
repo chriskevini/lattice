@@ -272,7 +272,9 @@ async def generate_response(
     }
 
     # Use template's temperature setting if available, otherwise default to 0.7
-    temperature = prompt_template.temperature if prompt_template.temperature else 0.7
+    temperature = (
+        prompt_template.temperature if prompt_template.temperature is not None else 0.7
+    )
 
     client = get_llm_client()
     result = await client.complete(filled_prompt, temperature=temperature)
@@ -301,7 +303,7 @@ def split_response(response: str, max_length: int = 1900) -> list[str]:
     current_length = 0
 
     for line in lines:
-        line_length = len(line) + 1  # +1 for newline
+        line_length = len(line) + 1  # +1 for newline separator
 
         # If single line exceeds max_length, split it at word boundaries
         if len(line) > max_length:
@@ -334,6 +336,13 @@ def split_response(response: str, max_length: int = 1900) -> list[str]:
                 chunks.append(temp_line)
             continue
 
+        # First line in chunk doesn't need newline
+        if current_length == 0:
+            line_length = len(line)
+        # Subsequent lines need +1 for newline separator
+        elif len(line) > 0:
+            line_length = len(line) + 1
+
         if current_length + line_length <= max_length:
             current_chunk.append(line)
             current_length += line_length
@@ -341,7 +350,7 @@ def split_response(response: str, max_length: int = 1900) -> list[str]:
             if current_chunk:
                 chunks.append("\n".join(current_chunk))
             current_chunk = [line]
-            current_length = line_length
+            current_length = len(line)
 
     if current_chunk:
         chunks.append("\n".join(current_chunk))
