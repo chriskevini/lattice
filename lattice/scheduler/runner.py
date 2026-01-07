@@ -8,12 +8,13 @@ message patterns to respect user's natural schedule.
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import discord
 import structlog
 
 from lattice.core.pipeline import UnifiedPipeline
-from lattice.discord_client.dream import DreamMirrorBuilder
+from lattice.discord_client.dream import AuditViewBuilder
 from lattice.memory import episodic, prompt_audits
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.triggers import (
@@ -182,9 +183,9 @@ class ProactiveScheduler:
                         )
                     )
 
-                    # Store prompt audit for proactive message
-                    audit_id = None
-                    if decision.rendered_prompt:
+                    # Use audit_id from LLM call if available, otherwise store one
+                    audit_id: UUID | None = decision.audit_id
+                    if audit_id is None and decision.rendered_prompt:
                         audit_id = await prompt_audits.store_prompt_audit(
                             prompt_key="PROACTIVE_DECISION",
                             rendered_prompt=decision.rendered_prompt,
@@ -251,7 +252,7 @@ class ProactiveScheduler:
         self,
         bot_message: discord.Message,
         reasoning: str,
-        audit_id: Any | None = None,
+        audit_id: UUID | None = None,
         prompt_key: str | None = None,
         template_version: int | None = None,
         rendered_prompt: str | None = None,
@@ -280,14 +281,15 @@ class ProactiveScheduler:
 
         try:
             # Build embed and view with audit info
-            embed, view = DreamMirrorBuilder.build_proactive_mirror(
+            # Only show audit view if we have a real audit_id
+            embed, view = AuditViewBuilder.build_proactive_audit(
+                reasoning=reasoning,
                 bot_message=bot_message.content,
                 main_message_url=bot_message.jump_url,
-                reasoning=reasoning,
-                main_message_id=bot_message.id,
+                prompt_key=prompt_key or "PROACTIVE_DECISION",
+                version=template_version or 1,
+                confidence=0.5,
                 audit_id=audit_id,
-                prompt_key=prompt_key,
-                template_version=template_version,
                 rendered_prompt=rendered_prompt,
             )
 

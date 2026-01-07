@@ -11,7 +11,7 @@ import structlog
 
 # Import compatibility layer first to ensure DesignerView exists
 from lattice.discord_client import dream  # noqa: F401
-from lattice.discord_client.dream import PromptViewView
+from lattice.discord_client.dream import PromptDetailView
 from lattice.dreaming.proposer import (
     OptimizationProposal,
     approve_proposal,
@@ -188,7 +188,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
 
             # Send ephemeral message with TextDisplay view (Components V2)
             # NOTE: V2 components cannot be sent with embeds or content (Pycord restriction)
-            view = PromptViewView(self.rendered_optimization_prompt)
+            view = PromptDetailView(self.rendered_optimization_prompt)
 
             await interaction.response.send_message(
                 view=view,

@@ -33,20 +33,28 @@ async def init_database() -> None:
     try:
         schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
         print(f"Loading schema from {schema_path}...")
-        with open(schema_path, "r") as f:
+        with open(schema_path) as f:
             schema_sql = f.read()
 
-        await conn.execute(schema_sql)
-        print("Schema applied successfully!")
+        try:
+            await conn.execute(schema_sql)
+            print("Schema applied successfully!")
+        except Exception as e:
+            print(f"ERROR: Failed to apply schema.sql: {e}", file=sys.stderr)
+            raise
 
         seed_path = os.path.join(os.path.dirname(__file__), "seed.sql")
         if os.path.exists(seed_path):
             print(f"Loading seed data from {seed_path}...")
-            with open(seed_path, "r") as f:
+            with open(seed_path) as f:
                 seed_sql = f.read()
 
-            await conn.execute(seed_sql)
-            print("Seed data applied!")
+            try:
+                await conn.execute(seed_sql)
+                print("Seed data applied!")
+            except Exception as e:
+                print(f"ERROR: Failed to apply seed.sql: {e}", file=sys.stderr)
+                raise
 
         print("\nDatabase schema initialization complete!")
         print("Tables: prompt_registry, raw_messages, message_extractions, entities,")

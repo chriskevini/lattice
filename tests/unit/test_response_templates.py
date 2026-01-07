@@ -15,7 +15,7 @@ from lattice.core.response_generator import (
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
-from lattice.utils.llm import GenerationResult
+from lattice.utils.llm import AuditResult
 
 
 @pytest.fixture
@@ -134,9 +134,9 @@ def mock_basic_template() -> PromptTemplate:
 
 
 @pytest.fixture
-def mock_generation_result() -> GenerationResult:
-    """Create a mock GenerationResult."""
-    return GenerationResult(
+def mock_generation_result() -> AuditResult:
+    """Create a mock AuditResult."""
+    return AuditResult(
         content="Got it! Friday deadline for lattice. That's coming up quick—how's it looking so far?",
         model="anthropic/claude-3.5-sonnet",
         provider="anthropic",
@@ -146,6 +146,8 @@ def mock_generation_result() -> GenerationResult:
         cost_usd=0.002,
         latency_ms=600,
         temperature=0.7,
+        audit_id=None,
+        prompt_key="GOAL_RESPONSE",
     )
 
 
@@ -270,27 +272,38 @@ class TestSelectResponseTemplate:
 class TestGenerateResponseWithTemplates:
     """Tests for generate_response with template selection."""
 
+    @pytest.fixture(autouse=True)
+    def reset_auditing_client(self):
+        """Reset global auditing client before and after each test."""
+        import lattice.utils.llm
+
+        lattice.utils.llm._auditing_client = None
+        yield
+        lattice.utils.llm._auditing_client = None
+
     @pytest.mark.asyncio
     async def test_generate_with_declaration_extraction(
         self,
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with declaration extraction."""
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_prompt_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="I need to finish the lattice project by Friday",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
@@ -314,7 +327,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with query extraction."""
         mock_template = PromptTemplate(
@@ -329,14 +342,16 @@ class TestGenerateResponseWithTemplates:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="When is the lattice deadline?",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_query,
@@ -358,7 +373,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_activity: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with activity update extraction."""
         mock_template = PromptTemplate(
@@ -373,14 +388,16 @@ class TestGenerateResponseWithTemplates:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Spent 3 hours coding today",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_activity,
@@ -397,7 +414,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_extraction_conversation: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation with conversation extraction."""
         mock_template = PromptTemplate(
@@ -412,14 +429,16 @@ class TestGenerateResponseWithTemplates:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Just made some tea",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_conversation,
@@ -436,21 +455,23 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_recent_messages: list[EpisodicMessage],
         mock_basic_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test backward compatibility when extraction is None."""
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_basic_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Hello",
                 recent_messages=mock_recent_messages,
                 extraction=None,
@@ -468,14 +489,16 @@ class TestGenerateResponseWithTemplates:
         mock_extraction_declaration: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_basic_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test fallback to BASIC_RESPONSE when selected template doesn't exist."""
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             # First call returns None (template not found), second call returns basic template
             mock_get_prompt.side_effect = [None, mock_basic_template]
@@ -483,7 +506,7 @@ class TestGenerateResponseWithTemplates:
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Test message",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
@@ -500,7 +523,7 @@ class TestGenerateResponseWithTemplates:
         mock_extraction_query: QueryExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation includes graph triples in context."""
         graph_triples = [
@@ -520,14 +543,16 @@ class TestGenerateResponseWithTemplates:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_prompt_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_generation_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="When is the deadline?",
                 recent_messages=mock_recent_messages,
                 graph_triples=graph_triples,
@@ -566,7 +591,7 @@ class TestGenerateResponseWithTemplates:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Response",
             model="test",
             provider="test",
@@ -576,20 +601,24 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Hello",
                 recent_messages=mock_recent_messages,
                 extraction=extraction,
@@ -632,7 +661,7 @@ class TestGenerateResponseWithTemplates:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="It's sunny!",
             model="test",
             provider="test",
@@ -642,20 +671,24 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_basic_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message=user_message_content,
                 recent_messages=recent_messages,
                 user_discord_message_id=user_discord_id,
@@ -716,7 +749,7 @@ class TestGenerateResponseWithTemplates:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Still sunny!",
             model="test",
             provider="test",
@@ -726,20 +759,24 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_basic_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message=duplicate_content,
                 recent_messages=recent_messages,
                 user_discord_message_id=4444444444,  # Current message ID
@@ -787,7 +824,7 @@ class TestGenerateResponseWithTemplates:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="It's sunny!",
             model="test",
             provider="test",
@@ -797,13 +834,17 @@ class TestGenerateResponseWithTemplates:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_basic_template
             mock_client = AsyncMock()
@@ -811,7 +852,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             # Don't pass user_discord_message_id (backward compatibility test)
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message=user_message_content,
                 recent_messages=recent_messages,
                 # user_discord_message_id=None (implicit)
@@ -857,7 +898,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Got it!",
             model="test",
             provider="test",
@@ -867,20 +908,24 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="I need to finish the lattice project by Friday",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
@@ -919,7 +964,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="The deadline is Friday.",
             model="test",
             provider="test",
@@ -929,20 +974,24 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.5,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="When is the lattice deadline?",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_query,
@@ -979,7 +1028,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Nice session!",
             model="test",
             provider="test",
@@ -989,20 +1038,24 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Spent 3 hours coding today",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_activity,
@@ -1039,7 +1092,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Nice! What kind?",
             model="test",
             provider="test",
@@ -1049,20 +1102,24 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Just made some tea",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_conversation,
@@ -1095,7 +1152,7 @@ class TestExtractionFieldsNotInPrompts:
             active=True,
         )
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Got it!",
             model="test",
             provider="test",
@@ -1105,20 +1162,24 @@ class TestExtractionFieldsNotInPrompts:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_template
             mock_client = AsyncMock()
             mock_client.complete.return_value = mock_result
             mock_get_client.return_value = mock_client
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="I need to finish the lattice project by Friday",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_declaration,
@@ -1158,7 +1219,7 @@ class TestNoTemplateFound:
             # Simulate both template lookups returning None
             mock_get_prompt.return_value = None
 
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Test message",
                 recent_messages=mock_recent_messages,
                 extraction=extraction,
@@ -1215,7 +1276,7 @@ class TestTimezoneConversionFailure:
             ),
         ]
 
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="Hi!",
             model="test",
             provider="test",
@@ -1225,13 +1286,17 @@ class TestTimezoneConversionFailure:
             cost_usd=0.001,
             latency_ms=100,
             temperature=0.7,
+            audit_id=None,
+            prompt_key="BASIC_RESPONSE",
         )
 
         with (
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_get_prompt,
-            patch("lattice.core.response_generator.get_llm_client") as mock_get_client,
+            patch(
+                "lattice.core.response_generator.get_auditing_llm_client"
+            ) as mock_get_client,
         ):
             mock_get_prompt.return_value = mock_basic_template
             mock_client = AsyncMock()
@@ -1239,7 +1304,7 @@ class TestTimezoneConversionFailure:
             mock_get_client.return_value = mock_client
 
             # Should not raise an exception
-            result, rendered_prompt, context_info = await generate_response(
+            result, rendered_prompt, context_info, _ = await generate_response(
                 user_message="Test",
                 recent_messages=recent_messages,
             )

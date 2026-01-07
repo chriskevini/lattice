@@ -576,7 +576,7 @@ async def _mirror_extraction_to_dream(
         rendered_prompt: Optional full rendered prompt
     """
     # Lazy import to avoid circular dependency
-    from lattice.discord_client.dream import DreamMirrorBuilder
+    from lattice.discord_client.dream import AuditViewBuilder
 
     dream_channel = bot.get_channel(dream_channel_id)
     if not dream_channel:
@@ -588,15 +588,14 @@ async def _mirror_extraction_to_dream(
 
     try:
         # Build embed and view with full audit data for transparency
-        embed, view = DreamMirrorBuilder.build_extraction_mirror(
+        # Only show audit view if we have a real audit_id
+        embed, view = AuditViewBuilder.build_extraction_audit(
             user_message=user_message,
             main_message_url=main_message_url,
             triples=triples,
             objectives=objectives,
-            main_message_id=main_message_id,
+            prompt_key=prompt_key or "TRIPLE_EXTRACTION",
             audit_id=audit_id,
-            prompt_key=prompt_key,
-            version=version,
             rendered_prompt=rendered_prompt,
         )
 

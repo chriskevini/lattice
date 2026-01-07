@@ -5,12 +5,13 @@ Handles prompt formatting, LLM generation, and message splitting for Discord.
 
 import re
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
 from lattice.memory import episodic, procedural
-from lattice.utils.llm import GenerationResult, get_llm_client
+from lattice.utils.llm import AuditResult, get_auditing_llm_client
 
 if TYPE_CHECKING:
     from lattice.core.query_extraction import QueryExtraction
@@ -122,7 +123,7 @@ async def generate_response(
     graph_triples: list[dict[str, Any]] | None = None,
     extraction: "QueryExtraction | None" = None,
     user_discord_message_id: int | None = None,
-) -> tuple[GenerationResult, str, dict[str, Any]]:
+) -> tuple[AuditResult, str, dict[str, Any], UUID | None]:
     """Generate a response using the appropriate prompt template.
 
     Selects template based on extracted message type and populates it with
@@ -158,7 +159,7 @@ async def generate_response(
 
     if not prompt_template:
         return (
-            GenerationResult(
+            AuditResult(
                 content="I'm still initializing. Please try again in a moment.",
                 model="unknown",
                 provider=None,
@@ -171,6 +172,7 @@ async def generate_response(
             ),
             "",
             {},
+            None,
         )
 
     def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
@@ -276,9 +278,15 @@ async def generate_response(
         prompt_template.temperature if prompt_template.temperature is not None else 0.7
     )
 
-    client = get_llm_client()
-    result = await client.complete(filled_prompt, temperature=temperature)
-    return result, filled_prompt, context_info
+    client = get_auditing_llm_client()
+    result = await client.complete(
+        prompt=filled_prompt,
+        prompt_key=template_name,
+        template_version=prompt_template.version,
+        main_discord_message_id=user_discord_message_id,
+        temperature=temperature,
+    )
+    return result, filled_prompt, context_info, getattr(result, "audit_id", None)
 
 
 def split_response(response: str, max_length: int = 1900) -> list[str]:
