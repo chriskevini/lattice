@@ -240,11 +240,10 @@ class LatticeBot(commands.Bot):
                 )
 
                 # Validate extraction structure
-                if extraction and extraction.message_type:
+                if extraction and extraction.entities is not None:
                     logger.info(
-                        "Query extraction completed",
-                        message_type=extraction.message_type,
-                        entities=extraction.entities,
+                        "Entity extraction completed",
+                        entity_count=len(extraction.entities),
                         extraction_id=str(extraction.id),
                     )
                 else:

@@ -49,7 +49,7 @@ class TestQueryExtractionPipeline:
 
             extraction_llm = AsyncMock()
             extraction_llm.complete.return_value = AuditResult(
-                content='{"message_type":"goal","entities":["lattice project","Friday"]}',
+                content='{"entities":["lattice project","Friday"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=100,
@@ -69,7 +69,6 @@ class TestQueryExtractionPipeline:
                 "id": uuid.uuid4(),
                 "message_id": message_id,
                 "extraction": {
-                    "message_type": "goal",
                     "entities": ["lattice project", "Friday"],
                 },
                 "prompt_key": "QUERY_EXTRACTION",
@@ -80,7 +79,7 @@ class TestQueryExtractionPipeline:
 
             # Setup response generation mocks
             response_template = PromptTemplate(
-                prompt_key="GOAL_RESPONSE",
+                prompt_key="UNIFIED_RESPONSE",
                 template=("Context: {episodic_context}\nUser: {user_message}"),
                 temperature=0.7,
                 version=1,
@@ -100,7 +99,7 @@ class TestQueryExtractionPipeline:
                 latency_ms=600,
                 temperature=0.7,
                 audit_id=None,
-                prompt_key="GOAL_RESPONSE",
+                prompt_key="UNIFIED_RESPONSE",
             )
             mock_resp_llm_client.return_value = response_llm
 
@@ -113,7 +112,6 @@ class TestQueryExtractionPipeline:
 
             # Verify extraction
             assert extraction is not None
-            assert extraction.message_type == "goal"
             assert "lattice project" in extraction.entities
 
             # Execute pipeline: Generate response with extraction
@@ -151,7 +149,7 @@ class TestQueryExtractionPipeline:
             # Verify response generation
             assert result is not None
             assert "Friday deadline" in result.content
-            assert context_info["template"] == "GOAL_RESPONSE"
+            assert context_info["template"] == "UNIFIED_RESPONSE"
             assert context_info["extraction_id"] == str(extraction.id)
 
             # Verify template placeholders were filled correctly
@@ -174,12 +172,12 @@ class TestQueryExtractionPipeline:
             # Setup extraction to fail
             mock_get_prompt.return_value = None  # Template not found
 
-            # Setup response generation to use BASIC_RESPONSE
+            # Setup response generation to use UNIFIED_RESPONSE
             from lattice.memory.procedural import PromptTemplate
             from lattice.utils.llm import AuditResult
 
-            basic_template = PromptTemplate(
-                prompt_key="BASIC_RESPONSE",
+            unified_template = PromptTemplate(
+                prompt_key="UNIFIED_RESPONSE",
                 template=(
                     "Context: {episodic_context}\n"
                     "Semantic: {semantic_context}\n"
@@ -189,7 +187,7 @@ class TestQueryExtractionPipeline:
                 version=1,
                 active=True,
             )
-            mock_resp_prompt.return_value = basic_template
+            mock_resp_prompt.return_value = unified_template
 
             response_llm = AsyncMock()
             response_llm.complete.return_value = AuditResult(
@@ -203,7 +201,7 @@ class TestQueryExtractionPipeline:
                 latency_ms=300,
                 temperature=0.7,
                 audit_id=None,
-                prompt_key="BASIC_RESPONSE",
+                prompt_key="UNIFIED_RESPONSE",
             )
             mock_resp_llm_client.return_value = response_llm
 
@@ -243,10 +241,10 @@ class TestQueryExtractionPipeline:
                 extraction=extraction,
             )
 
-            # Verify fallback to BASIC_RESPONSE
+            # Verify fallback to UNIFIED_RESPONSE
             assert result is not None
             assert "Hello" in result.content
-            assert context_info["template"] == "BASIC_RESPONSE"
+            assert context_info["template"] == "UNIFIED_RESPONSE"
             assert context_info["extraction_id"] is None
 
     @pytest.mark.asyncio
@@ -281,7 +279,7 @@ class TestQueryExtractionPipeline:
 
             extraction_llm = AsyncMock()
             extraction_llm.complete.return_value = AuditResult(
-                content='{"message_type":"question","entities":["project","deadline"]}',
+                content='{"entities":["project","deadline"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=80,
@@ -300,7 +298,6 @@ class TestQueryExtractionPipeline:
                 "id": uuid.uuid4(),
                 "message_id": message_id,
                 "extraction": {
-                    "message_type": "question",
                     "entities": ["project", "deadline"],
                 },
                 "prompt_key": "QUERY_EXTRACTION",
@@ -309,15 +306,15 @@ class TestQueryExtractionPipeline:
             }
             mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            # Setup QUESTION_RESPONSE template
-            query_template = PromptTemplate(
-                prompt_key="QUESTION_RESPONSE",
+            # Setup UNIFIED_RESPONSE template
+            unified_template = PromptTemplate(
+                prompt_key="UNIFIED_RESPONSE",
                 template="Context: {episodic_context}\nUser: {user_message}",
-                temperature=0.5,
+                temperature=0.7,
                 version=1,
                 active=True,
             )
-            mock_resp_prompt.return_value = query_template
+            mock_resp_prompt.return_value = unified_template
 
             response_llm = AsyncMock()
             response_llm.complete.return_value = AuditResult(
@@ -329,9 +326,9 @@ class TestQueryExtractionPipeline:
                 total_tokens=115,
                 cost_usd=0.001,
                 latency_ms=350,
-                temperature=0.5,
+                temperature=0.7,
                 audit_id=None,
-                prompt_key="QUESTION_RESPONSE",
+                prompt_key="UNIFIED_RESPONSE",
             )
             mock_resp_llm_client.return_value = response_llm
 
@@ -343,7 +340,7 @@ class TestQueryExtractionPipeline:
             )
 
             # Verify query extraction
-            assert extraction.message_type == "question"
+            assert "project" in extraction.entities
 
             # Generate response
             mock_recent_messages = [
@@ -369,6 +366,5 @@ class TestQueryExtractionPipeline:
                 extraction=extraction,
             )
 
-            # Verify QUESTION_RESPONSE template was used
-            assert context_info["template"] == "QUESTION_RESPONSE"
-            assert result.temperature == 0.5  # QUESTION_RESPONSE uses lower temperature
+            # Verify UNIFIED_RESPONSE template was used
+            assert context_info["template"] == "UNIFIED_RESPONSE"

@@ -14,7 +14,7 @@ from lattice.memory import episodic, procedural
 from lattice.utils.llm import AuditResult, get_auditing_llm_client
 
 if TYPE_CHECKING:
-    from lattice.core.query_extraction import QueryExtraction
+    from lattice.core.query_extraction import EntityExtraction
 
 
 logger = structlog.get_logger(__name__)
@@ -80,63 +80,25 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     return (len(unknown) == 0, unknown)
 
 
-def select_response_template(extraction: "QueryExtraction | None") -> str:
-    """Select the appropriate response template based on message type.
-
-    This function maps the extracted message type to one of four specialized
-    response templates, each optimized for different interaction patterns.
-
-    Args:
-        extraction: Query extraction containing message type and metadata.
-                   If None, defaults to BASIC_RESPONSE for backward compatibility.
-
-    Returns:
-        Template name to use for response generation:
-        - GOAL_RESPONSE: For goals, commitments, and intentions
-        - QUESTION_RESPONSE: For factual questions and information requests
-        - ACTIVITY_RESPONSE: For activity updates and progress reports
-        - CONVERSATION_RESPONSE: For general conversational messages
-        - BASIC_RESPONSE: Fallback when extraction unavailable
-
-    Note:
-        Updated in Design D: declaration→goal, query→question
-        Each template can be independently optimized via the Dreaming Cycle.
-    """
-    if extraction is None:
-        # No extraction available, use basic fallback template
-        return "BASIC_RESPONSE"
-
-    template_map = {
-        "goal": "GOAL_RESPONSE",
-        "question": "QUESTION_RESPONSE",
-        "activity_update": "ACTIVITY_RESPONSE",
-        "conversation": "CONVERSATION_RESPONSE",
-    }
-
-    # Default to BASIC_RESPONSE for unknown message types (general-purpose fallback)
-    return template_map.get(extraction.message_type, "BASIC_RESPONSE")
-
-
 async def generate_response(
     user_message: str,
     recent_messages: list[episodic.EpisodicMessage],
     graph_triples: list[dict[str, Any]] | None = None,
-    extraction: "QueryExtraction | None" = None,
+    extraction: "EntityExtraction | None" = None,
     user_discord_message_id: int | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any], UUID | None]:
-    """Generate a response using the appropriate prompt template.
+    """Generate a response using the unified prompt template.
 
-    Selects template based on extracted message type and populates it with
-    context from episodic memory and graph traversal.
+    Uses UNIFIED_RESPONSE for all message types. The template handles different
+    interaction patterns (questions, goals, activities, conversation) based on
+    the user message content.
 
     Args:
         user_message: The user's message
         recent_messages: Recent conversation history
         graph_triples: Related facts from graph traversal
-        extraction: Query extraction with message type and structured fields.
-                   If None, uses BASIC_RESPONSE template for backward compatibility.
+        extraction: Entity extraction for graph traversal
         user_discord_message_id: Discord message ID to exclude from episodic context.
-                                If None falls back to content-based filtering.
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
@@ -144,20 +106,12 @@ async def generate_response(
     if graph_triples is None:
         graph_triples = []
 
-    # Select appropriate template based on message type
-    template_name = select_response_template(extraction)
+    # Get unified response template
+    template_name = "UNIFIED_RESPONSE"
     prompt_template = await procedural.get_prompt(template_name)
 
-    # Fallback to BASIC_RESPONSE if selected template doesn't exist
-    if not prompt_template and template_name != "BASIC_RESPONSE":
-        logger.warning(
-            "Template not found, falling back",
-            requested_template=template_name,
-            fallback="BASIC_RESPONSE",
-        )
-        prompt_template = await procedural.get_prompt("BASIC_RESPONSE")
-
     if not prompt_template:
+        logger.warning("Template not found", requested_template=template_name)
         return (
             AuditResult(
                 content="I'm still initializing. Please try again in a moment.",
@@ -176,32 +130,24 @@ async def generate_response(
         )
 
     def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
-        # Convert UTC timestamp to user's local timezone
         try:
             user_tz = ZoneInfo(msg.user_timezone)
             local_ts = msg.timestamp.astimezone(user_tz)
             ts_str = local_ts.strftime("%Y-%m-%d %H:%M")
         except (ZoneInfoNotFoundError, ValueError, KeyError) as e:
-            # Fallback to UTC if timezone conversion fails
             logger.warning(
-                "Timezone conversion failed",
-                timezone=msg.user_timezone,
-                error=str(e),
+                "Timezone conversion failed", timezone=msg.user_timezone, error=str(e)
             )
             ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M UTC")
         return f"[{ts_str}] {msg.role}: {msg.content}"
 
-    # Exclude the current user message from episodic context to avoid duplication
-    # The current message is explicitly provided in {user_message} placeholder
     if user_discord_message_id is not None:
-        # Filter by Discord message ID (more reliable, handles duplicate content)
         filtered_messages = [
             msg
             for msg in recent_messages
             if msg.discord_message_id != user_discord_message_id
         ]
     else:
-        # Fallback: filter by content and role (for backward compatibility)
         filtered_messages = [
             msg for msg in recent_messages if msg.is_bot or msg.content != user_message
         ]
@@ -209,7 +155,6 @@ async def generate_response(
         format_with_timestamp(msg) for msg in filtered_messages
     )
 
-    # Format graph triples as relationships for semantic context
     semantic_lines = []
     if graph_triples:
         relationships = []
@@ -236,20 +181,12 @@ async def generate_response(
         template_name=template_name,
     )
 
-    # Build template parameters from extraction if available
     template_params = {
         "episodic_context": episodic_context or "No recent conversation.",
         "semantic_context": semantic_context,
         "user_message": user_message,
     }
 
-    # Note: As of Design D (migration 019), extraction is simplified to 2 fields:
-    # - message_type (for template selection)
-    # - entities (for graph traversal)
-    # We no longer extract or pass unused fields to templates.
-    # Modern LLMs can extract needed information naturally from the user message.
-
-    # Only pass parameters that the template actually uses
     template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
     filtered_params = {
         key: value
@@ -266,14 +203,12 @@ async def generate_response(
         extraction_available=extraction is not None,
     )
 
-    # Build context info for audit (removed context_config in Design D)
     context_info = {
         "template": template_name,
         "template_version": prompt_template.version,
         "extraction_id": str(extraction.id) if extraction else None,
     }
 
-    # Use template's temperature setting if available, otherwise default to 0.7
     temperature = (
         prompt_template.temperature if prompt_template.temperature is not None else 0.7
     )
