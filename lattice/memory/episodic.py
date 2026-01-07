@@ -372,14 +372,6 @@ async def consolidate_message(
         }
         for o in objectives_raw
     ]
-    objectives = [
-        {
-            "description": o["description"],
-            "saliency": o["saliency"],
-            "status": o["status"],
-        }
-        for o in objectives_raw
-    ]
 
     logger.info(
         "Parsed extraction", triple_count=len(triples), objective_count=len(objectives)
