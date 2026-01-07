@@ -3,15 +3,16 @@
 This module provides a unified interface for LLM operations via OpenRouter.
 """
 
-import logging
 import os
 import time
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+import structlog
 
-logger = logging.getLogger(__name__)
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -305,7 +306,7 @@ class AuditingLLMClient:
                 cost_usd=result.cost_usd,
                 latency_ms=result.latency_ms,
             )
-            logger.debug(
+            logger.info(
                 "Audited LLM call",
                 audit_id=str(audit_id),
                 prompt_key=prompt_key,

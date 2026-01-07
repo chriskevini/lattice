@@ -184,35 +184,26 @@ class ProactiveScheduler:
                     )
 
                     # Use audit_id from LLM call if available, otherwise store one
-                    audit_id: UUID | None = None
-                    if decision.audit_id:
-                        try:
-                            audit_id = UUID(decision.audit_id)
-                        except ValueError:
-                            logger.warning(
-                                "Invalid audit_id format", audit_id=decision.audit_id
-                            )
-                    else:
-                        # Fallback: store audit if not already stored by LLM call
-                        if decision.rendered_prompt:
-                            audit_id = await prompt_audits.store_prompt_audit(
-                                prompt_key="PROACTIVE_DECISION",
-                                rendered_prompt=decision.rendered_prompt,
-                                response_content=result.content,
-                                main_discord_message_id=result.id,
-                                template_version=decision.template_version,
-                                message_id=message_id,
-                                model=decision.model,
-                                provider=decision.provider,
-                                prompt_tokens=decision.prompt_tokens,
-                                completion_tokens=decision.completion_tokens,
-                                cost_usd=decision.cost_usd,
-                                latency_ms=decision.latency_ms,
-                            )
-                            logger.info(
-                                "Stored prompt audit for proactive message",
-                                audit_id=str(audit_id),
-                            )
+                    audit_id: UUID | None = decision.audit_id
+                    if audit_id is None and decision.rendered_prompt:
+                        audit_id = await prompt_audits.store_prompt_audit(
+                            prompt_key="PROACTIVE_DECISION",
+                            rendered_prompt=decision.rendered_prompt,
+                            response_content=result.content,
+                            main_discord_message_id=result.id,
+                            template_version=decision.template_version,
+                            message_id=message_id,
+                            model=decision.model,
+                            provider=decision.provider,
+                            prompt_tokens=decision.prompt_tokens,
+                            completion_tokens=decision.completion_tokens,
+                            cost_usd=decision.cost_usd,
+                            latency_ms=decision.latency_ms,
+                        )
+                        logger.info(
+                            "Stored prompt audit for proactive message",
+                            audit_id=str(audit_id),
+                        )
 
                     # Mirror to dream channel
                     await self._mirror_proactive_to_dream(

@@ -5,10 +5,12 @@ Respects adaptive active hours to avoid disturbing users outside their active ti
 """
 
 import json
-import logging
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import UUID
+
+import structlog
 
 from lattice.memory.episodic import EpisodicMessage, get_recent_messages
 from lattice.memory.procedural import get_prompt
@@ -17,7 +19,7 @@ from lattice.utils.database import db_pool, get_system_health, set_system_health
 from lattice.utils.llm import get_auditing_llm_client
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -28,8 +30,7 @@ class ProactiveDecision:
     content: str | None
     reason: str
     channel_id: int | None = None
-    # Generation metadata for audit trail
-    audit_id: str | None = None
+    audit_id: UUID | None = None
     rendered_prompt: str | None = None
     template_version: int | None = None
     model: str | None = None
@@ -198,8 +199,7 @@ async def decide_proactive() -> ProactiveDecision:
             content=content,
             reason=decision.get("reason", "No reason provided"),
             channel_id=channel_id,
-            # Capture generation metadata for audit trail
-            audit_id=str(result.audit_id) if result.audit_id else None,
+            audit_id=result.audit_id,
             rendered_prompt=prompt,
             template_version=prompt_template.version,
             model=result.model,

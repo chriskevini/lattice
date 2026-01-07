@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from lattice.utils.llm import GenerationResult, LLMClient, get_llm_client
+from lattice.utils.llm import AuditResult, GenerationResult, LLMClient, get_llm_client
 
 
 @pytest.fixture(autouse=True)
@@ -487,3 +487,144 @@ class TestGetLLMClient:
             client = get_llm_client()
 
             assert client.provider == "placeholder"
+
+
+class TestAuditResult:
+    """Tests for AuditResult dataclass."""
+
+    def test_audit_result_creation(self) -> None:
+        """Test that AuditResult can be created with all fields."""
+        from uuid import uuid4
+
+        audit_id = uuid4()
+        result = AuditResult(
+            content="test content",
+            model="test-model",
+            provider="test-provider",
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+            cost_usd=0.001,
+            latency_ms=100,
+            temperature=0.7,
+            audit_id=audit_id,
+            prompt_key="GOAL_RESPONSE",
+        )
+
+        assert result.content == "test content"
+        assert result.model == "test-model"
+        assert result.provider == "test-provider"
+        assert result.prompt_tokens == 10
+        assert result.completion_tokens == 20
+        assert result.total_tokens == 30
+        assert result.cost_usd == 0.001
+        assert result.latency_ms == 100
+        assert result.temperature == 0.7
+        assert result.audit_id == audit_id
+        assert result.prompt_key == "GOAL_RESPONSE"
+
+    def test_audit_result_inherits_from_generation_result(self) -> None:
+        """Test that AuditResult is a subclass of GenerationResult."""
+        from lattice.utils.llm import GenerationResult
+
+        assert issubclass(AuditResult, GenerationResult)
+
+    def test_audit_result_with_none_values(self) -> None:
+        """Test that AuditResult accepts None for optional fields."""
+        from uuid import uuid4
+
+        audit_id = uuid4()
+        result = AuditResult(
+            content="test",
+            model="test-model",
+            provider=None,
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+            cost_usd=None,
+            latency_ms=100,
+            temperature=0.7,
+            audit_id=audit_id,
+            prompt_key=None,
+        )
+
+        assert result.provider is None
+        assert result.cost_usd is None
+        assert result.audit_id == audit_id
+        assert result.prompt_key is None
+
+
+class TestAuditingLLMClient:
+    """Tests for AuditingLLMClient wrapper."""
+
+    @pytest.fixture(autouse=True)
+    def reset_auditing_client(self):
+        """Reset global auditing client before and after each test."""
+        import lattice.utils.llm
+
+        lattice.utils.llm._auditing_client = None
+        yield
+        lattice.utils.llm._auditing_client = None
+
+    @pytest.mark.asyncio
+    async def test_auditing_client_without_message_id(self) -> None:
+        """Test AuditingLLMClient returns None audit_id when no message_id provided."""
+        from lattice.utils.llm import AuditResult, get_auditing_llm_client
+
+        client = get_auditing_llm_client()
+
+        result = await client.complete(
+            prompt="test prompt",
+            prompt_key="TEST_PROMPT",
+            template_version=1,
+            main_discord_message_id=None,
+            temperature=0.7,
+        )
+
+        assert isinstance(result, AuditResult)
+        assert result.audit_id is None
+        assert result.prompt_key == "TEST_PROMPT"
+
+    @pytest.mark.asyncio
+    async def test_auditing_client_with_message_id(self) -> None:
+        """Test AuditingLLMClient stores audit and returns audit_id."""
+        from uuid import uuid4
+
+        from lattice.utils.llm import AuditResult, get_auditing_llm_client
+
+        mock_audit_id = uuid4()
+
+        with patch(
+            "lattice.memory.prompt_audits.store_prompt_audit",
+            new=AsyncMock(return_value=mock_audit_id),
+        ):
+            client = get_auditing_llm_client()
+
+            result = await client.complete(
+                prompt="test prompt",
+                prompt_key="TEST_PROMPT",
+                template_version=1,
+                main_discord_message_id=12345,
+                temperature=0.7,
+            )
+
+            assert isinstance(result, AuditResult)
+            assert result.audit_id == mock_audit_id
+            assert result.prompt_key == "TEST_PROMPT"
+
+    def test_get_auditing_client_creates_instance(self) -> None:
+        """Test that get_auditing_llm_client creates an AuditingLLMClient."""
+        from lattice.utils.llm import AuditingLLMClient, get_auditing_llm_client
+
+        client = get_auditing_llm_client()
+
+        assert isinstance(client, AuditingLLMClient)
+
+    def test_get_auditing_client_reuses_instance(self) -> None:
+        """Test that get_auditing_llm_client returns same instance."""
+        from lattice.utils.llm import get_auditing_llm_client
+
+        client1 = get_auditing_llm_client()
+        client2 = get_auditing_llm_client()
+
+        assert client1 is client2

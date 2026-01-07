@@ -298,3 +298,41 @@ class TestAuditViewBuilder:
 
         assert embed.fields[1].name == "OUTPUT"
         assert len(embed.fields[1].value) <= 1024
+
+
+class TestTruncateHelpers:
+    """Tests for truncation helper functions."""
+
+    def test_truncate_for_field_under_limit(self) -> None:
+        """Test truncation doesn't modify text under limit."""
+        from lattice.discord_client.dream import _truncate_for_field
+
+        text = "Short text"
+        result = _truncate_for_field(text, max_length=1024)
+        assert result == text
+
+    def test_truncate_for_field_over_limit(self) -> None:
+        """Test truncation adds ellipsis when over limit."""
+        from lattice.discord_client.dream import _truncate_for_field
+
+        text = "x" * 1030
+        result = _truncate_for_field(text, max_length=1024)
+        assert len(result) == 1024
+        assert result.endswith("...")
+
+    def test_truncate_for_message_under_limit(self) -> None:
+        """Test message truncation doesn't modify text under limit."""
+        from lattice.discord_client.dream import _truncate_for_message
+
+        text = "Short text"
+        result = _truncate_for_message(text, max_length=2000)
+        assert result == text
+
+    def test_truncate_for_message_over_limit(self) -> None:
+        """Test message truncation adds ellipsis when over limit."""
+        from lattice.discord_client.dream import _truncate_for_message
+
+        text = "x" * 2010
+        result = _truncate_for_message(text, max_length=2000)
+        assert len(result) == 2000
+        assert result.endswith("...")
