@@ -17,7 +17,7 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, query_extraction, response_generator
-from lattice.discord_client.dream import DreamMirrorBuilder, DreamMirrorView
+from lattice.discord_client.dream import AuditViewBuilder, AuditView
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
 from lattice.memory import episodic, prompt_audits
@@ -140,7 +140,7 @@ class LatticeBot(commands.Bot):
             # Register persistent views for bot restart resilience
             # Note: TemplateComparisonView (DesignerView) doesn't support persistent views
             # Proposals are ephemeral - buttons work only while bot is running
-            self.add_view(DreamMirrorView())  # Dream channel mirrors
+            self.add_view(AuditView())  # Dream channel audits
 
             logger.info("Schedulers started (proactive + dreaming)")
         else:
@@ -460,18 +460,18 @@ class LatticeBot(commands.Bot):
             return None
 
         # Build embed and view using new UI
-        embed, view = DreamMirrorBuilder.build_reactive_mirror(
+        latency_ms = performance.get("latency_ms", 0)
+        cost_usd = performance.get("cost_usd")
+        embed, view = AuditViewBuilder.build_reactive_audit(
             user_message=user_message,
             bot_response=bot_message.content,
             main_message_url=bot_message.jump_url,
             prompt_key=performance.get("prompt_key", "BASIC_RESPONSE"),
             version=performance.get("version", 1),
-            context_info=context_info,
-            performance=performance,
+            latency_ms=latency_ms,
+            cost_usd=cost_usd,
             audit_id=audit_id,
-            main_message_id=bot_message.id,
             rendered_prompt=rendered_prompt,
-            has_feedback=False,
         )
 
         try:

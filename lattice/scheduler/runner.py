@@ -8,13 +8,13 @@ message patterns to respect user's natural schedule.
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import discord
 import structlog
 
 from lattice.core.pipeline import UnifiedPipeline
-from lattice.discord_client.dream import DreamMirrorBuilder
+from lattice.discord_client.dream import AuditViewBuilder
 from lattice.memory import episodic, prompt_audits
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.triggers import (
@@ -290,14 +290,14 @@ class ProactiveScheduler:
 
         try:
             # Build embed and view with audit info
-            embed, view = DreamMirrorBuilder.build_proactive_mirror(
+            embed, view = AuditViewBuilder.build_proactive_audit(
+                reasoning=reasoning,
                 bot_message=bot_message.content,
                 main_message_url=bot_message.jump_url,
-                reasoning=reasoning,
-                main_message_id=bot_message.id,
-                audit_id=audit_id,
-                prompt_key=prompt_key,
-                template_version=template_version,
+                prompt_key=prompt_key or "PROACTIVE_DECISION",
+                version=template_version or 1,
+                confidence=0.5,
+                audit_id=audit_id or uuid4(),
                 rendered_prompt=rendered_prompt,
             )
 

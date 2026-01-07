@@ -1257,12 +1257,12 @@ class TestLatticeBot:
 
             with (
                 patch.object(bot, "get_channel", return_value=mock_dream_channel),
-                patch("lattice.discord_client.bot.DreamMirrorBuilder") as mock_builder,
+                patch("lattice.discord_client.bot.AuditViewBuilder") as mock_builder,
                 patch("lattice.discord_client.bot.prompt_audits") as mock_audits,
             ):
                 mock_embed = MagicMock()
                 mock_view = MagicMock()
-                mock_builder.build_reactive_mirror.return_value = (
+                mock_builder.build_reactive_audit.return_value = (
                     mock_embed,
                     mock_view,
                 )
@@ -1278,8 +1278,8 @@ class TestLatticeBot:
                 )
 
                 # Verify embed and view were built
-                mock_builder.build_reactive_mirror.assert_called_once()
-                call_args = mock_builder.build_reactive_mirror.call_args
+                mock_builder.build_reactive_audit.assert_called_once()
+                call_args = mock_builder.build_reactive_audit.call_args
                 assert call_args.kwargs["user_message"] == "User question"
                 assert call_args.kwargs["bot_response"] == "Bot response"
                 assert call_args.kwargs["audit_id"] == audit_id
@@ -1401,11 +1401,11 @@ class TestLatticeBot:
 
             with (
                 patch.object(bot, "get_channel", return_value=mock_dream_channel),
-                patch("lattice.discord_client.bot.DreamMirrorBuilder") as mock_builder,
+                patch("lattice.discord_client.bot.AuditViewBuilder") as mock_builder,
             ):
                 mock_embed = MagicMock()
                 mock_view = MagicMock()
-                mock_builder.build_reactive_mirror.return_value = (
+                mock_builder.build_reactive_audit.return_value = (
                     mock_embed,
                     mock_view,
                 )

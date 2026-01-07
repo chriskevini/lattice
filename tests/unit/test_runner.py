@@ -540,7 +540,7 @@ class TestProactiveScheduler:
         mock_view = MagicMock()
 
         with patch(
-            "lattice.scheduler.runner.DreamMirrorBuilder.build_proactive_mirror",
+            "lattice.scheduler.runner.AuditViewBuilder.build_proactive_audit",
             return_value=(mock_embed, mock_view),
         ):
             await scheduler._mirror_proactive_to_dream(
@@ -574,7 +574,7 @@ class TestProactiveScheduler:
         mock_view = MagicMock()
 
         with patch(
-            "lattice.scheduler.runner.DreamMirrorBuilder.build_proactive_mirror",
+            "lattice.scheduler.runner.AuditViewBuilder.build_proactive_audit",
             return_value=(mock_embed, mock_view),
         ):
             # Should not raise exception
