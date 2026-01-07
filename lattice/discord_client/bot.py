@@ -44,6 +44,10 @@ logger = structlog.get_logger(__name__)
 DB_INIT_MAX_RETRIES = 20
 DB_INIT_RETRY_INTERVAL = 0.5  # seconds
 
+# Scheduler settings
+SCHEDULER_BASE_INTERVAL_DEFAULT = 15  # minutes
+MAX_CONSECUTIVE_FAILURES = 5
+
 
 class LatticeBot(commands.Bot):
     """The Lattice Discord bot with ENGRAM memory framework."""
@@ -73,7 +77,7 @@ class LatticeBot(commands.Bot):
 
         self._memory_healthy = False
         self._consecutive_failures = 0
-        self._max_consecutive_failures = 5
+        self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
 
         self._scheduler: ProactiveScheduler | None = None
         self._dreaming_scheduler: DreamingScheduler | None = None
@@ -88,7 +92,7 @@ class LatticeBot(commands.Bot):
         try:
             await db_pool.initialize()
             logger.info("Database pool initialized successfully")
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.exception("Failed to initialize database pool")
             raise
 
@@ -251,7 +255,7 @@ class LatticeBot(commands.Bot):
                     logger.warning("Extraction returned invalid structure")
                     extraction = None
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning(
                     "Query extraction failed, continuing without extraction",
                     error=str(e),
@@ -261,7 +265,8 @@ class LatticeBot(commands.Bot):
 
             # Update scheduler interval
             base_interval = int(
-                await get_system_health("scheduler_base_interval") or 15
+                await get_system_health("scheduler_base_interval")
+                or SCHEDULER_BASE_INTERVAL_DEFAULT
             )
             await set_current_interval(base_interval)
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
@@ -402,7 +407,7 @@ class LatticeBot(commands.Bot):
             self._consecutive_failures = 0
             logger.info("Response sent successfully")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._consecutive_failures += 1
             logger.exception(
                 "Error processing message",
@@ -485,7 +490,7 @@ class LatticeBot(commands.Bot):
                 dream_discord_message_id=dream_msg.id,
             )
             return dream_msg  # noqa: TRY300
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.exception(
                 "Failed to mirror to dream channel",
                 audit_id=audit_id,
