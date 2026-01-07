@@ -172,6 +172,7 @@ class TestProactiveScheduler:
                 "lattice.scheduler.runner.get_next_check_at",
                 side_effect=get_next_check_side_effect,
             ),
+            patch("asyncio.sleep", AsyncMock()),
             patch.object(scheduler, "_run_proactive_check", AsyncMock()) as mock_check,
         ):
             await scheduler._scheduler_loop()
