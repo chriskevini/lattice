@@ -59,7 +59,7 @@ def _parse_text_format(text: str) -> list[dict[str, str]] | None:
         if not line or line.lower().startswith("triple"):
             continue
 
-        for separator in ["->", "→", "-->"]:
+        for separator in ["-->", "->", "→"]:
             if separator in line:
                 parts = line.split(separator)
                 if len(parts) == TRIPLE_PART_COUNT:

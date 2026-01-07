@@ -562,7 +562,7 @@ class TestAdaptiveActiveHours:
 
             # Should detect evening activity window
             assert result["sample_size"] == 100
-            assert result["confidence"] > 0.7  # High concentration
+            assert result["confidence"] >= 0.95  # High concentration for clear pattern
             # Window should capture evening hours (12-hour window starting around 11-12)
             assert 10 <= result["start_hour"] <= 20
 

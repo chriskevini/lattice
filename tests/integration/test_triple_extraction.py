@@ -141,6 +141,14 @@ class TestTextFormatParsingIntegration:
         assert result[0]["subject"] == "alice"
         assert result[0]["predicate"] == "works_at"
 
+    def test_parse_triples_dash_arrow(self) -> None:
+        """Test parsing triples with dash-arrow separator."""
+        result = parse_triples("alice --> works_at --> Acme Corp")
+        assert len(result) == 1
+        assert result[0]["subject"] == "alice"
+        assert result[0]["predicate"] == "works_at"
+        assert result[0]["object"] == "Acme Corp"
+
     def test_parse_triples_with_header(self) -> None:
         """Test parsing triples with Triples: header."""
         result = parse_triples("Triples:\nalice -> works_at -> Acme Corp")

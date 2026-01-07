@@ -216,7 +216,7 @@ async def test_dreaming_cycle_rejects_low_confidence_proposals() -> None:
     mock_llm_result.content = """{
         "proposed_template": "Slightly different template",
         "rationale": "Minor change, not sure if it will help",
-        "expected_improvements": {},
+        "expected_improvements": "Minor change, not sure if it will help",
         "confidence": 0.45
     }"""
 

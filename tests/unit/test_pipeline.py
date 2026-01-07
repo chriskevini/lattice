@@ -79,8 +79,10 @@ class TestUnifiedPipeline:
         assert result is None
 
         # Verify warning was logged
-        assert any("Channel not found" in rec.message for rec in caplog.records)
-        assert any("999999999" in rec.message for rec in caplog.records)
+        assert any(
+            "Channel not found" in rec.message and "999999999" in rec.message
+            for rec in caplog.records
+        )
 
     @pytest.mark.asyncio
     async def test_send_proactive_message_success(self) -> None:
