@@ -77,21 +77,20 @@ CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type) WHERE enti
 CREATE INDEX IF NOT EXISTS idx_entities_metadata ON entities USING gin(metadata);
 
 -- ----------------------------------------------------------------------------
--- semantic_triples: Graph relationships between entities
+-- semantic_triple: Text-based knowledge triples with timestamp evolution
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS semantic_triples (
+CREATE TABLE IF NOT EXISTS semantic_triple (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    subject_id UUID REFERENCES entities(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
     predicate TEXT NOT NULL,
-    object_id UUID REFERENCES entities(id) ON DELETE CASCADE,
-    origin_id UUID REFERENCES raw_messages(id),
+    object TEXT NOT NULL,
+    source_batch_id TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_triples_subject ON semantic_triples(subject_id);
-CREATE INDEX IF NOT EXISTS idx_triples_object ON semantic_triples(object_id);
-CREATE INDEX IF NOT EXISTS idx_triples_predicate ON semantic_triples(predicate);
-CREATE INDEX IF NOT EXISTS idx_triples_origin_id ON semantic_triples(origin_id);
-CREATE INDEX IF NOT EXISTS idx_triples_created_at ON semantic_triples(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_semantic_triple_subject ON semantic_triple(subject);
+CREATE INDEX IF NOT EXISTS idx_semantic_triple_predicate ON semantic_triple(predicate);
+CREATE INDEX IF NOT EXISTS idx_semantic_triple_object ON semantic_triple(object);
+CREATE INDEX IF NOT EXISTS idx_semantic_triple_created_at ON semantic_triple(created_at DESC);
 
 -- ----------------------------------------------------------------------------
 -- objectives: User goals and commitments
@@ -200,5 +199,6 @@ INSERT INTO system_health (metric_key, metric_value) VALUES
     ('active_hours_start', '9'),
     ('active_hours_end', '21'),
     ('active_hours_confidence', '0.0'),
-    ('active_hours_last_updated', NOW()::TEXT)
+    ('active_hours_last_updated', NOW()::TEXT),
+    ('last_batch_message_id', '0')
 ON CONFLICT (metric_key) DO NOTHING;

@@ -3,6 +3,7 @@
 Stores immutable conversation history with timestamp-based retrieval and timezone tracking.
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -106,7 +107,11 @@ async def store_message(message: EpisodicMessage) -> UUID:
             is_bot=message.is_bot,
         )
 
-        return message_id
+    from lattice.memory import batch_consolidation
+
+    asyncio.create_task(batch_consolidation.check_and_run_batch())
+
+    return message_id
 
 
 async def get_recent_messages(
@@ -224,12 +229,14 @@ async def upsert_entity(
 async def store_semantic_triples(
     message_id: UUID,
     triples: list[dict[str, str]],
+    source_batch_id: str | None = None,
 ) -> None:
-    """Store extracted triples in semantic_triples table.
+    """Store extracted triples in semantic_triple table.
 
     Args:
-        message_id: UUID of origin message (for origin_id FK)
+        message_id: UUID of origin message
         triples: List of {"subject": str, "predicate": str, "object": str}
+        source_batch_id: Optional batch identifier for traceability
 
     Raises:
         Exception: If database operation fails
@@ -243,7 +250,6 @@ async def store_semantic_triples(
             predicate = triple.get("predicate", "").strip()
             obj = triple.get("object", "").strip()
 
-            # Skip invalid triples
             if not (subject and predicate and obj):
                 logger.warning(
                     "Skipping invalid triple",
@@ -252,23 +258,17 @@ async def store_semantic_triples(
                 continue
 
             try:
-                # Upsert entities for subject and object (using transaction connection)
-                subject_id = await upsert_entity(name=subject, conn=conn)
-                object_id = await upsert_entity(name=obj, conn=conn)
-
-                # Insert triple with origin_id link
                 await conn.execute(
                     """
-                    INSERT INTO semantic_triples (
-                        subject_id, predicate, object_id, origin_id
+                    INSERT INTO semantic_triple (
+                        subject, predicate, object, source_batch_id
                     )
                     VALUES ($1, $2, $3, $4)
-                    ON CONFLICT DO NOTHING
                     """,
-                    subject_id,
+                    subject,
                     predicate,
-                    object_id,
-                    message_id,
+                    obj,
+                    source_batch_id,
                 )
 
                 logger.debug(
@@ -279,13 +279,12 @@ async def store_semantic_triples(
                     message_id=str(message_id),
                 )
 
-            except (asyncpg.PostgresError, ValueError, KeyError):
+            except asyncpg.PostgresError:
                 logger.exception(
                     "Failed to store triple",
                     triple=triple,
                     message_id=str(message_id),
                 )
-                # Continue with next triple instead of failing entire batch
 
 
 async def consolidate_message(

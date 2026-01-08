@@ -558,8 +558,6 @@ class TestStoreSemanticTriples:
     async def test_store_semantic_triples_valid_triple(self) -> None:
         """Test storing a valid semantic triple."""
         message_id = uuid4()
-        subject_id = uuid4()
-        object_id = uuid4()
 
         triples = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
 
@@ -569,24 +567,16 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity") as mock_upsert:
-                mock_upsert.side_effect = [subject_id, object_id]
+            await store_semantic_triples(message_id, triples)
 
-                await store_semantic_triples(message_id, triples)
-
-                # Verify entities were upserted
-                assert mock_upsert.call_count == 2
-                assert mock_upsert.call_args_list[0][1]["name"] == "Alice"
-                assert mock_upsert.call_args_list[1][1]["name"] == "Python"
-
-                # Verify triple was inserted
-                mock_conn.execute.assert_called_once()
-                call_args = mock_conn.execute.call_args
-                assert "INSERT INTO semantic_triples" in call_args[0][0]
-                assert call_args[0][1] == subject_id
-                assert call_args[0][2] == "likes"
-                assert call_args[0][3] == object_id
-                assert call_args[0][4] == message_id
+            # Verify triple was inserted
+            mock_conn.execute.assert_called_once()
+            call_args = mock_conn.execute.call_args
+            assert "INSERT INTO semantic_triple" in call_args[0][0]
+            assert call_args[0][1] == "Alice"
+            assert call_args[0][2] == "likes"
+            assert call_args[0][3] == "Python"
+            assert call_args[0][4] is None  # source_batch_id
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_skips_invalid(self) -> None:
@@ -617,10 +607,8 @@ class TestStoreSemanticTriples:
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_continues_on_error(self) -> None:
-        """Test that errors upserting entities are logged but don't stop processing."""
+        """Test that errors executing INSERT don't stop other triples."""
         message_id = uuid4()
-        subject_id = uuid4()
-        object_id = uuid4()
 
         triples = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
@@ -628,32 +616,24 @@ class TestStoreSemanticTriples:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.execute = AsyncMock()
+        # First execute succeeds, second fails
+        mock_conn.execute = AsyncMock(
+            side_effect=[None, asyncpg.PostgresError("DB error")]
+        )
 
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity") as mock_upsert:
-                # First triple succeeds, second fails during subject upsert
-                mock_upsert.side_effect = [
-                    subject_id,
-                    object_id,
-                    asyncpg.PostgresError("Entity upsert failed"),
-                ]
+            # Should not raise exception, continues to process all triples
+            await store_semantic_triples(message_id, triples)
 
-                await store_semantic_triples(message_id, triples)
-
-                # First triple should be inserted
-                mock_conn.execute.assert_called_once()
+            # Both triples attempted
+            assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_continues_on_execute_error(self) -> None:
         """Test that errors executing INSERT don't stop other triples."""
         message_id = uuid4()
-        subject_id1 = uuid4()
-        object_id1 = uuid4()
-        subject_id2 = uuid4()
-        object_id2 = uuid4()
 
         triples = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
@@ -669,20 +649,11 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity") as mock_upsert:
-                mock_upsert.side_effect = [
-                    subject_id1,
-                    object_id1,
-                    subject_id2,
-                    object_id2,
-                ]
+            # Should not raise exception, continues to process all triples
+            await store_semantic_triples(message_id, triples)
 
-                # Should not raise exception, continues to process all triples
-                await store_semantic_triples(message_id, triples)
-
-                # Both triples attempted (4 upserts = 2 triples × 2 entities each)
-                assert mock_upsert.call_count == 4
-                assert mock_conn.execute.call_count == 2
+            # Both triples attempted
+            assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_uses_transaction(self) -> None:
@@ -696,11 +667,10 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity", return_value=uuid4()):
-                await store_semantic_triples(message_id, triples)
+            await store_semantic_triples(message_id, triples)
 
-                # Verify transaction was used
-                mock_conn.transaction.assert_called_once()
+            # Verify transaction was used
+            mock_conn.transaction.assert_called_once()
 
 
 class TestStoreObjectives:
