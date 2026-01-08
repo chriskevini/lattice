@@ -3,11 +3,11 @@
 import json
 import logging
 
-from lattice.utils.objective_parsing import parse_objectives
+from lattice.utils.objective_parsing import parse_goals
 
 
-class TestParseObjectives:
-    """Tests for parse_objectives function."""
+class TestParseGoals:
+    """Tests for parse_goals function."""
 
     def test_parse_valid_json(self) -> None:
         """Test parsing valid JSON list of objectives."""
@@ -26,7 +26,7 @@ class TestParseObjectives:
             ]
         )
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 2
         assert result[0] == {
@@ -48,7 +48,7 @@ class TestParseObjectives:
 ]
 ```"""
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["description"] == "Implement feature"
@@ -62,7 +62,7 @@ class TestParseObjectives:
 ]
 ```"""
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["description"] == "Test task"
@@ -71,7 +71,7 @@ class TestParseObjectives:
         """Test parsing empty JSON list."""
         raw_output = "[]"
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert result == []
 
@@ -80,7 +80,7 @@ class TestParseObjectives:
         raw_output = "not valid json"
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert result == []
         assert any("JSON decode error" in rec.message for rec in caplog.records)
@@ -90,7 +90,7 @@ class TestParseObjectives:
         raw_output = '{"description": "Task", "saliency": 0.5}'
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert result == []
         assert any("expected list" in rec.message for rec in caplog.records)
@@ -106,7 +106,7 @@ class TestParseObjectives:
         )
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert len(result) == 2
         assert result[0]["description"] == "Valid task"
@@ -123,7 +123,7 @@ class TestParseObjectives:
         )
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["description"] == "Valid"
@@ -136,7 +136,7 @@ class TestParseObjectives:
         raw_output = json.dumps([{"description": "  ", "saliency": 0.5}])
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert result == []
 
@@ -145,7 +145,7 @@ class TestParseObjectives:
         raw_output = json.dumps([{"description": 123, "saliency": 0.5}])
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert result == []
 
@@ -153,7 +153,7 @@ class TestParseObjectives:
         """Test parsing objective without saliency uses default 0.5."""
         raw_output = json.dumps([{"description": "Task"}])
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["saliency"] == 0.5
@@ -163,7 +163,7 @@ class TestParseObjectives:
         raw_output = json.dumps([{"description": "Task", "saliency": "invalid"}])
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["saliency"] == 0.5
@@ -179,7 +179,7 @@ class TestParseObjectives:
             ]
         )
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 3
         assert result[0]["saliency"] == 1.0
@@ -195,7 +195,7 @@ class TestParseObjectives:
             ]
         )
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 2
         assert result[0]["saliency"] == 1.0
@@ -207,7 +207,7 @@ class TestParseObjectives:
         """Test parsing objective without status uses default 'pending'."""
         raw_output = json.dumps([{"description": "Task", "saliency": 0.5}])
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["status"] == "pending"
@@ -222,7 +222,7 @@ class TestParseObjectives:
             ]
         )
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 3
         assert result[0]["status"] == "pending"
@@ -234,7 +234,7 @@ class TestParseObjectives:
         raw_output = json.dumps([{"description": "Task", "status": "unknown"}])
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["status"] == "pending"
@@ -244,7 +244,7 @@ class TestParseObjectives:
         """Test parsing objective with non-string status uses 'pending'."""
         raw_output = json.dumps([{"description": "Task", "status": 123}])
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["status"] == "pending"
@@ -258,7 +258,7 @@ class TestParseObjectives:
             ]
         )
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 2
         assert result[0]["status"] == "pending"
@@ -270,7 +270,7 @@ class TestParseObjectives:
             [{"description": "  Task with spaces  ", "saliency": 0.5}]
         )
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 1
         assert result[0]["description"] == "Task with spaces"
@@ -281,7 +281,7 @@ class TestParseObjectives:
         raw_output = '{"description": null, "saliency": "bad"}'
 
         with caplog.at_level(logging.WARNING):
-            result = parse_objectives(raw_output)
+            result = parse_goals(raw_output)
 
         assert result == []
         # Should hit the "expected list" warning
@@ -291,7 +291,7 @@ class TestParseObjectives:
         """Test parsing input with only whitespace."""
         raw_output = "   \n\t   "
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert result == []
 
@@ -317,7 +317,7 @@ class TestParseObjectives:
             ]
         )
 
-        result = parse_objectives(raw_output)
+        result = parse_goals(raw_output)
 
         assert len(result) == 3
         assert all("description" in obj for obj in result)

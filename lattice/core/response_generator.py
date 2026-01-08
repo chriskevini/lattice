@@ -117,7 +117,7 @@ async def fetch_goal_names() -> list[str]:
     return [g["object"] for g in goals]
 
 
-async def get_objectives_context(goal_names: list[str] | None = None) -> str:
+async def get_goal_context(goal_names: list[str] | None = None) -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
     Args:
@@ -218,10 +218,10 @@ async def get_relevant_objectives(entities: list[str], user_message: str) -> str
         return None
 
     if _has_planning_intent(user_message):
-        return await get_objectives_context(goal_names=goal_names)
+        return await get_goal_context(goal_names=goal_names)
 
     if _has_entity_goal_overlap(entities, goal_names):
-        return await get_objectives_context(goal_names=goal_names)
+        return await get_goal_context(goal_names=goal_names)
 
     return None
 
@@ -328,8 +328,8 @@ async def generate_response(
         if relevant_objectives:
             semantic_context = f"{relevant_objectives}\n\n{semantic_context}"
             logger.debug(
-                "Injected objectives context",
-                objectives_context_preview=relevant_objectives[:200],
+                "Injected goal context",
+                goal_context_preview=relevant_objectives[:200],
             )
 
     logger.debug(

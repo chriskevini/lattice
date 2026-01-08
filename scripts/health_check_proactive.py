@@ -271,32 +271,39 @@ async def check_environment() -> dict:
     return env_vars
 
 
-async def check_objectives(conn: asyncpg.Connection) -> int:
-    """Check if there are active objectives."""
+async def check_goals(conn: asyncpg.Connection) -> int:
+    """Check if there are active goals in the knowledge graph."""
     print("\n" + "=" * 80)
-    print("7. OBJECTIVES")
+    print("7. GOALS")
     print("=" * 80)
 
-    objectives = await conn.fetch(
+    # Query semantic_triple for goals with their predicates
+    goals = await conn.fetch(
         """
-        SELECT description, status, saliency_score
-        FROM objectives
-        WHERE status = 'pending'
-        ORDER BY saliency_score DESC
+        SELECT DISTINCT st.object as goal_name,
+               COUNT(CASE WHEN st2.predicate = 'due_by' THEN 1 END) as has_deadline,
+               COUNT(CASE WHEN st2.predicate = 'priority' THEN 1 END) as has_priority
+        FROM semantic_triple st
+        LEFT JOIN semantic_triple st2 ON st.object = st2.subject
+        WHERE st.predicate = 'has_goal'
+        GROUP BY st.object
+        ORDER BY COUNT(st2.subject) DESC
         LIMIT 5
         """
     )
 
-    if not objectives:
-        print("⚠️  No pending objectives found")
+    if not goals:
+        print("⚠️  No active goals found in knowledge graph")
         print("   Proactive messages may lack context")
         return 0
 
-    print(f"✅ Found {len(objectives)} pending objective(s):")
-    for obj in objectives:
-        print(f"   - {obj['description'][:50]}... (score: {obj['saliency_score']})")
+    print(f"✅ Found {len(goals)} goal(s) in knowledge graph:")
+    for goal in goals:
+        print(
+            f"   - {goal['goal_name'][:50]}... (predicates: {goal['has_deadline'] + goal['has_priority']})"
+        )
 
-    return len(objectives)
+    return len(goals)
 
 
 async def generate_diagnosis() -> None:
@@ -346,7 +353,7 @@ async def main() -> None:
         await check_message_activity(conn)
         await check_prompt_templates(conn)
         await check_environment()
-        await check_objectives(conn)
+        await check_goals(conn)
 
         await generate_diagnosis()
 

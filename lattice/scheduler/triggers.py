@@ -78,7 +78,7 @@ async def get_conversation_context(limit: int = 20) -> str:
     return "\n".join(lines)
 
 
-async def get_objectives_context() -> str:
+async def get_goal_context() -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
     Fetches all has_goal predicates, then for each unique goal node,
@@ -170,7 +170,7 @@ async def decide_proactive() -> ProactiveDecision:
         )
 
     conversation = await get_conversation_context()
-    objectives = await get_objectives_context()
+    goals = await get_goal_context()
     channel_id = await get_default_channel_id()
     current_interval = await get_current_interval()
     current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -188,7 +188,7 @@ async def decide_proactive() -> ProactiveDecision:
         current_time=current_time,
         scheduler_current_interval=current_interval,
         episodic_context=conversation,
-        objectives_context=objectives,
+        goal_context=goals,
     )
 
     llm_client = get_auditing_llm_client()

@@ -83,10 +83,10 @@ CREATE INDEX IF NOT EXISTS idx_semantic_triple_created_at ON semantic_triple(cre
 CREATE INDEX IF NOT EXISTS idx_semantic_triple_source_batch ON semantic_triple(source_batch_id);
 
 -- ----------------------------------------------------------------------------
--- objectives: User goals and commitments
--- Note: This table exists for backward compatibility. Goal tracking is now
--- primarily done via semantic_triple with predicates like has_goal, due_by,
--- priority, and status. This table may be deprecated in a future version.
+-- objectives: DEPRECATED - User goals and commitments
+-- Note: This table is fully deprecated. Goal tracking is now
+-- exclusively done via semantic_triple with predicates like has_goal, due_by,
+-- priority, and status. This table should be removed in a future migration.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS objectives (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

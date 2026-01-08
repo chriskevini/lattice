@@ -15,7 +15,7 @@ from lattice.utils.database import (
     set_system_health,
     set_user_timezone,
 )
-from lattice.utils.objective_parsing import parse_objectives
+from lattice.utils.objective_parsing import parse_goals
 
 
 # NOTE: EmbeddingModel tests removed during Issue #61 refactor
@@ -323,129 +323,129 @@ class TestUserTimezoneFunctions:
 class TestObjectiveParsing:
     """Tests for objective parsing utilities."""
 
-    def test_parse_objectives_valid_json(self) -> None:
+    def test_parse_goals_valid_json(self) -> None:
         """Test parsing valid objective JSON array."""
         raw = (
             '[{"description": "Build a startup", "saliency": 0.9, "status": "pending"}]'
         )
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert len(result) == 1
         assert result[0]["description"] == "Build a startup"
         assert result[0]["saliency"] == 0.9
         assert result[0]["status"] == "pending"
 
-    def test_parse_objectives_multiple(self) -> None:
+    def test_parse_goals_multiple(self) -> None:
         """Test parsing multiple objectives."""
         raw = (
             '[{"description": "Learn Python", "saliency": 0.8, "status": "pending"}, '
             '{"description": "Build a project", "saliency": 0.7, "status": "completed"}]'
         )
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert len(result) == 2
 
-    def test_parse_objectives_empty_array(self) -> None:
+    def test_parse_goals_empty_array(self) -> None:
         """Test parsing empty objective array."""
         raw = "[]"
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert result == []
 
-    def test_parse_objectives_with_code_block(self) -> None:
+    def test_parse_goals_with_code_block(self) -> None:
         """Test parsing objectives wrapped in code block."""
         raw = """```json
 [{"description": "Test goal", "saliency": 0.5, "status": "pending"}]
 ```"""
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert len(result) == 1
         assert result[0]["description"] == "Test goal"
 
-    def test_parse_objectives_saliency_clamping(self) -> None:
+    def test_parse_goals_saliency_clamping(self) -> None:
         """Test that saliency is clamped to valid range."""
         raw = '[{"description": "Goal", "saliency": 1.5, "status": "pending"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert result[0]["saliency"] == 1.0
 
-    def test_parse_objectives_saliency_default(self) -> None:
+    def test_parse_goals_saliency_default(self) -> None:
         """Test that missing saliency uses default."""
         raw = '[{"description": "Goal", "status": "pending"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert result[0]["saliency"] == 0.5
 
-    def test_parse_objectives_invalid_status(self) -> None:
+    def test_parse_goals_invalid_status(self) -> None:
         """Test that invalid status defaults to pending."""
         raw = '[{"description": "Goal", "saliency": 0.5, "status": "invalid"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert result[0]["status"] == "pending"
 
-    def test_parse_objectives_invalid_json(self) -> None:
+    def test_parse_goals_invalid_json(self) -> None:
         """Test that invalid JSON returns empty list."""
         raw = "not valid json"
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert result == []
 
-    def test_parse_objectives_missing_description(self) -> None:
+    def test_parse_goals_missing_description(self) -> None:
         """Test that objectives without description are filtered out."""
         raw = (
             '[{"description": "Valid", "saliency": 0.5, "status": "pending"}, '
             '{"saliency": 0.5, "status": "pending"}]'
         )
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert len(result) == 1
         assert result[0]["description"] == "Valid"
 
-    def test_parse_objectives_negative_saliency(self) -> None:
+    def test_parse_goals_negative_saliency(self) -> None:
         """Test that negative saliency is clamped to 0.0."""
         raw = '[{"description": "Goal", "saliency": -0.5, "status": "pending"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert result[0]["saliency"] == 0.0
 
-    def test_parse_objectives_empty_description(self) -> None:
+    def test_parse_goals_empty_description(self) -> None:
         """Test that empty description is filtered out."""
         raw = '[{"description": "", "saliency": 0.5, "status": "pending"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert len(result) == 0
 
-    def test_parse_objectives_whitespace_description(self) -> None:
+    def test_parse_goals_whitespace_description(self) -> None:
         """Test that whitespace-only description is filtered out."""
         raw = '[{"description": "   ", "saliency": 0.5, "status": "pending"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert len(result) == 0
 
-    def test_parse_objectives_none_description(self) -> None:
+    def test_parse_goals_none_description(self) -> None:
         """Test that None description is filtered out."""
         raw = '[{"description": null, "saliency": 0.5, "status": "pending"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert len(result) == 0
 
-    def test_parse_objectives_status_case_insensitive(self) -> None:
+    def test_parse_goals_status_case_insensitive(self) -> None:
         """Test that status is normalized to lowercase."""
         raw = '[{"description": "Goal", "saliency": 0.5, "status": "COMPLETED"}]'
 
-        result = parse_objectives(raw)
+        result = parse_goals(raw)
 
         assert result[0]["status"] == "completed"
