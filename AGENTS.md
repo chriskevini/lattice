@@ -93,6 +93,7 @@ Use these placeholder names consistently across all prompts:
 | `{user_message}` | The user's current message | "How's the project going?" |
 | `{message_content}` | Same as `{user_message}` (legacy alias) | |
 | `{objectives_context}` | Active goals from knowledge graph | "user has_goal: launch v1 (due_by: 2026-01-15)" |
+| `{bigger_episodic_context}` | Full batch of new messages for extraction (~18 messages) | "User: Hello\nBot: Hi there!" |
 | `{current_time}` | ISO timestamp for time-sensitive decisions | "2026-01-07T21:30:00Z" |
 | `{scheduler_current_interval}` | Scheduler check interval (minutes between proactive checks) | 15 |
 | `{success_rate}` | Percentage of positive feedback | "75%" |
