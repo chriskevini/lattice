@@ -17,15 +17,15 @@ Concurrency:
       with created_at timestamps, and query logic uses recency for "current truth"
 """
 
-import json
-import os
 from typing import Any
 
 import structlog
 
+from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 from lattice.memory.episodic import store_semantic_triples
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
+from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 
 
@@ -172,16 +172,42 @@ async def run_batch_consolidation() -> None:
 
     llm_client = get_auditing_llm_client()
     bot = get_discord_bot()
-    dream_channel_id = int(os.getenv("DISCORD_DREAM_CHANNEL_ID", "0"))
+
+    # Call LLM
     result = await llm_client.complete(
         prompt=rendered_prompt,
         prompt_key="BATCH_MEMORY_EXTRACTION",
-        template_version=prompt_template.version,
         main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
-        dream_channel_id=dream_channel_id if dream_channel_id else None,
-        bot=bot,
     )
+
+    # Parse JSON response
+    triples: list[dict[str, str]] = []
+    try:
+        parsed_data = parse_llm_json_response(
+            content=result.content,
+            audit_result=result,
+            prompt_key="BATCH_MEMORY_EXTRACTION",
+        )
+        # Extract triples from parsed data
+        triples = parsed_data if isinstance(parsed_data, list) else []
+    except JSONParseError as e:
+        # Notify to dream channel if bot is available
+        if bot:
+            await notify_parse_error_to_dream(
+                bot=bot,
+                error=e,
+                context={
+                    "batch_id": batch_id,
+                    "parser_type": "json_triples",
+                    "rendered_prompt": rendered_prompt,
+                },
+            )
+        # Continue with empty triples rather than failing the batch
+        logger.warning(
+            "Parse error in batch extraction, continuing with empty triples",
+            batch_id=batch_id,
+        )
 
     logger.info(
         "Batch extraction completed",
@@ -190,25 +216,6 @@ async def run_batch_consolidation() -> None:
         model=result.model,
         tokens=result.total_tokens,
     )
-
-    try:
-        content = result.content.strip()
-        if content.startswith("```json"):
-            content = content.removeprefix("```json").removesuffix("```").strip()
-        elif content.startswith("```"):
-            content = content.removeprefix("```").removesuffix("```").strip()
-
-        triples = json.loads(content)
-        if not isinstance(triples, list):
-            triples = []
-    except json.JSONDecodeError:
-        logger.warning(
-            "Failed to parse batch extraction response",
-            batch_id=batch_id,
-            response_preview=result.content[:200],
-            model=result.model,
-        )
-        triples = []
 
     if triples:
         message_id = messages[-1]["id"]

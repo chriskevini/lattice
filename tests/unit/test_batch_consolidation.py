@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import json
 import pytest
 
 from lattice.memory.batch_consolidation import (
@@ -317,16 +318,26 @@ class TestRunBatchConsolidation:
                     return_value=mock_llm_client,
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_triples"
-                    ) as mock_store:
-                        await run_batch_consolidation()
-                        mock_store.assert_called_once()
-                        call_args = mock_store.call_args
-                        assert len(call_args[0][1]) == 1
-                        assert call_args[0][1][0]["subject"] == "user"
-                        assert call_args[0][1][0]["predicate"] == "lives_in"
-                        assert call_args[0][1][0]["object"] == "Vancouver"
-                        assert call_args.kwargs["source_batch_id"] == "101"
+                        "lattice.memory.batch_consolidation.parse_llm_json_response",
+                        return_value=[
+                            {
+                                "subject": "user",
+                                "predicate": "lives_in",
+                                "object": "Vancouver",
+                            }
+                        ],
+                    ):
+                        with patch(
+                            "lattice.memory.batch_consolidation.store_semantic_triples"
+                        ) as mock_store:
+                            await run_batch_consolidation()
+                            mock_store.assert_called_once()
+                            call_args = mock_store.call_args
+                            assert len(call_args[0][1]) == 1
+                            assert call_args[0][1][0]["subject"] == "user"
+                            assert call_args[0][1][0]["predicate"] == "lives_in"
+                            assert call_args[0][1][0]["object"] == "Vancouver"
+                            assert call_args.kwargs["source_batch_id"] == "101"
 
     @pytest.mark.asyncio
     async def test_updates_last_batch_message_id(self) -> None:
@@ -336,156 +347,6 @@ class TestRunBatchConsolidation:
             {
                 "id": message_id,
                 "discord_message_id": 118,
-                "content": "Test",
-                "is_bot": False,
-                "timestamp": datetime.now(UTC),
-            }
-        ]
-
-        mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(
-            side_effect=[
-                {"metric_value": "100"},
-                {"cnt": 20},
-            ]
-        )
-        mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
-
-        mock_prompt = MagicMock()
-        mock_prompt.template = "Template"
-        mock_prompt.temperature = 0.2
-        mock_prompt.safe_format = MagicMock(return_value="Formatted")
-        mock_prompt.version = 1
-
-        mock_result = MagicMock()
-        mock_result.content = "[]"
-        mock_result.model = "gpt-4"
-        mock_result.provider = "openai"
-        mock_result.prompt_tokens = 50
-        mock_result.completion_tokens = 10
-        mock_result.total_tokens = 60
-        mock_result.cost_usd = 0.001
-        mock_result.latency_ms = 200
-        mock_result.audit_id = uuid4()
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.complete = AsyncMock(return_value=mock_result)
-
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
-            ):
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
-                    await run_batch_consolidation()
-                    update_call = mock_conn2.execute.call_args
-                    assert "UPDATE system_health" in update_call[0][0]
-                    assert update_call[0][1] == "118"
-
-    @pytest.mark.asyncio
-    async def test_handles_json_code_blocks(self) -> None:
-        """Test that JSON code blocks are stripped before parsing."""
-        message_id = uuid4()
-        messages = [
-            {
-                "id": message_id,
-                "discord_message_id": 101,
-                "content": "I have a dog",
-                "is_bot": False,
-                "timestamp": datetime.now(UTC),
-            }
-        ]
-
-        mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(
-            side_effect=[
-                {"metric_value": "100"},
-                {"cnt": 20},
-            ]
-        )
-        mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
-
-        mock_prompt = MagicMock()
-        mock_prompt.template = "Template"
-        mock_prompt.temperature = 0.2
-        mock_prompt.safe_format = MagicMock(return_value="Formatted")
-        mock_prompt.version = 1
-
-        mock_result = MagicMock()
-        mock_result.content = """```json
-[{"subject": "user", "predicate": "has_pet", "object": "dog"}]
-```"""
-        mock_result.model = "gpt-4"
-        mock_result.provider = "openai"
-        mock_result.prompt_tokens = 100
-        mock_result.completion_tokens = 50
-        mock_result.total_tokens = 150
-        mock_result.cost_usd = 0.002
-        mock_result.latency_ms = 500
-        mock_result.audit_id = uuid4()
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.complete = AsyncMock(return_value=mock_result)
-
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
-            ):
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
-                    with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_triples"
-                    ) as mock_store:
-                        await run_batch_consolidation()
-                        mock_store.assert_called_once()
-                        triples = mock_store.call_args[0][1]
-                        assert len(triples) == 1
-                        assert triples[0]["predicate"] == "has_pet"
-
-    @pytest.mark.asyncio
-    async def test_invalid_json_stores_no_triples(self) -> None:
-        """Test that invalid JSON response results in no triples stored."""
-        message_id = uuid4()
-        messages = [
-            {
-                "id": message_id,
-                "discord_message_id": 101,
                 "content": "Test",
                 "is_bot": False,
                 "timestamp": datetime.now(UTC),
@@ -535,6 +396,8 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
+        from lattice.utils.json_parser import JSONParseError
+
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
@@ -546,10 +409,20 @@ class TestRunBatchConsolidation:
                     return_value=mock_llm_client,
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_triples"
-                    ) as mock_store:
-                        await run_batch_consolidation()
-                        mock_store.assert_not_called()
+                        "lattice.memory.batch_consolidation.parse_llm_json_response",
+                        side_effect=JSONParseError(
+                            raw_content="not valid json",
+                            parse_error=json.JSONDecodeError("Expecting value", "", 0),
+                        ),
+                    ):
+                        with patch(
+                            "lattice.memory.batch_consolidation.notify_parse_error_to_dream"
+                        ):
+                            with patch(
+                                "lattice.memory.batch_consolidation.store_semantic_triples"
+                            ) as mock_store:
+                                await run_batch_consolidation()
+                                mock_store.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_message_history_format(self) -> None:

@@ -50,7 +50,7 @@ class TestEntityExtractionPipeline:
             mock_get_prompt.return_value = extraction_template
 
             extraction_llm = AsyncMock()
-            extraction_llm.complete.return_value = AuditResult(
+            extraction_result = AuditResult(
                 content='{"entities":["lattice project","Friday"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
@@ -63,6 +63,7 @@ class TestEntityExtractionPipeline:
                 audit_id=None,
                 prompt_key="ENTITY_EXTRACTION",
             )
+            extraction_llm.complete.return_value = extraction_result
             mock_llm_client.return_value = extraction_llm
 
             # Setup database mock for extraction storage
@@ -282,7 +283,7 @@ class TestEntityExtractionPipeline:
             mock_get_prompt.return_value = extraction_template
 
             extraction_llm = AsyncMock()
-            extraction_llm.complete.return_value = AuditResult(
+            extraction_result = AuditResult(
                 content='{"entities":["project","deadline"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
@@ -295,6 +296,7 @@ class TestEntityExtractionPipeline:
                 audit_id=None,
                 prompt_key="ENTITY_EXTRACTION",
             )
+            extraction_llm.complete.return_value = extraction_result
             mock_llm_client.return_value = extraction_llm
 
             mock_conn = AsyncMock()
