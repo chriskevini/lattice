@@ -203,15 +203,17 @@ def _has_entity_goal_overlap(entities: list[str], goal_names: list[str]) -> bool
     return False
 
 
-async def get_relevant_objectives(entities: list[str], user_message: str) -> str | None:
-    """Get objectives context if message is relevant to goals.
+async def get_relevant_goal_context(
+    entities: list[str], user_message: str
+) -> str | None:
+    """Get goal context if message is relevant to goals.
 
     Args:
         entities: Extracted entities from the message
         user_message: The user's message
 
     Returns:
-        Formatted objectives context, or None if not relevant
+        Formatted goal context, or None if not relevant
     """
     goal_names = await fetch_goal_names()
     if not goal_names:
@@ -321,15 +323,15 @@ async def generate_response(
     )
 
     if extraction:
-        relevant_objectives = await get_relevant_objectives(
+        relevant_goal_context = await get_relevant_goal_context(
             entities=extraction.entities,
             user_message=user_message,
         )
-        if relevant_objectives:
-            semantic_context = f"{relevant_objectives}\n\n{semantic_context}"
+        if relevant_goal_context:
+            semantic_context = f"{relevant_goal_context}\n\n{semantic_context}"
             logger.debug(
                 "Injected goal context",
-                goal_context_preview=relevant_objectives[:200],
+                goal_context_preview=relevant_goal_context[:200],
             )
 
     logger.debug(
