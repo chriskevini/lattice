@@ -216,7 +216,7 @@ class _LLMClient:
         )
 
 
-_llm_client: "_LLMClient | None" = None
+_llm_client: _LLMClient | None = None
 _auditing_client: "AuditingLLMClient | None" = None
 
 
