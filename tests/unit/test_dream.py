@@ -116,13 +116,13 @@ class TestAuditViewBuilder:
             main_message_url="https://discord.com/channels/123/456/789",
             triples=triples,
             objectives=objectives,
-            prompt_key="MEMORY_EXTRACTION",
+            prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
             rendered_prompt="Extract memory from: I'm planning to ship v2...",
         )
 
         assert isinstance(embed, discord.Embed)
-        assert embed.title == "🧠 MEMORY_EXTRACTION v1"
+        assert embed.title == "🧠 BATCH_MEMORY_EXTRACTION v1"
         assert embed.color == discord.Color.purple()
         assert len(embed.fields) == 3
 
@@ -147,7 +147,7 @@ class TestAuditViewBuilder:
             main_message_url="https://discord.com/channels/123/456/789",
             triples=[],
             objectives=[],
-            prompt_key="MEMORY_EXTRACTION",
+            prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
         )
 
@@ -221,7 +221,7 @@ class TestAuditViewBuilder:
             main_message_url="url",
             triples=[],
             objectives=[],
-            prompt_key="MEMORY_EXTRACTION",
+            prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
         )
         assert extraction_embed.title.startswith("🧠")
@@ -270,7 +270,7 @@ class TestAuditViewBuilder:
             main_message_url="url",
             triples=[],
             objectives=[],
-            prompt_key="MEMORY_EXTRACTION",
+            prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
         )
         assert extraction_embed.color == discord.Color.purple()
