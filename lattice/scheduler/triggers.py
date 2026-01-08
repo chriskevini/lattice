@@ -78,7 +78,7 @@ async def get_conversation_context(limit: int = 20) -> str:
     return "\n".join(lines)
 
 
-async def get_objectives_context() -> str:  # noqa: B608
+async def get_objectives_context() -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
     Fetches all has_goal predicates, then for each unique goal node,
@@ -106,7 +106,7 @@ async def get_objectives_context() -> str:  # noqa: B608
 
     async with db_pool.pool.acquire() as conn:
         placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
-        query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"  # noqa: B608
+        query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
         predicates = await conn.fetch(query, *goal_names)
 
     goal_predicates: dict[str, list[tuple[str, str]]] = {}
@@ -187,7 +187,7 @@ async def decide_proactive() -> ProactiveDecision:
     prompt = prompt_template.template.format(
         current_time=current_time,
         scheduler_current_interval=current_interval,
-        conversation_context=conversation,
+        episodic_context=conversation,
         objectives_context=objectives,
     )
 

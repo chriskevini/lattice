@@ -166,8 +166,8 @@ async def run_batch_consolidation() -> None:
         return
 
     rendered_prompt = prompt_template.safe_format(
-        MEMORY_CONTEXT=memory_context,
-        MESSAGE_HISTORY=message_history,
+        episodic_context=memory_context,
+        message_content=message_history,
     )
 
     llm_client = get_auditing_llm_client()

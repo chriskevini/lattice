@@ -57,9 +57,12 @@ ON CONFLICT (prompt_key) DO NOTHING;
 INSERT INTO prompt_registry (prompt_key, template, temperature, version)
 VALUES ('ENTITY_EXTRACTION', E'You are a message analysis system. Extract entity mentions for graph traversal.
 
-## Input
-**Recent Context:** {context}
-**Current User Message:** {message_content}
+## Context
+**Recent conversation history:**
+{episodic_context}
+
+**Current user message:**
+{user_message}
 
 ## Task
 Extract an array of entity mentions from the user message.
@@ -126,11 +129,12 @@ has_goal, due_by (ISO date), priority (high/medium/low), status (active/complete
 ### Other open (use sparingly, keep reusable)
 prefers_*, favorite_*, owns_*, born_in, born_on, etc.
 
-## Previous Memories
-{{MEMORY_CONTEXT}}
+## Context
+**Recent memories:**
+{episodic_context}
 
-## New Messages
-{{MESSAGE_HISTORY}}
+**New messages to extract from:**
+{message_content}
 
 ## Output
 Output ONLY a valid JSON array of triples. No explanations.
@@ -149,20 +153,23 @@ ON CONFLICT (prompt_key) DO NOTHING;
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, template, temperature, version)
-VALUES ('PROMPT_OPTIMIZATION', E'## Recent conversation history (episodic)
+VALUES ('PROMPT_OPTIMIZATION', E'## Context
+**Recent conversation history:**
 {episodic_context}
 
-## Relevant facts from past conversations (semantic)
+**Relevant facts from past conversations:**
 {semantic_context}
 
-## Current Template
+**Current template being evaluated:**
 {current_template}
+
+**Template version:** {current_version}
 
 ## Metrics
 - Total uses: {total_uses}
 - Success rate: {success_rate}
 
-## User Feedback (version {current_version})
+## User Feedback
 {experience_cases}
 
 ## Task
@@ -176,7 +183,6 @@ Return ONLY valid JSON:
   "justification": "brief explanation of why this change addresses the pain point"
 }', 0.7, 1)
 ON CONFLICT (prompt_key) DO NOTHING;
-ON CONFLICT (prompt_key) DO NOTHING;
 
 -- PROACTIVE_CHECKIN (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, template, temperature, version)
@@ -187,10 +193,14 @@ Decide ONE action:
 1. Send a short proactive message to the user
 2. Wait {scheduler_current_interval} minutes before checking again
 
-## Inputs
-- **Current Time:** {current_time} (Consider whether it''s an appropriate time to message - avoid late night/early morning unless there''s strong recent activity)
-- **Conversation Context:** {conversation_context}
-- **Active Goals:** {objectives_context}
+## Context
+**Current time:** {current_time} (Consider whether it''s an appropriate time to message - avoid late night/early morning unless there''s strong recent activity)
+
+**Recent conversation history:**
+{episodic_context}
+
+**Active goals:**
+{objectives_context}
 
 ## Guidelines
 - **Time Sensitivity:** Check the current time - avoid messaging during typical sleep hours (11 PM - 7 AM local time) unless recent conversation suggests the user is active
