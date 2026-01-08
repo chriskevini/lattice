@@ -130,11 +130,11 @@ has_goal, due_by (ISO date), priority (high/medium/low), status (active/complete
 prefers_*, favorite_*, owns_*, born_in, born_on, etc.
 
 ## Context
-**Recent memories:**
-{episodic_context}
+**Relevant facts from past conversations:**
+{semantic_context}
 
 **New messages to extract from:**
-{message_content}
+{new_messages}
 
 ## Output
 Output ONLY a valid JSON array of triples. No explanations.
