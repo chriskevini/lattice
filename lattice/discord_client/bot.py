@@ -390,17 +390,6 @@ class LatticeBot(commands.Bot):
                     },
                 )
 
-            # Start async consolidation (creates its own TRIPLE_EXTRACTION audit)
-            await memory_orchestrator.consolidate_message_async(
-                message_id=user_message_id,
-                content=message.content,
-                context=[msg.content for msg in recent_messages[-5:]],
-                bot=self,
-                dream_channel_id=self.dream_channel_id,
-                main_message_url=message.jump_url,
-                main_message_id=message.id,
-            )
-
             self._consecutive_failures = 0
             logger.info("Response sent successfully")
 

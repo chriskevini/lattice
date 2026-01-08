@@ -35,8 +35,9 @@ async def store_user_message(
         UUID of the stored episodic message
 
     Note:
-        Semantic facts are extracted asynchronously via consolidation,
+        Semantic facts are extracted asynchronously via batch consolidation,
         not stored directly from raw messages to avoid redundancy.
+        Batch extraction runs every 18 messages.
     """
     user_message_id = await episodic.store_message(
         episodic.EpisodicMessage(
@@ -160,45 +161,3 @@ async def retrieve_context(
             logger.warning("Database pool not initialized, skipping graph traversal")
 
     return recent_messages, graph_triples
-
-
-async def consolidate_message_async(
-    message_id: UUID,
-    content: str,
-    context: list[str],
-    bot: Any | None = None,
-    dream_channel_id: int | None = None,
-    main_message_url: str | None = None,
-    main_message_id: int | None = None,
-) -> None:
-    """Start background consolidation of a message (fire-and-forget).
-
-    This function spawns a background task to extract semantic information
-    from a message without blocking the caller. This is intended for use in
-    reactive message processing where we don't want to delay the response.
-
-    The consolidation creates its own audit record for the TRIPLE_EXTRACTION prompt.
-
-    Note: This creates a background task that is not awaited. Errors in
-    consolidation will be logged but not propagated to the caller.
-
-    Args:
-        message_id: UUID of the stored message
-        content: Message content to extract from
-        context: Recent conversation context
-        bot: Optional Discord bot instance for mirroring extractions
-        dream_channel_id: Optional dream channel ID for mirroring
-        main_message_url: Optional jump URL to main channel message
-        main_message_id: Optional Discord message ID for display
-    """
-    _consolidation_task = asyncio.create_task(  # noqa: RUF006
-        episodic.consolidate_message(
-            message_id=message_id,
-            content=content,
-            context=context,
-            bot=bot,
-            dream_channel_id=dream_channel_id,
-            main_message_url=main_message_url,
-            main_message_id=main_message_id,
-        )
-    )
