@@ -402,6 +402,19 @@ class DateRange:
         """Return a string representation of the DateRange."""
         return f"DateRange(start={self.start.isoformat()}, end={self.end.isoformat()})"
 
+    def __eq__(self, other: object) -> bool:
+        """Check equality based on start and end datetimes.
+
+        Args:
+            other: Object to compare against
+
+        Returns:
+            True if both start and end datetimes are equal
+        """
+        if not isinstance(other, DateRange):
+            return NotImplemented
+        return self.start == other.start and self.end == other.end
+
 
 def parse_relative_date_range(
     message: str, timezone_str: str | None = None

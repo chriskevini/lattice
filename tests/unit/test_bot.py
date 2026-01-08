@@ -1,5 +1,6 @@
 """Unit tests for Discord bot implementation."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from uuid import uuid4
 
@@ -1125,6 +1126,135 @@ class TestLatticeBot:
                     assert call_args.kwargs["triple_depth"] == 0
                     assert call_args.kwargs["entity_names"] == []
 
+    @pytest.mark.asyncio
+    async def test_on_message_activity_query_integration(self) -> None:
+        """Test on_message handles activity queries with predicate extraction and graph traversal."""
+        with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
+            bot = LatticeBot()
+            mock_user = MagicMock(id=999)
+            bot._memory_healthy = True
+            bot._user_timezone = "UTC"
+
+            message = MagicMock(spec=discord.Message)
+            message.author = MagicMock(id=111, name="TestUser")
+            message.channel.id = 123
+            message.id = 555
+            message.content = "What did I do last week?"
+            message.guild = None
+            message.jump_url = "https://discord.com/channels/..."
+
+            user_message_id = uuid4()
+
+            with (
+                patch.object(
+                    type(bot), "user", new_callable=PropertyMock, return_value=mock_user
+                ),
+                patch.object(
+                    bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
+                ),
+                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
+                patch(
+                    "lattice.discord_client.bot.entity_extraction"
+                ) as mock_extraction,
+                patch("lattice.discord_client.bot.episodic") as mock_episodic,
+                patch("lattice.discord_client.bot.response_generator") as mock_response,
+                patch("lattice.discord_client.bot.GraphTraversal") as mock_graph_class,
+                patch("lattice.discord_client.bot.db_pool"),
+                patch(
+                    "lattice.discord_client.bot.get_system_health",
+                    AsyncMock(return_value=15),
+                ),
+                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
+                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
+                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch("lattice.discord_client.bot.prompt_audits") as mock_prompt_audits,
+            ):
+                mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
+                mock_episodic.get_recent_messages = AsyncMock(return_value=[])
+
+                mock_extraction_result = MagicMock()
+                mock_extraction_result.id = uuid4()
+                mock_extraction_result.entities = []
+                mock_extraction.extract_entities = AsyncMock(
+                    return_value=mock_extraction_result
+                )
+
+                mock_activity_triples = [
+                    {
+                        "subject": "user",
+                        "predicate": "performed_activity",
+                        "object": "coding",
+                        "created_at": datetime.now(UTC),
+                    },
+                    {
+                        "subject": "coding",
+                        "predicate": "has_duration",
+                        "object": "3 hours",
+                        "created_at": datetime.now(UTC),
+                    },
+                ]
+
+                mock_graph_traverser = MagicMock()
+                mock_graph_traverser.find_by_predicate = AsyncMock(
+                    return_value=mock_activity_triples
+                )
+                mock_graph_class.return_value = mock_graph_traverser
+
+                mock_memory.retrieve_context = AsyncMock(return_value=([], []))
+
+                mock_response_obj = MagicMock()
+                mock_response_obj.content = "Last week you spent 3 hours coding."
+                mock_response_obj.model = "gpt-4"
+                mock_response_obj.provider = "openai"
+                mock_response_obj.temperature = 0.7
+                mock_response_obj.prompt_tokens = 100
+                mock_response_obj.completion_tokens = 50
+                mock_response_obj.total_tokens = 150
+                mock_response_obj.cost_usd = 0.01
+                mock_response_obj.latency_ms = 500
+
+                mock_response.generate_response = AsyncMock(
+                    return_value=(
+                        mock_response_obj,
+                        "rendered_prompt",
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
+                        str(uuid4()),
+                    )
+                )
+                mock_response.split_response = MagicMock(
+                    return_value=["Last week you spent 3 hours coding."]
+                )
+
+                mock_bot_message = MagicMock(spec=discord.Message)
+                mock_bot_message.id = 999
+                mock_bot_message.channel.id = 123
+                mock_bot_message.content = "Last week you spent 3 hours coding."
+
+                mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
+                mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=uuid4())
+
+                with (
+                    patch.object(
+                        message.channel,
+                        "send",
+                        AsyncMock(return_value=mock_bot_message),
+                    ),
+                    patch.object(bot, "_mirror_to_dream_channel", AsyncMock()),
+                ):
+                    await bot.on_message(message)
+
+                    mock_graph_traverser.find_by_predicate.assert_called_once()
+                    call_args = mock_graph_traverser.find_by_predicate.call_args
+                    assert call_args.kwargs["predicate"] == "performed_activity"
+                    assert call_args.kwargs["limit"] == 50
+
+                    mock_memory.store_user_message.assert_called_once()
+                    mock_response.generate_response.assert_called_once()
+                    mock_send = message.channel.send
+                    mock_send.assert_called_once()
+
+    # ============================================================================
+    # Phase 2: Dream Channel Mirroring Tests (Lines 438-493)
     # ============================================================================
     # Phase 2: Dream Channel Mirroring Tests (Lines 438-493)
     # ============================================================================
