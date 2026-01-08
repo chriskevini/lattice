@@ -126,7 +126,7 @@ async def retrieve_context(
             traverser = GraphTraversal(db_pool.pool, max_depth=triple_depth)
 
             traverse_tasks = [
-                traverser.find_entity_relationships(entity_name, limit=10)
+                traverser.traverse_from_entity(entity_name, max_hops=triple_depth)
                 for entity_name in entity_names
             ]
 

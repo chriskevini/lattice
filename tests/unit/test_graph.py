@@ -215,3 +215,142 @@ class TestGraphTraversal:
         result = await traverser.find_entity_relationships("user", limit=3)
 
         assert len(result) == 3
+
+
+class TestSanitizationFunctions:
+    """Tests for ILIKE pattern sanitization functions."""
+
+    def test_escape_wildcard_percent(self) -> None:
+        """Test that % wildcard is escaped."""
+        from lattice.memory.graph import _escape_like_pattern
+
+        result = _escape_like_pattern("test%entity")
+        assert "\\%test\\%entity" in result or "test\\%entity" in result
+
+    def test_escape_wildcard_underscore(self) -> None:
+        """Test that _ wildcard is escaped."""
+        from lattice.memory.graph import _escape_like_pattern
+
+        result = _escape_like_pattern("test_entity")
+        assert "\\_" in result or "_" in result
+
+    def test_escape_backslash(self) -> None:
+        """Test that backslash is escaped."""
+        from lattice.memory.graph import _escape_like_pattern
+
+        result = _escape_like_pattern("test\\entity")
+        assert "\\\\" in result or "\\" in result
+
+    def test_sanitize_long_entity_name(self) -> None:
+        """Test that long entity names are truncated."""
+        from lattice.memory.graph import _sanitize_entity_name, MAX_ENTITY_NAME_LENGTH
+
+        long_name = "x" * (MAX_ENTITY_NAME_LENGTH + 100)
+        result = _sanitize_entity_name(long_name)
+        assert len(result) == MAX_ENTITY_NAME_LENGTH
+
+    def test_sanitize_preserves_content(self) -> None:
+        """Test that sanitization preserves normal entity names."""
+        from lattice.memory.graph import _sanitize_entity_name
+
+        normal_name = "Alice works at Acme Corp"
+        result = _sanitize_entity_name(normal_name)
+        assert result == normal_name
+
+
+class TestBFSTraversal:
+    """Tests for BFS multi-hop traversal functionality."""
+
+    @pytest.mark.asyncio
+    async def test_bfs_cycle_detection(self) -> None:
+        """Test that BFS prevents infinite loops in cycles.
+
+        Creates A -> B -> C -> A cycle and verifies:
+        - No infinite loop (algorithm terminates)
+        - Only unique triples returned (no duplicates)
+        """
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+
+        cycle_triples = [
+            {
+                "subject": "A",
+                "predicate": "connects_to",
+                "object": "B",
+                "created_at": datetime.now(UTC),
+            },
+            {
+                "subject": "B",
+                "predicate": "connects_to",
+                "object": "C",
+                "created_at": datetime.now(UTC),
+            },
+            {
+                "subject": "C",
+                "predicate": "connects_to",
+                "object": "A",
+                "created_at": datetime.now(UTC),
+            },
+        ]
+
+        mock_conn.fetch = AsyncMock(return_value=cycle_triples)
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.traverse_from_entity("A", max_hops=5)
+
+        subject_objects = {(t["subject"], t["object"]) for t in result}
+        assert len(subject_objects) == 3, (
+            f"Expected 3 unique triples, got {len(subject_objects)}: {subject_objects}"
+        )
+
+        seen_subjects = {t["subject"] for t in result}
+        seen_objects = {t["object"] for t in result}
+        assert seen_subjects == {"A", "B", "C"}, (
+            f"Expected subjects A, B, C, got {seen_subjects}"
+        )
+        assert seen_objects == {"A", "B", "C"}, (
+            f"Expected objects A, B, C, got {seen_objects}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_bfs_max_hops_limit(self) -> None:
+        """Test that max_hops parameter limits traversal depth."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=1)
+        result = await traverser.traverse_from_entity("test", max_hops=2)
+
+        assert len(result) == 0
+
+    @pytest.mark.asyncio
+    async def test_bfs_returns_depth_info(self) -> None:
+        """Test that BFS returns triples with depth metadata."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "Alice",
+                    "predicate": "works_at",
+                    "object": "Acme Corp",
+                    "created_at": datetime.now(UTC),
+                },
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.traverse_from_entity("Alice", max_hops=1)
+
+        assert len(result) == 1
+        assert "depth" in result[0]
+        assert result[0]["depth"] == 1

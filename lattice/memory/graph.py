@@ -19,6 +19,39 @@ import asyncpg
 
 logger = logging.getLogger(__name__)
 
+MAX_ENTITY_NAME_LENGTH = 255
+
+
+def _escape_like_pattern(entity: str) -> str:
+    """Escape special characters for ILIKE pattern matching.
+
+    Prevents injection of wildcards (%) and underscore (_) that could
+    cause unexpected matching behavior.
+
+    Args:
+        entity: The entity name to escape
+
+    Returns:
+        Entity name with ILIKE wildcards escaped
+    """
+    return entity.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _sanitize_entity_name(entity: str) -> str:
+    """Sanitize entity name for safe pattern matching.
+
+    Truncates long names and escapes special characters.
+
+    Args:
+        entity: The entity name to sanitize
+
+    Returns:
+        Sanitized entity name safe for ILIKE queries
+    """
+    if len(entity) > MAX_ENTITY_NAME_LENGTH:
+        entity = entity[:MAX_ENTITY_NAME_LENGTH]
+    return _escape_like_pattern(entity)
+
 
 class GraphTraversal:
     """Text-based graph traversal for semantic triples.
@@ -81,6 +114,7 @@ class GraphTraversal:
                         continue
                     visited_entities.add(entity_lower)
 
+                    sanitized_entity = _sanitize_entity_name(entity)
                     triples = await conn.fetch(
                         """
                         SELECT
@@ -94,7 +128,7 @@ class GraphTraversal:
                         ORDER BY created_at DESC
                         LIMIT 50
                         """,
-                        f"%{entity}%",
+                        f"%{sanitized_entity}%",
                         list(predicate_filter) if predicate_filter else None,
                     )
 
@@ -141,6 +175,7 @@ class GraphTraversal:
             List of triples with keys: subject, predicate, object, created_at
         """
         async with self.db_pool.acquire() as conn:
+            sanitized_name = _sanitize_entity_name(entity_name)
             rows = await conn.fetch(
                 """
                 SELECT
@@ -153,7 +188,7 @@ class GraphTraversal:
                 ORDER BY created_at DESC
                 LIMIT $2
                 """,
-                f"%{entity_name}%",
+                f"%{sanitized_name}%",
                 limit,
             )
             return [dict(row) for row in rows]
