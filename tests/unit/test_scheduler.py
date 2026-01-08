@@ -91,7 +91,7 @@ class TestDecideProactive:
 
     @pytest.mark.asyncio
     async def test_decide_proactive_with_missing_prompt(self) -> None:
-        """Test that missing PROACTIVE_DECISION prompt returns wait."""
+        """Test that missing PROACTIVE_CHECKIN prompt returns wait."""
         with (
             patch(
                 "lattice.scheduler.triggers.is_within_active_hours", return_value=True

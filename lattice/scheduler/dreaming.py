@@ -1,4 +1,4 @@
-"""Dreaming Cycle scheduler for autonomous prompt optimization.
+"""Dreaming cycle scheduler - autonomous prompt optimization.
 
 Runs analysis at scheduled intervals (default: daily at 3 AM) to identify
 underperforming prompts and propose improvements via the dream channel.
@@ -9,7 +9,7 @@ import contextlib
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
-from typing import Any, cast
+from typing import Any
 
 import asyncpg
 import discord
@@ -31,15 +31,9 @@ logger = structlog.get_logger(__name__)
 DEFAULT_DREAM_TIME = time(3, 0)  # 3:00 AM UTC
 MAX_PROPOSALS_PER_CYCLE = 3
 
-# Priority thresholds for embed colors
-PRIORITY_VERY_HIGH = 0.9
-PRIORITY_HIGH = 0.8
-PRIORITY_MEDIUM = 0.7
-
 # Dreaming cycle defaults (used when not configured in database)
 DREAMING_MIN_USES_DEFAULT = 10
 DREAMING_LOOKBACK_DAYS_DEFAULT = 30
-DREAMING_MIN_CONFIDENCE_DEFAULT = 0.7
 DREAMING_MIN_FEEDBACK_DEFAULT = 10
 
 # Error retry intervals for scheduler loop
@@ -53,27 +47,7 @@ class DreamingConfig:
 
     min_uses: int
     lookback_days: int
-    min_confidence: float
     enabled: bool
-
-
-def _get_priority_label(confidence: float) -> str:
-    """Get priority label based on confidence score using existing constants.
-
-    Args:
-        confidence: Confidence score between 0 and 1
-
-    Returns:
-        Priority label with emoji indicator
-    """
-    if confidence >= PRIORITY_VERY_HIGH:
-        return "🔴 VERY HIGH"
-    elif confidence >= PRIORITY_HIGH:
-        return "🟠 HIGH"
-    elif confidence >= PRIORITY_MEDIUM:
-        return "🟡 MEDIUM"
-    else:
-        return "🟢 LOW"
 
 
 class DreamingScheduler:
@@ -130,7 +104,6 @@ class DreamingScheduler:
                     )
                     await asyncio.sleep(sleep_seconds)
 
-                # Check if dreaming cycle is enabled
                 enabled = await self._is_enabled()
                 if not enabled:
                     logger.info("Dreaming cycle disabled, skipping run")
@@ -145,41 +118,37 @@ class DreamingScheduler:
                 await asyncio.sleep(TRANSIENT_ERROR_RETRY_SECONDS)
             except Exception:  # noqa: BLE001
                 logger.exception("Fatal error in dreaming scheduler loop")
-                # Fail fast in development, retry in production
                 if os.getenv("ENVIRONMENT") == "development":
                     raise
                 await asyncio.sleep(FATAL_ERROR_RETRY_SECONDS)
 
     def _calculate_next_run(self) -> datetime:
-        """Calculate the next scheduled run time.
+        """Calculate the next run time based on configured dream_time.
 
         Returns:
-            Next run datetime in UTC
+            datetime of the next run
         """
         now = datetime.now(UTC)
-        next_run = datetime.combine(now.date(), self.dream_time, tzinfo=UTC)
+        today_run = datetime.combine(now.date(), self.dream_time, tzinfo=UTC)
 
-        # If we've passed today's scheduled time, schedule for tomorrow
-        if next_run <= now:
-            next_run += timedelta(days=1)
-
-        return next_run
+        if now < today_run:
+            return today_run
+        return today_run + timedelta(days=1)
 
     async def _is_enabled(self) -> bool:
-        """Check if dreaming cycle is enabled.
+        """Check if the dreaming cycle is enabled.
 
         Returns:
-            True if enabled, False otherwise
+            True if dreaming is enabled, False otherwise
         """
         enabled_str = await get_system_health("dreaming_enabled")
-        # Default to enabled if not set
         return enabled_str != "false"
 
     async def _get_dreaming_config(self) -> DreamingConfig:
-        """Fetch all dreaming configuration values in a single batch.
+        """Load dreaming configuration from database.
 
         Returns:
-            DreamingConfig with all configuration values
+            DreamingConfig with loaded settings
         """
         min_uses = int(
             await get_system_health("dreaming_min_uses") or DREAMING_MIN_USES_DEFAULT
@@ -188,17 +157,12 @@ class DreamingScheduler:
             await get_system_health("dreaming_lookback_days")
             or DREAMING_LOOKBACK_DAYS_DEFAULT
         )
-        min_confidence = float(
-            await get_system_health("dreaming_min_confidence")
-            or DREAMING_MIN_CONFIDENCE_DEFAULT
-        )
         enabled_str = await get_system_health("dreaming_enabled")
         enabled = enabled_str != "false"
 
         return DreamingConfig(
             min_uses=min_uses,
             lookback_days=lookback_days,
-            min_confidence=min_confidence,
             enabled=enabled,
         )
 
@@ -216,7 +180,6 @@ class DreamingScheduler:
         try:
             config = await self._get_dreaming_config()
 
-            # If forced, use 1 as minimum for thresholding
             min_uses = 1 if force else config.min_uses
             min_feedback = 1 if force else DREAMING_MIN_FEEDBACK_DEFAULT
 
@@ -242,8 +205,6 @@ class DreamingScheduler:
             proposals: list[OptimizationProposal] = []
 
             for prompt_metrics in metrics[:MAX_PROPOSALS_PER_CYCLE]:
-                # First, reject any stale proposals for this prompt
-                # (pending proposals with outdated current_version)
                 rejected_count = await reject_stale_proposals(prompt_metrics.prompt_key)
                 if rejected_count > 0:
                     logger.info(
@@ -252,24 +213,17 @@ class DreamingScheduler:
                         rejected_count=rejected_count,
                     )
 
-                proposal = await propose_optimization(
-                    metrics=prompt_metrics,
-                    min_confidence=config.min_confidence,
-                )
+                proposal = await propose_optimization(metrics=prompt_metrics)
 
                 if proposal:
-                    # Store proposal in database
                     await store_proposal(proposal)
                     proposals.append(proposal)
 
                     logger.info(
                         "Created optimization proposal",
-                        prompt_key=proposal.prompt_key,
-                        confidence=proposal.confidence,
+                        prompt_key=prompt_metrics.prompt_key,
+                        proposal_id=str(proposal.proposal_id),
                     )
-
-            # Post proposals to dream channel
-            await self._post_proposals_to_dream_channel(proposals)
 
             logger.info(
                 "Dreaming cycle completed",
@@ -277,61 +231,77 @@ class DreamingScheduler:
                 proposals_created=len(proposals),
             )
 
+            await self._post_proposals_to_dream_channel(proposals)
+
             return {
                 "status": "success",
                 "prompts_analyzed": len(metrics),
                 "proposals_created": len(proposals),
-                "message": f"Analyzed {len(metrics)} prompts, created {len(proposals)} proposals",
+                "message": f"Created {len(proposals)} optimization proposal(s)",
             }
 
-        except Exception as e:
-            logger.exception("Error running dreaming cycle")
+        except Exception:  # noqa: BLE001
+            logger.exception("Dreaming cycle failed")
+            await self._post_summary_to_dream_channel(
+                proposals=[],
+                message="❌ Dreaming cycle failed. Check logs for details.",
+            )
             return {
                 "status": "error",
                 "prompts_analyzed": 0,
                 "proposals_created": 0,
-                "message": str(e),
+                "message": "Dreaming cycle failed",
             }
 
     async def _get_dream_channel(self) -> discord.TextChannel | None:
-        """Get and validate dream channel.
+        """Get the dream channel for posting proposals.
 
         Returns:
-            TextChannel if found and valid, None otherwise
+            discord.TextChannel or None if not available
         """
         if not self.dream_channel_id:
-            logger.warning("Dream channel not configured, cannot post proposals")
+            logger.warning("Dream channel ID not configured")
             return None
 
         channel = self.bot.get_channel(self.dream_channel_id)
         if not channel:
-            logger.error(
-                "Dream channel not found", dream_channel_id=self.dream_channel_id
-            )
+            logger.warning("Dream channel not found", channel_id=self.dream_channel_id)
             return None
 
-        return cast(discord.TextChannel, channel)
+        if not isinstance(channel, discord.TextChannel):
+            logger.warning("Dream channel is not a text channel")
+            return None
 
-    async def _post_empty_summary(self, channel: discord.TextChannel) -> None:
-        """Post message when no proposals to display.
-
-        Args:
-            channel: Dream channel to post to
-        """
-        message = "✨ **Dreaming cycle completed.** All prompts performing well!"
-        await channel.send(message)
+        return channel
 
     async def _post_proposal_summary(
         self, channel: discord.TextChannel, count: int
     ) -> None:
-        """Post summary header for proposals.
+        """Post summary of proposals.
 
         Args:
             channel: Dream channel to post to
             count: Number of proposals
         """
-        summary = f"🌙 **DREAMING CYCLE: {count} OPTIMIZATION PROPOSAL(S)**\n\n"
-        await channel.send(summary)
+        embed = discord.Embed(
+            title="🧠 Optimization Proposals",
+            description=f"Found {count} prompt(s) needing optimization",
+            color=discord.Color.magenta(),
+        )
+        await channel.send(embed=embed)
+
+    async def _post_empty_summary(self, channel: discord.TextChannel) -> None:
+        """Post empty state when no proposals.
+
+        Args:
+            channel: Dream channel to post to
+        """
+        embed = discord.Embed(
+            title="✨ All Good",
+            description="No prompts need optimization at this time.",
+            color=discord.Color.green(),
+        )
+        await channel.send(embed=embed)
 
     def _format_proposal_summary(self, proposal: OptimizationProposal) -> str:
         """Format proposal summary text.
@@ -342,11 +312,11 @@ class DreamingScheduler:
         Returns:
             Formatted summary text
         """
-        priority = _get_priority_label(proposal.confidence)
+        pain_point = proposal.proposal_metadata.get("pain_point", "N/A")
         return (
             f"**Target:** `{proposal.prompt_key}` "
             f"(v{proposal.current_version} → v{proposal.proposed_version})\n"
-            f"**Priority:** {priority} (confidence: {proposal.confidence:.0%})\n"
+            f"**Issue:** {pain_point}\n"
             f"**Proposal ID:** {proposal.proposal_id}"
         )
 
@@ -429,5 +399,4 @@ async def trigger_dreaming_cycle_manually(
         force: Whether to bypass statistical thresholds
     """
     scheduler = DreamingScheduler(bot=bot, dream_channel_id=dream_channel_id)
-    # Call public method for running the cycle
     await scheduler._run_dreaming_cycle(force=force)  # noqa: SLF001

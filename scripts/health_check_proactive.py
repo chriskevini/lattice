@@ -215,7 +215,7 @@ async def check_message_activity(conn: asyncpg.Connection) -> dict:
 
 
 async def check_prompt_templates(conn: asyncpg.Connection) -> bool:
-    """Check if PROACTIVE_DECISION prompt exists."""
+    """Check if PROACTIVE_CHECKIN prompt exists."""
     print("\n" + "=" * 80)
     print("5. PROMPT TEMPLATES")
     print("=" * 80)
@@ -224,16 +224,16 @@ async def check_prompt_templates(conn: asyncpg.Connection) -> bool:
         """
         SELECT prompt_key, temperature, version, active
         FROM prompt_registry
-        WHERE prompt_key = 'PROACTIVE_DECISION'
+        WHERE prompt_key = 'PROACTIVE_CHECKIN'
         """
     )
 
     if not prompt:
-        print("❌ PROACTIVE_DECISION prompt NOT FOUND in database")
+        print("❌ PROACTIVE_CHECKIN prompt NOT FOUND in database")
         print("   Run: make migrate")
         return False
 
-    print("✅ PROACTIVE_DECISION prompt found")
+    print("✅ PROACTIVE_CHECKIN prompt found")
     print(f"   Version:     {prompt['version']}")
     print(f"   Temperature: {prompt['temperature']}")
     print(f"   Active:      {prompt['active']}")
@@ -311,7 +311,7 @@ async def generate_diagnosis() -> None:
     print("\n📋 Common Issues:")
     print("1. Outside active hours - Wait until user's active window")
     print("2. Recent conversation - AI may decide to wait after user response")
-    print("3. Missing PROACTIVE_DECISION prompt - Run: make migrate")
+    print("3. Missing PROACTIVE_CHECKIN prompt - Run: make migrate")
     print("4. Scheduler interval too long - Check scheduler_current_interval")
     print("5. Bot not running - Check deployment logs")
 

@@ -377,21 +377,19 @@ class AuditViewBuilder:
     Three audit types:
     - REACTIVE: User message + bot response (UNIFIED_RESPONSE)
     - PROACTIVE: Bot-initiated check-in (PROACTIVE_CHECKIN)
-    - REASONING: Internal decision/analysis (PROACTIVE_DECISION)
+    - REASONING: Internal decision/analysis (PROACTIVE_CHECKIN)
     - EXTRACTION: Batch semantic analysis (BATCH_MEMORY_EXTRACTION)
     """
 
     _EMOJI_MAP = {
         "UNIFIED_RESPONSE": "💬",
         "PROACTIVE_CHECKIN": "🌟",
-        "PROACTIVE_DECISION": "🧠",
         "BATCH_MEMORY_EXTRACTION": "🧠",
     }
 
     _COLOR_MAP = {
         "UNIFIED_RESPONSE": discord.Color.blurple(),
         "PROACTIVE_CHECKIN": discord.Color.gold(),
-        "PROACTIVE_DECISION": discord.Color.magenta(),
         "BATCH_MEMORY_EXTRACTION": discord.Color.purple(),
     }
 
@@ -616,7 +614,7 @@ class AuditViewBuilder:
         Args:
             input_context: Input context for the decision
             decision: The decision or analysis result
-            prompt_key: Prompt template key (e.g., PROACTIVE_DECISION)
+            prompt_key: Prompt template key (e.g., PROACTIVE_CHECKIN)
             confidence: Confidence score (0-1)
             latency_ms: Processing latency
             audit_id: Prompt audit UUID

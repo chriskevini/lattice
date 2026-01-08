@@ -140,13 +140,13 @@ async def decide_proactive() -> ProactiveDecision:
     current_interval = await get_current_interval()
     current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
-    prompt_template = await get_prompt("PROACTIVE_DECISION")
+    prompt_template = await get_prompt("PROACTIVE_CHECKIN")
     if not prompt_template:
-        logger.error("PROACTIVE_DECISION prompt not found in database")
+        logger.error("PROACTIVE_CHECKIN prompt not found in database")
         return ProactiveDecision(
             action="wait",
             content=None,
-            reason="PROACTIVE_DECISION prompt not found, defaulting to wait",
+            reason="PROACTIVE_CHECKIN prompt not found, defaulting to wait",
         )
 
     prompt = prompt_template.template.format(
@@ -160,7 +160,7 @@ async def decide_proactive() -> ProactiveDecision:
     try:
         result = await llm_client.complete(
             prompt=prompt,
-            prompt_key="PROACTIVE_DECISION",
+            prompt_key="PROACTIVE_CHECKIN",
             template_version=prompt_template.version,
             main_discord_message_id=0,  # Placeholder since no message exists yet
             temperature=prompt_template.temperature,

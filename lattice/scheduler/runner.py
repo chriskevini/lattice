@@ -187,7 +187,7 @@ class ProactiveScheduler:
                     audit_id: UUID | None = decision.audit_id
                     if audit_id is None and decision.rendered_prompt:
                         audit_id = await prompt_audits.store_prompt_audit(
-                            prompt_key="PROACTIVE_DECISION",
+                            prompt_key="PROACTIVE_CHECKIN",
                             rendered_prompt=decision.rendered_prompt,
                             response_content=result.content,
                             main_discord_message_id=result.id,
@@ -210,7 +210,7 @@ class ProactiveScheduler:
                         bot_message=result,
                         reasoning=decision.reason or "No specific reason provided",
                         audit_id=audit_id,
-                        prompt_key="PROACTIVE_DECISION",
+                        prompt_key="PROACTIVE_CHECKIN",
                         template_version=decision.template_version or 1,
                         rendered_prompt=decision.rendered_prompt,
                     )
@@ -286,7 +286,7 @@ class ProactiveScheduler:
                 reasoning=reasoning,
                 bot_message=bot_message.content,
                 main_message_url=bot_message.jump_url,
-                prompt_key=prompt_key or "PROACTIVE_DECISION",
+                prompt_key=prompt_key or "PROACTIVE_CHECKIN",
                 version=template_version or 1,
                 confidence=0.5,
                 audit_id=audit_id,

@@ -547,7 +547,7 @@ class TestProactiveScheduler:
                 bot_message=mock_message,
                 reasoning="Deadline approaching",
                 audit_id=uuid4(),
-                prompt_key="PROACTIVE_DECISION",
+                prompt_key="PROACTIVE_CHECKIN",
                 template_version=1,
                 rendered_prompt="[prompt]",
             )
