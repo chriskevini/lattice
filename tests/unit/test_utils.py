@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from zoneinfo import ZoneInfo
 
 from lattice.utils.database import (
     DatabasePool,
@@ -14,6 +15,14 @@ from lattice.utils.database import (
     set_next_check_at,
     set_system_health,
     set_user_timezone,
+)
+from lattice.utils.date_resolution import (
+    InvalidTimezoneError,
+    InvalidWeekdayError,
+    UserDatetime,
+    format_current_date,
+    format_current_time,
+    resolve_relative_dates,
 )
 from lattice.utils.objective_parsing import parse_goals
 
@@ -449,3 +458,345 @@ class TestObjectiveParsing:
         result = parse_goals(raw)
 
         assert result[0]["status"] == "completed"
+
+
+@pytest.fixture
+def fixed_user_datetime() -> UserDatetime:
+    """Fixture providing a UserDatetime with fixed test date."""
+    user_dt = UserDatetime("UTC")
+    user_dt._now = datetime(2026, 1, 8, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+    return user_dt
+
+
+@pytest.fixture
+def mock_user_datetime(fixed_user_datetime: UserDatetime) -> MagicMock:
+    """Fixture providing a mocked UserDatetime for date resolution tests."""
+    mock_instance = MagicMock()
+    mock_instance.now = fixed_user_datetime.now
+    mock_instance.format.side_effect = lambda fmt: fixed_user_datetime.format(fmt)
+    # Use side_effect to return different values based on the argument
+    mock_instance.add_days.side_effect = lambda days: fixed_user_datetime.add_days(days)
+    mock_instance.add_weeks.side_effect = lambda weeks: fixed_user_datetime.add_weeks(
+        weeks
+    )
+    mock_instance.add_months.side_effect = lambda: fixed_user_datetime.add_months()
+    mock_instance.add_years.side_effect = lambda: fixed_user_datetime.add_years()
+    mock_instance.next_weekday.side_effect = (
+        lambda day: fixed_user_datetime.next_weekday(day)
+    )
+    return mock_instance
+
+
+class TestUserDatetime:
+    """Tests for the UserDatetime class."""
+
+    def test_init_default_timezone(self) -> None:
+        """Test that UserDatetime defaults to UTC."""
+        user_dt = UserDatetime()
+        assert user_dt._timezone_str == "UTC"
+
+    def test_init_custom_timezone(self) -> None:
+        """Test initialization with custom timezone."""
+        user_dt = UserDatetime("America/New_York")
+        assert user_dt._timezone_str == "America/New_York"
+
+    def test_invalid_timezone_raises_error(self) -> None:
+        """Test that invalid timezone raises InvalidTimezoneError when tz property is accessed."""
+        user_dt = UserDatetime("Invalid/Timezone")
+        with pytest.raises(InvalidTimezoneError):
+            _ = user_dt.tz
+
+    def test_next_weekday_valid(self, fixed_user_datetime: UserDatetime) -> None:
+        """Test next_weekday returns correct date."""
+        next_monday = fixed_user_datetime.next_weekday("monday")
+        # Today is Thursday 2026-01-08, next Monday is 2026-01-12
+        assert next_monday.strftime("%Y-%m-%d") == "2026-01-12"
+
+    def test_next_weekday_today_is_target(
+        self, fixed_user_datetime: UserDatetime
+    ) -> None:
+        """Test that next_weekday returns next week if today is target."""
+        # Today is Thursday, next Thursday should be 7 days from now
+        next_thursday = fixed_user_datetime.next_weekday("thursday")
+        assert next_thursday.strftime("%Y-%m-%d") == "2026-01-15"
+
+    def test_next_weekday_invalid_raises_error(
+        self, fixed_user_datetime: UserDatetime
+    ) -> None:
+        """Test that invalid weekday raises InvalidWeekdayError."""
+        with pytest.raises(InvalidWeekdayError):
+            fixed_user_datetime.next_weekday("funday")
+
+    def test_add_days(self, fixed_user_datetime: UserDatetime) -> None:
+        """Test add_days method."""
+        result = fixed_user_datetime.add_days(5)
+        assert result.strftime("%Y-%m-%d") == "2026-01-13"
+
+    def test_add_weeks(self, fixed_user_datetime: UserDatetime) -> None:
+        """Test add_weeks method."""
+        result = fixed_user_datetime.add_weeks(1)
+        assert result.strftime("%Y-%m-%d") == "2026-01-15"
+
+    def test_add_months(self, fixed_user_datetime: UserDatetime) -> None:
+        """Test add_months method."""
+        result = fixed_user_datetime.add_months()
+        assert result.strftime("%Y-%m-%d") == "2026-02-08"
+
+    def test_add_years(self, fixed_user_datetime: UserDatetime) -> None:
+        """Test add_years method."""
+        result = fixed_user_datetime.add_years()
+        assert result.strftime("%Y-%m-%d") == "2027-01-08"
+
+
+class TestFormatCurrentDateAndTime:
+    """Tests for format_current_date and format_current_time functions."""
+
+    def test_format_current_date_default_timezone(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test formatting current date with default UTC timezone."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = format_current_date()
+            assert result == "2026/01/08, Thursday"
+
+    def test_format_current_date_custom_timezone(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test formatting with custom timezone."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = format_current_date("America/New_York")
+            assert "2026/01/08" in result
+            assert "Thursday" in result
+
+    def test_format_current_time_default_timezone(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test formatting current time with default UTC timezone."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = format_current_time()
+            assert result == "12:00"
+
+    def test_format_current_time_custom_timezone(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test formatting time with custom timezone."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = format_current_time("America/New_York")
+            assert ":" in result  # Time format with hours and minutes
+
+
+class TestResolveRelativeDates:
+    """Tests for resolve_relative_dates function."""
+
+    def test_resolve_today(self, mock_user_datetime: MagicMock) -> None:
+        """Test that 'today' returns empty hints (redundant with {local_date})."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Let's meet today", "UTC")
+            assert result == ""
+
+    def test_resolve_tonight(self, mock_user_datetime: MagicMock) -> None:
+        """Test that 'tonight' returns empty hints (redundant with {local_date})."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Watching a movie tonight", "UTC")
+            assert result == ""
+
+    def test_resolve_tomorrow(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'tomorrow'."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Let's meet tomorrow", "UTC")
+            assert "tomorrow → 2026-01-09" in result
+
+    def test_resolve_yesterday(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'yesterday'."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("That was yesterday", "UTC")
+            assert "yesterday → 2026-01-07" in result
+
+    def test_resolve_day_after_tomorrow(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'day after tomorrow'."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("See you day after tomorrow", "UTC")
+            assert "day after tomorrow → 2026-01-10" in result
+
+    def test_resolve_day_before_yesterday(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'day before yesterday'."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("That happened day before yesterday", "UTC")
+            assert "day before yesterday → 2026-01-06" in result
+
+    def test_resolve_next_week(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'next week'."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Let's meet next week", "UTC")
+            assert "next week → 2026-01-15" in result
+
+    def test_resolve_next_month(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'next month'."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Due next month", "UTC")
+            assert "next month → 2026-02-08" in result
+
+    def test_resolve_next_year(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'next year'."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Coming next year", "UTC")
+            assert "next year → 2027-01-08" in result
+
+    def test_resolve_plain_weekday_this_week(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test resolving plain weekday (this week's occurrence)."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Meeting on Friday", "UTC")
+            # Today is Thursday 2026-01-08, Friday is tomorrow (1 day ahead)
+            assert "friday → 2026-01-09" in result
+
+    def test_resolve_next_weekday_plus_7_days(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test that 'next wednesday' is 7 days after this wednesday."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Deadline is next wednesday", "UTC")
+            # Today is Thursday 2026-01-08, next wednesday is 2026-01-14 + 7 = 2026-01-21
+            assert "next wednesday → 2026-01-21" in result
+
+    def test_resolve_weekday_next_week_format(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test resolving 'wednesday next week' format."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Let's meet wednesday next week", "UTC")
+            # "wednesday next week" is normalized to "next wednesday"
+            assert "next wednesday → 2026-01-21" in result
+
+    def test_resolve_multiple_patterns(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving multiple date patterns in one message."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Meet tomorrow and finish by Friday", "UTC")
+            assert "tomorrow → 2026-01-09" in result
+            # Today is Thursday, Friday is tomorrow (1 day ahead)
+            assert "friday → 2026-01-09" in result
+
+    def test_resolve_next_weekday_with_the(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving 'next the wednesday' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Due next the wednesday", "UTC")
+            # "next the wednesday" → next wednesday
+            assert "next wednesday → 2026-01-21" in result
+
+    def test_resolve_case_insensitive(self, mock_user_datetime: MagicMock) -> None:
+        """Test that pattern matching is case insensitive."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("TOMORROW and NEXT FRIDAY", "UTC")
+            assert "tomorrow → 2026-01-09" in result
+            # Today is Thursday, next Friday is 2026-01-09 + 7 = 2026-01-16
+            assert "next friday → 2026-01-16" in result
+
+    def test_resolve_mixed_patterns(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving mixed patterns with weekdays and relative dates."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Next Friday and day after tomorrow", "UTC")
+            # Next Friday: today is Thursday, this Friday is tomorrow 2026-01-09, next Friday +7 = 2026-01-16
+            assert "next friday → 2026-01-16" in result
+            # Day after tomorrow: today is Thursday, day after tomorrow is Saturday 2026-01-10
+            assert "day after tomorrow → 2026-01-10" in result
+
+    def test_resolve_plain_weekday_when_next_weekday_also_mentioned(
+        self, mock_user_datetime: MagicMock
+    ) -> None:
+        """Test that plain weekday is not duplicated when next weekday is mentioned."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates("Next Friday and also Friday", "UTC")
+            assert "next friday → 2026-01-16" in result
+            # Today is Thursday, Friday is tomorrow 2026-01-09
+            assert "friday → 2026-01-09" in result
+            # Should not have duplicate entries
+            assert result.count("friday") == 2  # Once in "next friday", once as plain
+
+    def test_resolve_all_weekdays(self, mock_user_datetime: MagicMock) -> None:
+        """Test resolving all weekday names."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = resolve_relative_dates(
+                "monday tuesday wednesday thursday friday saturday sunday", "UTC"
+            )
+            # Today is Thursday 2026-01-08
+            # Monday: 2026-01-12 (4 days ahead)
+            assert "monday → 2026-01-12" in result
+            # Tuesday: 2026-01-13 (5 days ahead)
+            assert "tuesday → 2026-01-13" in result
+            # Wednesday: 2026-01-14 (6 days ahead)
+            assert "wednesday → 2026-01-14" in result
+            # Thursday: 2026-01-15 (7 days ahead - next week's Thursday)
+            assert "thursday → 2026-01-15" in result
+            # Friday: 2026-01-09 (1 day ahead - this week's Friday/tomorrow)
+            assert "friday → 2026-01-09" in result
+            # Saturday: 2026-01-10 (2 days ahead)
+            assert "saturday → 2026-01-10" in result
+            # Sunday: 2026-01-11 (3 days ahead)
+            assert "sunday → 2026-01-11" in result

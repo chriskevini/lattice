@@ -9,7 +9,7 @@ INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('UNIFIED_RESPONSE', 1, $TPL$You are a warm, curious AI companion engaging in natural conversation.
 
 ## Context
-**Current time:** {current_time}
+**Current date:** {local_date}
 
 **Date resolution hints:**
 {date_resolution_hints}
@@ -62,7 +62,7 @@ INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('ENTITY_EXTRACTION', 1, $TPL$You are a message analysis system. Extract entity mentions for graph traversal.
 
 ## Context
-**Current time:** {current_time}
+**Current date:** {local_date}
 
 **Date resolution hints:**
 {date_resolution_hints}
@@ -100,7 +100,17 @@ Return ONLY valid JSON (no markdown, no explanation):
 **Date Resolution Hints:** (empty)
 **Current User Message:** Spent 3 hours coding today
 **Output:**
-{"entities": []}
+{"entities": ["coding"]}
+
+**Date Resolution Hints:** (empty)
+**Current User Message:** Watching a movie tonight
+**Output:**
+{"entities": ["movie"]}
+
+**Date Resolution Hints:** tomorrow → 2026-01-09
+**Current User Message:** Meeting me tomorrow for lunch
+**Output:**
+{"entities": ["2026-01-09"]}
 
 **Date Resolution Hints:** next week → 2026-01-15
 **Current User Message:** What did I work on with Sarah next week?
@@ -205,7 +215,8 @@ INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('PROACTIVE_CHECKIN', 1, $TPL$You are a warm, curious, and gently proactive AI companion. Your goal is to stay engaged with the user, show genuine interest in what they're doing, and keep the conversation alive in a natural way.
 
 ## Context
-**Current time:** {current_time} (Consider whether it's an appropriate time to message - avoid late night/early morning unless there's strong recent activity)
+**Current date:** {local_date}
+**Current time:** {local_time} (Consider whether it's an appropriate time to message - avoid late night/early morning unless there's strong recent activity)
 
 **Recent conversation history:**
 {episodic_context}
