@@ -11,7 +11,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import structlog
 
 from lattice.memory import episodic, procedural
-from lattice.utils.date_resolution import format_current_time, resolve_relative_dates
+from lattice.utils.date_resolution import (
+    format_current_date,
+    format_current_time,
+    resolve_relative_dates,
+)
 from lattice.utils.llm import AuditResult, get_auditing_llm_client
 
 if TYPE_CHECKING:
@@ -42,7 +46,8 @@ AVAILABLE_PLACEHOLDERS = {
     "episodic_context": "Recent conversation history with timestamps",
     "semantic_context": "Relevant facts and graph relationships",
     "user_message": "The user's current message",
-    "current_time": "Current time with day of week (e.g., 2026/01/08, Thursday)",
+    "local_date": "Current date with day of week (e.g., 2026/01/08, Thursday)",
+    "local_time": "Current time for proactive decisions (e.g., 14:30)",
     "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
 }
 
@@ -363,8 +368,11 @@ async def generate_response(
         if key in template_placeholders
     }
 
-    if "current_time" in template_placeholders:
-        filtered_params["current_time"] = format_current_time(user_tz)
+    if "local_date" in template_placeholders:
+        filtered_params["local_date"] = format_current_date(user_tz)
+
+    if "local_time" in template_placeholders:
+        filtered_params["local_time"] = format_current_time(user_tz)
 
     if "date_resolution_hints" in template_placeholders:
         filtered_params["date_resolution_hints"] = resolve_relative_dates(

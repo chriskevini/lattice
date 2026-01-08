@@ -297,6 +297,7 @@ class LatticeBot(commands.Bot):
                     message_id=user_message_id,
                     message_content=message.content,
                     context=context_str,
+                    user_timezone=self._user_timezone,
                 )
 
                 if extraction:

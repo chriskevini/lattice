@@ -128,7 +128,7 @@ async def run_batch_consolidation() -> None:
 
         messages = await conn.fetch(
             """
-            SELECT id, discord_message_id, content, is_bot, timestamp
+            SELECT id, discord_message_id, content, is_bot, timestamp, user_timezone
             FROM raw_messages
             WHERE discord_message_id > $1
             ORDER BY timestamp ASC

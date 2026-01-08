@@ -1,5 +1,6 @@
 """Date resolution utilities for converting relative time expressions to ISO dates."""
 
+import calendar
 import re
 from datetime import datetime, timedelta
 
@@ -136,7 +137,14 @@ class UserDatetime:
         return self.now + timedelta(weeks=weeks)
 
     def add_months(self) -> datetime:
-        """Add one month to current time."""
+        """Add one month to current time.
+
+        Handles months with fewer days by clamping the day (e.g., Jan 31 + 1 month
+        becomes Feb 28/29 instead of an invalid Feb 31).
+
+        Returns:
+            datetime: A new datetime one month ahead.
+        """
         current = self.now
         year = current.year
         month = current.month + 1
@@ -144,8 +152,6 @@ class UserDatetime:
             month = 1
             year += 1
         # Handle months with fewer days (e.g., Feb 30 doesn't exist)
-        import calendar
-
         max_day = calendar.monthrange(year, month)[1]
         new_day = min(current.day, max_day)
         return current.replace(year=year, month=month, day=new_day)
@@ -153,6 +159,20 @@ class UserDatetime:
     def add_years(self) -> datetime:
         """Add one year to current time."""
         return self.now + timedelta(days=365)
+
+    @classmethod
+    def for_testing(cls, dt: datetime) -> "UserDatetime":
+        """Create a UserDatetime instance with a fixed time for testing.
+
+        Args:
+            dt: The datetime to use (should include timezone info).
+
+        Returns:
+            UserDatetime instance with fixed time.
+        """
+        instance = cls()
+        instance._now = dt
+        return instance
 
 
 def _get_user_datetime(timezone_str: str | None = None) -> UserDatetime:
@@ -321,7 +341,7 @@ def resolve_relative_dates(message: str, timezone_str: str | None = None) -> str
                     continue
                 hints.append(f"{match_text} → {iso_date}")
                 consumed_ranges.append((match_start, match_end))
-            except Exception:  # nosec[B112]
+            except (InvalidTimezoneError, InvalidWeekdayError, ValueError):
                 continue
 
     if not hints:

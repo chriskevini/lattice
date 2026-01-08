@@ -93,7 +93,8 @@ Use these placeholder names consistently across all prompts:
 | `{bigger_episodic_context}` | Full batch of new messages for extraction (~18 messages) | "User: Hello\nBot: Hi there!" |
 | `{user_message}` | The user's current message | "How's the project going?" |
 | `{goal_context}` | Active goals from knowledge graph | "user has_goal: complete project | complete project due_by: 2026-01-15 | complete project priority: high" |
-| `{current_time}` | Current time with day of week for date-sensitive decisions | "2026/01/08, Thursday" |
+| `{local_date}` | Current date with day of week for date-sensitive decisions | "2026/01/08, Thursday" |
+| `{local_time}` | Current time for time-sensitive proactive decisions | "14:30" |
 | `{date_resolution_hints}` | Resolved relative dates to ISO format | "Friday → 2026-01-10, tomorrow → 2026-01-09" |
 | `{scheduler_current_interval}` | Scheduler check interval (minutes between proactive checks) | 15 |
 | `{feedback_samples}` | Feedback samples for prompt optimization (user + response + feedback) | See PROMPT_OPTIMIZATION template |

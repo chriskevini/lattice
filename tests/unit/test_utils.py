@@ -463,9 +463,9 @@ class TestObjectiveParsing:
 @pytest.fixture
 def fixed_user_datetime() -> UserDatetime:
     """Fixture providing a UserDatetime with fixed test date."""
-    user_dt = UserDatetime("UTC")
-    user_dt._now = datetime(2026, 1, 8, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-    return user_dt
+    return UserDatetime.for_testing(
+        datetime(2026, 1, 8, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+    )
 
 
 @pytest.fixture
