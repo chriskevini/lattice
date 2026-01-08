@@ -69,7 +69,7 @@ def parse_llm_json_response(
     content: str,
     audit_result: AuditResult | None = None,
     prompt_key: str | None = None,
-) -> dict[str, Any]:
+) -> Any:
     """Parse LLM response as JSON, stripping markdown if present.
 
     This is a pure function with no side effects. It only parses and validates
@@ -81,7 +81,7 @@ def parse_llm_json_response(
         prompt_key: Optional prompt key for error context
 
     Returns:
-        Parsed JSON as dictionary
+        Parsed JSON (any type: dict, list, str, etc.)
 
     Raises:
         JSONParseError: If parsing fails, with full context attached
@@ -89,7 +89,7 @@ def parse_llm_json_response(
     content = strip_markdown_code_blocks(content)
 
     try:
-        parsed = json.loads(content)
+        return json.loads(content)
     except json.JSONDecodeError as e:
         logger.warning(
             "Failed to parse LLM JSON response",
@@ -103,20 +103,3 @@ def parse_llm_json_response(
             audit_result=audit_result,
             prompt_key=prompt_key,
         ) from e
-
-    if not isinstance(parsed, dict):
-        error_msg = f"Expected dict, got {type(parsed).__name__}"
-        logger.warning(
-            "LLM response is not a JSON object",
-            prompt_key=prompt_key,
-            type=type(parsed).__name__,
-        )
-        # Create a synthetic JSONDecodeError for consistency
-        raise JSONParseError(
-            raw_content=content,
-            parse_error=json.JSONDecodeError(error_msg, content, 0),
-            audit_result=audit_result,
-            prompt_key=prompt_key,
-        )
-
-    return parsed
