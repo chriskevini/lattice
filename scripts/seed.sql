@@ -146,6 +146,7 @@ Each triple:
 ## Examples
 [
   {"subject": "user", "predicate": "lives_in", "object": "Richmond, British Columbia"},
+  {"subject": "user", "predicate": "has_goal", "object": "run a marathon"},
   {"subject": "user", "predicate": "has_pet", "object": "cat named Luna"},
   {"subject": "run a marathon", "predicate": "due_by", "object": "2026-10-01"},
   {"subject": "run a marathon", "predicate": "priority", "object": "high"},
