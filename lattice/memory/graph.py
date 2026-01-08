@@ -12,6 +12,7 @@ BFS Traversal Design:
 """
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import asyncpg
@@ -191,4 +192,51 @@ class GraphTraversal:
                 f"%{sanitized_name}%",
                 limit,
             )
+            return [dict(row) for row in rows]
+
+    async def find_by_predicate(
+        self,
+        predicate: str,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Find all triples with a specific predicate within a date range.
+
+        Enables predicate-based queries like finding all "performed_activity" triples
+        for activity tracking queries.
+
+        Args:
+            predicate: The predicate to search for (e.g., "performed_activity")
+            start_date: Optional start of date range filter
+            end_date: Optional end of date range filter
+            limit: Maximum number of results (default 50)
+
+        Returns:
+            List of triples with keys: subject, predicate, object, created_at
+        """
+        async with self.db_pool.acquire() as conn:
+            query = """
+                SELECT
+                    subject,
+                    predicate,
+                    object,
+                    created_at
+                FROM semantic_triple
+                WHERE predicate = $1
+            """
+            params: list[Any] = [predicate]
+
+            if start_date is not None:
+                query += " AND created_at >= $" + str(len(params) + 1)
+                params.append(start_date)
+
+            if end_date is not None:
+                query += " AND created_at <= $" + str(len(params) + 1)
+                params.append(end_date)
+
+            query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
+            params.append(limit)
+
+            rows = await conn.fetch(query, *params)
             return [dict(row) for row in rows]

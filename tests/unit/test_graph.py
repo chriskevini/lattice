@@ -354,3 +354,164 @@ class TestBFSTraversal:
         assert len(result) == 1
         assert "depth" in result[0]
         assert result[0]["depth"] == 1
+
+
+class TestFindByPredicate:
+    """Tests for the find_by_predicate method."""
+
+    @pytest.mark.asyncio
+    async def test_find_by_predicate_basic(self) -> None:
+        """Test finding triples by predicate."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "user",
+                    "predicate": "performed_activity",
+                    "object": "coding",
+                    "created_at": datetime.now(UTC),
+                },
+                {
+                    "subject": "user",
+                    "predicate": "performed_activity",
+                    "object": "running",
+                    "created_at": datetime.now(UTC),
+                },
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_by_predicate("performed_activity", limit=50)
+
+        assert len(result) == 2
+        assert result[0]["predicate"] == "performed_activity"
+        assert result[0]["subject"] == "user"
+        assert result[0]["object"] == "coding"
+
+    @pytest.mark.asyncio
+    async def test_find_by_predicate_with_date_range(self) -> None:
+        """Test finding triples by predicate within date range."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        start_date = datetime(2026, 1, 1, tzinfo=UTC)
+        end_date = datetime(2026, 1, 8, tzinfo=UTC)
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "user",
+                    "predicate": "performed_activity",
+                    "object": "coding",
+                    "created_at": datetime(2026, 1, 5, tzinfo=UTC),
+                },
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_by_predicate(
+            "performed_activity",
+            start_date=start_date,
+            end_date=end_date,
+            limit=50,
+        )
+
+        assert len(result) == 1
+        assert result[0]["object"] == "coding"
+
+    @pytest.mark.asyncio
+    async def test_find_by_predicate_empty_result(self) -> None:
+        """Test that empty list is returned when no matches."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_by_predicate("nonexistent_predicate")
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_find_by_predicate_respects_limit(self) -> None:
+        """Test that limit parameter is respected."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+
+        triples = [
+            {
+                "subject": "user",
+                "predicate": "performed_activity",
+                "object": f"activity_{i}",
+                "created_at": datetime.now(UTC),
+            }
+            for i in range(10)
+        ]
+        mock_conn.fetch = AsyncMock(return_value=triples[:5])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_by_predicate("performed_activity", limit=5)
+
+        assert len(result) == 5
+
+    @pytest.mark.asyncio
+    async def test_find_by_predicate_with_start_date_only(self) -> None:
+        """Test finding triples with start date only."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        start_date = datetime(2026, 1, 1, tzinfo=UTC)
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "user",
+                    "predicate": "performed_activity",
+                    "object": "coding",
+                    "created_at": datetime(2026, 1, 10, tzinfo=UTC),
+                },
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_by_predicate(
+            "performed_activity",
+            start_date=start_date,
+            limit=50,
+        )
+
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_find_by_predicate_with_end_date_only(self) -> None:
+        """Test finding triples with end date only."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        end_date = datetime(2026, 1, 8, tzinfo=UTC)
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "user",
+                    "predicate": "performed_activity",
+                    "object": "coding",
+                    "created_at": datetime(2026, 1, 5, tzinfo=UTC),
+                },
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_by_predicate(
+            "performed_activity",
+            end_date=end_date,
+            limit=50,
+        )
+
+        assert len(result) == 1

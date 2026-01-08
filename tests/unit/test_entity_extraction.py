@@ -13,6 +13,7 @@ import pytest
 from lattice.core.entity_extraction import (
     EntityExtraction,
     extract_entities,
+    extract_predicates,
     get_extraction,
     get_message_extraction,
 )
@@ -377,3 +378,85 @@ class TestGetMessageExtraction:
             extraction = await get_message_extraction(message_id)
 
             assert extraction is None
+
+
+class TestExtractPredicates:
+    """Tests for the extract_predicates function."""
+
+    def test_extract_predicates_activity_query_what_did_i_do(self) -> None:
+        """Test detecting 'what did I do' activity query."""
+        result = extract_predicates("What did I do last week?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_summarize(self) -> None:
+        """Test detecting 'summarize my activities' query."""
+        result = extract_predicates("Summarize my activities")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_how_spent_time(self) -> None:
+        """Test detecting 'how did I spend my time' query."""
+        result = extract_predicates("How did I spend my time this week?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_been_up_to(self) -> None:
+        """Test detecting 'what have I been up to' query."""
+        result = extract_predicates("What have I been up to lately?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_been_doing(self) -> None:
+        """Test detecting 'what have I been doing' query."""
+        result = extract_predicates("What have I been doing?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_with_timeframe(self) -> None:
+        """Test detecting activity query with specific timeframe."""
+        result = extract_predicates("What did I do yesterday?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_last_week(self) -> None:
+        """Test detecting activity query for last week."""
+        result = extract_predicates("What did I do last week?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_last_month(self) -> None:
+        """Test detecting activity query for last month."""
+        result = extract_predicates("What did I do last month?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_how_was_day(self) -> None:
+        """Test detecting 'how was my day' query."""
+        result = extract_predicates("How was my day?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_activity_query_activities_did_i(self) -> None:
+        """Test detecting 'what activities did I do' query."""
+        result = extract_predicates("What activities did I complete today?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_non_activity_message(self) -> None:
+        """Test that non-activity messages return empty list."""
+        result = extract_predicates("I need to finish the project by Friday")
+        assert result == []
+
+    def test_extract_predicates_greeting(self) -> None:
+        """Test that greetings return empty list."""
+        result = extract_predicates("Hello, how are you?")
+        assert result == []
+
+    def test_extract_predicates_case_insensitive(self) -> None:
+        """Test that pattern matching is case insensitive."""
+        result = extract_predicates("WHAT DID I DO LAST WEEK?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_mixed_case(self) -> None:
+        """Test mixed case pattern matching."""
+        result = extract_predicates("What Have I Been Up To?")
+        assert result == ["performed_activity"]
+
+    def test_extract_predicates_no_duplicate_predicates(self) -> None:
+        """Test that duplicate predicates are not added."""
+        result = extract_predicates(
+            "What did I do and what have I been doing? I want to summarize my activities"
+        )
+        assert result == ["performed_activity"]
+        assert len(result) == 1

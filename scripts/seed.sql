@@ -157,6 +157,9 @@ lives_in, works_as, studied_at, knows_language, has_pet, has_family_member
 ### Goal-related (use together when applicable)
 has_goal, due_by (ISO date), priority (high/medium/low), status (active/completed/abandoned)
 
+### Activity-related (use together when applicable)
+performed_activity, has_duration (e.g., "3 hours", "30 minutes")
+
 ### Other open (use sparingly, keep reusable)
 prefers_*, favorite_*, owns_*, born_in, born_on, etc.
 
@@ -184,6 +187,18 @@ User: Call me tomorrow about the design
 [
   {"subject": "mobile app", "predicate": "due_by", "object": "2026-01-10"},
   {"subject": "design", "predicate": "due_by", "object": "2026-01-09"}
+]
+
+**Date Resolution Hints:** (empty)
+**New Messages:**
+User: Spent 3 hours coding today
+User: Went for a 30 minute run this morning
+**Output:**
+[
+  {"subject": "user", "predicate": "performed_activity", "object": "coding"},
+  {"subject": "coding", "predicate": "has_duration", "object": "3 hours"},
+  {"subject": "user", "predicate": "performed_activity", "object": "running"},
+  {"subject": "running", "predicate": "has_duration", "object": "30 minutes"}
 ]$TPL$, 0.2);
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
