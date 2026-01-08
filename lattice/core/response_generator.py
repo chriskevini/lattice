@@ -157,9 +157,10 @@ async def generate_response(
     if graph_triples:
         relationships = []
         for triple in graph_triples[:MAX_GRAPH_TRIPLES]:
-            subject = triple.get("subject_content", "")
+            # Text-based triples use "subject" and "object" keys directly
+            subject = triple.get("subject", "")
             predicate = triple.get("predicate", "")
-            obj = triple.get("object_content", "")
+            obj = triple.get("object", "")
             if subject and predicate and obj:
                 relationships.append(f"{subject} {predicate} {obj}")
 

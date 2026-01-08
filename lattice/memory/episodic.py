@@ -163,62 +163,6 @@ async def get_recent_messages(
     ]
 
 
-async def upsert_entity(
-    name: str,
-    entity_type: str | None = None,
-    conn: Any | None = None,
-) -> UUID:
-    """Get or create entity by name.
-
-    Args:
-        name: Entity name
-        entity_type: Optional entity type
-        conn: Optional connection to use (for transactions)
-
-    Returns:
-        UUID of entity
-
-    Raises:
-        Exception: If database operation fails
-    """
-    normalized_name = name.lower().strip()
-
-    async def _upsert(c: Any) -> UUID:
-        row = await c.fetchrow(
-            """
-            SELECT id FROM entities WHERE LOWER(name) = $1
-            """,
-            normalized_name,
-        )
-
-        if row:
-            return cast("UUID", row["id"])
-
-        row = await c.fetchrow(
-            """
-            INSERT INTO entities (name, entity_type)
-            VALUES ($1, $2)
-            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-            RETURNING id
-            """,
-            name,
-            entity_type,
-        )
-
-        if not row:
-            raise ValueError(f"Failed to create entity: {name}")
-
-        entity_id = cast("UUID", row["id"])
-        logger.info("Created entity", name=name, entity_id=str(entity_id))
-        return entity_id
-
-    if conn:
-        return await _upsert(conn)
-    else:
-        async with db_pool.pool.acquire() as c:
-            return await _upsert(c)
-
-
 async def store_semantic_triples(
     message_id: UUID,
     triples: list[dict[str, str]],

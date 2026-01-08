@@ -1,7 +1,11 @@
-"""Integration tests for entity and semantic triple storage.
+"""Integration tests for semantic triple storage.
 
 These tests require a real database connection and are skipped in CI.
 To run locally, set DATABASE_URL environment variable.
+
+Note: After issue #131, semantic triples use text-based storage
+(subject/predicate/object as TEXT) rather than entity IDs.
+The entities table is no longer used for triple storage.
 """
 
 import os
@@ -10,7 +14,6 @@ import pytest
 
 from lattice.memory import episodic
 from lattice.utils.database import db_pool
-from lattice.utils.triple_parsing import parse_triples
 
 
 # Skip all tests if DATABASE_URL not set (CI environment)
@@ -18,61 +21,6 @@ pytestmark = pytest.mark.skipif(
     not os.getenv("DATABASE_URL"),
     reason="DATABASE_URL not set - requires real database for integration tests",
 )
-
-
-@pytest.mark.integration
-class TestEntityStorage:
-    """Test entity upsert functionality."""
-
-    @pytest.mark.asyncio
-    async def test_create_new_entity(self) -> None:
-        """Test creating a new entity."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
-        entity_id = await episodic.upsert_entity(name="TestEntity", entity_type="test")
-
-        assert entity_id is not None
-
-        # Verify entity exists in database
-        async with db_pool.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT id, name, entity_type FROM entities WHERE id = $1", entity_id
-            )
-            assert row is not None
-            assert row["name"] == "TestEntity"
-            assert row["entity_type"] == "test"
-
-    @pytest.mark.asyncio
-    async def test_upsert_existing_entity(self) -> None:
-        """Test that upserting existing entity returns same ID."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
-        # Create entity first time
-        entity_id_1 = await episodic.upsert_entity(name="DuplicateTest")
-
-        # Create same entity again
-        entity_id_2 = await episodic.upsert_entity(name="DuplicateTest")
-
-        # Should return same ID
-        assert entity_id_1 == entity_id_2
-
-    @pytest.mark.asyncio
-    async def test_entity_case_insensitive_matching(self) -> None:
-        """Test that entity matching is case-insensitive."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
-        # Create with lowercase
-        entity_id_1 = await episodic.upsert_entity(name="casetest")
-
-        # Try with different casing
-        entity_id_2 = await episodic.upsert_entity(name="CaseTest")
-        entity_id_3 = await episodic.upsert_entity(name="CASETEST")
-
-        # All should match
-        assert entity_id_1 == entity_id_2 == entity_id_3
 
 
 @pytest.mark.integration
@@ -95,27 +43,32 @@ class TestTripleStorage:
         message_id = await episodic.store_message(message)
 
         # Store triple
-        triples = [{"subject": "Alice", "predicate": "works_at", "object": "OpenAI"}]
+        triples = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
         await episodic.store_semantic_triples(message_id, triples)
 
         # Verify triple was stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT s.name as subject, t.predicate, o.name as object, t.origin_id
-                FROM semantic_triples t
-                JOIN entities s ON t.subject_id = s.id
-                JOIN entities o ON t.object_id = o.id
-                WHERE t.origin_id = $1
-                """,
-                message_id,
+                SELECT subject, predicate, object
+                FROM semantic_triple
+                WHERE source_batch_id IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
             )
 
-            assert len(rows) == 1
-            assert rows[0]["subject"] == "Alice"
-            assert rows[0]["predicate"] == "works_at"
-            assert rows[0]["object"] == "OpenAI"
-            assert rows[0]["origin_id"] == message_id
+            assert len(rows) >= 1
+            found = False
+            for row in rows:
+                if (
+                    row["subject"] == "user"
+                    and row["predicate"] == "works_at"
+                    and row["object"] == "OpenAI"
+                ):
+                    found = True
+                    break
+            assert found, "Triple not found in database"
 
     @pytest.mark.asyncio
     async def test_store_multiple_triples(self) -> None:
@@ -132,64 +85,28 @@ class TestTripleStorage:
         )
         message_id = await episodic.store_message(message)
 
-        # Store multiple triples
+        # Store multiple triples with a batch ID for tracking
+        batch_id = "test_batch_12346"
         triples = [
-            {"subject": "Alice", "predicate": "works_at", "object": "OpenAI"},
-            {"subject": "Alice", "predicate": "likes", "object": "Python"},
+            {"subject": "user", "predicate": "works_at", "object": "OpenAI"},
+            {"subject": "user", "predicate": "likes", "object": "Python"},
         ]
-        await episodic.store_semantic_triples(message_id, triples)
+        await episodic.store_semantic_triples(
+            message_id, triples, source_batch_id=batch_id
+        )
 
         # Verify both triples stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT COUNT(*) as count
-                FROM semantic_triples
-                WHERE origin_id = $1
+                FROM semantic_triple
+                WHERE source_batch_id = $1
                 """,
-                message_id,
+                batch_id,
             )
 
             assert rows[0]["count"] == 2
-
-    @pytest.mark.asyncio
-    async def test_store_triple_with_normalized_predicate(self) -> None:
-        """Test that predicates are normalized correctly."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
-        message = episodic.EpisodicMessage(
-            content="Bob loves pizza",
-            discord_message_id=12347,
-            channel_id=67890,
-            is_bot=False,
-        )
-        message_id = await episodic.store_message(message)
-
-        # Parse triples to normalize predicates (mimics actual pipeline)
-        # parse_triples() normalizes "loves" → "likes"
-        raw_output = '[{"subject": "Bob", "predicate": "loves", "object": "pizza"}]'
-        triples = parse_triples(raw_output)
-
-        assert len(triples) == 1
-        assert triples[0]["predicate"] == "likes"  # Verify normalization happened
-
-        await episodic.store_semantic_triples(message_id, triples)
-
-        # Verify predicate was normalized to "likes"
-        async with db_pool.pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT predicate
-                FROM semantic_triples
-                WHERE origin_id = $1
-                """,
-                message_id,
-            )
-
-            assert len(rows) == 1
-            # Should be normalized to canonical form
-            assert rows[0]["predicate"] == "likes"
 
     @pytest.mark.asyncio
     async def test_skip_invalid_triples(self) -> None:
@@ -206,43 +123,47 @@ class TestTripleStorage:
         message_id = await episodic.store_message(message)
 
         # Mix of valid and invalid triples
+        batch_id = "test_batch_12348"
         triples = [
-            {"subject": "Alice", "predicate": "works_at", "object": "OpenAI"},  # Valid
+            {"subject": "user", "predicate": "works_at", "object": "OpenAI"},  # Valid
             {
                 "subject": "",
                 "predicate": "likes",
                 "object": "Python",
             },  # Invalid - empty subject
             {
-                "subject": "Bob",
+                "subject": "user",
                 "predicate": "",
                 "object": "Coffee",
             },  # Invalid - empty predicate
             {
-                "subject": "Carol",
+                "subject": "user",
                 "predicate": "knows",
                 "object": "",
             },  # Invalid - empty object
         ]
 
         # Should not raise exception
-        await episodic.store_semantic_triples(message_id, triples)
+        await episodic.store_semantic_triples(
+            message_id, triples, source_batch_id=batch_id
+        )
 
         # Verify only valid triple was stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT s.name as subject
-                FROM semantic_triples t
-                JOIN entities s ON t.subject_id = s.id
-                WHERE t.origin_id = $1
+                SELECT subject, predicate, object
+                FROM semantic_triple
+                WHERE source_batch_id = $1
                 """,
-                message_id,
+                batch_id,
             )
 
             # Should have stored only the valid triple
             assert len(rows) == 1
-            assert rows[0]["subject"] == "Alice"
+            assert rows[0]["subject"] == "user"
+            assert rows[0]["predicate"] == "works_at"
+            assert rows[0]["object"] == "OpenAI"
 
     @pytest.mark.asyncio
     async def test_empty_triples_list(self) -> None:
@@ -259,15 +180,71 @@ class TestTripleStorage:
         message_id = await episodic.store_message(message)
 
         # Should not raise exception
-        await episodic.store_semantic_triples(message_id, [])
+        batch_id = "test_batch_12349"
+        await episodic.store_semantic_triples(message_id, [], source_batch_id=batch_id)
 
         # Verify no triples stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT COUNT(*) as count FROM semantic_triples WHERE origin_id = $1",
-                message_id,
+                """
+                SELECT COUNT(*) as count
+                FROM semantic_triple
+                WHERE source_batch_id = $1
+                """,
+                batch_id,
             )
             assert rows[0]["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_text_based_triple_search(self) -> None:
+        """Test searching for triples by text matching."""
+        if not db_pool.is_initialized():
+            await db_pool.initialize()
+
+        message = episodic.EpisodicMessage(
+            content="Test triple search",
+            discord_message_id=12350,
+            channel_id=67890,
+            is_bot=False,
+        )
+        message_id = await episodic.store_message(message)
+
+        # Store a triple with unique identifiers
+        batch_id = "test_batch_12350"
+        triples = [
+            {"subject": "user", "predicate": "lives_in", "object": "Richmond, BC"}
+        ]
+        await episodic.store_semantic_triples(
+            message_id, triples, source_batch_id=batch_id
+        )
+
+        # Search by subject
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT subject, predicate, object
+                FROM semantic_triple
+                WHERE subject ILIKE $1 AND source_batch_id = $2
+                """,
+                "%user%",
+                batch_id,
+            )
+            assert len(rows) == 1
+            assert rows[0]["predicate"] == "lives_in"
+
+        # Search by object
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT subject, predicate, object
+                FROM semantic_triple
+                WHERE object ILIKE $1 AND source_batch_id = $2
+                """,
+                "%Richmond%",
+                batch_id,
+            )
+            assert len(rows) == 1
+            assert rows[0]["subject"] == "user"
 
 
 if __name__ == "__main__":

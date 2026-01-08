@@ -1,94 +1,161 @@
-"""Graph traversal utilities for semantic triple relationships."""
+"""Graph traversal utilities for semantic triple relationships.
+
+This module provides text-based semantic triple queries with BFS traversal
+capability. The semantic_triple table uses text columns (subject, predicate,
+object) rather than entity IDs, following the timestamp-based evolution design
+from issue #131.
+
+BFS Traversal Design:
+- Multi-hop traversal is implemented iteratively using text matching
+- Each hop expands to triples containing entities discovered in the previous hop
+- Cycle detection prevents infinite loops by tracking visited entities
+"""
 
 import logging
 from typing import Any
-from uuid import UUID
 
 import asyncpg
 
 
 logger = logging.getLogger(__name__)
 
+MAX_ENTITY_NAME_LENGTH = 255
+
+
+def _escape_like_pattern(entity: str) -> str:
+    """Escape special characters for ILIKE pattern matching.
+
+    Prevents injection of wildcards (%) and underscore (_) that could
+    cause unexpected matching behavior.
+
+    Args:
+        entity: The entity name to escape
+
+    Returns:
+        Entity name with ILIKE wildcards escaped
+    """
+    return entity.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _sanitize_entity_name(entity: str) -> str:
+    """Sanitize entity name for safe pattern matching.
+
+    Truncates long names and escapes special characters.
+
+    Args:
+        entity: The entity name to sanitize
+
+    Returns:
+        Sanitized entity name safe for ILIKE queries
+    """
+    if len(entity) > MAX_ENTITY_NAME_LENGTH:
+        entity = entity[:MAX_ENTITY_NAME_LENGTH]
+    return _escape_like_pattern(entity)
+
 
 class GraphTraversal:
-    """Neuro-symbolic graph traversal for relational reasoning."""
+    """Text-based graph traversal for semantic triples.
+
+    Provides BFS traversal for multi-hop reasoning using text-based triple storage.
+    Unlike entity-ID based traversal, this uses iterative text matching to discover
+    related entities across multiple hops.
+    """
 
     def __init__(self, db_pool: asyncpg.Pool, max_depth: int = 3) -> None:
         """Initialize graph traverser.
 
         Args:
             db_pool: Database connection pool
-            max_depth: Default maximum traversal depth
+            max_depth: Default maximum traversal depth for BFS
         """
         self.db_pool = db_pool
         self.max_depth = max_depth
 
-    async def traverse_from_fact(
+    async def traverse_from_entity(
         self,
-        fact_id: UUID,
+        entity_name: str,
         predicate_filter: set[str] | None = None,
         max_hops: int | None = None,
     ) -> list[dict[str, Any]]:
-        """BFS traversal starting from an entity.
+        """BFS traversal starting from an entity name.
+
+        Performs breadth-first search to find entities connected through chains
+        of relationships. For example, given "Alice", it can discover:
+        - Hop 1: Alice works_at Acme Corp
+        - Hop 2: Acme Corp acquired_by TechCorp
+        - Hop 3: TechCorp in Technology Industry
 
         Args:
-            fact_id: Starting entity UUID
+            entity_name: Starting entity name (case-insensitive partial match)
             predicate_filter: Optional set of predicates to follow (None = all)
             max_hops: Maximum traversal depth (defaults to self.max_depth)
 
         Returns:
-            List of discovered triples with metadata
+            List of discovered triples with metadata including depth
         """
         if max_hops is None:
             max_hops = self.max_depth
 
+        all_triples: list[dict[str, Any]] = []
+        visited_entities: set[str] = set()
+        frontier: set[str] = {entity_name.lower()}
+        seen_triples: set[tuple[str, str, str]] = set()
+
         async with self.db_pool.acquire() as conn:
-            result = await conn.fetch(
-                """
-                WITH RECURSIVE traversal AS (
-                    SELECT
-                        t.id,
-                        t.subject_id,
-                        s.name AS subject_content,
-                        t.predicate,
-                        t.object_id,
-                        o.name AS object_content,
-                        1 AS depth,
-                        ARRAY[t.object_id] AS visited
-                    FROM semantic_triples t
-                    JOIN entities s ON t.subject_id = s.id
-                    JOIN entities o ON t.object_id = o.id
-                    WHERE t.subject_id = $1
-                      AND ($2 IS NULL OR t.predicate = ANY($2))
+            for depth in range(1, max_hops + 1):
+                if not frontier:
+                    break
 
-                    UNION ALL
+                next_frontier: set[str] = set()
 
-                    SELECT
-                        t.id,
-                        t.subject_id,
-                        s.name AS subject_content,
-                        t.predicate,
-                        t.object_id,
-                        o.name AS object_content,
-                        traversal.depth + 1,
-                        traversal.visited || t.object_id
-                    FROM semantic_triples t
-                    JOIN entities s ON t.subject_id = s.id
-                    JOIN entities o ON t.object_id = o.id
-                    JOIN traversal ON t.subject_id = traversal.object_id
-                    WHERE traversal.depth < $3
-                      AND NOT t.object_id = ANY(traversal.visited)
-                      AND ($4 IS NULL OR t.predicate = ANY($4))
-                )
-                SELECT * FROM traversal
-                """,
-                fact_id,
-                list(predicate_filter) if predicate_filter else None,
-                max_hops,
-                list(predicate_filter) if predicate_filter else None,
-            )
+                for entity in frontier:
+                    entity_lower = entity.lower()
+                    if entity_lower in visited_entities:
+                        continue
+                    visited_entities.add(entity_lower)
 
-            return [dict(row) for row in result]
+                    sanitized_entity = _sanitize_entity_name(entity)
+                    triples = await conn.fetch(
+                        """
+                        SELECT
+                            subject,
+                            predicate,
+                            object,
+                            created_at
+                        FROM semantic_triple
+                        WHERE (subject ILIKE $1 OR object ILIKE $1)
+                          AND ($2 IS NULL OR predicate = ANY($2))
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                        """,
+                        f"%{sanitized_entity}%",
+                        list(predicate_filter) if predicate_filter else None,
+                    )
+
+                    for row in triples:
+                        triple = dict(row)
+                        triple_key = (
+                            triple["subject"].lower(),
+                            triple["predicate"].lower(),
+                            triple["object"].lower(),
+                        )
+                        if triple_key in seen_triples:
+                            continue
+                        seen_triples.add(triple_key)
+                        triple["depth"] = depth
+                        all_triples.append(triple)
+
+                        discovered_entity = (
+                            triple["object"]
+                            if triple["subject"].lower() == entity_lower
+                            else triple["subject"]
+                        )
+                        if discovered_entity.lower() not in visited_entities:
+                            next_frontier.add(discovered_entity)
+
+                frontier = next_frontier
+
+        return all_triples
 
     async def find_entity_relationships(
         self,
@@ -97,29 +164,31 @@ class GraphTraversal:
     ) -> list[dict[str, Any]]:
         """Find all relationships involving a specific entity by name.
 
+        Uses text-based matching against subject and object columns.
+        Returns most recent triples first (timestamp-based evolution).
+
         Args:
-            entity_name: Entity name to search for
+            entity_name: Entity name to search for (case-insensitive partial match)
             limit: Maximum number of results
 
         Returns:
-            List of triples involving the entity (includes origin_id for source attribution)
+            List of triples with keys: subject, predicate, object, created_at
         """
         async with self.db_pool.acquire() as conn:
-            return await conn.fetch(
+            sanitized_name = _sanitize_entity_name(entity_name)
+            rows = await conn.fetch(
                 """
                 SELECT
-                    s.name AS subject,
-                    t.predicate,
-                    o.name AS object,
-                    t.created_at,
-                    t.origin_id
-                FROM semantic_triples t
-                JOIN entities s ON t.subject_id = s.id
-                JOIN entities o ON t.object_id = o.id
-                WHERE s.name ILIKE $1 OR o.name ILIKE $1
-                ORDER BY t.created_at DESC
+                    subject,
+                    predicate,
+                    object,
+                    created_at
+                FROM semantic_triple
+                WHERE subject ILIKE $1 OR object ILIKE $1
+                ORDER BY created_at DESC
                 LIMIT $2
                 """,
-                f"%{entity_name}%",
+                f"%{sanitized_name}%",
                 limit,
             )
+            return [dict(row) for row in rows]
