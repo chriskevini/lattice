@@ -134,7 +134,7 @@ prefers_*, favorite_*, owns_*, born_in, born_on, etc.
 {semantic_context}
 
 **New messages to extract from:**
-{new_messages}
+{bigger_episodic_context}
 
 ## Output
 Output ONLY a valid JSON array of triples. No explanations.

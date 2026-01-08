@@ -286,7 +286,9 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "Template with {semantic_context} and {new_messages}"
+        mock_prompt.template = (
+            "Template with {semantic_context} and {bigger_episodic_context}"
+        )
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Formatted prompt")
         mock_prompt.version = 1
@@ -470,7 +472,7 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "{new_messages}"
+        mock_prompt.template = "{bigger_episodic_context}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="User: Hello\nBot: Hi there!")
         mock_prompt.version = 1
@@ -501,8 +503,8 @@ class TestRunBatchConsolidation:
                 ):
                     await run_batch_consolidation()
                     call_args = mock_prompt.safe_format.call_args
-                    assert "new_messages" in call_args[1]
-                    history = call_args[1]["new_messages"]
+                    assert "bigger_episodic_context" in call_args[1]
+                    history = call_args[1]["bigger_episodic_context"]
                     assert "User: Hello" in history
                     assert "Bot: Hi there!" in history
 
