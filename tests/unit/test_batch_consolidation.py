@@ -120,7 +120,6 @@ class TestCheckAndRunBatch:
             ) as mock_run:
                 mock_run.return_value = None
                 await check_and_run_batch()
-                # Verify query used int("0") = 0
                 call_args = mock_conn.fetchrow.call_args_list[1]
                 assert "discord_message_id > $1" in call_args[0][0]
                 assert call_args[0][1] == 0
@@ -144,7 +143,6 @@ class TestCheckAndRunBatch:
             ) as mock_run:
                 mock_run.return_value = None
                 await check_and_run_batch()
-                # Should use 0 when parsing fails
                 call_args = mock_conn.fetchrow.call_args_list[1]
                 assert call_args[0][1] == 0
 
@@ -156,8 +154,37 @@ class TestRunBatchConsolidation:
     async def test_no_messages_returns_early(self) -> None:
         """Test that batch returns early when no new messages."""
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
         mock_conn.fetch = AsyncMock(return_value=[])  # No messages
+
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
+
+        mock_pool = MagicMock()
+        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+
+        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+            mock_db_pool.pool = mock_pool
+            with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+                await run_batch_consolidation()
+                mock_prompt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_threshold_check_prevents_double_run(self) -> None:
+        """Test that threshold is re-checked inside transaction."""
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 5},  # Re-check shows below threshold - another worker ran first
+            ]
+        )
 
         mock_acquire_cm = MagicMock()
         mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -187,10 +214,13 @@ class TestRunBatchConsolidation:
         ]
 
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-        mock_conn.fetch = AsyncMock(
-            side_effect=[messages, []]
-        )  # messages + empty memories
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
+        mock_conn.fetch = AsyncMock(side_effect=[messages, []])
 
         mock_acquire_cm = MagicMock()
         mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -202,7 +232,7 @@ class TestRunBatchConsolidation:
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                mock_prompt.return_value = None  # No template
+                mock_prompt.return_value = None
                 with patch(
                     "lattice.memory.batch_consolidation.get_auditing_llm_client"
                 ) as mock_llm:
@@ -232,7 +262,12 @@ class TestRunBatchConsolidation:
         ]
 
         mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+        mock_conn1.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, memories])
 
         mock_conn2 = AsyncMock()
@@ -253,6 +288,7 @@ class TestRunBatchConsolidation:
         mock_prompt.template = "Template with {MEMORY_CONTEXT} and {MESSAGE_HISTORY}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Formatted prompt")
+        mock_prompt.version = 1
 
         mock_result = MagicMock()
         mock_result.content = (
@@ -265,6 +301,7 @@ class TestRunBatchConsolidation:
         mock_result.total_tokens = 150
         mock_result.cost_usd = 0.002
         mock_result.latency_ms = 500
+        mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
@@ -306,73 +343,12 @@ class TestRunBatchConsolidation:
         ]
 
         mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-        mock_conn1.fetch = AsyncMock(side_effect=[messages, []])  # No memories
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
-
-        mock_prompt = MagicMock()
-        mock_prompt.template = "Template"
-        mock_prompt.temperature = 0.2
-        mock_prompt.safe_format = MagicMock(return_value="Formatted")
-
-        mock_result = MagicMock()
-        mock_result.content = "[]"  # No triples
-        mock_result.model = "gpt-4"
-        mock_result.provider = "openai"
-        mock_result.prompt_tokens = 50
-        mock_result.completion_tokens = 10
-        mock_result.total_tokens = 60
-        mock_result.cost_usd = 0.001
-        mock_result.latency_ms = 200
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.complete = AsyncMock(return_value=mock_result)
-
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
-            ):
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
-                    await run_batch_consolidation()
-                    # Verify last_batch_message_id was updated
-                    update_call = mock_conn2.execute.call_args
-                    assert "UPDATE system_health" in update_call[0][0]
-                    assert update_call[0][1] == "118"  # Updated to last message id
-
-    @pytest.mark.asyncio
-    async def test_handles_json_code_blocks(self) -> None:
-        """Test that JSON code blocks are stripped before parsing."""
-        message_id = uuid4()
-        messages = [
-            {
-                "id": message_id,
-                "discord_message_id": 101,
-                "content": "I have a dog",
-                "is_bot": False,
-                "timestamp": datetime.now(UTC),
-            }
-        ]
-
-        mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+        mock_conn1.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
 
         mock_conn2 = AsyncMock()
@@ -393,6 +369,79 @@ class TestRunBatchConsolidation:
         mock_prompt.template = "Template"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Formatted")
+        mock_prompt.version = 1
+
+        mock_result = MagicMock()
+        mock_result.content = "[]"
+        mock_result.model = "gpt-4"
+        mock_result.provider = "openai"
+        mock_result.prompt_tokens = 50
+        mock_result.completion_tokens = 10
+        mock_result.total_tokens = 60
+        mock_result.cost_usd = 0.001
+        mock_result.latency_ms = 200
+        mock_result.audit_id = uuid4()
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.complete = AsyncMock(return_value=mock_result)
+
+        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+            mock_db_pool.pool = mock_pool
+            with patch(
+                "lattice.memory.batch_consolidation.get_prompt",
+                return_value=mock_prompt,
+            ):
+                with patch(
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
+                    return_value=mock_llm_client,
+                ):
+                    await run_batch_consolidation()
+                    update_call = mock_conn2.execute.call_args
+                    assert "UPDATE system_health" in update_call[0][0]
+                    assert update_call[0][1] == "118"
+
+    @pytest.mark.asyncio
+    async def test_handles_json_code_blocks(self) -> None:
+        """Test that JSON code blocks are stripped before parsing."""
+        message_id = uuid4()
+        messages = [
+            {
+                "id": message_id,
+                "discord_message_id": 101,
+                "content": "I have a dog",
+                "is_bot": False,
+                "timestamp": datetime.now(UTC),
+            }
+        ]
+
+        mock_conn1 = AsyncMock()
+        mock_conn1.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
+        mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
+
+        mock_conn2 = AsyncMock()
+        mock_conn2.execute = AsyncMock()
+
+        mock_acquire_cm1 = MagicMock()
+        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
+        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
+
+        mock_acquire_cm2 = MagicMock()
+        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
+        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
+
+        mock_pool = MagicMock()
+        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+
+        mock_prompt = MagicMock()
+        mock_prompt.template = "Template"
+        mock_prompt.temperature = 0.2
+        mock_prompt.safe_format = MagicMock(return_value="Formatted")
+        mock_prompt.version = 1
 
         mock_result = MagicMock()
         mock_result.content = """```json
@@ -405,6 +454,7 @@ class TestRunBatchConsolidation:
         mock_result.total_tokens = 150
         mock_result.cost_usd = 0.002
         mock_result.latency_ms = 500
+        mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
@@ -443,7 +493,12 @@ class TestRunBatchConsolidation:
         ]
 
         mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+        mock_conn1.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
 
         mock_conn2 = AsyncMock()
@@ -464,6 +519,7 @@ class TestRunBatchConsolidation:
         mock_prompt.template = "Template"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Formatted")
+        mock_prompt.version = 1
 
         mock_result = MagicMock()
         mock_result.content = "not valid json at all"
@@ -474,6 +530,7 @@ class TestRunBatchConsolidation:
         mock_result.total_tokens = 55
         mock_result.cost_usd = 0.001
         mock_result.latency_ms = 150
+        mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
@@ -504,20 +561,25 @@ class TestRunBatchConsolidation:
                 "id": message_id,
                 "discord_message_id": 101,
                 "content": "Hello",
-                "is_bot": False,  # User
+                "is_bot": False,
                 "timestamp": now,
             },
             {
                 "id": uuid4(),
                 "discord_message_id": 102,
                 "content": "Hi there!",
-                "is_bot": True,  # Bot
+                "is_bot": True,
                 "timestamp": now,
             },
         ]
 
         mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+        mock_conn1.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
 
         mock_conn2 = AsyncMock()
@@ -538,6 +600,7 @@ class TestRunBatchConsolidation:
         mock_prompt.template = "{MESSAGE_HISTORY}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="User: Hello\nBot: Hi there!")
+        mock_prompt.version = 1
 
         mock_result = MagicMock()
         mock_result.content = "[]"
@@ -548,6 +611,7 @@ class TestRunBatchConsolidation:
         mock_result.total_tokens = 60
         mock_result.cost_usd = 0.001
         mock_result.latency_ms = 200
+        mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
@@ -563,7 +627,6 @@ class TestRunBatchConsolidation:
                     return_value=mock_llm_client,
                 ):
                     await run_batch_consolidation()
-                    # Verify safe_format was called with correct message history
                     call_args = mock_prompt.safe_format.call_args
                     assert "MESSAGE_HISTORY" in call_args[1]
                     history = call_args[1]["MESSAGE_HISTORY"]
@@ -599,7 +662,12 @@ class TestRunBatchConsolidation:
         ]
 
         mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+        mock_conn1.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, memories])
 
         mock_conn2 = AsyncMock()
@@ -620,6 +688,7 @@ class TestRunBatchConsolidation:
         mock_prompt.template = "{MEMORY_CONTEXT}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Memories")
+        mock_prompt.version = 1
 
         mock_result = MagicMock()
         mock_result.content = "[]"
@@ -630,6 +699,7 @@ class TestRunBatchConsolidation:
         mock_result.total_tokens = 60
         mock_result.cost_usd = 0.001
         mock_result.latency_ms = 200
+        mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
@@ -666,8 +736,13 @@ class TestRunBatchConsolidation:
         ]
 
         mock_conn1 = AsyncMock()
-        mock_conn1.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-        mock_conn1.fetch = AsyncMock(side_effect=[messages, []])  # No memories
+        mock_conn1.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {"cnt": 20},
+            ]
+        )
+        mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
 
         mock_conn2 = AsyncMock()
         mock_conn2.execute = AsyncMock()
@@ -687,6 +762,7 @@ class TestRunBatchConsolidation:
         mock_prompt.template = "{MEMORY_CONTEXT}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="(No previous memories)")
+        mock_prompt.version = 1
 
         mock_result = MagicMock()
         mock_result.content = "[]"
@@ -697,6 +773,7 @@ class TestRunBatchConsolidation:
         mock_result.total_tokens = 60
         mock_result.cost_usd = 0.001
         mock_result.latency_ms = 200
+        mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
@@ -754,3 +831,36 @@ class TestRaceCondition:
         call_args = mock_conn.execute.call_args
         assert "UPDATE system_health" in call_args[0][0]
         assert call_args[0][1] == "99999"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_workers_race_prevention(self) -> None:
+        """Test that concurrent workers don't process same batch twice.
+
+        This tests the double-checked locking pattern: first worker passes
+        initial check, second worker also passes initial check, but when
+        first worker updates last_batch_id, second worker's re-check fails.
+        """
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[
+                {"metric_value": "100"},
+                {
+                    "cnt": 5
+                },  # Second check shows only 5 - another worker updated last_batch_id
+            ]
+        )
+        mock_conn.fetch = AsyncMock(return_value=[])
+
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
+
+        mock_pool = MagicMock()
+        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+
+        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+            mock_db_pool.pool = mock_pool
+            with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+                await run_batch_consolidation()
+                mock_prompt.assert_not_called()
+                # fetch is not called because we returned early when threshold no longer met

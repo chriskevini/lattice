@@ -4,13 +4,14 @@ Uses timestamp-based evolution: all triples are inserted with created_at,
 no updates or deletes. Query logic handles "current truth" via recency.
 
 Architecture:
-    - check_and_run_batch(): Called after each message, delegates to run_batch_consolidation()
-    - run_batch_consolidation(): Performs threshold check and extraction
+    - check_and_run_batch(): Fast threshold check, called after each message
+    - run_batch_consolidation(): Double-check threshold under lock, then process
     - BATCH_SIZE = 18: Number of messages required to trigger extraction
 
 Concurrency:
+    - Threshold check in check_and_run_batch() is fast and lock-free
+    - run_batch_consolidation() re-checks threshold under lock to prevent races
     - Sequential last_batch_message_id updates prevent double-runs
-    - No advisory lock needed - the check-and-update pattern is atomic by design
 """
 
 import json
@@ -60,10 +61,9 @@ async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
 async def check_and_run_batch() -> None:
     """Check if batch consolidation is needed and run it.
 
-    Called after each message is stored. Uses last_batch_message_id
-    from system_health to track position.
-
-    Uses advisory lock to prevent concurrent batch runs.
+    Called after each message is stored. Performs a fast threshold check
+    outside of any lock. If threshold is met, delegates to run_batch_consolidation()
+    which performs a second check under the database transaction to prevent races.
     """
     async with db_pool.pool.acquire() as conn:
         last_batch_id = await _get_last_batch_id(conn)
@@ -100,10 +100,26 @@ async def run_batch_consolidation() -> None:
 
     All LLM calls are audited via AuditingLLMClient.
 
-    last_batch_message_id is updated after extraction, preventing double-runs.
+    Performs a second threshold check inside the transaction to prevent
+    race conditions when multiple workers call this concurrently.
+    Only one worker will successfully update last_batch_message_id.
     """
     async with db_pool.pool.acquire() as conn:
         last_batch_id = await _get_last_batch_id(conn)
+
+        count_row = await conn.fetchrow(
+            "SELECT COUNT(*) as cnt FROM raw_messages WHERE discord_message_id > $1",
+            int(last_batch_id) if last_batch_id.isdigit() else 0,
+        )
+        message_count = count_row["cnt"] if count_row else 0
+
+        if message_count < BATCH_SIZE:
+            logger.debug(
+                "Batch cancelled - threshold no longer met",
+                message_count=message_count,
+                threshold=BATCH_SIZE,
+            )
+            return
 
         messages = await conn.fetch(
             """
