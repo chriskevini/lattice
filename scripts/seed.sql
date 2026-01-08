@@ -36,7 +36,7 @@ Respond naturally based on what the user is saying:
 ## Examples
 
 **User:** "What did I work on yesterday?"
-**Response:** "Yesterday you worked on the lattice project for about 3 hours."
+**Response:** "Yesterday you worked on the mobile app for about 3 hours."
 
 **User:** "I need to finish this by Friday"
 **Response:** "Got it—Friday deadline. How's it coming along?"
@@ -47,8 +47,8 @@ Respond naturally based on what the user is saying:
 **User:** "That's awesome!"
 **Response:** "Glad to hear it!"
 
-**User:** "Did I talk to Alice this week?"
-**Response:** "I don't see any mentions of Alice in this week's conversations."
+**User:** "Did I talk to Sarah this week?"
+**Response:** "I don't see any mentions of Sarah in this week's conversations."
 
 Respond naturally and helpfully.$TPL$, 0.7);
 
@@ -79,19 +79,19 @@ Return ONLY valid JSON (no markdown, no explanation):
 ## Examples
 
 **Recent Context:** I've been working on several projects lately.
-**Current User Message:** I need to finish the lattice project by Friday
+**Current User Message:** I need to finish the mobile app by Friday
 **Output:**
-{"entities": ["lattice project", "Friday"]}
+{"entities": ["mobile app", "Friday"]}
 
-**Recent Context:** You mentioned working on lattice yesterday.
+**Recent Context:** You mentioned working on the mobile app yesterday.
 **Current User Message:** Spent 3 hours coding today
 **Output:**
 {"entities": []}
 
 **Recent Context:** (No additional context)
-**Current User Message:** What did I work on with Alice yesterday?
+**Current User Message:** What did I work on with Sarah yesterday?
 **Output:**
-{"entities": ["Alice", "yesterday"]}
+{"entities": ["Sarah", "yesterday"]}
 
 **Recent Context:** I finished the meeting.
 **Current User Message:** That went really well!
@@ -124,6 +124,7 @@ Extract durable facts from the new messages to build the knowledge graph.
 - Ignore transient chatter, questions, hypotheticals, greetings, opinions.
 - Do not infer beyond what is explicitly stated or very strongly implied.
 - Always use "user" as subject for facts about the primary conversant.
+- Goal metadata (due_by, priority, status) uses the goal description as subject, not "user".
 - If new information contradicts prior memory, output the new fact — downstream merging will handle overrides.
 
 ## Predicates
@@ -144,10 +145,12 @@ Each triple:
 
 ## Examples
 [
-  {"subject": "user", "predicate": "lives_in", "object": "Richmond, British Columbia"},
+  {"subject": "user", "predicate": "lives_in", "object": "Seattle, Washington"},
   {"subject": "user", "predicate": "has_goal", "object": "run a marathon"},
-  {"subject": "user", "predicate": "due_by", "object": "2026-10-01"},
-  {"subject": "user", "predicate": "has_pet", "object": "cat named Luna"}
+  {"subject": "user", "predicate": "has_pet", "object": "dog named Max"},
+  {"subject": "run a marathon", "predicate": "due_by", "object": "2026-10-01"},
+  {"subject": "run a marathon", "predicate": "priority", "object": "high"},
+  {"subject": "run a marathon", "predicate": "status", "object": "active"}
 ]$TPL$, 0.2);
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
