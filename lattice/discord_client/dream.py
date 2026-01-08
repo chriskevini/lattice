@@ -374,27 +374,25 @@ def _truncate_for_message(text: str, max_length: int = DISCORD_MESSAGE_LIMIT) ->
 class AuditViewBuilder:
     """Builder for creating concise audit view messages.
 
-    Four audit types:
+    Three audit types:
     - REACTIVE: User message + bot response (UNIFIED_RESPONSE)
     - PROACTIVE: Bot-initiated check-in (PROACTIVE_CHECKIN)
-    - EXTRACTION: Internal semantic analysis (TRIPLE_EXTRACTION, OBJECTIVE_EXTRACTION)
     - REASONING: Internal decision/analysis (PROACTIVE_DECISION)
+    - EXTRACTION: Batch semantic analysis (BATCH_MEMORY_EXTRACTION)
     """
 
     _EMOJI_MAP = {
         "UNIFIED_RESPONSE": "💬",
         "PROACTIVE_CHECKIN": "🌟",
-        "TRIPLE_EXTRACTION": "🧠",
-        "OBJECTIVE_EXTRACTION": "🧠",
         "PROACTIVE_DECISION": "🧠",
+        "BATCH_MEMORY_EXTRACTION": "🧠",
     }
 
     _COLOR_MAP = {
         "UNIFIED_RESPONSE": discord.Color.blurple(),
         "PROACTIVE_CHECKIN": discord.Color.gold(),
-        "TRIPLE_EXTRACTION": discord.Color.purple(),
-        "OBJECTIVE_EXTRACTION": discord.Color.magenta(),
         "PROACTIVE_DECISION": discord.Color.magenta(),
+        "BATCH_MEMORY_EXTRACTION": discord.Color.purple(),
     }
 
     @staticmethod
