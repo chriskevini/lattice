@@ -3,6 +3,7 @@
 This module provides a unified interface for LLM operations via OpenRouter.
 """
 
+import json
 import os
 import time
 from dataclasses import dataclass
@@ -454,3 +455,136 @@ class AuditingLLMClient:
             )
         except discord.DiscordException:
             logger.exception("Failed to mirror LLM error to dream channel")
+
+    async def complete_and_parse(
+        self,
+        prompt: str,
+        prompt_key: str,
+        parser: str,
+        main_discord_message_id: int | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        dream_channel_id: int | None = None,
+        bot: Any | None = None,
+    ) -> tuple[Any, AuditResult]:
+        """Complete a prompt and parse the response with audit and error notification.
+
+        Centralizes parsing logic and sends parse failures to dream channel for
+        easy debugging with interactive audit views.
+
+        Args:
+            prompt: The prompt to complete
+            prompt_key: Identifier for the prompt template/purpose
+            parser: Parser name for audit logging (e.g., "json_entities", "json_triples")
+            main_discord_message_id: Discord message ID for audit linkage
+            temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Maximum tokens to generate
+            dream_channel_id: Optional dream channel ID for parse error notifications
+            bot: Optional Discord bot instance for error notifications
+
+        Returns:
+            Tuple of (parsed_result, AuditResult)
+
+        Raises:
+            json.JSONDecodeError: If response is not valid JSON
+            ValueError: If parsed content doesn't match expected structure
+        """
+        result = await self.complete(
+            prompt=prompt,
+            prompt_key=prompt_key,
+            template_version=None,
+            main_discord_message_id=main_discord_message_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            dream_channel_id=dream_channel_id,
+            bot=bot,
+        )
+
+        content = result.content.strip()
+        if content.startswith("```json"):
+            content = content.removeprefix("```json").removesuffix("```").strip()
+        elif content.startswith("```"):
+            content = content.removeprefix("```").removesuffix("```").strip()
+
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as e:
+            if result.audit_id and dream_channel_id and bot:
+                await self._mirror_parse_error_to_dream(
+                    bot=bot,
+                    dream_channel_id=dream_channel_id,
+                    prompt_key=prompt_key,
+                    parser=parser,
+                    raw_response=content,
+                    error_message=str(e),
+                    rendered_prompt=prompt,
+                    audit_id=result.audit_id,
+                )
+            raise
+
+        return parsed, result
+
+    async def _mirror_parse_error_to_dream(
+        self,
+        bot: Any,
+        dream_channel_id: int,
+        prompt_key: str,
+        parser: str,
+        raw_response: str,
+        error_message: str,
+        rendered_prompt: str,
+        audit_id: UUID,
+    ) -> None:
+        """Mirror parse error to dream channel with interactive audit view.
+
+        Args:
+            bot: Discord bot instance
+            dream_channel_id: Dream channel ID
+            prompt_key: Prompt that failed
+            parser: Parser name for context
+            raw_response: Raw LLM response that failed to parse
+            error_message: Parse error message
+            rendered_prompt: Full rendered prompt that was sent
+            audit_id: Audit record ID for the LLM call
+        """
+        import discord
+        from lattice.discord_client.dream import AuditViewBuilder
+
+        dream_channel = bot.get_channel(dream_channel_id)
+        if not isinstance(dream_channel, discord.TextChannel):
+            logger.warning(
+                "Dream channel not found for parse error mirror",
+                dream_channel_id=dream_channel_id,
+            )
+            return
+
+        truncated_response = (
+            raw_response[:500] + "..." if len(raw_response) > 500 else raw_response
+        )
+
+        try:
+            embed, view = AuditViewBuilder.build_extraction_audit(
+                user_message=f"[{parser.upper()}] Parse failed",
+                main_message_url="",
+                triples=[],
+                objectives=[],
+                prompt_key=prompt_key,
+                audit_id=audit_id,
+                rendered_prompt=rendered_prompt,
+            )
+            embed.description = f"❌ **Parse Error**: {error_message}"
+            embed.add_field(
+                name="RAW RESPONSE",
+                value=f"```{truncated_response}```",
+                inline=False,
+            )
+
+            await dream_channel.send(embed=embed, view=view)
+            logger.info(
+                "Mirrored parse error to dream channel",
+                prompt_key=prompt_key,
+                parser=parser,
+                audit_id=str(audit_id),
+            )
+        except discord.DiscordException:
+            logger.exception("Failed to mirror parse error to dream channel")

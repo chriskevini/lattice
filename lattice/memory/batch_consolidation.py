@@ -26,7 +26,7 @@ import structlog
 from lattice.memory.episodic import store_semantic_triples
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
+from lattice.utils.llm import AuditResult, get_auditing_llm_client, get_discord_bot
 
 
 logger = structlog.get_logger(__name__)
@@ -173,42 +173,35 @@ async def run_batch_consolidation() -> None:
     llm_client = get_auditing_llm_client()
     bot = get_discord_bot()
     dream_channel_id = int(os.getenv("DISCORD_DREAM_CHANNEL_ID", "0"))
-    result = await llm_client.complete(
-        prompt=rendered_prompt,
-        prompt_key="BATCH_MEMORY_EXTRACTION",
-        template_version=prompt_template.version,
-        main_discord_message_id=int(batch_id),
-        temperature=prompt_template.temperature,
-        dream_channel_id=dream_channel_id if dream_channel_id else None,
-        bot=bot,
-    )
 
-    logger.info(
-        "Batch extraction completed",
-        batch_id=batch_id,
-        audit_id=str(result.audit_id) if result.audit_id else None,
-        model=result.model,
-        tokens=result.total_tokens,
-    )
-
+    result: AuditResult | None = None
     try:
-        content = result.content.strip()
-        if content.startswith("```json"):
-            content = content.removeprefix("```json").removesuffix("```").strip()
-        elif content.startswith("```"):
-            content = content.removeprefix("```").removesuffix("```").strip()
-
-        triples = json.loads(content)
+        triples, result = await llm_client.complete_and_parse(
+            prompt=rendered_prompt,
+            prompt_key="BATCH_MEMORY_EXTRACTION",
+            parser="json_triples",
+            main_discord_message_id=int(batch_id),
+            temperature=prompt_template.temperature,
+            dream_channel_id=dream_channel_id if dream_channel_id else None,
+            bot=bot,
+        )
         if not isinstance(triples, list):
             triples = []
     except json.JSONDecodeError:
         logger.warning(
             "Failed to parse batch extraction response",
             batch_id=batch_id,
-            response_preview=result.content[:200],
-            model=result.model,
+            model=result.model if result else "unknown",
         )
         triples = []
+
+    logger.info(
+        "Batch extraction completed",
+        batch_id=batch_id,
+        audit_id=str(result.audit_id) if result and result.audit_id else None,
+        model=result.model if result else "unknown",
+        tokens=result.total_tokens if result else 0,
+    )
 
     if triples:
         message_id = messages[-1]["id"]

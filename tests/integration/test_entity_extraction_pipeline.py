@@ -50,18 +50,21 @@ class TestEntityExtractionPipeline:
             mock_get_prompt.return_value = extraction_template
 
             extraction_llm = AsyncMock()
-            extraction_llm.complete.return_value = AuditResult(
-                content='{"entities":["lattice project","Friday"]}',
-                model="anthropic/claude-3.5-sonnet",
-                provider="anthropic",
-                prompt_tokens=100,
-                completion_tokens=50,
-                total_tokens=150,
-                cost_usd=0.001,
-                latency_ms=500,
-                temperature=0.2,
-                audit_id=None,
-                prompt_key="ENTITY_EXTRACTION",
+            extraction_llm.complete_and_parse.return_value = (
+                {"entities": ["lattice project", "Friday"]},
+                AuditResult(
+                    content='{"entities":["lattice project","Friday"]}',
+                    model="anthropic/claude-3.5-sonnet",
+                    provider="anthropic",
+                    prompt_tokens=100,
+                    completion_tokens=50,
+                    total_tokens=150,
+                    cost_usd=0.001,
+                    latency_ms=500,
+                    temperature=0.2,
+                    audit_id=None,
+                    prompt_key="ENTITY_EXTRACTION",
+                ),
             )
             mock_llm_client.return_value = extraction_llm
 
@@ -282,18 +285,21 @@ class TestEntityExtractionPipeline:
             mock_get_prompt.return_value = extraction_template
 
             extraction_llm = AsyncMock()
-            extraction_llm.complete.return_value = AuditResult(
-                content='{"entities":["project","deadline"]}',
-                model="anthropic/claude-3.5-sonnet",
-                provider="anthropic",
-                prompt_tokens=80,
-                completion_tokens=40,
-                total_tokens=120,
-                cost_usd=0.001,
-                latency_ms=400,
-                temperature=0.2,
-                audit_id=None,
-                prompt_key="ENTITY_EXTRACTION",
+            extraction_llm.complete_and_parse.return_value = (
+                {"entities": ["project", "deadline"]},
+                AuditResult(
+                    content='{"entities":["project","deadline"]}',
+                    model="anthropic/claude-3.5-sonnet",
+                    provider="anthropic",
+                    prompt_tokens=80,
+                    completion_tokens=40,
+                    total_tokens=120,
+                    cost_usd=0.001,
+                    latency_ms=400,
+                    temperature=0.2,
+                    audit_id=None,
+                    prompt_key="ENTITY_EXTRACTION",
+                ),
             )
             mock_llm_client.return_value = extraction_llm
 

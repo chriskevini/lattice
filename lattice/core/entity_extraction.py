@@ -17,7 +17,7 @@ import structlog
 
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_auditing_llm_client
+from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 
 
 logger = structlog.get_logger(__name__)
@@ -87,13 +87,17 @@ async def extract_entities(
         message_length=len(message_content),
     )
 
-    # 3. Call API for extraction
     llm_client = get_auditing_llm_client()
-    result = await llm_client.complete(
+    bot = get_discord_bot()
+
+    extraction_data, result = await llm_client.complete_and_parse(
         prompt=rendered_prompt,
-        temperature=prompt_template.temperature,
         prompt_key="ENTITY_EXTRACTION",
-        main_discord_message_id=0,
+        parser="json_entities",
+        main_discord_message_id=int(message_id),
+        temperature=prompt_template.temperature,
+        dream_channel_id=bot.dream_channel_id if bot else None,
+        bot=bot,
     )
     raw_response = result.content
     extraction_method = "api"
@@ -106,27 +110,6 @@ async def extract_entities(
         latency_ms=result.latency_ms,
     )
 
-    # 4. Parse JSON response
-    try:
-        # Handle markdown code blocks if present
-        content = raw_response.strip()
-        if content.startswith("```json"):
-            content = content.removeprefix("```json").removesuffix("```").strip()
-        elif content.startswith("```"):
-            content = content.removeprefix("```").removesuffix("```").strip()
-
-        extraction_data = json.loads(content)
-    except json.JSONDecodeError as e:
-        logger.error(
-            "Failed to parse extraction JSON",
-            message_id=str(message_id),
-            extraction_method=extraction_method,
-            raw_response=raw_response[:200],
-            error=str(e),
-        )
-        raise
-
-    # Validate required fields (entities only now)
     required_fields = ["entities"]
     for field in required_fields:
         if field not in extraction_data:
