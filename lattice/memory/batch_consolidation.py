@@ -18,6 +18,7 @@ Concurrency:
 """
 
 import json
+import os
 from typing import Any
 
 import structlog
@@ -25,7 +26,7 @@ import structlog
 from lattice.memory.episodic import store_semantic_triples
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_auditing_llm_client
+from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 
 
 logger = structlog.get_logger(__name__)
@@ -170,12 +171,16 @@ async def run_batch_consolidation() -> None:
     )
 
     llm_client = get_auditing_llm_client()
+    bot = get_discord_bot()
+    dream_channel_id = int(os.getenv("DISCORD_DREAM_CHANNEL_ID", "0"))
     result = await llm_client.complete(
         prompt=rendered_prompt,
         prompt_key="BATCH_MEMORY_EXTRACTION",
         template_version=prompt_template.version,
         main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
+        dream_channel_id=dream_channel_id if dream_channel_id else None,
+        bot=bot,
     )
 
     logger.info(

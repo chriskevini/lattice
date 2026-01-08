@@ -137,6 +137,12 @@ class LatticeBot(commands.Bot):
             )
             await self._dreaming_scheduler.start()
 
+            # Register bot instance for LLM error mirroring
+            from lattice.utils.llm import set_discord_bot
+
+            set_discord_bot(self)
+            logger.info("Bot registered for LLM error mirroring")
+
             # Register persistent views for bot restart resilience
             # Note: TemplateComparisonView (DesignerView) doesn't support persistent views
             # Proposals are ephemeral - buttons work only while bot is running
