@@ -522,31 +522,28 @@ async def approve_proposal(
 
         # Begin transaction
         async with conn.transaction():
-            # Update prompt_registry with new template (with optimistic locking on version)
-            update_result = await conn.execute(
+            # Deactivate old version
+            await conn.execute(
                 """
                 UPDATE prompt_registry
-                SET
-                    template = $1,
-                    version = $2,
-                    updated_at = now()
-                WHERE prompt_key = $3 AND version = $4
+                SET active = false
+                WHERE prompt_key = $1 AND version = $2
                 """,
-                proposal_row["proposed_template"],
-                proposal_row["proposed_version"],
                 proposal_row["prompt_key"],
                 proposal_row["current_version"],
             )
 
-            # Check if update succeeded (version mismatch = prompt was already updated)
-            if update_result != "UPDATE 1":
-                logger.warning(
-                    "Prompt version mismatch - prompt was modified since proposal creation",
-                    proposal_id=str(proposal_id),
-                    prompt_key=proposal_row["prompt_key"],
-                    expected_version=proposal_row["current_version"],
-                )
-                return False
+            # Insert new version as active
+            await conn.execute(
+                """
+                INSERT INTO prompt_registry (prompt_key, version, template, temperature, active)
+                VALUES ($1, $2, $3, $4, true)
+                """,
+                proposal_row["prompt_key"],
+                proposal_row["proposed_version"],
+                proposal_row["proposed_template"],
+                proposal_row.get("temperature", 0.7),
+            )
 
             # Mark proposal as approved (with optimistic locking)
             result = await conn.execute(

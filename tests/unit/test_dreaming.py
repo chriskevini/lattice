@@ -183,6 +183,7 @@ class TestProposer:
                     "current_version": 1,
                     "proposed_template": "New template",
                     "proposed_version": 2,
+                    "temperature": 0.7,
                 }
             )
             mock_conn.execute = AsyncMock(return_value="UPDATE 1")
@@ -196,36 +197,8 @@ class TestProposer:
 
             assert success is True
             assert (
-                mock_conn.execute.call_count == 2
-            )  # Update prompt_registry + proposals
-
-    @pytest.mark.asyncio
-    async def test_approve_proposal_version_mismatch(self) -> None:
-        """Test that approving fails when prompt version has changed."""
-        proposal_id = uuid4()
-
-        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            # Proposal fetches successfully
-            mock_conn.fetchrow = AsyncMock(
-                return_value={
-                    "prompt_key": "BASIC_RESPONSE",
-                    "current_version": 1,
-                    "proposed_template": "New template",
-                    "proposed_version": 2,
-                }
-            )
-            # But UPDATE fails because version doesn't match (prompt was already updated)
-            mock_conn.execute = AsyncMock(return_value="UPDATE 0")
-            mock_conn.transaction = MagicMock()
-            mock_conn.transaction().__aenter__ = AsyncMock()
-            mock_conn.transaction().__aexit__ = AsyncMock()
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
-
-            success = await approve_proposal(proposal_id, "user123", "Looks good")
-
-            assert success is False
+                mock_conn.execute.call_count == 3
+            )  # Deactivate old + Insert new + Update proposals
 
     @pytest.mark.asyncio
     async def test_reject_proposal_success(self) -> None:

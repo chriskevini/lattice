@@ -75,7 +75,7 @@ class PromptTemplate:
 
 
 async def get_prompt(prompt_key: str) -> PromptTemplate | None:
-    """Retrieve a prompt template by key.
+    """Retrieve the latest active prompt template by key.
 
     Args:
         prompt_key: The unique identifier for the template
@@ -89,6 +89,8 @@ async def get_prompt(prompt_key: str) -> PromptTemplate | None:
             SELECT prompt_key, template, temperature, version, active
             FROM prompt_registry
             WHERE prompt_key = $1 AND active = true
+            ORDER BY version DESC
+            LIMIT 1
             """,
             prompt_key,
         )
@@ -104,32 +106,3 @@ async def get_prompt(prompt_key: str) -> PromptTemplate | None:
             version=row["version"],
             active=row["active"],
         )
-
-
-async def store_prompt(prompt: PromptTemplate) -> None:
-    """Store or update a prompt template.
-
-    Args:
-        prompt: The prompt template to store
-    """
-    async with db_pool.pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO prompt_registry (prompt_key, template, temperature, version, active)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (prompt_key)
-            DO UPDATE SET
-                template = EXCLUDED.template,
-                temperature = EXCLUDED.temperature,
-                version = prompt_registry.version + 1,
-                active = EXCLUDED.active,
-                updated_at = now()
-            """,
-            prompt.prompt_key,
-            prompt.template,
-            prompt.temperature,
-            prompt.version,
-            prompt.active,
-        )
-
-        logger.info("Stored prompt template", prompt_key=prompt.prompt_key)
