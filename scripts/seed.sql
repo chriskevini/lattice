@@ -9,6 +9,11 @@ INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('UNIFIED_RESPONSE', 1, $TPL$You are a warm, curious AI companion engaging in natural conversation.
 
 ## Context
+**Current time:** {current_time}
+
+**Date resolution hints:**
+{date_resolution_hints}
+
 **Recent conversation history:**
 {episodic_context}
 
@@ -57,6 +62,11 @@ INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('ENTITY_EXTRACTION', 1, $TPL$You are a message analysis system. Extract entity mentions for graph traversal.
 
 ## Context
+**Current time:** {current_time}
+
+**Date resolution hints:**
+{date_resolution_hints}
+
 **Recent conversation history:**
 {episodic_context}
 
@@ -68,8 +78,7 @@ Extract an array of entity mentions from the user message.
 
 ## Guidelines
 - Extract ALL proper nouns and important concepts
-- Include time references when mentioned (e.g., "Friday", "yesterday", "next week")
-- Use exact mentions from the message
+- For time references (Friday, tomorrow, next week), use the ISO date format from the hints
 - Empty array if no entities mentioned
 
 ## Output Format
@@ -78,27 +87,27 @@ Return ONLY valid JSON (no markdown, no explanation):
 
 ## Examples
 
-**Recent Context:** I've been working on several projects lately.
+**Date Resolution Hints:** Friday → 2026-01-10
 **Current User Message:** I need to finish the mobile app by Friday
 **Output:**
-{"entities": ["mobile app", "Friday"]}
+{"entities": ["mobile app", "2026-01-10"]}
 
-**Recent Context:** You mentioned working on the mobile app yesterday.
+**Date Resolution Hints:** tomorrow → 2026-01-09
+**Current User Message:** Meet me tomorrow for lunch
+**Output:**
+{"entities": ["2026-01-09"]}
+
+**Date Resolution Hints:** (empty)
 **Current User Message:** Spent 3 hours coding today
 **Output:**
 {"entities": []}
 
-**Recent Context:** (No additional context)
-**Current User Message:** What did I work on with Sarah yesterday?
+**Date Resolution Hints:** next week → 2026-01-15
+**Current User Message:** What did I work on with Sarah next week?
 **Output:**
-{"entities": ["Sarah", "yesterday"]}
+{"entities": ["Sarah", "2026-01-15"]}
 
-**Recent Context:** I finished the meeting.
-**Current User Message:** That went really well!
-**Output:**
-{"entities": []}
-
-**Recent Context:** (No additional context)
+**Date Resolution Hints:** (empty)
 **Current User Message:** Starting work on the database migration
 **Output:**
 {"entities": ["database migration"]}$TPL$, 0.2);
@@ -110,6 +119,9 @@ VALUES ('BATCH_MEMORY_EXTRACTION', 1, $TPL$# Batch Memory Extraction for User Kn
 You are extracting durable facts about the user to build a persistent knowledge graph.
 
 ## Context
+**Date resolution hints:**
+{date_resolution_hints}
+
 **Relevant facts from past conversations:**
 {semantic_context}
 
@@ -126,6 +138,7 @@ Extract durable facts from the new messages to build the knowledge graph.
 - Always use "user" as subject for facts about the primary conversant.
 - Goal metadata (due_by, priority, status) uses the goal description as subject, not "user".
 - If new information contradicts prior memory, output the new fact — downstream merging will handle overrides.
+- When extracting dates, use the ISO date format from the hints (e.g., "2026-01-10" instead of "Friday").
 
 ## Predicates
 ### Preferred controlled
@@ -151,6 +164,16 @@ Each triple:
   {"subject": "run a marathon", "predicate": "due_by", "object": "2026-10-01"},
   {"subject": "run a marathon", "predicate": "priority", "object": "high"},
   {"subject": "run a marathon", "predicate": "status", "object": "active"}
+]
+
+**Date Resolution Hints:** Friday → 2026-01-10, tomorrow → 2026-01-09
+**New Messages:**
+User: I need to finish the mobile app by Friday
+User: Call me tomorrow about the design
+**Output:**
+[
+  {"subject": "mobile app", "predicate": "due_by", "object": "2026-01-10"},
+  {"subject": "design", "predicate": "due_by", "object": "2026-01-09"}
 ]$TPL$, 0.2);
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)

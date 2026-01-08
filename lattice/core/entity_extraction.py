@@ -18,6 +18,7 @@ import structlog
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
+from lattice.utils.date_resolution import format_current_time, resolve_relative_dates
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 
@@ -78,9 +79,12 @@ async def extract_entities(
         raise ValueError(msg)
 
     # 2. Render prompt with message content and context
+    user_tz: str | None = None
     rendered_prompt = prompt_template.safe_format(
         episodic_context=context if context else "(No additional context)",
         user_message=message_content,
+        current_time=format_current_time(user_tz),
+        date_resolution_hints=resolve_relative_dates(message_content, user_tz),
     )
 
     logger.info(

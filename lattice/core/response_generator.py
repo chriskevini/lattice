@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import structlog
 
 from lattice.memory import episodic, procedural
+from lattice.utils.date_resolution import format_current_time, resolve_relative_dates
 from lattice.utils.llm import AuditResult, get_auditing_llm_client
 
 if TYPE_CHECKING:
@@ -41,6 +42,8 @@ AVAILABLE_PLACEHOLDERS = {
     "episodic_context": "Recent conversation history with timestamps",
     "semantic_context": "Relevant facts and graph relationships",
     "user_message": "The user's current message",
+    "current_time": "Current time with day of week (e.g., 2026/01/08, Thursday)",
+    "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
 }
 
 
@@ -349,11 +352,24 @@ async def generate_response(
     }
 
     template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
+
+    user_tz: str | None = None
+    if recent_messages:
+        user_tz = getattr(recent_messages[0], "user_timezone", None) or "UTC"
+
     filtered_params = {
         key: value
         for key, value in template_params.items()
         if key in template_placeholders
     }
+
+    if "current_time" in template_placeholders:
+        filtered_params["current_time"] = format_current_time(user_tz)
+
+    if "date_resolution_hints" in template_placeholders:
+        filtered_params["date_resolution_hints"] = resolve_relative_dates(
+            user_message, user_tz
+        )
 
     filled_prompt = prompt_template.safe_format(**filtered_params)
 
