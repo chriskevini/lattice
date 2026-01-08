@@ -19,18 +19,26 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-# Maximum number of graph triples to include in prompt context
 MAX_GRAPH_TRIPLES = 10
 
-# Canonical list of available template placeholders
-# These are populated by response_generator during prompt rendering
+PLANNING_KEYWORDS = {
+    "goal",
+    "goals",
+    "objective",
+    "objectives",
+    "deadline",
+    "due",
+    "milestone",
+    "my plan",
+    "my tasks",
+    "my priorities",
+    "what are my",
+}
+
 AVAILABLE_PLACEHOLDERS = {
-    # Core context (always available)
     "episodic_context": "Recent conversation history with timestamps",
     "semantic_context": "Relevant facts and graph relationships",
     "user_message": "The user's current message",
-    # Note: UNIFIED_RESPONSE template handles all message types internally.
-    # Entity extraction is used for graph traversal starting points only.
 }
 
 
@@ -76,6 +84,127 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     known_placeholders = set(AVAILABLE_PLACEHOLDERS.keys())
     unknown = list(template_placeholders - known_placeholders)
     return (len(unknown) == 0, unknown)
+
+
+async def fetch_goal_names() -> list[str]:
+    """Fetch all goal names from the knowledge graph.
+
+    Returns:
+        List of goal names (objects of has_goal predicates)
+    """
+    from lattice.utils.database import db_pool
+
+    if not db_pool.is_initialized():
+        return []
+
+    async with db_pool.pool.acquire() as conn:
+        goals = await conn.fetch(
+            """
+            SELECT DISTINCT object FROM semantic_triple
+            WHERE predicate = 'has_goal'
+            ORDER BY object
+            """
+        )
+    return [g["object"] for g in goals]
+
+
+async def get_objectives_context() -> str:
+    """Get user's goals from knowledge graph with hierarchical predicate display.
+
+    Returns:
+        Formatted goals string showing goals and their predicates
+    """
+    from lattice.utils.database import db_pool
+
+    goal_names = await fetch_goal_names()
+    if not goal_names:
+        return "No active goals."
+
+    async with db_pool.pool.acquire() as conn:
+        placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
+        query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
+        predicates = await conn.fetch(query, *goal_names)
+
+    goal_predicates: dict[str, list[tuple[str, str]]] = {}
+    for pred in predicates:
+        goal_name = pred["subject"]
+        if goal_name not in goal_predicates:
+            goal_predicates[goal_name] = []
+        goal_predicates[goal_name].append((pred["predicate"], pred["object"]))
+
+    lines = ["User goals:"]
+    for i, goal_name in enumerate(goal_names):
+        is_last = i == len(goal_names) - 1
+        goal_prefix = "└── " if is_last else "├── "
+        lines.append(f"{goal_prefix}{goal_name}")
+
+        if goal_name in goal_predicates:
+            preds = goal_predicates[goal_name]
+            for j, (pred, obj) in enumerate(preds):
+                pred_is_last = j == len(preds) - 1
+                pred_prefix = "    " if is_last else "│   "
+                pred_goal_prefix = "└── " if pred_is_last else "├── "
+                lines.append(f"{pred_prefix}{pred_goal_prefix}{pred}: {obj}")
+
+    return "\n".join(lines)
+
+
+def _has_planning_intent(message: str) -> bool:
+    """Check if message contains planning-related keywords.
+
+    Args:
+        message: The user's message
+
+    Returns:
+        True if message suggests user is asking about goals/plans
+    """
+    message_lower = message.lower()
+    return any(kw in message_lower for kw in PLANNING_KEYWORDS)
+
+
+def _has_entity_goal_overlap(entities: list[str], goal_names: list[str]) -> bool:
+    """Check if any extracted entities overlap with goal names.
+
+    Args:
+        entities: Extracted entities from the message
+        goal_names: Goal names from the knowledge graph
+
+    Returns:
+        True if there's meaningful overlap
+    """
+    if not entities or not goal_names:
+        return False
+
+    for entity in entities:
+        entity_lower = entity.lower()
+        for goal in goal_names:
+            goal_lower = goal.lower()
+            if entity_lower in goal_lower or goal_lower in entity_lower:
+                return True
+    return False
+
+
+async def get_relevant_objectives(entities: list[str], user_message: str) -> str | None:
+    """Get objectives context if message is relevant to goals.
+
+    Args:
+        entities: Extracted entities from the message
+        user_message: The user's message
+
+    Returns:
+        Formatted objectives context, or None if not relevant
+    """
+    goal_names = await fetch_goal_names()
+    if not goal_names:
+        return None
+
+    if _has_planning_intent(user_message):
+        return await get_objectives_context()
+
+    if _has_entity_goal_overlap(entities, goal_names):
+        return await get_objectives_context()
+
+    return None
 
 
 async def generate_response(
@@ -171,6 +300,18 @@ async def generate_response(
     semantic_context = (
         "\n".join(semantic_lines) if semantic_lines else "No relevant context found."
     )
+
+    if extraction:
+        relevant_objectives = await get_relevant_objectives(
+            entities=extraction.entities,
+            user_message=user_message,
+        )
+        if relevant_objectives:
+            semantic_context = f"{relevant_objectives}\n\n{semantic_context}"
+            logger.debug(
+                "Injected objectives context",
+                objectives_preview=relevant_objectives[:200],
+            )
 
     logger.debug(
         "Context built for generation",
