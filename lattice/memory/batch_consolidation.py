@@ -19,8 +19,6 @@ logger = structlog.get_logger(__name__)
 
 BATCH_SIZE = 18
 
-BATCH_LOCK_KEY = 12345
-
 
 async def _get_last_batch_id(conn: Any) -> str:
     """Get the last processed batch message ID.
@@ -93,12 +91,9 @@ async def run_batch_consolidation() -> None:
 
     All LLM calls are audited via AuditingLLMClient.
 
-    Uses advisory lock to ensure only one batch runs at a time.
-    Triple storage and last_batch_message_id update are atomic.
+    last_batch_message_id is updated after extraction, preventing double-runs.
     """
     async with db_pool.pool.acquire() as conn:
-        await conn.execute(f"SELECT pg_advisory_xact_lock({BATCH_LOCK_KEY})")
-
         last_batch_id = await _get_last_batch_id(conn)
 
         messages = await conn.fetch(
