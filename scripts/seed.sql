@@ -47,8 +47,8 @@ Respond naturally based on what the user is saying:
 **User:** "That's awesome!"
 **Response:** "Glad to hear it!"
 
-**User:** "Did I talk to Alice this week?"
-**Response:** "I don't see any mentions of Alice in this week's conversations."
+**User:** "Did I talk to Sarah this week?"
+**Response:** "I don't see any mentions of Sarah in this week's conversations."
 
 Respond naturally and helpfully.$TPL$, 0.7);
 
@@ -89,9 +89,9 @@ Return ONLY valid JSON (no markdown, no explanation):
 {"entities": []}
 
 **Recent Context:** (No additional context)
-**Current User Message:** What did I work on with Alice yesterday?
+**Current User Message:** What did I work on with Sarah yesterday?
 **Output:**
-{"entities": ["Alice", "yesterday"]}
+{"entities": ["Sarah", "yesterday"]}
 
 **Recent Context:** I finished the meeting.
 **Current User Message:** That went really well!
@@ -145,9 +145,9 @@ Each triple:
 
 ## Examples
 [
-  {"subject": "user", "predicate": "lives_in", "object": "Richmond, British Columbia"},
+  {"subject": "user", "predicate": "lives_in", "object": "Seattle, Washington"},
   {"subject": "user", "predicate": "has_goal", "object": "run a marathon"},
-  {"subject": "user", "predicate": "has_pet", "object": "cat named Luna"},
+  {"subject": "user", "predicate": "has_pet", "object": "dog named Max"},
   {"subject": "run a marathon", "predicate": "due_by", "object": "2026-10-01"},
   {"subject": "run a marathon", "predicate": "priority", "object": "high"},
   {"subject": "run a marathon", "predicate": "status", "object": "active"}
