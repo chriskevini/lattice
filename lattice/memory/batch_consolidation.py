@@ -5,6 +5,7 @@ no updates or deletes. Query logic handles "current truth" via recency.
 """
 
 import json
+from typing import Any
 
 import structlog
 
@@ -18,18 +19,47 @@ logger = structlog.get_logger(__name__)
 
 BATCH_SIZE = 18
 
+BATCH_LOCK_KEY = 12345
+
+
+async def _get_last_batch_id(conn: Any) -> str:
+    """Get the last processed batch message ID.
+
+    Args:
+        conn: Database connection
+
+    Returns:
+        The last batch message ID as a string, or "0" if not set
+    """
+    row = await conn.fetchrow(
+        "SELECT metric_value FROM system_health WHERE metric_key = 'last_batch_message_id'"
+    )
+    return row["metric_value"] if row else "0"
+
+
+async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
+    """Update the last processed batch message ID.
+
+    Args:
+        conn: Database connection
+        batch_id: The new batch ID to set
+    """
+    await conn.execute(
+        "UPDATE system_health SET metric_value = $1 WHERE metric_key = 'last_batch_message_id'",
+        batch_id,
+    )
+
 
 async def check_and_run_batch() -> None:
     """Check if batch consolidation is needed and run it.
 
     Called after each message is stored. Uses last_batch_message_id
     from system_health to track position.
+
+    Uses advisory lock to prevent concurrent batch runs.
     """
     async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT metric_value FROM system_health WHERE metric_key = 'last_batch_message_id'"
-        )
-        last_batch_id = row["metric_value"] if row else "0"
+        last_batch_id = await _get_last_batch_id(conn)
 
         count_row = await conn.fetchrow(
             "SELECT COUNT(*) as cnt FROM raw_messages WHERE discord_message_id > $1",
@@ -62,12 +92,14 @@ async def run_batch_consolidation() -> None:
     - New messages (18 since last batch)
 
     All LLM calls are audited via AuditingLLMClient.
+
+    Uses advisory lock to ensure only one batch runs at a time.
+    Triple storage and last_batch_message_id update are atomic.
     """
     async with db_pool.pool.acquire() as conn:
-        last_batch_row = await conn.fetchrow(
-            "SELECT metric_value FROM system_health WHERE metric_key = 'last_batch_message_id'"
-        )
-        last_batch_id = last_batch_row["metric_value"] if last_batch_row else "0"
+        await conn.execute(f"SELECT pg_advisory_xact_lock({BATCH_LOCK_KEY})")
+
+        last_batch_id = await _get_last_batch_id(conn)
 
         messages = await conn.fetch(
             """
@@ -158,10 +190,7 @@ async def run_batch_consolidation() -> None:
         )
 
     async with db_pool.pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE system_health SET metric_value = $1 WHERE metric_key = 'last_batch_message_id'",
-            batch_id,
-        )
+        await _update_last_batch_id(conn, batch_id)
 
     logger.info(
         "Batch consolidation completed",

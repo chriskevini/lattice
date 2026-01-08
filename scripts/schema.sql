@@ -91,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_semantic_triple_subject ON semantic_triple(subjec
 CREATE INDEX IF NOT EXISTS idx_semantic_triple_predicate ON semantic_triple(predicate);
 CREATE INDEX IF NOT EXISTS idx_semantic_triple_object ON semantic_triple(object);
 CREATE INDEX IF NOT EXISTS idx_semantic_triple_created_at ON semantic_triple(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_semantic_triple_source_batch ON semantic_triple(source_batch_id);
 
 -- ----------------------------------------------------------------------------
 -- objectives: User goals and commitments
