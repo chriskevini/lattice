@@ -17,7 +17,7 @@ from lattice.core.entity_extraction import (
     get_message_extraction,
 )
 from lattice.memory.procedural import PromptTemplate
-from lattice.utils.llm import GenerationResult
+from lattice.utils.llm import AuditResult
 
 
 @pytest.fixture
@@ -43,9 +43,9 @@ def mock_llm_response() -> str:
 
 
 @pytest.fixture
-def mock_generation_result(mock_llm_response: str) -> GenerationResult:
-    """Create a mock GenerationResult."""
-    return GenerationResult(
+def mock_generation_result(mock_llm_response: str) -> AuditResult:
+    """Create a mock AuditResult."""
+    return AuditResult(
         content=mock_llm_response,
         model="anthropic/claude-3.5-sonnet",
         provider="anthropic",
@@ -55,6 +55,8 @@ def mock_generation_result(mock_llm_response: str) -> GenerationResult:
         cost_usd=0.0005,
         latency_ms=300,
         temperature=0.2,
+        audit_id=None,
+        prompt_key=None,
     )
 
 
@@ -91,7 +93,7 @@ class TestExtractEntities:
     async def test_extract_entities_success(
         self,
         mock_prompt_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test successful extraction."""
         message_id = uuid.uuid4()
@@ -102,7 +104,7 @@ class TestExtractEntities:
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.entity_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
             patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
         ):
@@ -146,7 +148,7 @@ class TestExtractEntities:
         """Test extraction with invalid JSON response."""
         message_id = uuid.uuid4()
 
-        invalid_response = GenerationResult(
+        invalid_response = AuditResult(
             content="This is not JSON",
             model="test",
             provider=None,
@@ -164,7 +166,7 @@ class TestExtractEntities:
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.entity_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
         ):
             mock_client = AsyncMock()
@@ -185,7 +187,7 @@ class TestExtractEntities:
         """Test extraction with missing required fields."""
         message_id = uuid.uuid4()
 
-        incomplete_response = GenerationResult(
+        incomplete_response = AuditResult(
             content="{}",  # Missing entities
             model="test",
             provider=None,
@@ -203,7 +205,7 @@ class TestExtractEntities:
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.entity_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
         ):
             mock_client = AsyncMock()
@@ -224,7 +226,7 @@ class TestExtractEntities:
         """Test extraction handles markdown-wrapped JSON."""
         message_id = uuid.uuid4()
 
-        markdown_response = GenerationResult(
+        markdown_response = AuditResult(
             content="```json\n" + json.dumps({"entities": []}) + "\n```",
             model="test",
             provider=None,
@@ -242,7 +244,7 @@ class TestExtractEntities:
                 return_value=mock_prompt_template,
             ),
             patch(
-                "lattice.core.entity_extraction.get_llm_client",
+                "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
             patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
         ):

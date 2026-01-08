@@ -14,7 +14,7 @@ from lattice.core.entity_resolution import (
     resolve_entity,
 )
 from lattice.memory.procedural import PromptTemplate
-from lattice.utils.llm import GenerationResult
+from lattice.utils.llm import AuditResult
 
 
 @pytest.fixture
@@ -41,9 +41,9 @@ def mock_normalization_response() -> str:
 
 
 @pytest.fixture
-def mock_generation_result(mock_normalization_response: str) -> GenerationResult:
-    """Create a mock GenerationResult."""
-    return GenerationResult(
+def mock_generation_result(mock_normalization_response: str) -> AuditResult:
+    """Create a mock AuditResult."""
+    return AuditResult(
         content=mock_normalization_response,
         model="anthropic/claude-3.5-sonnet",
         provider="anthropic",
@@ -53,6 +53,8 @@ def mock_generation_result(mock_normalization_response: str) -> GenerationResult
         cost_usd=0.0005,
         latency_ms=300,
         temperature=0.2,
+        audit_id=None,
+        prompt_key=None,
     )
 
 
@@ -113,7 +115,7 @@ class TestResolveEntity:
     async def test_resolve_entity_tier3_llm_normalization_existing(
         self,
         mock_prompt_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test Tier 3 resolution where LLM normalizes to existing entity."""
         entity_id = uuid.uuid4()
@@ -137,7 +139,9 @@ class TestResolveEntity:
         with (
             patch("lattice.core.entity_resolution.db_pool") as mock_db_pool,
             patch("lattice.core.entity_resolution.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_resolution.get_llm_client") as mock_get_llm,
+            patch(
+                "lattice.core.entity_resolution.get_auditing_llm_client"
+            ) as mock_get_llm,
         ):
             mock_db_pool.pool = mock_pool
             mock_get_prompt.return_value = mock_prompt_template
@@ -160,7 +164,7 @@ class TestResolveEntity:
     async def test_resolve_entity_tier3_creates_new_entity(
         self,
         mock_prompt_template: PromptTemplate,
-        mock_generation_result: GenerationResult,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test Tier 3 resolution creates new entity when none exists."""
         entity_mention = "john"
@@ -189,7 +193,7 @@ class TestResolveEntity:
                 "reasoning": "New entity, proper name capitalization",
             }
         )
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content=new_entity_response,
             model="test-model",
             provider=None,
@@ -199,12 +203,16 @@ class TestResolveEntity:
             cost_usd=None,
             latency_ms=200,
             temperature=0.2,
+            audit_id=None,
+            prompt_key=None,
         )
 
         with (
             patch("lattice.core.entity_resolution.db_pool") as mock_db_pool,
             patch("lattice.core.entity_resolution.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_resolution.get_llm_client") as mock_get_llm,
+            patch(
+                "lattice.core.entity_resolution.get_auditing_llm_client"
+            ) as mock_get_llm,
         ):
             mock_db_pool.pool = mock_pool
             mock_get_prompt.return_value = mock_prompt_template
@@ -259,7 +267,7 @@ class TestResolveEntity:
             )
         }
 ```"""
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content=markdown_response,
             model="test-model",
             provider=None,
@@ -269,12 +277,16 @@ class TestResolveEntity:
             cost_usd=None,
             latency_ms=200,
             temperature=0.2,
+            audit_id=None,
+            prompt_key=None,
         )
 
         with (
             patch("lattice.core.entity_resolution.db_pool") as mock_db_pool,
             patch("lattice.core.entity_resolution.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_resolution.get_llm_client") as mock_get_llm,
+            patch(
+                "lattice.core.entity_resolution.get_auditing_llm_client"
+            ) as mock_get_llm,
         ):
             mock_db_pool.pool = mock_pool
             mock_get_prompt.return_value = mock_prompt_template
@@ -336,7 +348,7 @@ class TestResolveEntity:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         # Mock invalid JSON response
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content="This is not valid JSON",
             model="test-model",
             provider=None,
@@ -346,12 +358,16 @@ class TestResolveEntity:
             cost_usd=None,
             latency_ms=200,
             temperature=0.2,
+            audit_id=None,
+            prompt_key=None,
         )
 
         with (
             patch("lattice.core.entity_resolution.db_pool") as mock_db_pool,
             patch("lattice.core.entity_resolution.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_resolution.get_llm_client") as mock_get_llm,
+            patch(
+                "lattice.core.entity_resolution.get_auditing_llm_client"
+            ) as mock_get_llm,
         ):
             mock_db_pool.pool = mock_pool
             mock_get_prompt.return_value = mock_prompt_template
@@ -389,7 +405,7 @@ class TestResolveEntity:
                 # Missing canonical_name
             }
         )
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content=incomplete_response,
             model="test-model",
             provider=None,
@@ -399,12 +415,16 @@ class TestResolveEntity:
             cost_usd=None,
             latency_ms=200,
             temperature=0.2,
+            audit_id=None,
+            prompt_key=None,
         )
 
         with (
             patch("lattice.core.entity_resolution.db_pool") as mock_db_pool,
             patch("lattice.core.entity_resolution.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_resolution.get_llm_client") as mock_get_llm,
+            patch(
+                "lattice.core.entity_resolution.get_auditing_llm_client"
+            ) as mock_get_llm,
         ):
             mock_db_pool.pool = mock_pool
             mock_get_prompt.return_value = mock_prompt_template
@@ -442,7 +462,7 @@ class TestResolveEntity:
                 "reasoning": "Some reasoning",
             }
         )
-        mock_result = GenerationResult(
+        mock_result = AuditResult(
             content=empty_response,
             model="test-model",
             provider=None,
@@ -452,12 +472,16 @@ class TestResolveEntity:
             cost_usd=None,
             latency_ms=200,
             temperature=0.2,
+            audit_id=None,
+            prompt_key=None,
         )
 
         with (
             patch("lattice.core.entity_resolution.db_pool") as mock_db_pool,
             patch("lattice.core.entity_resolution.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_resolution.get_llm_client") as mock_get_llm,
+            patch(
+                "lattice.core.entity_resolution.get_auditing_llm_client"
+            ) as mock_get_llm,
         ):
             mock_db_pool.pool = mock_pool
             mock_get_prompt.return_value = mock_prompt_template

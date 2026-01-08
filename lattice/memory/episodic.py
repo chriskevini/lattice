@@ -14,7 +14,7 @@ import structlog
 
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_llm_client
+from lattice.utils.llm import get_auditing_llm_client
 from lattice.utils.memory_parsing import MIN_SALIENCY_DELTA, parse_memory_extraction
 
 
@@ -328,10 +328,12 @@ async def consolidate_message(
         filled_prompt = memory_prompt.template.replace("{CONTEXT}", context_text)
     logger.info("Calling LLM for memory extraction", message_id=str(message_id))
 
-    llm_client = get_llm_client()
+    llm_client = get_auditing_llm_client()
     result = await llm_client.complete(
         filled_prompt,
         temperature=memory_prompt.temperature,
+        prompt_key="MEMORY_EXTRACTION",
+        main_discord_message_id=main_message_id or 0,
     )
 
     logger.info(
@@ -340,22 +342,7 @@ async def consolidate_message(
         content_preview=result.content[:100],
     )
 
-    from lattice.memory import prompt_audits
-
-    extraction_audit_id = await prompt_audits.store_prompt_audit(
-        prompt_key="MEMORY_EXTRACTION",
-        rendered_prompt=filled_prompt,
-        response_content=result.content,
-        main_discord_message_id=main_message_id or 0,
-        template_version=memory_prompt.version,
-        message_id=message_id,
-        model=result.model,
-        provider=result.provider,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
-        cost_usd=result.cost_usd,
-        latency_ms=result.latency_ms,
-    )
+    extraction_audit_id = result.audit_id
 
     extraction = parse_memory_extraction(result.content)
     triples_raw = extraction.get("triples", [])

@@ -38,7 +38,7 @@ class AuditResult(GenerationResult):
     prompt_key: str | None = None
 
 
-class LLMClient:
+class _LLMClient:
     """Unified LLM client interface via OpenRouter."""
 
     def __init__(self, provider: str = "placeholder") -> None:
@@ -216,11 +216,11 @@ class LLMClient:
         )
 
 
-_llm_client: LLMClient | None = None
+_llm_client: "_LLMClient | None" = None
 _auditing_client: "AuditingLLMClient | None" = None
 
 
-def get_llm_client() -> LLMClient:
+def _get_llm_client() -> "_LLMClient":
     """Get or create the global LLM client instance.
 
     Returns:
@@ -229,7 +229,7 @@ def get_llm_client() -> LLMClient:
     global _llm_client
     if _llm_client is None:
         provider = os.getenv("LLM_PROVIDER", "placeholder")
-        _llm_client = LLMClient(provider=provider)
+        _llm_client = _LLMClient(provider=provider)
     return _llm_client
 
 
@@ -259,7 +259,7 @@ class AuditingLLMClient:
 
     def __init__(self) -> None:
         """Initialize the auditing client with underlying LLM client."""
-        self._client = LLMClient()
+        self._client = _LLMClient()
 
     async def complete(
         self,

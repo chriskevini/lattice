@@ -19,7 +19,7 @@ from lattice.dreaming.analyzer import (
 )
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_llm_client
+from lattice.utils.llm import get_auditing_llm_client
 
 
 logger = structlog.get_logger(__name__)
@@ -229,13 +229,14 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     )
 
     # Call LLM to generate proposal with timeout
-    llm_client = get_llm_client()
+    llm_client = get_auditing_llm_client()
     try:
         result = await asyncio.wait_for(
             llm_client.complete(
                 prompt=optimization_prompt,
                 temperature=0.7,
-                # No max_tokens - proposals need full reasoning (typically 500-1500 tokens)
+                prompt_key="PROMPT_OPTIMIZATION",
+                main_discord_message_id=0,
             ),
             timeout=LLM_PROPOSAL_TIMEOUT,
         )
