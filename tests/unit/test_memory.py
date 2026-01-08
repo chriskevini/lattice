@@ -11,7 +11,7 @@ from lattice.memory.episodic import (
     get_recent_messages,
     store_message,
 )
-from lattice.memory.procedural import PromptTemplate, get_prompt, store_prompt
+from lattice.memory.procedural import PromptTemplate, get_prompt
 
 
 class TestEpisodicMessage:
@@ -261,23 +261,6 @@ class TestProceduralMemoryFunctions:
             result = await get_prompt("nonexistent")
 
             assert result is None
-
-    @pytest.mark.asyncio
-    async def test_store_prompt(self) -> None:
-        """Test storing a prompt template."""
-        mock_conn = MagicMock()
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.procedural.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-            prompt = PromptTemplate(prompt_key="new_key", template="New template")
-            await store_prompt(prompt)
-
-            mock_conn.execute.assert_called_once()
 
 
 class MockMessage:

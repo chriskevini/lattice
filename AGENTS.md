@@ -83,6 +83,26 @@ Always retrieves **15 recent messages** (generous conversation history), but gra
 - Graph traversal is expensive; only do it when entities provide starting points
 - Depth=2 finds multi-hop relationships (e.g., project → deadline → date)
 
+### [Canonical Placeholders](#canonical-placeholders)
+Use these placeholder names consistently across all prompts:
+
+| Placeholder | Contains | Example |
+|-------------|----------|---------|
+| `{episodic_context}` | Recent conversation history (~15 messages) | "User: What's the status?\nBot: All systems operational." |
+| `{semantic_context}` | Relevant facts from knowledge graph | "user has_goal: launch v1, due_by: 2026-01-15" |
+| `{bigger_episodic_context}` | Full batch of new messages for extraction (~18 messages) | "User: Hello\nBot: Hi there!" |
+| `{user_message}` | The user's current message | "How's the project going?" |
+| `{objectives_context}` | Active goals from knowledge graph | "user has_goal: launch v1 (due_by: 2026-01-15)" |
+| `{current_time}` | ISO timestamp for time-sensitive decisions | "2026-01-07T21:30:00Z" |
+| `{scheduler_current_interval}` | Scheduler check interval (minutes between proactive checks) | 15 |
+| `{feedback_samples}` | Feedback samples for prompt optimization (user + response + feedback) | See PROMPT_OPTIMIZATION template |
+| `{metrics}` | Performance metrics string for prompt optimization | "75% success rate (15 positive, 5 negative). 100 total uses." |
+
+**Rules**:
+- New placeholders must be documented here
+- Use existing placeholders before creating new ones
+- Placeholders in templates are validated at `response_generator.py:validate_template_placeholders`
+
 ### [Memory Optimization](#memory-optimization)
 - **Streaming**: Use async generators for large message sets.
 - **Pooling**: Strict connection limits (`min_size=2, max_size=5`).

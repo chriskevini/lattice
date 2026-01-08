@@ -164,7 +164,7 @@ class TestAuditViewBuilder:
         embed, _ = AuditViewBuilder.build_reasoning_audit(
             input_context="deadline: 3 days, no progress updates, user prefers check-ins",
             decision="Send proactive check-in. Deadline in 3 days, no recent progress.",
-            prompt_key="PROACTIVE_DECISION",
+            prompt_key="PROACTIVE_CHECKIN",
             confidence=0.80,
             latency_ms=180,
             audit_id=audit_id,
@@ -172,8 +172,8 @@ class TestAuditViewBuilder:
         )
 
         assert isinstance(embed, discord.Embed)
-        assert embed.title == "🧠 PROACTIVE_DECISION v1"
-        assert embed.color == discord.Color.magenta()
+        assert embed.title == "🌟 PROACTIVE_CHECKIN v1"
+        assert embed.color == discord.Color.gold()
         assert len(embed.fields) == 3
 
         assert embed.fields[0].name == "INPUT"
@@ -229,12 +229,12 @@ class TestAuditViewBuilder:
         reasoning_embed, _ = AuditViewBuilder.build_reasoning_audit(
             input_context="test",
             decision="test",
-            prompt_key="PROACTIVE_DECISION",
+            prompt_key="PROACTIVE_CHECKIN",
             confidence=0.5,
             latency_ms=100,
             audit_id=audit_id,
         )
-        assert reasoning_embed.title.startswith("🧠")
+        assert reasoning_embed.title.startswith("🌟")
 
     @pytest.mark.asyncio
     async def test_color_mapping(self) -> None:

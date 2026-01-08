@@ -91,7 +91,7 @@ class TestDecideProactive:
 
     @pytest.mark.asyncio
     async def test_decide_proactive_with_missing_prompt(self) -> None:
-        """Test that missing PROACTIVE_DECISION prompt returns wait."""
+        """Test that missing PROACTIVE_CHECKIN prompt returns wait."""
         with (
             patch(
                 "lattice.scheduler.triggers.is_within_active_hours", return_value=True
@@ -119,7 +119,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_llm_exception(self) -> None:
         """Test that LLM exceptions are handled gracefully."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{episodic_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
 
         mock_llm = MagicMock()
@@ -156,7 +156,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_json_parse_error(self) -> None:
         """Test that invalid JSON from LLM is handled gracefully."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{episodic_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
 
         mock_result = MagicMock()
@@ -202,7 +202,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_invalid_action(self) -> None:
         """Test that invalid action from LLM defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{episodic_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -250,7 +250,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_empty_content(self) -> None:
         """Test that empty content in message action defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{episodic_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -298,7 +298,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_literal_empty_string(self) -> None:
         """Test that literal empty string content defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{episodic_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -344,7 +344,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_missing_content(self) -> None:
         """Test that missing content field defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{episodic_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -484,18 +484,35 @@ class TestGetObjectivesContext:
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_objectives_context()
-            assert result == "No active objectives."
+            assert result == "No active goals."
 
     @pytest.mark.asyncio
     async def test_get_objectives_context_with_objectives(self) -> None:
-        """Test objectives context with objectives."""
-        objectives = [
-            {"description": "Complete project by Friday", "status": "pending"},
-            {"description": "Review documentation", "status": "pending"},
+        """Test objectives context with goals and predicates from semantic_triple."""
+        goals = [
+            {"object": "Complete project by Friday"},
+            {"object": "Review documentation"},
+        ]
+        predicates = [
+            {
+                "subject": "Complete project by Friday",
+                "predicate": "due_by",
+                "object": "2026-01-10",
+            },
+            {
+                "subject": "Complete project by Friday",
+                "predicate": "priority",
+                "object": "high",
+            },
+            {
+                "subject": "Complete project by Friday",
+                "predicate": "status",
+                "object": "active",
+            },
         ]
 
         mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(return_value=objectives)
+        mock_conn.fetch = AsyncMock(side_effect=[goals, predicates])
 
         with patch("lattice.scheduler.triggers.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
@@ -505,8 +522,10 @@ class TestGetObjectivesContext:
 
             result = await get_objectives_context()
             assert "User goals:" in result
-            assert "Complete project by Friday (pending)" in result
-            assert "Review documentation (pending)" in result
+            assert "Complete project by Friday" in result
+            assert "Review documentation" in result
+            assert "due_by: 2026-01-10" in result
+            assert "priority: high" in result
 
 
 class TestGetDefaultChannelId:

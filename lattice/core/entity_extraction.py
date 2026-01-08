@@ -79,8 +79,8 @@ async def extract_entities(
 
     # 2. Render prompt with message content and context
     rendered_prompt = prompt_template.safe_format(
-        message_content=message_content,
-        context=context if context else "(No additional context)",
+        episodic_context=context if context else "(No additional context)",
+        user_message=message_content,
     )
 
     logger.info(

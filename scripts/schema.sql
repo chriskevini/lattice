@@ -17,17 +17,18 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 CREATE INDEX IF NOT EXISTS idx_schema_migrations_name ON schema_migrations(migration_name);
 
 -- ----------------------------------------------------------------------------
--- prompt_registry: Prompt templates with versioning
+-- prompt_registry: Prompt templates with version history (append-only)
+-- ----------------------------------------------------------------------------
+-- Query current version with: ORDER BY version DESC LIMIT 1
+-- All versions are preserved - version number alone determines "active"
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prompt_registry (
-    prompt_key TEXT PRIMARY KEY,
+    prompt_key TEXT NOT NULL,
+    version INT NOT NULL,
     template TEXT NOT NULL,
-    version INT DEFAULT 1,
     temperature FLOAT DEFAULT 0.2,
-    updated_at TIMESTAMPTZ DEFAULT now(),
-    active BOOLEAN DEFAULT true,
-    pending_approval BOOLEAN DEFAULT false,
-    proposed_template TEXT
+    created_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (prompt_key, version)
 );
 
 -- ----------------------------------------------------------------------------
@@ -141,7 +142,6 @@ CREATE TABLE IF NOT EXISTS dreaming_proposals (
     proposed_template TEXT NOT NULL,
     rationale TEXT NOT NULL,
     proposal_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    confidence FLOAT CHECK (confidence >= 0.0 AND confidence <= 1.0),
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'deferred')),
     human_feedback TEXT,
     rendered_optimization_prompt TEXT,
@@ -185,7 +185,6 @@ INSERT INTO system_health (metric_key, metric_value) VALUES
     ('scheduler_current_interval', '15'),
     ('scheduler_max_interval', '1440'),
     ('dreaming_min_uses', '10'),
-    ('dreaming_min_confidence', '0.7'),
     ('dreaming_enabled', 'true'),
     ('user_timezone', 'UTC'),
     ('active_hours_start', '9'),

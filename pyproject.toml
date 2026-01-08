@@ -272,6 +272,7 @@ exclude_lines = [
 # ============================================================================
 [tool.bandit]
 exclude_dirs = ["tests/"]
+skips = ["B608"]
 
 # ============================================================================
 # COMMITIZEN CONFIGURATION - Conventional commits

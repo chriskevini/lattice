@@ -96,16 +96,18 @@ class TestProposer:
         mock_template = MagicMock()
         mock_template.template = "You are a helpful assistant."
 
-        # Mock the PROMPT_OPTIMIZATION template
         mock_optimization_template = MagicMock()
-        mock_optimization_template.template = "Optimize this prompt: {current_template}"
+        mock_optimization_template.template = "Optimize this: {current_template}"
+        mock_optimization_template.safe_format = MagicMock(
+            return_value="Optimize this: You are a helpful assistant."
+        )
 
         mock_llm_result = MagicMock()
         mock_llm_result.content = """{
             "proposed_template": "You are a concise assistant.",
-            "changes": [{"issue": "High latency", "fix": "Reduce verbosity", "why": "Shorter responses are faster"}],
-            "expected_improvements": "This change will reduce response latency by 30% and improve clarity with more focused responses.",
-            "confidence": 0.85
+            "pain_point": "Responses are too verbose",
+            "proposed_change": "Add 'Keep responses brief' to guidelines",
+            "justification": "Will help reduce response length"
         }"""
 
         with (
@@ -117,7 +119,7 @@ class TestProposer:
                 "lattice.dreaming.proposer.get_auditing_llm_client"
             ) as mock_llm_client,
         ):
-            # Mock get_prompt to return different templates for different keys
+
             def get_prompt_side_effect(prompt_key: str):
                 if prompt_key == "BASIC_RESPONSE":
                     return mock_template
@@ -131,74 +133,13 @@ class TestProposer:
             mock_llm.complete = AsyncMock(return_value=mock_llm_result)
             mock_llm_client.return_value = mock_llm
 
-            proposal = await propose_optimization(metrics, min_confidence=0.7)
+            proposal = await propose_optimization(metrics)
 
             assert proposal is not None
             assert proposal.prompt_key == "BASIC_RESPONSE"
             assert proposal.current_version == 1
             assert proposal.proposed_version == 2
-            assert proposal.confidence == 0.85
             assert "concise" in proposal.proposed_template
-
-    @pytest.mark.asyncio
-    async def test_propose_optimization_below_confidence_threshold(self) -> None:
-        """Test that low confidence proposals are rejected."""
-        metrics = PromptMetrics(
-            prompt_key="BASIC_RESPONSE",
-            version=1,
-            total_uses=50,
-            uses_with_feedback=5,
-            feedback_rate=0.1,
-            positive_feedback=3,
-            negative_feedback=2,
-            neutral_feedback=0,
-            success_rate=0.6,
-            avg_latency_ms=150.0,
-            avg_tokens=100.0,
-            avg_cost_usd=Decimal("0.0005"),
-            priority_score=10.0,
-        )
-
-        mock_template = MagicMock()
-        mock_template.template = "You are a helpful assistant."
-
-        # Mock the PROMPT_OPTIMIZATION template
-        mock_optimization_template = MagicMock()
-        mock_optimization_template.template = "Optimize this prompt: {current_template}"
-
-        mock_llm_result = MagicMock()
-        mock_llm_result.content = """{
-            "proposed_template": "You are an assistant.",
-            "changes": [{"issue": "Minor issue", "fix": "Small tweak", "why": "Minor improvement"}],
-            "expected_improvements": "Small performance improvement",
-            "confidence": 0.5
-        }"""
-
-        with (
-            patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
-            patch(
-                "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
-            ),
-            patch(
-                "lattice.dreaming.proposer.get_auditing_llm_client"
-            ) as mock_llm_client,
-        ):
-            # Mock get_prompt to return different templates for different keys
-            def get_prompt_side_effect(prompt_key: str):
-                if prompt_key == "BASIC_RESPONSE":
-                    return mock_template
-                elif prompt_key == "PROMPT_OPTIMIZATION":
-                    return mock_optimization_template
-                return None
-
-            mock_get_prompt.side_effect = get_prompt_side_effect
-            mock_llm = AsyncMock()
-            mock_llm.complete = AsyncMock(return_value=mock_llm_result)
-            mock_llm_client.return_value = mock_llm
-
-            proposal = await propose_optimization(metrics, min_confidence=0.7)
-
-            assert proposal is None
 
     @pytest.mark.asyncio
     async def test_store_proposal(self) -> None:
@@ -211,17 +152,11 @@ class TestProposer:
             current_template="Old template",
             proposed_template="New template",
             proposal_metadata={
-                "changes": [
-                    {
-                        "issue": "Performance issue",
-                        "fix": "Improve template",
-                        "why": "Better performance",
-                    }
-                ],
-                "expected_improvements": "This change will improve latency by 20%",
+                "pain_point": "Responses are too verbose",
+                "proposed_change": "Add brevity guideline",
+                "justification": "Will help reduce response length",
             },
-            confidence=0.8,
-            rendered_optimization_prompt="CURRENT TEMPLATE:\nOld template\n\nPERFORMANCE METRICS:\n...",
+            rendered_optimization_prompt="Optimize this: Old template",
         )
 
         with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
@@ -248,6 +183,7 @@ class TestProposer:
                     "current_version": 1,
                     "proposed_template": "New template",
                     "proposed_version": 2,
+                    "temperature": 0.7,
                 }
             )
             mock_conn.execute = AsyncMock(return_value="UPDATE 1")
@@ -262,35 +198,7 @@ class TestProposer:
             assert success is True
             assert (
                 mock_conn.execute.call_count == 2
-            )  # Update prompt_registry + proposals
-
-    @pytest.mark.asyncio
-    async def test_approve_proposal_version_mismatch(self) -> None:
-        """Test that approving fails when prompt version has changed."""
-        proposal_id = uuid4()
-
-        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            # Proposal fetches successfully
-            mock_conn.fetchrow = AsyncMock(
-                return_value={
-                    "prompt_key": "BASIC_RESPONSE",
-                    "current_version": 1,
-                    "proposed_template": "New template",
-                    "proposed_version": 2,
-                }
-            )
-            # But UPDATE fails because version doesn't match (prompt was already updated)
-            mock_conn.execute = AsyncMock(return_value="UPDATE 0")
-            mock_conn.transaction = MagicMock()
-            mock_conn.transaction().__aenter__ = AsyncMock()
-            mock_conn.transaction().__aexit__ = AsyncMock()
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
-
-            success = await approve_proposal(proposal_id, "user123", "Looks good")
-
-            assert success is False
+            )  # Insert new version + Update proposals
 
     @pytest.mark.asyncio
     async def test_reject_proposal_success(self) -> None:
@@ -366,7 +274,8 @@ class TestValidateTemplate:
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
 
         assert not is_valid
-        assert "exceeds maximum length" in error
+        assert error is not None
+        assert "exceeds maximum length" in error  # type: ignore[operator]
 
     def test_validate_template_unbalanced_braces(self) -> None:
         """Test validation fails for unbalanced braces."""
@@ -376,7 +285,8 @@ class TestValidateTemplate:
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
 
         assert not is_valid
-        assert "unbalanced braces" in error
+        assert error is not None
+        assert "unbalanced braces" in error  # type: ignore[operator]
 
     def test_validate_template_missing_placeholders(self) -> None:
         """Test validation fails for missing required placeholders."""
@@ -386,7 +296,8 @@ class TestValidateTemplate:
         is_valid, error = validate_template(template, "BASIC_RESPONSE")
 
         assert not is_valid
-        assert "missing context/message placeholders" in error
+        assert error is not None
+        assert "missing context/message placeholders" in error  # type: ignore[operator]
 
     def test_validate_template_with_valid_placeholders(self) -> None:
         """Test validation passes with various valid placeholders."""
@@ -432,7 +343,7 @@ class TestParseAndValidateProposalFields:
         """Test parsing valid JSON response."""
         from lattice.dreaming.proposer import _parse_llm_response
 
-        response = '{"proposed_template": "test", "confidence": 0.8}'
+        response = '{"proposed_template": "test", "pain_point": "issue"}'
         data, error = _parse_llm_response(response, "TEST_KEY")
 
         assert data is not None
@@ -456,9 +367,9 @@ class TestParseAndValidateProposalFields:
 
         data = {
             "proposed_template": "test template",
-            "changes": [{"issue": "x", "fix": "y", "why": "z"}],
-            "expected_improvements": "better",
-            "confidence": 0.85,
+            "pain_point": "Responses are too long",
+            "proposed_change": "Add brevity guideline",
+            "justification": "Will help keep responses concise",
         }
 
         error = _validate_proposal_fields(data)
@@ -470,47 +381,37 @@ class TestParseAndValidateProposalFields:
 
         data = {
             "proposed_template": "test",
-            # Missing changes, expected_improvements, confidence
+            # Missing pain_point, proposed_change, justification
         }
 
         error = _validate_proposal_fields(data)
         assert error is not None
         assert "Missing required fields" in error
 
-    def test_validate_proposal_fields_invalid_confidence_type(self) -> None:
-        """Test validation fails with non-numeric confidence."""
-        from lattice.dreaming.proposer import _validate_proposal_fields
-
-        data = {
-            "proposed_template": "test",
-            "changes": [],
-            "expected_improvements": "better",
-            "confidence": "high",  # Should be number
-        }
-
-        error = _validate_proposal_fields(data)
-        assert error is not None
-
-        data = {
-            "proposed_template": "test",
-            "changes": "not a list",
-            "expected_improvements": "better",
-            "confidence": 0.8,
-        }
-
-        error = _validate_proposal_fields(data)
-        assert error is not None
-        assert "list" in error.lower()
-
-    def test_validate_proposal_fields_invalid_template_type(self) -> None:
-        """Test validation fails with non-string template."""
+    def test_validate_proposal_fields_invalid_types(self) -> None:
+        """Test validation fails with invalid field types."""
         from lattice.dreaming.proposer import _validate_proposal_fields
 
         data = {
             "proposed_template": 123,  # Should be string
-            "changes": [],
-            "expected_improvements": "better",
-            "confidence": 0.8,
+            "pain_point": "issue",
+            "proposed_change": "fix",
+            "justification": "why",
+        }
+
+        error = _validate_proposal_fields(data)
+        assert error is not None
+        assert "str" in error
+
+    def test_validate_proposal_fields_invalid_pain_point_type(self) -> None:
+        """Test validation fails with non-string pain_point."""
+        from lattice.dreaming.proposer import _validate_proposal_fields
+
+        data = {
+            "proposed_template": "test",
+            "pain_point": ["list", "not", "string"],  # Should be string
+            "proposed_change": "fix",
+            "justification": "why",
         }
 
         error = _validate_proposal_fields(data)

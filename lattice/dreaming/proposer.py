@@ -57,7 +57,7 @@ def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]
 
     # Check for required placeholders based on prompt_key
     # This is a simple check - extend as needed for different prompt types
-    if "{" in template and prompt_key in ("BASIC_RESPONSE", "PROACTIVE_DECISION"):
+    if "{" in template and prompt_key in ("BASIC_RESPONSE", "PROACTIVE_CHECKIN"):
         # Basic sanity check: ensure at least some common placeholders exist
         # for prompts that typically need them
         # These prompts typically need some context/input placeholder
@@ -83,8 +83,7 @@ class OptimizationProposal:
     proposed_template: str
     proposal_metadata: dict[
         str, Any
-    ]  # Full LLM response: {changes: [...], expected_improvements: "...", confidence: 0.XX}
-    confidence: float
+    ]  # Full LLM response: {pain_point, proposed_change, justification}
     rendered_optimization_prompt: str  # The exact prompt sent to optimizer LLM
 
 
@@ -130,9 +129,9 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
     """
     required_fields = [
         "proposed_template",
-        "changes",
-        "expected_improvements",
-        "confidence",
+        "pain_point",
+        "proposed_change",
+        "justification",
     ]
     missing = [f for f in required_fields if f not in data]
     if missing:
@@ -141,18 +140,14 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
     if not isinstance(data["proposed_template"], str):
         return f"Invalid proposed_template type: expected str, got {type(data['proposed_template']).__name__}"
 
-    if not isinstance(data["changes"], list):
-        return (
-            f"Invalid changes type: expected list, got {type(data['changes']).__name__}"
-        )
+    if not isinstance(data["pain_point"], str):
+        return f"Invalid pain_point type: expected str, got {type(data['pain_point']).__name__}"
 
-    if not isinstance(data["expected_improvements"], str):
-        return f"Invalid expected_improvements type: expected str, got {type(data['expected_improvements']).__name__}"
+    if not isinstance(data["proposed_change"], str):
+        return f"Invalid proposed_change type: expected str, got {type(data['proposed_change']).__name__}"
 
-    try:
-        float(data["confidence"])
-    except (ValueError, TypeError):
-        return f"Invalid confidence type: expected float-convertible, got {type(data['confidence']).__name__}"
+    if not isinstance(data["justification"], str):
+        return f"Invalid justification type: expected str, got {type(data['justification']).__name__}"
 
     # Validate template placeholders (prevents proposing templates with unavailable placeholders)
     is_valid, unknown = validate_template_placeholders(data["proposed_template"])
@@ -162,18 +157,16 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
     return None
 
 
-async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
+async def propose_optimization(
     metrics: PromptMetrics,
-    min_confidence: float = 0.7,
 ) -> OptimizationProposal | None:
     """Generate optimization proposal for an underperforming prompt.
 
     Args:
         metrics: Prompt metrics indicating performance issues
-        min_confidence: Minimum confidence threshold to propose
 
     Returns:
-        OptimizationProposal if confident enough, None otherwise
+        OptimizationProposal if generated, None otherwise
     """
     # Get current template
     prompt_template = await get_prompt(metrics.prompt_key)
@@ -217,15 +210,24 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
     # Format samples into experience cases
     experience_cases = _format_experience_cases(detailed_samples, lightweight_samples)
 
+    # Build context for the optimization prompt
+    feedback_samples = (
+        experience_cases
+        if experience_cases != "(none)"
+        else "No recent feedback samples."
+    )
+    metrics_context = (
+        f"Success rate: {metrics.success_rate:.1%} "
+        f"({metrics.positive_feedback} positive, {metrics.negative_feedback} negative). "
+        f"Total uses: {metrics.total_uses}. "
+        f"Feedback rate: {metrics.feedback_rate:.1%}."
+    )
+
     # Format the optimization prompt using database template
     optimization_prompt = optimization_prompt_template.safe_format(
+        feedback_samples=feedback_samples,
+        metrics=metrics_context,
         current_template=prompt_template.template,
-        total_uses=metrics.total_uses,
-        feedback_rate=f"{metrics.feedback_rate:.1%}",
-        success_rate=f"{metrics.success_rate:.1%}",
-        positive_feedback=metrics.positive_feedback,
-        negative_feedback=metrics.negative_feedback,
-        experience_cases=experience_cases,
     )
 
     # Call LLM to generate proposal with timeout
@@ -264,25 +266,12 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         )
         return None
 
-    # Extract confidence (validated as float-convertible above)
-    confidence = float(proposal_data["confidence"])
-
-    # Store the entire LLM response as metadata (JSONB flexibility)
-    # Remove fields that are stored separately in the schema
+    # Store the LLM response as metadata
     proposal_metadata = {
-        "changes": proposal_data["changes"],
-        "expected_improvements": proposal_data["expected_improvements"],
+        "pain_point": proposal_data["pain_point"],
+        "proposed_change": proposal_data["proposed_change"],
+        "justification": proposal_data["justification"],
     }
-
-    # Check confidence threshold
-    if confidence < min_confidence:
-        logger.info(
-            "Optimization proposal below confidence threshold",
-            prompt_key=metrics.prompt_key,
-            confidence=confidence,
-            threshold=min_confidence,
-        )
-        return None
 
     # Create proposal object (store the exact prompt sent to LLM for auditability)
     proposal = OptimizationProposal(
@@ -292,15 +281,13 @@ async def propose_optimization(  # noqa: PLR0911 - Multiple returns for clarity
         proposed_version=metrics.version + 1,
         current_template=prompt_template.template,
         proposed_template=proposal_data["proposed_template"],
-        proposal_metadata=proposal_metadata,  # Full JSONB structure
-        confidence=confidence,
-        rendered_optimization_prompt=optimization_prompt,  # Store full rendered prompt
+        proposal_metadata=proposal_metadata,
+        rendered_optimization_prompt=optimization_prompt,
     )
 
     logger.info(
         "Generated optimization proposal",
         prompt_key=metrics.prompt_key,
-        confidence=confidence,
         proposal_id=str(proposal.proposal_id),
     )
 
@@ -379,11 +366,10 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
                 current_template,
                 proposed_template,
                 proposal_metadata,
-                confidence,
                 rendered_optimization_prompt,
                 status
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
             RETURNING id
             """,
             proposal.proposal_id,
@@ -393,7 +379,6 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
             proposal.current_template,
             proposal.proposed_template,
             json.dumps(proposal.proposal_metadata),
-            proposal.confidence,
             proposal.rendered_optimization_prompt,
         )
 
@@ -428,7 +413,6 @@ async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
                 current_template,
                 proposed_template,
                 proposal_metadata,
-                confidence,
                 rendered_optimization_prompt
             FROM dreaming_proposals
             WHERE id = $1
@@ -447,7 +431,6 @@ async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
             current_template=row["current_template"],
             proposed_template=row["proposed_template"],
             proposal_metadata=row["proposal_metadata"],
-            confidence=float(row["confidence"]),
             rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
         )
 
@@ -456,7 +439,7 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
     """Get all pending optimization proposals.
 
     Returns:
-        List of pending proposals, ordered by confidence (highest first)
+        List of pending proposals, ordered by created_at (newest first)
     """
     async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
@@ -469,11 +452,10 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 current_template,
                 proposed_template,
                 proposal_metadata,
-                confidence,
                 rendered_optimization_prompt
             FROM dreaming_proposals
             WHERE status = 'pending'
-            ORDER BY confidence DESC, created_at DESC
+            ORDER BY created_at DESC
             """
         )
 
@@ -486,7 +468,6 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
                 current_template=row["current_template"],
                 proposed_template=row["proposed_template"],
                 proposal_metadata=row["proposal_metadata"],
-                confidence=float(row["confidence"]),
                 rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
             )
             for row in rows
@@ -541,31 +522,17 @@ async def approve_proposal(
 
         # Begin transaction
         async with conn.transaction():
-            # Update prompt_registry with new template (with optimistic locking on version)
-            update_result = await conn.execute(
+            # Insert new version (version number alone determines "current")
+            await conn.execute(
                 """
-                UPDATE prompt_registry
-                SET
-                    template = $1,
-                    version = $2,
-                    updated_at = now()
-                WHERE prompt_key = $3 AND version = $4
+                INSERT INTO prompt_registry (prompt_key, version, template, temperature)
+                VALUES ($1, $2, $3, $4)
                 """,
-                proposal_row["proposed_template"],
-                proposal_row["proposed_version"],
                 proposal_row["prompt_key"],
-                proposal_row["current_version"],
+                proposal_row["proposed_version"],
+                proposal_row["proposed_template"],
+                proposal_row.get("temperature", 0.7),
             )
-
-            # Check if update succeeded (version mismatch = prompt was already updated)
-            if update_result != "UPDATE 1":
-                logger.warning(
-                    "Prompt version mismatch - prompt was modified since proposal creation",
-                    proposal_id=str(proposal_id),
-                    prompt_key=proposal_row["prompt_key"],
-                    expected_version=proposal_row["current_version"],
-                )
-                return False
 
             # Mark proposal as approved (with optimistic locking)
             result = await conn.execute(

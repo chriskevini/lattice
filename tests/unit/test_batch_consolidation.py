@@ -286,7 +286,9 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "Template with {MEMORY_CONTEXT} and {MESSAGE_HISTORY}"
+        mock_prompt.template = (
+            "Template with {semantic_context} and {bigger_episodic_context}"
+        )
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Formatted prompt")
         mock_prompt.version = 1
@@ -470,7 +472,7 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "{MESSAGE_HISTORY}"
+        mock_prompt.template = "{bigger_episodic_context}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="User: Hello\nBot: Hi there!")
         mock_prompt.version = 1
@@ -501,8 +503,8 @@ class TestRunBatchConsolidation:
                 ):
                     await run_batch_consolidation()
                     call_args = mock_prompt.safe_format.call_args
-                    assert "MESSAGE_HISTORY" in call_args[1]
-                    history = call_args[1]["MESSAGE_HISTORY"]
+                    assert "bigger_episodic_context" in call_args[1]
+                    history = call_args[1]["bigger_episodic_context"]
                     assert "User: Hello" in history
                     assert "Bot: Hi there!" in history
 
@@ -558,7 +560,7 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "{MEMORY_CONTEXT}"
+        mock_prompt.template = "{semantic_context}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Memories")
         mock_prompt.version = 1
@@ -589,8 +591,8 @@ class TestRunBatchConsolidation:
                 ):
                     await run_batch_consolidation()
                     call_args = mock_prompt.safe_format.call_args
-                    assert "MEMORY_CONTEXT" in call_args[1]
-                    context = call_args[1]["MEMORY_CONTEXT"]
+                    assert "semantic_context" in call_args[1]
+                    context = call_args[1]["semantic_context"]
                     assert "user --lives_in--> Richmond" in context
                     assert "user --has_goal--> run a marathon" in context
 
@@ -632,7 +634,7 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "{MEMORY_CONTEXT}"
+        mock_prompt.template = "{semantic_context}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="(No previous memories)")
         mock_prompt.version = 1
@@ -663,7 +665,7 @@ class TestRunBatchConsolidation:
                 ):
                     await run_batch_consolidation()
                     call_args = mock_prompt.safe_format.call_args
-                    assert call_args[1]["MEMORY_CONTEXT"] == "(No previous memories)"
+                    assert call_args[1]["semantic_context"] == "(No previous memories)"
 
 
 class TestRaceCondition:

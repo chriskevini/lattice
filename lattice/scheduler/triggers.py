@@ -79,23 +79,58 @@ async def get_conversation_context(limit: int = 20) -> str:
 
 
 async def get_objectives_context() -> str:
-    """Get user's goals and objectives.
+    """Get user's goals from knowledge graph with hierarchical predicate display.
+
+    Fetches all has_goal predicates, then for each unique goal node,
+    retrieves all predicates attached to that goal to display a tree hierarchy.
 
     Returns:
-        Formatted objectives string
+        Formatted goals string showing goals and their predicates
     """
     async with db_pool.pool.acquire() as conn:
-        objectives = await conn.fetch(
-            "SELECT description, status FROM objectives WHERE status = 'pending' ORDER BY saliency_score DESC LIMIT 5"
+        goals = await conn.fetch(
+            """
+            SELECT DISTINCT object FROM semantic_triple
+            WHERE predicate = 'has_goal'
+            ORDER BY object
+            """
         )
 
-    if not objectives:
-        return "No active objectives."
+    if not goals:
+        return "No active goals."
 
-    lines: list[str] = [
-        f"- {obj['description']} ({obj['status']})" for obj in objectives
-    ]
-    return "User goals:\n" + "\n".join(lines)
+    goal_names = [g["object"] for g in goals]
+
+    if not goal_names:
+        return "No active goals."
+
+    async with db_pool.pool.acquire() as conn:
+        placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
+        query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
+        predicates = await conn.fetch(query, *goal_names)
+
+    goal_predicates: dict[str, list[tuple[str, str]]] = {}
+    for pred in predicates:
+        goal_name = pred["subject"]
+        if goal_name not in goal_predicates:
+            goal_predicates[goal_name] = []
+        goal_predicates[goal_name].append((pred["predicate"], pred["object"]))
+
+    lines = ["User goals:"]
+    for i, goal_name in enumerate(goal_names):
+        is_last = i == len(goal_names) - 1
+        goal_prefix = "└── " if is_last else "├── "
+        lines.append(f"{goal_prefix}{goal_name}")
+
+        if goal_name in goal_predicates:
+            preds = goal_predicates[goal_name]
+            for j, (pred, obj) in enumerate(preds):
+                pred_is_last = j == len(preds) - 1
+                pred_prefix = "    " if is_last else "│   "
+                pred_goal_prefix = "└── " if pred_is_last else "├── "
+                lines.append(f"{pred_prefix}{pred_goal_prefix}{pred}: {obj}")
+
+    return "\n".join(lines)
 
 
 async def get_default_channel_id() -> int | None:
@@ -140,19 +175,19 @@ async def decide_proactive() -> ProactiveDecision:
     current_interval = await get_current_interval()
     current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
-    prompt_template = await get_prompt("PROACTIVE_DECISION")
+    prompt_template = await get_prompt("PROACTIVE_CHECKIN")
     if not prompt_template:
-        logger.error("PROACTIVE_DECISION prompt not found in database")
+        logger.error("PROACTIVE_CHECKIN prompt not found in database")
         return ProactiveDecision(
             action="wait",
             content=None,
-            reason="PROACTIVE_DECISION prompt not found, defaulting to wait",
+            reason="PROACTIVE_CHECKIN prompt not found, defaulting to wait",
         )
 
     prompt = prompt_template.template.format(
         current_time=current_time,
-        current_interval=current_interval,
-        conversation_context=conversation,
+        scheduler_current_interval=current_interval,
+        episodic_context=conversation,
         objectives_context=objectives,
     )
 
@@ -160,7 +195,7 @@ async def decide_proactive() -> ProactiveDecision:
     try:
         result = await llm_client.complete(
             prompt=prompt,
-            prompt_key="PROACTIVE_DECISION",
+            prompt_key="PROACTIVE_CHECKIN",
             template_version=prompt_template.version,
             main_discord_message_id=0,  # Placeholder since no message exists yet
             temperature=prompt_template.temperature,
