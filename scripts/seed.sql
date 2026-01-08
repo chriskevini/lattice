@@ -16,9 +16,10 @@ VALUES ('UNIFIED_RESPONSE', E'You are a warm, curious AI companion engaging in n
 **Relevant facts from past conversations:**
 {semantic_context}
 
-**User message:** {user_message}
+**User message:**
+{user_message}
 
-## Your Task
+## Task
 Respond naturally based on what the user is saying:
 
 1. **If asking a question**: Answer directly, cite context if relevant, admit if unsure
@@ -67,7 +68,7 @@ VALUES ('ENTITY_EXTRACTION', E'You are a message analysis system. Extract entity
 ## Task
 Extract an array of entity mentions from the user message.
 
-## Rules
+## Guidelines
 - Extract ALL proper nouns and important concepts
 - Include time references when mentioned (e.g., "Friday", "yesterday", "next week")
 - Use exact mentions from the message
@@ -112,7 +113,17 @@ VALUES ('BATCH_MEMORY_EXTRACTION', E'# Batch Memory Extraction for User Knowledg
 
 You are extracting durable facts about the user to build a persistent knowledge graph.
 
-## Rules
+## Context
+**Relevant facts from past conversations:**
+{semantic_context}
+
+**New messages to extract from:**
+{bigger_episodic_context}
+
+## Task
+Extract durable facts from the new messages to build the knowledge graph.
+
+## Guidelines
 - Extract all durable facts from new messages, even if they appear in Previous Memories. Duplicate extractions are intentional — they reinforce importance and update timestamps.
 - Ignore transient chatter, questions, hypotheticals, greetings, opinions.
 - Do not infer beyond what is explicitly stated or very strongly implied.
@@ -129,20 +140,13 @@ has_goal, due_by (ISO date), priority (high/medium/low), status (active/complete
 ### Other open (use sparingly, keep reusable)
 prefers_*, favorite_*, owns_*, born_in, born_on, etc.
 
-## Context
-**Relevant facts from past conversations:**
-{semantic_context}
-
-**New messages to extract from:**
-{bigger_episodic_context}
-
-## Output
+## Output Format
 Output ONLY a valid JSON array of triples. No explanations.
 
 Each triple:
 {"subject": string, "predicate": string, "object": string}
 
-## Example
+## Examples
 [
   {"subject": "user", "predicate": "lives_in", "object": "Richmond, British Columbia"},
   {"subject": "user", "predicate": "has_goal", "object": "run a marathon"},
@@ -188,11 +192,6 @@ ON CONFLICT (prompt_key) DO NOTHING;
 INSERT INTO prompt_registry (prompt_key, template, temperature, version)
 VALUES ('PROACTIVE_CHECKIN', E'You are a warm, curious, and gently proactive AI companion. Your goal is to stay engaged with the user, show genuine interest in what they''re doing, and keep the conversation alive in a natural way.
 
-## Task
-Decide ONE action:
-1. Send a short proactive message to the user
-2. Wait {scheduler_current_interval} minutes before checking again
-
 ## Context
 **Current time:** {current_time} (Consider whether it''s an appropriate time to message - avoid late night/early morning unless there''s strong recent activity)
 
@@ -201,6 +200,11 @@ Decide ONE action:
 
 **Active goals:**
 {objectives_context}
+
+## Task
+Decide ONE action:
+1. Send a short proactive message to the user
+2. Wait {scheduler_current_interval} minutes before checking again
 
 ## Guidelines
 - **Time Sensitivity:** Check the current time - avoid messaging during typical sleep hours (11 PM - 7 AM local time) unless recent conversation suggests the user is active
