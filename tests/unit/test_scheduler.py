@@ -484,18 +484,35 @@ class TestGetObjectivesContext:
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             result = await get_objectives_context()
-            assert result == "No active objectives."
+            assert result == "No active goals."
 
     @pytest.mark.asyncio
     async def test_get_objectives_context_with_objectives(self) -> None:
-        """Test objectives context with objectives."""
-        objectives = [
-            {"description": "Complete project by Friday", "status": "pending"},
-            {"description": "Review documentation", "status": "pending"},
+        """Test objectives context with goals and predicates from semantic_triple."""
+        goals = [
+            {"object": "Complete project by Friday"},
+            {"object": "Review documentation"},
+        ]
+        predicates = [
+            {
+                "subject": "Complete project by Friday",
+                "predicate": "due_by",
+                "object": "2026-01-10",
+            },
+            {
+                "subject": "Complete project by Friday",
+                "predicate": "priority",
+                "object": "high",
+            },
+            {
+                "subject": "Complete project by Friday",
+                "predicate": "status",
+                "object": "active",
+            },
         ]
 
         mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(return_value=objectives)
+        mock_conn.fetch = AsyncMock(side_effect=[goals, predicates])
 
         with patch("lattice.scheduler.triggers.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
@@ -505,8 +522,10 @@ class TestGetObjectivesContext:
 
             result = await get_objectives_context()
             assert "User goals:" in result
-            assert "Complete project by Friday (pending)" in result
-            assert "Review documentation (pending)" in result
+            assert "Complete project by Friday" in result
+            assert "Review documentation" in result
+            assert "due_by: 2026-01-10" in result
+            assert "priority: high" in result
 
 
 class TestGetDefaultChannelId:

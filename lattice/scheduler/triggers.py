@@ -78,24 +78,59 @@ async def get_conversation_context(limit: int = 20) -> str:
     return "\n".join(lines)
 
 
-async def get_objectives_context() -> str:
-    """Get user's goals and objectives.
+async def get_objectives_context() -> str:  # noqa: B608
+    """Get user's goals from knowledge graph with hierarchical predicate display.
+
+    Fetches all has_goal predicates, then for each unique goal node,
+    retrieves all predicates attached to that goal to display a tree hierarchy.
 
     Returns:
-        Formatted objectives string
+        Formatted goals string showing goals and their predicates
     """
     async with db_pool.pool.acquire() as conn:
-        objectives = await conn.fetch(
-            "SELECT description, status FROM objectives WHERE status = 'pending' ORDER BY saliency_score DESC LIMIT 5"
+        goals = await conn.fetch(
+            """
+            SELECT DISTINCT object FROM semantic_triple
+            WHERE predicate = 'has_goal'
+            ORDER BY object
+            """
         )
 
-    if not objectives:
-        return "No active objectives."
+    if not goals:
+        return "No active goals."
 
-    lines: list[str] = [
-        f"- {obj['description']} ({obj['status']})" for obj in objectives
-    ]
-    return "User goals:\n" + "\n".join(lines)
+    goal_names = [g["object"] for g in goals]
+
+    if not goal_names:
+        return "No active goals."
+
+    async with db_pool.pool.acquire() as conn:
+        placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
+        query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"  # noqa: B608
+        predicates = await conn.fetch(query, *goal_names)
+
+    goal_predicates: dict[str, list[tuple[str, str]]] = {}
+    for pred in predicates:
+        goal_name = pred["subject"]
+        if goal_name not in goal_predicates:
+            goal_predicates[goal_name] = []
+        goal_predicates[goal_name].append((pred["predicate"], pred["object"]))
+
+    lines = ["User goals:"]
+    for i, goal_name in enumerate(goal_names):
+        is_last = i == len(goal_names) - 1
+        goal_prefix = "└── " if is_last else "├── "
+        lines.append(f"{goal_prefix}{goal_name}")
+
+        if goal_name in goal_predicates:
+            preds = goal_predicates[goal_name]
+            for j, (pred, obj) in enumerate(preds):
+                pred_is_last = j == len(preds) - 1
+                pred_prefix = "    " if is_last else "│   "
+                pred_goal_prefix = "└── " if pred_is_last else "├── "
+                lines.append(f"{pred_prefix}{pred_goal_prefix}{pred}: {obj}")
+
+    return "\n".join(lines)
 
 
 async def get_default_channel_id() -> int | None:
