@@ -65,20 +65,6 @@ CREATE INDEX IF NOT EXISTS idx_extractions_entities ON message_extractions USING
 CREATE INDEX IF NOT EXISTS idx_extractions_created_at ON message_extractions(created_at DESC);
 
 -- ----------------------------------------------------------------------------
--- entities: Entity registry (no embeddings, keyword search + graph traversal)
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS entities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT UNIQUE NOT NULL,
-    entity_type TEXT,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    first_mentioned TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_entities_name_lower ON entities(LOWER(name));
-CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type) WHERE entity_type IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_entities_metadata ON entities USING gin(metadata);
-
--- ----------------------------------------------------------------------------
 -- semantic_triple: Text-based knowledge triples with timestamp evolution
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS semantic_triple (
@@ -97,6 +83,9 @@ CREATE INDEX IF NOT EXISTS idx_semantic_triple_source_batch ON semantic_triple(s
 
 -- ----------------------------------------------------------------------------
 -- objectives: User goals and commitments
+-- Note: This table exists for backward compatibility. Goal tracking is now
+-- primarily done via semantic_triple with predicates like has_goal, due_by,
+-- priority, and status. This table may be deprecated in a future version.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS objectives (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -141,14 +141,7 @@ async def retrieve_context(
                             triple.get("object"),
                         )
                         if triple_key not in seen_triple_ids:
-                            graph_triples.append(
-                                {
-                                    "subject_content": triple.get("subject"),
-                                    "predicate": triple.get("predicate"),
-                                    "object_content": triple.get("object"),
-                                    "origin_id": triple.get("origin_id"),
-                                }
-                            )
+                            graph_triples.append(triple)
                             seen_triple_ids.add(triple_key)
 
                 logger.debug(

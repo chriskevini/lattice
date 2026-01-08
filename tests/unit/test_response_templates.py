@@ -466,16 +466,17 @@ class TestGenerateResponseWithTemplates:
         mock_generation_result: AuditResult,
     ) -> None:
         """Test response generation includes graph triples in context."""
+        # Text-based triples use 'subject' and 'object' keys (not subject_content/object_content)
         graph_triples = [
             {
-                "subject_content": "lattice project",
+                "subject": "lattice project",
                 "predicate": "has deadline",
-                "object_content": "Friday",
+                "object": "Friday",
             },
             {
-                "subject_content": "user",
+                "subject": "user",
                 "predicate": "working on",
-                "object_content": "lattice project",
+                "object": "lattice project",
             },
         ]
 
