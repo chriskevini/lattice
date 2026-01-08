@@ -11,7 +11,7 @@ import structlog
 from lattice.memory.episodic import store_semantic_triples
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_llm_client
+from lattice.utils.llm import get_auditing_llm_client
 
 
 logger = structlog.get_logger(__name__)
@@ -60,6 +60,8 @@ async def run_batch_consolidation() -> None:
     Uses BATCH_MEMORY_EXTRACTION prompt with:
     - Previous memories (for context/reinforcement)
     - New messages (18 since last batch)
+
+    All LLM calls are audited via AuditingLLMClient.
     """
     async with db_pool.pool.acquire() as conn:
         last_batch_row = await conn.fetchrow(
@@ -112,15 +114,19 @@ async def run_batch_consolidation() -> None:
         MESSAGE_HISTORY=message_history,
     )
 
-    llm_client = get_llm_client()
+    llm_client = get_auditing_llm_client()
     result = await llm_client.complete(
         prompt=rendered_prompt,
+        prompt_key="BATCH_MEMORY_EXTRACTION",
+        template_version=prompt_template.version,
+        main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
     )
 
     logger.info(
         "Batch extraction completed",
         batch_id=batch_id,
+        audit_id=str(result.audit_id) if result.audit_id else None,
         model=result.model,
         tokens=result.total_tokens,
     )

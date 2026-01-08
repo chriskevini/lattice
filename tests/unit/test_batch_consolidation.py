@@ -204,7 +204,7 @@ class TestRunBatchConsolidation:
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
                 mock_prompt.return_value = None  # No template
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client"
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client"
                 ) as mock_llm:
                     await run_batch_consolidation()
                     mock_llm.assert_not_called()
@@ -276,7 +276,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client",
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(
@@ -348,7 +348,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client",
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     await run_batch_consolidation()
@@ -416,7 +416,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client",
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(
@@ -485,7 +485,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client",
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(
@@ -559,7 +559,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client",
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     await run_batch_consolidation()
@@ -641,7 +641,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client",
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     await run_batch_consolidation()
@@ -708,7 +708,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_llm_client",
+                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     await run_batch_consolidation()
