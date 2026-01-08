@@ -25,7 +25,9 @@ class TestEntityExtractionPipeline:
         # Mock dependencies
         with (
             patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_extraction.get_llm_client") as mock_llm_client,
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client"
+            ) as mock_llm_client,
             patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
@@ -255,7 +257,9 @@ class TestEntityExtractionPipeline:
 
         with (
             patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
-            patch("lattice.core.entity_extraction.get_llm_client") as mock_llm_client,
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client"
+            ) as mock_llm_client,
             patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"

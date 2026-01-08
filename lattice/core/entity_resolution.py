@@ -14,7 +14,7 @@ import structlog
 
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_llm_client
+from lattice.utils.llm import get_auditing_llm_client
 
 
 logger = structlog.get_logger(__name__)
@@ -169,11 +169,12 @@ async def _normalize_with_llm(
     )
 
     # Call LLM
-    llm_client = get_llm_client()
+    llm_client = get_auditing_llm_client()
     result = await llm_client.complete(
         prompt=rendered_prompt,
         temperature=prompt_template.temperature,
-        # No max_tokens - entity names are naturally short (~5-20 tokens)
+        prompt_key="ENTITY_NORMALIZATION",
+        main_discord_message_id=0,
     )
 
     logger.info(

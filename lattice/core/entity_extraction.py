@@ -17,7 +17,7 @@ import structlog
 
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.llm import get_llm_client
+from lattice.utils.llm import get_auditing_llm_client
 
 
 logger = structlog.get_logger(__name__)
@@ -88,11 +88,12 @@ async def extract_entities(
     )
 
     # 3. Call API for extraction
-    llm_client = get_llm_client()
+    llm_client = get_auditing_llm_client()
     result = await llm_client.complete(
         prompt=rendered_prompt,
         temperature=prompt_template.temperature,
-        # No max_tokens - let model complete naturally (JSON is ~50-100 tokens now)
+        prompt_key="ENTITY_EXTRACTION",
+        main_discord_message_id=0,
     )
     raw_response = result.content
     extraction_method = "api"

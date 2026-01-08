@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from lattice.utils.llm import AuditResult, GenerationResult, LLMClient, get_llm_client
+from lattice.utils.llm import (
+    AuditResult,
+    GenerationResult,
+    _LLMClient,
+    _get_llm_client,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -63,30 +68,30 @@ class TestGenerationResult:
         assert result.cost_usd is None
 
 
-class TestLLMClientInit:
-    """Tests for LLMClient initialization."""
+class Test_LLMClientInit:
+    """Tests for _LLMClient initialization."""
 
     def test_init_with_default_provider(self) -> None:
-        """Test LLMClient initializes with default placeholder provider."""
-        client = LLMClient()
+        """Test _LLMClient initializes with default placeholder provider."""
+        client = _LLMClient()
 
         assert client.provider == "placeholder"
         assert client._client is None
 
     def test_init_with_custom_provider(self) -> None:
-        """Test LLMClient initializes with custom provider."""
-        client = LLMClient(provider="openrouter")
+        """Test _LLMClient initializes with custom provider."""
+        client = _LLMClient(provider="openrouter")
 
         assert client.provider == "openrouter"
         assert client._client is None
 
 
-class TestLLMClientPlaceholder:
+class Test_LLMClientPlaceholder:
     """Tests for placeholder completion mode."""
 
     def test_placeholder_complete_extraction_prompt(self) -> None:
         """Test placeholder returns JSON for extraction prompts."""
-        client = LLMClient(provider="placeholder")
+        client = _LLMClient(provider="placeholder")
 
         result = client._placeholder_complete("Extract triples from this text", 0.7)
 
@@ -103,7 +108,7 @@ class TestLLMClientPlaceholder:
 
     def test_placeholder_complete_non_extraction_prompt(self) -> None:
         """Test placeholder returns echo for non-extraction prompts."""
-        client = LLMClient(provider="placeholder")
+        client = _LLMClient(provider="placeholder")
         prompt = "What is the weather today?"
 
         result = client._placeholder_complete(prompt, 0.5)
@@ -117,7 +122,7 @@ class TestLLMClientPlaceholder:
 
     def test_placeholder_complete_token_counting(self) -> None:
         """Test placeholder counts tokens correctly."""
-        client = LLMClient(provider="placeholder")
+        client = _LLMClient(provider="placeholder")
         prompt = "one two three four five"
 
         result = client._placeholder_complete(prompt, 0.7)
@@ -129,7 +134,7 @@ class TestLLMClientPlaceholder:
     @pytest.mark.asyncio
     async def test_complete_uses_placeholder_for_placeholder_provider(self) -> None:
         """Test that complete() routes to placeholder for placeholder provider."""
-        client = LLMClient(provider="placeholder")
+        client = _LLMClient(provider="placeholder")
 
         result = await client.complete("test prompt", temperature=0.8, max_tokens=100)
 
@@ -138,13 +143,13 @@ class TestLLMClientPlaceholder:
         assert result.temperature == 0.8
 
 
-class TestLLMClientOpenRouter:
+class Test_LLMClientOpenRouter:
     """Tests for OpenRouter completion mode."""
 
     @pytest.mark.asyncio
     async def test_openrouter_complete_missing_import(self) -> None:
         """Test that OpenRouter mode raises ImportError if openai not installed."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         with patch.dict("sys.modules", {"openai": None}):
             with pytest.raises(ImportError, match="openai package not installed"):
@@ -153,7 +158,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_missing_api_key(self) -> None:
         """Test that OpenRouter mode raises ValueError if API key not set."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_openai_module = MagicMock()
 
@@ -165,7 +170,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_success(self) -> None:
         """Test successful OpenRouter API call."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         # Mock response
         mock_usage = MagicMock()
@@ -209,7 +214,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_with_custom_model(self) -> None:
         """Test OpenRouter uses custom model from environment."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_usage = MagicMock()
         mock_usage.prompt_tokens = 5
@@ -248,7 +253,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_empty_content(self) -> None:
         """Test OpenRouter handles empty content from LLM."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_usage = MagicMock()
         mock_usage.prompt_tokens = 10
@@ -283,7 +288,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_no_usage_data(self) -> None:
         """Test OpenRouter handles missing usage data gracefully."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_choice = MagicMock()
         mock_choice.message.content = "response"
@@ -314,7 +319,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_reuses_client(self) -> None:
         """Test that OpenRouter client is reused across calls."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_usage = MagicMock()
         mock_usage.prompt_tokens = 5
@@ -353,7 +358,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_empty_choices_list(self) -> None:
         """Test OpenRouter handles empty choices list gracefully."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_usage = MagicMock()
         mock_usage.prompt_tokens = 10
@@ -383,7 +388,7 @@ class TestLLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_cost_as_string(self) -> None:
         """Test OpenRouter handles cost as string value."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_usage = MagicMock()
         mock_usage.prompt_tokens = 10
@@ -416,13 +421,13 @@ class TestLLMClientOpenRouter:
                 assert isinstance(result.cost_usd, float)
 
 
-class TestLLMClientComplete:
+class Test_LLMClientComplete:
     """Tests for the main complete() interface."""
 
     @pytest.mark.asyncio
     async def test_complete_invalid_provider(self) -> None:
         """Test that complete raises ValueError for unknown provider."""
-        client = LLMClient(provider="invalid_provider")
+        client = _LLMClient(provider="invalid_provider")
 
         with pytest.raises(ValueError, match="Unknown LLM provider: invalid_provider"):
             await client.complete("test")
@@ -430,7 +435,7 @@ class TestLLMClientComplete:
     @pytest.mark.asyncio
     async def test_complete_routes_to_openrouter(self) -> None:
         """Test that complete routes to OpenRouter for openrouter provider."""
-        client = LLMClient(provider="openrouter")
+        client = _LLMClient(provider="openrouter")
 
         mock_result = GenerationResult(
             content="test",
@@ -455,36 +460,36 @@ class TestLLMClientComplete:
             assert result == mock_result
 
 
-class TestGetLLMClient:
+class TestGet_LLMClient:
     """Tests for the global LLM client getter."""
 
-    def test_get_llm_client_creates_instance(self) -> None:
-        """Test that get_llm_client creates a client instance."""
+    def test__get_llm_client_creates_instance(self) -> None:
+        """Test that _get_llm_client creates a client instance."""
         with patch.dict(os.environ, {"LLM_PROVIDER": "placeholder"}, clear=True):
-            client = get_llm_client()
+            client = _get_llm_client()
 
-            assert isinstance(client, LLMClient)
+            assert isinstance(client, _LLMClient)
             assert client.provider == "placeholder"
 
-    def test_get_llm_client_reuses_instance(self) -> None:
-        """Test that get_llm_client returns same instance on subsequent calls."""
+    def test__get_llm_client_reuses_instance(self) -> None:
+        """Test that _get_llm_client returns same instance on subsequent calls."""
         with patch.dict(os.environ, {"LLM_PROVIDER": "placeholder"}, clear=True):
-            client1 = get_llm_client()
-            client2 = get_llm_client()
+            client1 = _get_llm_client()
+            client2 = _get_llm_client()
 
             assert client1 is client2
 
-    def test_get_llm_client_uses_env_var(self) -> None:
-        """Test that get_llm_client uses LLM_PROVIDER environment variable."""
+    def test__get_llm_client_uses_env_var(self) -> None:
+        """Test that _get_llm_client uses LLM_PROVIDER environment variable."""
         with patch.dict(os.environ, {"LLM_PROVIDER": "openrouter"}, clear=True):
-            client = get_llm_client()
+            client = _get_llm_client()
 
             assert client.provider == "openrouter"
 
-    def test_get_llm_client_defaults_to_placeholder(self) -> None:
-        """Test that get_llm_client defaults to placeholder when env var not set."""
+    def test__get_llm_client_defaults_to_placeholder(self) -> None:
+        """Test that _get_llm_client defaults to placeholder when env var not set."""
         with patch.dict(os.environ, {}, clear=True):
-            client = get_llm_client()
+            client = _get_llm_client()
 
             assert client.provider == "placeholder"
 
@@ -554,8 +559,8 @@ class TestAuditResult:
         assert result.prompt_key is None
 
 
-class TestAuditingLLMClient:
-    """Tests for AuditingLLMClient wrapper."""
+class TestAuditing_LLMClient:
+    """Tests for Auditing_LLMClient wrapper."""
 
     @pytest.fixture(autouse=True)
     def reset_auditing_client(self):
@@ -568,7 +573,7 @@ class TestAuditingLLMClient:
 
     @pytest.mark.asyncio
     async def test_auditing_client_without_message_id(self) -> None:
-        """Test AuditingLLMClient returns None audit_id when no message_id provided."""
+        """Test Auditing_LLMClient returns None audit_id when no message_id provided."""
         from lattice.utils.llm import AuditResult, get_auditing_llm_client
 
         client = get_auditing_llm_client()
@@ -587,7 +592,7 @@ class TestAuditingLLMClient:
 
     @pytest.mark.asyncio
     async def test_auditing_client_with_message_id(self) -> None:
-        """Test AuditingLLMClient stores audit and returns audit_id."""
+        """Test Auditing_LLMClient stores audit and returns audit_id."""
         from uuid import uuid4
 
         from lattice.utils.llm import AuditResult, get_auditing_llm_client
@@ -613,7 +618,7 @@ class TestAuditingLLMClient:
             assert result.prompt_key == "TEST_PROMPT"
 
     def test_get_auditing_client_creates_instance(self) -> None:
-        """Test that get_auditing_llm_client creates an AuditingLLMClient."""
+        """Test that get_auditing_llm_client creates an Auditing_LLMClient."""
         from lattice.utils.llm import AuditingLLMClient, get_auditing_llm_client
 
         client = get_auditing_llm_client()

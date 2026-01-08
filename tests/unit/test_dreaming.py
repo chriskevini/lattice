@@ -113,7 +113,9 @@ class TestProposer:
             patch(
                 "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
             ),
-            patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
+            patch(
+                "lattice.dreaming.proposer.get_auditing_llm_client"
+            ) as mock_llm_client,
         ):
             # Mock get_prompt to return different templates for different keys
             def get_prompt_side_effect(prompt_key: str):
@@ -177,7 +179,9 @@ class TestProposer:
             patch(
                 "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
             ),
-            patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
+            patch(
+                "lattice.dreaming.proposer.get_auditing_llm_client"
+            ) as mock_llm_client,
         ):
             # Mock get_prompt to return different templates for different keys
             def get_prompt_side_effect(prompt_key: str):

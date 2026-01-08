@@ -73,7 +73,7 @@ async def test_full_dreaming_cycle_workflow() -> None:
     with (
         patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
         patch("lattice.dreaming.proposer.get_feedback_with_context") as mock_feedback,
-        patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
+        patch("lattice.dreaming.proposer.get_auditing_llm_client") as mock_llm_client,
     ):
         # Mock get_prompt to return different templates for different keys
         def get_prompt_side_effect(prompt_key: str):
@@ -223,7 +223,7 @@ async def test_dreaming_cycle_rejects_low_confidence_proposals() -> None:
     with (
         patch("lattice.dreaming.proposer.get_prompt", return_value=mock_template),
         patch("lattice.dreaming.proposer.get_feedback_with_context", return_value=[]),
-        patch("lattice.dreaming.proposer.get_llm_client") as mock_llm_client,
+        patch("lattice.dreaming.proposer.get_auditing_llm_client") as mock_llm_client,
     ):
         mock_llm = AsyncMock()
         mock_llm.complete = AsyncMock(return_value=mock_llm_result)
