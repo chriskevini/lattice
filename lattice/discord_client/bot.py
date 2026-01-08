@@ -18,7 +18,10 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, entity_extraction, response_generator
+from lattice.core.entity_extraction import extract_predicates
 from lattice.discord_client.dream import AuditViewBuilder, AuditView
+from lattice.memory.graph import GraphTraversal
+from lattice.utils.date_resolution import parse_relative_date_range
 
 # No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
 from lattice.memory import episodic, prompt_audits
@@ -334,6 +337,43 @@ class LatticeBot(commands.Bot):
             else:
                 triple_depth = 0  # NO_ENTITY_TRIPLE_DEPTH
 
+            # Check for predicate queries (activity tracking - issue #147)
+            detected_predicates = extract_predicates(message.content)
+            predicate_triples: list[dict[str, Any]] = []
+
+            if detected_predicates:
+                logger.info(
+                    "Detected predicate query",
+                    predicates=detected_predicates,
+                    message_preview=message.content[:50],
+                )
+
+                try:
+                    date_range = parse_relative_date_range(
+                        message.content, self._user_timezone
+                    )
+
+                    graph_traverser = GraphTraversal(db_pool.pool)
+                    for predicate in detected_predicates:
+                        results = await graph_traverser.find_by_predicate(
+                            predicate=predicate,
+                            start_date=date_range.start if date_range else None,
+                            end_date=date_range.end if date_range else None,
+                            limit=50,
+                        )
+                        predicate_triples.extend(results)
+                        logger.info(
+                            "Predicate query completed",
+                            predicate=predicate,
+                            result_count=len(results),
+                        )
+                except Exception as e:
+                    logger.error(
+                        "Predicate query failed",
+                        predicates=detected_predicates,
+                        error=str(e),
+                    )
+
             # Retrieve context using determined limits
             (
                 recent_messages,
@@ -345,6 +385,28 @@ class LatticeBot(commands.Bot):
                 triple_depth=triple_depth,
                 entity_names=extraction.entities if extraction else [],
             )
+
+            # Inject predicate query results into graph triples for response generation
+            # These are formatted as semantic triples for semantic_context
+            if predicate_triples:
+                # Convert to semantic triple format
+                activity_triples = [
+                    {
+                        "subject": t["subject"],
+                        "predicate": t["predicate"],
+                        "object": t["object"],
+                        "origin_id": None,
+                        "depth": 0,
+                    }
+                    for t in predicate_triples
+                ]
+                # Prepend activity triples to graph triples
+                graph_triples = activity_triples + graph_triples
+                logger.info(
+                    "Injected activity triples",
+                    activity_count=len(activity_triples),
+                    total_count=len(graph_triples),
+                )
 
             # Generate response with extraction for template selection
             (

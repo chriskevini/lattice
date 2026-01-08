@@ -17,11 +17,13 @@ from lattice.utils.database import (
     set_user_timezone,
 )
 from lattice.utils.date_resolution import (
+    DateRange,
     InvalidTimezoneError,
     InvalidWeekdayError,
     UserDatetime,
     format_current_date,
     format_current_time,
+    parse_relative_date_range,
     resolve_relative_dates,
 )
 from lattice.utils.objective_parsing import parse_goals
@@ -800,3 +802,177 @@ class TestResolveRelativeDates:
             assert "saturday → 2026-01-10" in result
             # Sunday: 2026-01-11 (3 days ahead)
             assert "sunday → 2026-01-11" in result
+
+
+class TestDateRange:
+    """Tests for the DateRange class."""
+
+    def test_daterange_init(self) -> None:
+        """Test DateRange initialization."""
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 7, tzinfo=timezone.utc)
+        date_range = DateRange(start=start, end=end)
+        assert date_range.start == start
+        assert date_range.end == end
+
+    def test_daterange_repr(self) -> None:
+        """Test DateRange string representation."""
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 7, tzinfo=timezone.utc)
+        date_range = DateRange(start=start, end=end)
+        repr_str = repr(date_range)
+        assert "DateRange" in repr_str
+        assert "2026-01-01" in repr_str
+        assert "2026-01-07" in repr_str
+
+
+class TestParseRelativeDateRange:
+    """Tests for parse_relative_date_range function."""
+
+    def test_parse_last_week(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'last week' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("What did I do last week?", "UTC")
+            assert result is not None
+            # Today is Thursday 2026-01-08
+            # Last week: Monday 2025-12-29 to Sunday 2026-01-04
+            assert result.start.year == 2025
+            assert result.start.month == 12
+            assert result.start.day == 29
+            assert result.end.year == 2026
+            assert result.end.month == 1
+            assert result.end.day == 4
+
+    def test_parse_this_week(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'this week' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("What did I do this week?", "UTC")
+            assert result is not None
+            # Today is Thursday 2026-01-08
+            # This week: Monday 2026-01-05 to now
+            assert result.start.year == 2026
+            assert result.start.month == 1
+            assert result.start.day == 5
+
+    def test_parse_last_month(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'last month' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("Summarize last month", "UTC")
+            assert result is not None
+            # Today is Thursday 2026-01-08
+            # Last month: December 2025
+            assert result.start.year == 2025
+            assert result.start.month == 12
+            assert result.start.day == 1
+            assert result.end.year == 2025
+            assert result.end.month == 12
+            assert result.end.day == 31
+
+    def test_parse_yesterday(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'yesterday' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("What did I do yesterday?", "UTC")
+            assert result is not None
+            # Today is Thursday 2026-01-08
+            # Yesterday: 2026-01-07
+            assert result.start.year == 2026
+            assert result.start.month == 1
+            assert result.start.day == 7
+            assert result.end.year == 2026
+            assert result.end.month == 1
+            assert result.end.day == 7
+
+    def test_parse_today(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'today' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("What did I do today?", "UTC")
+            assert result is not None
+            # Today: from midnight to now
+            assert result.start.year == 2026
+            assert result.start.month == 1
+            assert result.start.day == 8
+            assert result.start.hour == 0
+            assert result.start.minute == 0
+
+    def test_parse_last_7_days(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'last 7 days' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("Show me last 7 days", "UTC")
+            assert result is not None
+            # Last 7 days: 2026-01-01 to now
+            assert result.start.year == 2026
+            assert result.start.month == 1
+            assert result.start.day == 1  # 8 - 7 + 1 = 2 (inclusive)
+
+    def test_parse_last_30_days(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'last 30 days' pattern."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("What about last 30 days?", "UTC")
+            assert result is not None
+            # Last 30 days: 2025-12-09 to now
+            assert result.start.year == 2025
+            assert result.start.month == 12
+            assert result.start.day == 9  # 8 - 30 + 1 = -21, wraps to Dec
+
+    def test_parse_no_date_range(self, mock_user_datetime: MagicMock) -> None:
+        """Test that messages without date patterns return None."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("I need to finish the project", "UTC")
+            assert result is None
+
+    def test_parse_case_insensitive(self, mock_user_datetime: MagicMock) -> None:
+        """Test that pattern matching is case insensitive."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("LAST WEEK was busy", "UTC")
+            assert result is not None
+
+    def test_parse_with_custom_timezone(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing with custom timezone."""
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range(
+                "What did I do last week?", "America/New_York"
+            )
+            assert result is not None
+
+    def test_parse_last_month_when_january(self, mock_user_datetime: MagicMock) -> None:
+        """Test parsing 'last month' when current month is January."""
+        # Today is Thursday 2026-01-08, which is January
+        with patch(
+            "lattice.utils.date_resolution._get_user_datetime",
+            return_value=mock_user_datetime,
+        ):
+            result = parse_relative_date_range("Summarize last month", "UTC")
+            assert result is not None
+            # Last month should be December 2025
+            assert result.start.year == 2025
+            assert result.start.month == 12

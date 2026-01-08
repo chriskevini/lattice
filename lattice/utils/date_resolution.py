@@ -36,6 +36,15 @@ RELATIVE_PATTERNS = [
     (r"\bnext year\b", lambda d: (d + timedelta(days=365)).strftime("%Y-%m-%d")),
 ]
 
+DATE_RANGE_PATTERNS = {
+    "last_week": re.compile(r"\blast\s+week\b", re.IGNORECASE),
+    "this_week": re.compile(r"\bthis\s+week\b", re.IGNORECASE),
+    "last_month": re.compile(r"\blast\s+month\b", re.IGNORECASE),
+    "yesterday": re.compile(r"\byesterday\b", re.IGNORECASE),
+    "today": re.compile(r"\btoday\b", re.IGNORECASE),
+    "last_days": re.compile(r"\blast\s+(\d+)\s+days?\b", re.IGNORECASE),
+}
+
 
 class DateResolutionError(Exception):
     """Base exception for date resolution errors."""
@@ -374,3 +383,101 @@ def format_current_time(timezone_str: str | None = None) -> str:
     """
     user_dt = _get_user_datetime(timezone_str)
     return user_dt.format("%H:%M")
+
+
+class DateRange:
+    """Represents a date range with start and end datetimes."""
+
+    def __init__(self, start: datetime, end: datetime) -> None:
+        """Initialize a date range.
+
+        Args:
+            start: Start datetime (inclusive)
+            end: End datetime (inclusive)
+        """
+        self.start = start
+        self.end = end
+
+    def __repr__(self) -> str:
+        """Return a string representation of the DateRange."""
+        return f"DateRange(start={self.start.isoformat()}, end={self.end.isoformat()})"
+
+    def __eq__(self, other: object) -> bool:
+        """Check equality based on start and end datetimes.
+
+        Args:
+            other: Object to compare against
+
+        Returns:
+            True if both start and end datetimes are equal
+        """
+        if not isinstance(other, DateRange):
+            return NotImplemented
+        return self.start == other.start and self.end == other.end
+
+
+def parse_relative_date_range(
+    message: str, timezone_str: str | None = None
+) -> DateRange | None:
+    """Parse relative date expressions to determine a date range for queries.
+
+    Handles:
+    - "last week": Monday of previous week to Sunday of previous week
+    - "this week": Monday of current week to now
+    - "last month": First to last day of previous month
+    - "yesterday": Previous day
+    - "today": Current day from midnight to now
+    - "last X days": Past X days
+
+    Args:
+        message: The user message containing relative date expressions
+        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+
+    Returns:
+        DateRange object with start and end datetimes, or None if no date range detected
+    """
+    user_dt = _get_user_datetime(timezone_str)
+    now = user_dt.now
+    message_lower = message.lower()
+
+    current_weekday = now.weekday()
+    days_since_monday = current_weekday if current_weekday != 0 else 7
+    start_of_week = now - timedelta(days=days_since_monday)
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if DATE_RANGE_PATTERNS["last_week"].search(message_lower):
+        last_week_start = start_of_week - timedelta(weeks=1)
+        last_week_end = last_week_start + timedelta(days=6)
+        last_week_end = last_week_end.replace(hour=23, minute=59, second=59)
+        return DateRange(start=last_week_start, end=last_week_end)
+
+    if DATE_RANGE_PATTERNS["this_week"].search(message_lower):
+        return DateRange(start=start_of_week, end=now)
+
+    if DATE_RANGE_PATTERNS["last_month"].search(message_lower):
+        if now.month == 1:
+            last_month = now.replace(year=now.year - 1, month=12)
+        else:
+            last_month = now.replace(month=now.month - 1)
+        _, last_day = calendar.monthrange(last_month.year, last_month.month)
+        last_month_start = last_month.replace(day=1, hour=0, minute=0, second=0)
+        last_month_end = last_month.replace(day=last_day, hour=23, minute=59, second=59)
+        return DateRange(start=last_month_start, end=last_month_end)
+
+    if DATE_RANGE_PATTERNS["yesterday"].search(message_lower):
+        yesterday_start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0)
+        yesterday_end = yesterday_start.replace(hour=23, minute=59, second=59)
+        return DateRange(start=yesterday_start, end=yesterday_end)
+
+    if DATE_RANGE_PATTERNS["today"].search(message_lower):
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return DateRange(start=today_start, end=now)
+
+    last_days_match = DATE_RANGE_PATTERNS["last_days"].search(message_lower)
+    if last_days_match:
+        num_days = int(last_days_match.group(1))
+        range_start = now - timedelta(days=num_days)
+        range_start = range_start.replace(hour=0, minute=0, second=0)
+        return DateRange(start=range_start, end=now)
+
+    return None
