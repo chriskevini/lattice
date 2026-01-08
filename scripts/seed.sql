@@ -36,7 +36,7 @@ Respond naturally based on what the user is saying:
 ## Examples
 
 **User:** "What did I work on yesterday?"
-**Response:** "Yesterday you worked on the lattice project for about 3 hours."
+**Response:** "Yesterday you worked on the mobile app for about 3 hours."
 
 **User:** "I need to finish this by Friday"
 **Response:** "Got it—Friday deadline. How's it coming along?"
@@ -79,11 +79,11 @@ Return ONLY valid JSON (no markdown, no explanation):
 ## Examples
 
 **Recent Context:** I've been working on several projects lately.
-**Current User Message:** I need to finish the lattice project by Friday
+**Current User Message:** I need to finish the mobile app by Friday
 **Output:**
-{"entities": ["lattice project", "Friday"]}
+{"entities": ["mobile app", "Friday"]}
 
-**Recent Context:** You mentioned working on lattice yesterday.
+**Recent Context:** You mentioned working on the mobile app yesterday.
 **Current User Message:** Spent 3 hours coding today
 **Output:**
 {"entities": []}
