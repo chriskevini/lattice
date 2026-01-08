@@ -2,8 +2,8 @@
 
 import asyncio
 from collections.abc import Generator
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
 
 import pytest
 
@@ -20,7 +20,7 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 
 class TestMultiHopReasoningIntegration:
-    """Integration tests for multi-hop graph traversal.
+    """Integration tests for multi-hop graph traversal using text-based storage.
 
     Note: Uses mocked database connections to test traversal logic.
     Real database integration is covered by test_entity_and_triple_storage.py.
@@ -28,46 +28,33 @@ class TestMultiHopReasoningIntegration:
 
     @pytest.mark.asyncio
     async def test_three_hop_reasoning_chain(self) -> None:
-        """Test three-hop reasoning through graph traversal."""
-        alice_id = uuid4()
-        acme_id = uuid4()
-        techcorp_id = uuid4()
-        industry_id = uuid4()
+        """Test three-hop reasoning through graph traversal.
 
+        Verifies that BFS can discover entities across multiple hops:
+        Alice -> works_at -> Acme Corp -> acquired_by -> TechCorp -> in -> Technology Industry
+        """
         # Create mock pool and connection
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
-                    "id": uuid4(),
-                    "subject_id": alice_id,
-                    "subject_content": "Alice",
+                    "subject": "Alice",
                     "predicate": "works_at",
-                    "object_id": acme_id,
-                    "object_content": "Acme Corp",
-                    "depth": 1,
-                    "visited": [acme_id],
+                    "object": "Acme Corp",
+                    "created_at": datetime.now(UTC),
                 },
                 {
-                    "id": uuid4(),
-                    "subject_id": acme_id,
-                    "subject_content": "Acme Corp",
+                    "subject": "Acme Corp",
                     "predicate": "acquired_by",
-                    "object_id": techcorp_id,
-                    "object_content": "TechCorp",
-                    "depth": 2,
-                    "visited": [acme_id, techcorp_id],
+                    "object": "TechCorp",
+                    "created_at": datetime.now(UTC),
                 },
                 {
-                    "id": uuid4(),
-                    "subject_id": techcorp_id,
-                    "subject_content": "TechCorp",
+                    "subject": "TechCorp",
                     "predicate": "in",
-                    "object_id": industry_id,
-                    "object_content": "Technology Industry",
-                    "depth": 3,
-                    "visited": [acme_id, techcorp_id, industry_id],
+                    "object": "Technology Industry",
+                    "created_at": datetime.now(UTC),
                 },
             ]
         )
@@ -76,35 +63,29 @@ class TestMultiHopReasoningIntegration:
 
         # Create traverser with mock pool
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.traverse_from_fact(alice_id, max_hops=3)
+        result = await traverser.traverse_from_entity("Alice", max_hops=3)
 
         assert len(result) == 3
-        assert result[0]["subject_content"] == "Alice"
+        assert result[0]["subject"] == "Alice"
         assert result[0]["predicate"] == "works_at"
-        assert result[1]["subject_content"] == "Acme Corp"
+        assert result[1]["subject"] == "Acme Corp"
         assert result[1]["predicate"] == "acquired_by"
-        assert result[2]["subject_content"] == "TechCorp"
+        assert result[2]["subject"] == "TechCorp"
         assert result[2]["predicate"] == "in"
 
     @pytest.mark.asyncio
     async def test_filtered_multi_hop_traversal(self) -> None:
         """Test multi-hop traversal with predicate filter."""
-        alice_id = uuid4()
-
         # Create mock pool and connection
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
-                    "id": uuid4(),
-                    "subject_id": alice_id,
-                    "subject_content": "Alice",
+                    "subject": "Alice",
                     "predicate": "works_at",
-                    "object_id": uuid4(),
-                    "object_content": "Acme Corp",
-                    "depth": 1,
-                    "visited": [uuid4()],
+                    "object": "Acme Corp",
+                    "created_at": datetime.now(UTC),
                 }
             ]
         )
@@ -113,8 +94,8 @@ class TestMultiHopReasoningIntegration:
 
         # Create traverser with mock pool
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.traverse_from_fact(
-            alice_id, predicate_filter={"works_at", "likes"}, max_hops=2
+        result = await traverser.traverse_from_entity(
+            "Alice", predicate_filter={"works_at", "likes"}, max_hops=2
         )
 
         assert len(result) == 1
