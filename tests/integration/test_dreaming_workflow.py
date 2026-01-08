@@ -122,6 +122,7 @@ async def test_full_dreaming_cycle_workflow() -> None:
                 "current_version": proposal.current_version,
                 "proposed_template": proposal.proposed_template,
                 "proposed_version": proposal.proposed_version,
+                "temperature": 0.7,
             }
         )
         mock_conn.execute = AsyncMock(return_value="UPDATE 1")
@@ -138,7 +139,9 @@ async def test_full_dreaming_cycle_workflow() -> None:
         )
 
         assert success is True
-        assert mock_conn.execute.call_count == 2
+        assert (
+            mock_conn.execute.call_count == 3
+        )  # Deactivate old + Insert new + Update proposals
 
 
 @pytest.mark.asyncio
