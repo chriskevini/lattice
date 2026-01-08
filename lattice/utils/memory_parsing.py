@@ -1,6 +1,5 @@
-"""Memory extraction parsing utilities for unified triple and objective extraction."""
+"""Memory extraction parsing utilities for batch triple extraction."""
 
-import json
 import logging
 from typing import TypedDict
 
@@ -16,21 +15,6 @@ class ParsedTriple(TypedDict):
     object: str
 
 
-class ParsedObjective(TypedDict):
-    """Parsed objective."""
-
-    description: str
-    saliency: float
-    status: str
-
-
-class ParsedMemoryExtraction(TypedDict):
-    """Result of parsing MEMORY_EXTRACTION response."""
-
-    triples: list[ParsedTriple]
-    objectives: list[ParsedObjective]
-
-
 PREDICATE_SYNONYMS: dict[str, list[str]] = {
     "likes": ["likes", "enjoys", "loves", "fond_of", "appreciates"],
     "works_at": ["works_at", "employed_at", "job_at", "position_at", "works_for"],
@@ -40,10 +24,6 @@ PREDICATE_SYNONYMS: dict[str, list[str]] = {
     "member_of": ["member_of", "part_of", "belongs_to", "affiliated_with"],
 }
 
-MIN_SALIENCY = 0.0
-MAX_SALIENCY = 1.0
-MIN_SALIENCY_DELTA = 0.01
-VALID_STATUSES = frozenset({"pending", "completed", "archived"})
 MIN_CODE_BLOCK_LINES = 2
 
 
@@ -76,7 +56,7 @@ def _parse_triples_from_list(triples: list) -> list[ParsedTriple]:
     for item in triples:
         if not isinstance(item, dict):
             logger.warning(
-                "parse_memory_extraction: expected dict for triple, got %s", type(item)
+                "parse_triples: expected dict for triple, got %s", type(item)
             )
             continue
 
@@ -96,120 +76,6 @@ def _parse_triples_from_list(triples: list) -> list[ParsedTriple]:
                 }
             )
         else:
-            logger.warning("parse_memory_extraction: invalid triple format: %s", item)
+            logger.warning("parse_triples: invalid triple format: %s", item)
 
     return validated
-
-
-def _parse_objectives_from_list(objectives: list) -> list[ParsedObjective]:
-    """Parse objectives from a list, validating structure.
-
-    Args:
-        objectives: List of objective dicts from JSON
-
-    Returns:
-        List of validated objectives
-    """
-    validated: list[ParsedObjective] = []
-    for item in objectives:
-        if not isinstance(item, dict):
-            logger.warning(
-                "parse_memory_extraction: expected dict for objective, got %s",
-                type(item),
-            )
-            continue
-
-        description = item.get("description")
-        if (
-            not description
-            or not isinstance(description, str)
-            or not description.strip()
-        ):
-            logger.warning(
-                "parse_memory_extraction: missing or invalid description: %s", item
-            )
-            continue
-
-        saliency = item.get("saliency", 0.5)
-        if not isinstance(saliency, (int, float)):
-            logger.warning(
-                "parse_memory_extraction: invalid saliency, using default: %s", item
-            )
-            saliency = 0.5
-        saliency = float(saliency)
-        saliency = max(MIN_SALIENCY, min(MAX_SALIENCY, saliency))
-
-        status = item.get("status", "pending")
-        status = "pending" if not isinstance(status, str) else status.lower().strip()
-        if status not in VALID_STATUSES:
-            logger.warning(
-                "parse_memory_extraction: invalid status '%s', using 'pending'", status
-            )
-            status = "pending"
-
-        validated.append(
-            {
-                "description": description.strip(),
-                "saliency": saliency,
-                "status": status,
-            }
-        )
-
-    return validated
-
-
-def parse_memory_extraction(raw_output: str) -> ParsedMemoryExtraction:
-    """Parse LLM output from MEMORY_EXTRACTION into structured triples and objectives.
-
-    Args:
-        raw_output: Raw string output from LLM
-
-    Returns:
-        ParsedMemoryExtraction with validated triples and objectives
-    """
-    cleaned = raw_output.strip()
-
-    try:
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            if len(lines) >= MIN_CODE_BLOCK_LINES:
-                cleaned = "\n".join(lines[1:-1])
-                if cleaned.lower().startswith("json"):
-                    cleaned = cleaned[4:].strip()
-
-        data = json.loads(cleaned)
-
-        if not isinstance(data, dict):
-            logger.warning("parse_memory_extraction: expected dict, got %s", type(data))
-            return {"triples": [], "objectives": []}
-
-        triples_raw = data.get("triples", [])
-        objectives_raw = data.get("objectives", [])
-
-        if not isinstance(triples_raw, list):
-            logger.warning(
-                "parse_memory_extraction: expected triples to be list, got %s",
-                type(triples_raw),
-            )
-            triples_raw = []
-
-        if not isinstance(objectives_raw, list):
-            logger.warning(
-                "parse_memory_extraction: expected objectives to be list, got %s",
-                type(objectives_raw),
-            )
-            objectives_raw = []
-
-        return {
-            "triples": _parse_triples_from_list(triples_raw),
-            "objectives": _parse_objectives_from_list(objectives_raw),
-        }
-
-    except json.JSONDecodeError:
-        logger.warning(
-            "parse_memory_extraction: JSON decode error: %s", raw_output[:100]
-        )
-        return {"triples": [], "objectives": []}
-    except Exception:
-        logger.exception("parse_memory_extraction: unexpected error")
-        return {"triples": [], "objectives": []}
