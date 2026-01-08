@@ -103,6 +103,51 @@ Return ONLY valid JSON (no markdown, no explanation):
 {"entities": ["database migration"]}', 0.2, 3)
 ON CONFLICT (prompt_key) DO NOTHING;
 
+-- BATCH_MEMORY_EXTRACTION (v1, temp=0.2)
+-- Batch consolidation every 18 messages
+INSERT INTO prompt_registry (prompt_key, template, temperature, version)
+VALUES ('BATCH_MEMORY_EXTRACTION', E'# Batch Memory Extraction for User Knowledge Graph
+
+You are extracting durable facts about the user to build a persistent knowledge graph.
+
+## Rules
+- Extract all durable facts from new messages, even if they appear in Previous Memories. Duplicate extractions are intentional — they reinforce importance and update timestamps.
+- Ignore transient chatter, questions, hypotheticals, greetings, opinions.
+- Do not infer beyond what is explicitly stated or very strongly implied.
+- Always use "user" as subject for facts about the primary conversant.
+- If new information contradicts prior memory, output the new fact — downstream merging will handle overrides.
+
+## Predicates
+### Preferred controlled
+lives_in, works_as, studied_at, knows_language, has_pet, has_family_member
+
+### Goal-related (use together when applicable)
+has_goal, due_by (ISO date), priority (high/medium/low), status (active/completed/abandoned)
+
+### Other open (use sparingly, keep reusable)
+prefers_*, favorite_*, owns_*, born_in, born_on, etc.
+
+## Previous Memories
+{{MEMORY_CONTEXT}}
+
+## New Messages
+{{MESSAGE_HISTORY}}
+
+## Output
+Output ONLY a valid JSON array of triples. No explanations.
+
+Each triple:
+{"subject": string, "predicate": string, "object": string}
+
+## Example
+[
+  {"subject": "user", "predicate": "lives_in", "object": "Richmond, British Columbia"},
+  {"subject": "user", "predicate": "has_goal", "object": "run a marathon"},
+  {"subject": "user", "predicate": "due_by", "object": "2026-10-01"},
+  {"subject": "user", "predicate": "has_pet", "object": "cat named Luna"}
+]', 0.2, 1)
+ON CONFLICT (prompt_key) DO NOTHING;
+
 -- MEMORY_EXTRACTION (v1, temp=0.1)
 -- Unified extraction: triples + objectives in single LLM call
 INSERT INTO prompt_registry (prompt_key, template, temperature, version)

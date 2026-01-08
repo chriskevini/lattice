@@ -7,10 +7,6 @@ from typing import TypedDict
 
 logger = logging.getLogger(__name__)
 
-MIN_SALIENCY = 0.0
-MAX_SALIENCY = 1.0
-MIN_SALIENCY_DELTA = 0.01
-
 
 class ParsedTriple(TypedDict):
     """Parsed semantic triple."""
@@ -46,6 +42,7 @@ PREDICATE_SYNONYMS: dict[str, list[str]] = {
 
 MIN_SALIENCY = 0.0
 MAX_SALIENCY = 1.0
+MIN_SALIENCY_DELTA = 0.01
 VALID_STATUSES = frozenset({"pending", "completed", "archived"})
 MIN_CODE_BLOCK_LINES = 2
 

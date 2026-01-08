@@ -2,7 +2,6 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -14,7 +13,6 @@ from lattice.memory.episodic import (
     get_recent_messages,
     store_message,
     store_semantic_triples,
-    store_objectives,
     upsert_entity,
 )
 
@@ -558,8 +556,6 @@ class TestStoreSemanticTriples:
     async def test_store_semantic_triples_valid_triple(self) -> None:
         """Test storing a valid semantic triple."""
         message_id = uuid4()
-        subject_id = uuid4()
-        object_id = uuid4()
 
         triples = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
 
@@ -569,24 +565,16 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity") as mock_upsert:
-                mock_upsert.side_effect = [subject_id, object_id]
+            await store_semantic_triples(message_id, triples)
 
-                await store_semantic_triples(message_id, triples)
-
-                # Verify entities were upserted
-                assert mock_upsert.call_count == 2
-                assert mock_upsert.call_args_list[0][1]["name"] == "Alice"
-                assert mock_upsert.call_args_list[1][1]["name"] == "Python"
-
-                # Verify triple was inserted
-                mock_conn.execute.assert_called_once()
-                call_args = mock_conn.execute.call_args
-                assert "INSERT INTO semantic_triples" in call_args[0][0]
-                assert call_args[0][1] == subject_id
-                assert call_args[0][2] == "likes"
-                assert call_args[0][3] == object_id
-                assert call_args[0][4] == message_id
+            # Verify triple was inserted
+            mock_conn.execute.assert_called_once()
+            call_args = mock_conn.execute.call_args
+            assert "INSERT INTO semantic_triple" in call_args[0][0]
+            assert call_args[0][1] == "Alice"
+            assert call_args[0][2] == "likes"
+            assert call_args[0][3] == "Python"
+            assert call_args[0][4] is None  # source_batch_id
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_skips_invalid(self) -> None:
@@ -617,10 +605,8 @@ class TestStoreSemanticTriples:
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_continues_on_error(self) -> None:
-        """Test that errors upserting entities are logged but don't stop processing."""
+        """Test that errors executing INSERT don't stop other triples."""
         message_id = uuid4()
-        subject_id = uuid4()
-        object_id = uuid4()
 
         triples = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
@@ -628,32 +614,24 @@ class TestStoreSemanticTriples:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.execute = AsyncMock()
+        # First execute succeeds, second fails
+        mock_conn.execute = AsyncMock(
+            side_effect=[None, asyncpg.PostgresError("DB error")]
+        )
 
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity") as mock_upsert:
-                # First triple succeeds, second fails during subject upsert
-                mock_upsert.side_effect = [
-                    subject_id,
-                    object_id,
-                    asyncpg.PostgresError("Entity upsert failed"),
-                ]
+            # Should not raise exception, continues to process all triples
+            await store_semantic_triples(message_id, triples)
 
-                await store_semantic_triples(message_id, triples)
-
-                # First triple should be inserted
-                mock_conn.execute.assert_called_once()
+            # Both triples attempted
+            assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_continues_on_execute_error(self) -> None:
         """Test that errors executing INSERT don't stop other triples."""
         message_id = uuid4()
-        subject_id1 = uuid4()
-        object_id1 = uuid4()
-        subject_id2 = uuid4()
-        object_id2 = uuid4()
 
         triples = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
@@ -669,20 +647,11 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity") as mock_upsert:
-                mock_upsert.side_effect = [
-                    subject_id1,
-                    object_id1,
-                    subject_id2,
-                    object_id2,
-                ]
+            # Should not raise exception, continues to process all triples
+            await store_semantic_triples(message_id, triples)
 
-                # Should not raise exception, continues to process all triples
-                await store_semantic_triples(message_id, triples)
-
-                # Both triples attempted (4 upserts = 2 triples × 2 entities each)
-                assert mock_upsert.call_count == 4
-                assert mock_conn.execute.call_count == 2
+            # Both triples attempted
+            assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_store_semantic_triples_uses_transaction(self) -> None:
@@ -696,233 +665,7 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            with patch("lattice.memory.episodic.upsert_entity", return_value=uuid4()):
-                await store_semantic_triples(message_id, triples)
+            await store_semantic_triples(message_id, triples)
 
-                # Verify transaction was used
-                mock_conn.transaction.assert_called_once()
-
-
-class TestStoreObjectives:
-    """Tests for store_objectives function."""
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_empty_list(self) -> None:
-        """Test that empty objectives list returns immediately."""
-        message_id = uuid4()
-
-        result = await store_objectives(message_id, [])
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_creates_new(self) -> None:
-        """Test creating a new objective when it doesn't exist."""
-        message_id = uuid4()
-        objectives = [
-            {"description": "Build a web app", "saliency": 0.8, "status": "pending"}
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        # fetchrow returns None (objective doesn't exist)
-        mock_conn.fetchrow = AsyncMock(return_value=None)
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            await store_objectives(message_id, objectives)
-
-            # Verify INSERT was called
-            call_args = mock_conn.execute.call_args
-            assert "INSERT INTO objectives" in call_args[0][0]
-            assert call_args[0][1] == "Build a web app"  # description
-            assert call_args[0][2] == 0.8  # saliency
-            assert call_args[0][3] == "pending"  # status
-            assert call_args[0][4] == message_id  # origin_id
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_updates_status_change(self) -> None:
-        """Test updating existing objective when status changes."""
-        message_id = uuid4()
-        objective_id = uuid4()
-        objectives = [
-            {"description": "Learn Python", "saliency": 0.7, "status": "completed"}
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        # Existing objective with different status
-        mock_conn.fetchrow = AsyncMock(
-            return_value={
-                "id": objective_id,
-                "status": "pending",
-                "saliency_score": 0.7,
-            }
-        )
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            await store_objectives(message_id, objectives)
-
-        # Verify UPDATE was called
-        call_args = mock_conn.execute.call_args
-        assert "UPDATE objectives" in call_args[0][0]
-        assert "status =" in call_args[0][0]
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_updates_saliency_change(self) -> None:
-        """Test updating existing objective when saliency changes significantly."""
-        message_id = uuid4()
-        objective_id = uuid4()
-        objectives = [
-            {"description": "Write tests", "saliency": 0.9, "status": "pending"}
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        # Existing objective with significantly different saliency
-        mock_conn.fetchrow = AsyncMock(
-            return_value={
-                "id": objective_id,
-                "status": "pending",
-                "saliency_score": 0.5,  # Delta of 0.4 > MIN_SALIENCY_DELTA
-            }
-        )
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            await store_objectives(message_id, objectives)
-
-            # Verify UPDATE was called
-            call_args = mock_conn.execute.call_args
-            assert "UPDATE objectives" in call_args[0][0]
-            assert "saliency_score = $2" in call_args[0][0]
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_no_update_when_unchanged(self) -> None:
-        """Test that objectives are not updated when status and saliency unchanged."""
-        message_id = uuid4()
-        objective_id = uuid4()
-        objectives = [
-            {"description": "Existing goal", "saliency": 0.7, "status": "pending"}
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        # Existing objective with same values
-        mock_conn.fetchrow = AsyncMock(
-            return_value={
-                "id": objective_id,
-                "status": "pending",
-                "saliency_score": 0.7,
-            }
-        )
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            await store_objectives(message_id, objectives)
-
-            # Should not call execute (no update needed)
-            mock_conn.execute.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_case_insensitive_matching(self) -> None:
-        """Test that objective matching is case-insensitive."""
-        message_id = uuid4()
-        objective_id = uuid4()
-        objectives = [
-            {"description": "UPPERCASE OBJECTIVE", "saliency": 0.7, "status": "pending"}
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={
-                "id": objective_id,
-                "status": "pending",
-                "saliency_score": 0.7,
-            }
-        )
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            await store_objectives(message_id, objectives)
-
-            # Verify LOWER() was used in SELECT for case-insensitive matching
-            call_args = mock_conn.fetchrow.call_args
-            assert "LOWER(description) = $1" in call_args[0][0]
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_handles_non_numeric_saliency(self) -> None:
-        """Test that non-numeric saliency defaults to 0.5."""
-        message_id = uuid4()
-        objectives: list[dict[str, Any]] = [
-            {"description": "Task", "saliency": "invalid", "status": "pending"}
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(return_value=None)
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            await store_objectives(message_id, objectives)
-
-            # Verify saliency defaulted to 0.5
-            call_args = mock_conn.execute.call_args
-            assert call_args[0][2] == 0.5
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_boundary_saliency_values(self) -> None:
-        """Test objectives with boundary saliency values (0.0, 1.0)."""
-        message_id = uuid4()
-        objectives = [
-            {"description": "Zero saliency", "saliency": 0.0, "status": "pending"},
-            {"description": "Max saliency", "saliency": 1.0, "status": "pending"},
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(return_value=None)
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            await store_objectives(message_id, objectives)
-
-            # Verify both objectives were inserted
-            assert mock_conn.execute.call_count == 2
-            # Check first call has saliency 0.0
-            first_call = mock_conn.execute.call_args_list[0]
-            assert first_call[0][2] == 0.0
-            # Check second call has saliency 1.0
-            second_call = mock_conn.execute.call_args_list[1]
-            assert second_call[0][2] == 1.0
-
-    @pytest.mark.asyncio
-    async def test_store_objectives_empty_description(self) -> None:
-        """Test storing objective with empty description string."""
-        message_id = uuid4()
-        objectives: list[dict[str, Any]] = [
-            {"description": "", "saliency": 0.5, "status": "pending"}
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(return_value=None)
-        mock_conn.execute = AsyncMock()
-
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            # Should insert even with empty description (DB schema allows it)
-            await store_objectives(message_id, objectives)
-
-            mock_conn.execute.assert_called_once()
-            call_args = mock_conn.execute.call_args
-            assert call_args[0][1] == ""  # empty description
+            # Verify transaction was used
+            mock_conn.transaction.assert_called_once()
