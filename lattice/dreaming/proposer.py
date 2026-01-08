@@ -227,7 +227,6 @@ async def propose_optimization(
     optimization_prompt = optimization_prompt_template.safe_format(
         feedback_samples=feedback_samples,
         metrics=metrics_context,
-        current_template=prompt_template.template,
         current_template_key=metrics.prompt_key,
         current_version=metrics.version,
     )
