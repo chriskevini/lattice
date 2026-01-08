@@ -94,7 +94,7 @@ Use these placeholder names consistently across all prompts:
 | `{message_content}` | Same as `{user_message}` (legacy alias) | |
 | `{objectives_context}` | Active goals and commitments | "Active: launch v1 (high priority)" |
 | `{current_time}` | ISO timestamp for time-sensitive decisions | "2026-01-07T21:30:00Z" |
-| `{current_interval}` | Scheduler interval in minutes | 15 |
+| `{scheduler_current_interval}` | Scheduler check interval (minutes between proactive checks) | 15 |
 | `{success_rate}` | Percentage of positive feedback | "75%" |
 | `{total_uses}` | Number of times prompt was used | 42 |
 | `{experience_cases}` | Feedback samples for optimization | See PROMPT_OPTIMIZATION template |

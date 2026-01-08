@@ -119,7 +119,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_llm_exception(self) -> None:
         """Test that LLM exceptions are handled gracefully."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
 
         mock_llm = MagicMock()
@@ -156,7 +156,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_json_parse_error(self) -> None:
         """Test that invalid JSON from LLM is handled gracefully."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
 
         mock_result = MagicMock()
@@ -202,7 +202,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_invalid_action(self) -> None:
         """Test that invalid action from LLM defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -250,7 +250,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_empty_content(self) -> None:
         """Test that empty content in message action defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -298,7 +298,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_literal_empty_string(self) -> None:
         """Test that literal empty string content defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -344,7 +344,7 @@ class TestDecideProactive:
     async def test_decide_proactive_with_missing_content(self) -> None:
         """Test that missing content field defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "{current_time}\n{current_interval}\n{conversation_context}\n{objectives_context}"
+        mock_prompt.template = "{current_time}\n{scheduler_current_interval}\n{conversation_context}\n{objectives_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 

@@ -185,7 +185,7 @@ VALUES ('PROACTIVE_CHECKIN', E'You are a warm, curious, and gently proactive AI 
 ## Task
 Decide ONE action:
 1. Send a short proactive message to the user
-2. Wait {current_interval} minutes before checking again
+2. Wait {scheduler_current_interval} minutes before checking again
 
 ## Inputs
 - **Current Time:** {current_time} (Consider whether it''s an appropriate time to message - avoid late night/early morning unless there''s strong recent activity)

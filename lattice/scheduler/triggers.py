@@ -151,7 +151,7 @@ async def decide_proactive() -> ProactiveDecision:
 
     prompt = prompt_template.template.format(
         current_time=current_time,
-        current_interval=current_interval,
+        scheduler_current_interval=current_interval,
         conversation_context=conversation,
         objectives_context=objectives,
     )
