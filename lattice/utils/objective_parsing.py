@@ -1,4 +1,4 @@
-"""Objective parsing utilities for objective extraction."""
+"""Goal parsing utilities for goal extraction."""
 
 import json
 import logging
@@ -13,14 +13,14 @@ MIN_CODE_BLOCK_LINES = 2
 MIN_SALIENCY_DELTA = 0.01
 
 
-def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
-    """Parse LLM output into structured objectives.
+def parse_goals(raw_output: str) -> list[dict[str, str | float]]:
+    """Parse LLM output into structured goals.
 
     Args:
         raw_output: Raw string output from LLM
 
     Returns:
-        List of validated objectives with description, saliency, and status
+        List of validated goals with description, saliency, and status
     """
     cleaned = raw_output.strip()
 
@@ -35,13 +35,13 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
         objectives = json.loads(cleaned)
 
         if not isinstance(objectives, list):
-            logger.warning("parse_objectives: expected list, got %s", type(objectives))
+            logger.warning("parse_goals: expected list, got %s", type(objectives))
             return []
 
         validated = []
         for item in objectives:
             if not isinstance(item, dict):
-                logger.warning("parse_objectives: expected dict, got %s", type(item))
+                logger.warning("parse_goals: expected dict, got %s", type(item))
                 continue
 
             description = item.get("description")
@@ -50,15 +50,13 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
                 or not isinstance(description, str)
                 or not description.strip()
             ):
-                logger.warning(
-                    "parse_objectives: missing or invalid description: %s", item
-                )
+                logger.warning("parse_goals: missing or invalid description: %s", item)
                 continue
 
             saliency = item.get("saliency", 0.5)
             if not isinstance(saliency, (int, float)):
                 logger.warning(
-                    "parse_objectives: invalid saliency, using default: %s",
+                    "parse_goals: invalid saliency, using default: %s",
                     item,
                 )
                 saliency = 0.5
@@ -71,7 +69,7 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
             )
             if status not in VALID_STATUSES:
                 logger.warning(
-                    "parse_objectives: invalid status '%s', using 'pending'",
+                    "parse_goals: invalid status '%s', using 'pending'",
                     status,
                 )
                 status = "pending"
@@ -87,8 +85,8 @@ def parse_objectives(raw_output: str) -> list[dict[str, str | float]]:
         return validated
 
     except json.JSONDecodeError as e:
-        logger.warning("parse_objectives: JSON decode error: %s, trying text format", e)
+        logger.warning("parse_goals: JSON decode error: %s, trying text format", e)
         return []
     except Exception:
-        logger.exception("parse_objectives: unexpected error")
+        logger.exception("parse_goals: unexpected error")
         return []

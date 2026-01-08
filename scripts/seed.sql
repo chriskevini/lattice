@@ -187,8 +187,8 @@ VALUES ('PROACTIVE_CHECKIN', 1, $TPL$You are a warm, curious, and gently proacti
 **Recent conversation history:**
 {episodic_context}
 
-**Active goals:**
-{objectives_context}
+**Goal context:**
+{goal_context}
 
 ## Task
 Decide ONE action:

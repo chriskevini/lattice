@@ -32,8 +32,7 @@ class TestAnalyzer:
                 "feedback_rate": 0.1,
                 "positive_feedback": 5,
                 "negative_feedback": 5,
-                "neutral_count": 0,
-                "success_rate": 0.5,
+                "success_rate": 0.95,
                 "avg_latency_ms": 120.0,
                 "avg_tokens": 150.0,
                 "avg_cost_usd": Decimal("0.001"),
@@ -54,7 +53,7 @@ class TestAnalyzer:
             assert len(metrics) == 1
             assert metrics[0].prompt_key == "BASIC_RESPONSE"
             assert metrics[0].total_uses == 100
-            assert metrics[0].success_rate == 0.5
+            assert metrics[0].success_rate == 0.95
             assert metrics[0].priority_score == 25.0
 
     @pytest.mark.asyncio
@@ -85,8 +84,7 @@ class TestProposer:
             feedback_rate=0.1,
             positive_feedback=3,
             negative_feedback=7,
-            neutral_feedback=0,
-            success_rate=0.3,
+            success_rate=0.93,
             avg_latency_ms=200.0,
             avg_tokens=150.0,
             avg_cost_usd=Decimal("0.001"),

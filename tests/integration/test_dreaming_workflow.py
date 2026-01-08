@@ -26,8 +26,7 @@ async def test_full_dreaming_cycle_workflow() -> None:
             "feedback_rate": 0.15,
             "positive_feedback": 3,
             "negative_feedback": 12,
-            "neutral_count": 0,
-            "success_rate": 0.2,
+            "success_rate": 0.88,
             "avg_latency_ms": 300.0,
             "avg_tokens": 200.0,
             "avg_cost_usd": Decimal("0.002"),
@@ -157,8 +156,7 @@ async def test_dreaming_cycle_no_proposals_when_performing_well() -> None:
             "feedback_rate": 0.05,
             "positive_feedback": 4,
             "negative_feedback": 1,
-            "neutral_count": 0,
-            "success_rate": 0.8,
+            "success_rate": 0.99,
             "avg_latency_ms": 120.0,
             "avg_tokens": 150.0,
             "avg_cost_usd": Decimal("0.001"),
@@ -175,5 +173,5 @@ async def test_dreaming_cycle_no_proposals_when_performing_well() -> None:
         metrics = await analyze_prompt_effectiveness()
 
         assert len(metrics) == 1
-        assert metrics[0].success_rate == 0.8
+        assert metrics[0].success_rate == 0.99
         assert metrics[0].priority_score == 5.0

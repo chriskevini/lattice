@@ -66,8 +66,7 @@ class PromptMetrics:
     # Sentiment analysis
     positive_feedback: int
     negative_feedback: int
-    neutral_feedback: int
-    success_rate: float  # positive / (positive + negative)
+    success_rate: float  # (total_uses - negative_feedback) / total_uses
 
     # Performance metrics
     avg_latency_ms: float | None
@@ -144,12 +143,9 @@ async def analyze_prompt_effectiveness(
                 ps.feedback_rate,
                 COALESCE(fs.positive_count, 0) as positive_feedback,
                 COALESCE(fs.negative_count, 0) as negative_feedback,
-                COALESCE(fs.neutral_count, 0) as neutral_count,
                 CASE
-                    WHEN COALESCE(fs.positive_count, 0) + COALESCE(fs.negative_count, 0) = 0
-                    THEN 0.5  -- neutral when no feedback
-                    ELSE COALESCE(fs.positive_count, 0)::FLOAT /
-                         NULLIF(COALESCE(fs.positive_count, 0) + COALESCE(fs.negative_count, 0), 0)
+                    WHEN ps.total_uses = 0 THEN 0.5  -- neutral when no uses
+                    ELSE (ps.total_uses - COALESCE(fs.negative_count, 0))::FLOAT / ps.total_uses
                 END as success_rate,
                 ps.avg_latency_ms,
                 ps.avg_tokens,
@@ -177,7 +173,6 @@ async def analyze_prompt_effectiveness(
                 feedback_rate=_safe_float(row["feedback_rate"]),
                 positive_feedback=row["positive_feedback"],
                 negative_feedback=row["negative_feedback"],
-                neutral_feedback=row["neutral_count"],
                 success_rate=_safe_float(row["success_rate"]),
                 avg_latency_ms=_safe_float_optional(row["avg_latency_ms"]),
                 avg_tokens=_safe_float_optional(row["avg_tokens"]),
