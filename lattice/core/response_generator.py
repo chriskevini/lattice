@@ -21,6 +21,8 @@ logger = structlog.get_logger(__name__)
 
 MAX_GRAPH_TRIPLES = 10
 
+MAX_GOALS_CONTEXT = 50
+
 PLANNING_KEYWORDS = {
     "goal",
     "goals",
@@ -95,35 +97,52 @@ async def fetch_goal_names() -> list[str]:
     from lattice.utils.database import db_pool
 
     if not db_pool.is_initialized():
+        logger.warning("Database pool not initialized, cannot fetch goal names")
         return []
 
-    async with db_pool.pool.acquire() as conn:
-        goals = await conn.fetch(
-            """
-            SELECT DISTINCT object FROM semantic_triple
-            WHERE predicate = 'has_goal'
-            ORDER BY object
-            """
-        )
+    try:
+        async with db_pool.pool.acquire() as conn:
+            goals = await conn.fetch(
+                f"""
+                SELECT DISTINCT object FROM semantic_triple
+                WHERE predicate = 'has_goal'
+                ORDER BY object
+                LIMIT {MAX_GOALS_CONTEXT}
+                """
+            )
+    except Exception as e:
+        logger.error("Failed to fetch goal names from database", error=str(e))
+        return []
+
     return [g["object"] for g in goals]
 
 
-async def get_objectives_context() -> str:
+async def get_objectives_context(goal_names: list[str] | None = None) -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
+
+    Args:
+        goal_names: Optional pre-fetched goal names to avoid duplicate DB call.
+                    If None, fetches from database.
 
     Returns:
         Formatted goals string showing goals and their predicates
     """
     from lattice.utils.database import db_pool
 
-    goal_names = await fetch_goal_names()
+    if goal_names is None:
+        goal_names = await fetch_goal_names()
+
     if not goal_names:
         return "No active goals."
 
-    async with db_pool.pool.acquire() as conn:
-        placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
-        query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
-        predicates = await conn.fetch(query, *goal_names)
+    try:
+        async with db_pool.pool.acquire() as conn:
+            placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
+            query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
+            predicates = await conn.fetch(query, *goal_names)
+    except Exception as e:
+        logger.error("Failed to fetch goal predicates from database", error=str(e))
+        predicates = []
 
     goal_predicates: dict[str, list[tuple[str, str]]] = {}
     for pred in predicates:
@@ -199,10 +218,10 @@ async def get_relevant_objectives(entities: list[str], user_message: str) -> str
         return None
 
     if _has_planning_intent(user_message):
-        return await get_objectives_context()
+        return await get_objectives_context(goal_names=goal_names)
 
     if _has_entity_goal_overlap(entities, goal_names):
-        return await get_objectives_context()
+        return await get_objectives_context(goal_names=goal_names)
 
     return None
 
@@ -310,7 +329,7 @@ async def generate_response(
             semantic_context = f"{relevant_objectives}\n\n{semantic_context}"
             logger.debug(
                 "Injected objectives context",
-                objectives_preview=relevant_objectives[:200],
+                objectives_context_preview=relevant_objectives[:200],
             )
 
     logger.debug(
