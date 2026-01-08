@@ -522,22 +522,11 @@ async def approve_proposal(
 
         # Begin transaction
         async with conn.transaction():
-            # Deactivate old version
+            # Insert new version (version number alone determines "current")
             await conn.execute(
                 """
-                UPDATE prompt_registry
-                SET active = false
-                WHERE prompt_key = $1 AND version = $2
-                """,
-                proposal_row["prompt_key"],
-                proposal_row["current_version"],
-            )
-
-            # Insert new version as active
-            await conn.execute(
-                """
-                INSERT INTO prompt_registry (prompt_key, version, template, temperature, active)
-                VALUES ($1, $2, $3, $4, true)
+                INSERT INTO prompt_registry (prompt_key, version, template, temperature)
+                VALUES ($1, $2, $3, $4)
                 """,
                 proposal_row["prompt_key"],
                 proposal_row["proposed_version"],

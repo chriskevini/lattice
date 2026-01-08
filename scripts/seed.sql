@@ -5,7 +5,7 @@
 -- ============================================================================
 
 -- UNIFIED_RESPONSE (v1, temp=0.7)
-INSERT INTO prompt_registry (prompt_key, version, template, temperature, active)
+INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('UNIFIED_RESPONSE', 1, E'You are a warm, curious AI companion engaging in natural conversation.
 
 ## Context
@@ -53,7 +53,7 @@ Respond naturally based on what the user is saying:
 Respond naturally and helpfully.', 0.7, true);
 
 -- ENTITY_EXTRACTION (v1, temp=0.2)
-INSERT INTO prompt_registry (prompt_key, version, template, temperature, active)
+INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('ENTITY_EXTRACTION', 1, E'You are a message analysis system. Extract entity mentions for graph traversal.
 
 ## Context
@@ -104,7 +104,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 {"entities": ["database migration"]}', 0.2, true);
 
 -- BATCH_MEMORY_EXTRACTION (v1, temp=0.2)
-INSERT INTO prompt_registry (prompt_key, version, template, temperature, active)
+INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('BATCH_MEMORY_EXTRACTION', 1, E'# Batch Memory Extraction for User Knowledge Graph
 
 You are extracting durable facts about the user to build a persistent knowledge graph.
@@ -151,7 +151,7 @@ Each triple:
 ]', 0.2, true);
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
-INSERT INTO prompt_registry (prompt_key, version, template, temperature, active)
+INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('PROMPT_OPTIMIZATION', 1, E'## Feedback Samples
 {feedback_samples}
 
@@ -175,7 +175,7 @@ Return ONLY valid JSON:
 }', 0.7, true);
 
 -- PROACTIVE_CHECKIN (v1, temp=0.7)
-INSERT INTO prompt_registry (prompt_key, version, template, temperature, active)
+INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('PROACTIVE_CHECKIN', 1, E'You are a warm, curious, and gently proactive AI companion. Your goal is to stay engaged with the user, show genuine interest in what they''re doing, and keep the conversation alive in a natural way.
 
 ## Context

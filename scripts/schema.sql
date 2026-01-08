@@ -19,16 +19,17 @@ CREATE INDEX IF NOT EXISTS idx_schema_migrations_name ON schema_migrations(migra
 -- ----------------------------------------------------------------------------
 -- prompt_registry: Prompt templates with version history (append-only)
 -- ----------------------------------------------------------------------------
+-- Query current version with: ORDER BY version DESC LIMIT 1
+-- All versions are preserved - version number alone determines "active"
+-- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prompt_registry (
     prompt_key TEXT NOT NULL,
     version INT NOT NULL,
     template TEXT NOT NULL,
     temperature FLOAT DEFAULT 0.2,
     created_at TIMESTAMPTZ DEFAULT now(),
-    active BOOLEAN DEFAULT true,
     PRIMARY KEY (prompt_key, version)
 );
-CREATE INDEX IF NOT EXISTS idx_prompt_registry_active ON prompt_registry(prompt_key, active) WHERE active = true;
 
 -- ----------------------------------------------------------------------------
 -- raw_messages: Stored Discord messages
