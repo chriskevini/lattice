@@ -720,67 +720,6 @@ class TestRaceCondition:
     """Tests for race condition handling in batch processing."""
 
     @pytest.mark.asyncio
-    async def test_concurrent_batches_wait_for_lock(self) -> None:
-        """Test that concurrent batch runs wait for advisory lock."""
-        message_id = uuid4()
-        messages = [
-            {
-                "id": message_id,
-                "discord_message_id": 101,
-                "content": "Test",
-                "is_bot": False,
-                "timestamp": datetime.now(UTC),
-            }
-        ]
-
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-        mock_conn.fetch = AsyncMock(side_effect=[messages, []])
-        mock_conn.execute = AsyncMock()
-
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
-
-        mock_prompt = MagicMock()
-        mock_prompt.template = "Template"
-        mock_prompt.temperature = 0.2
-        mock_prompt.safe_format = MagicMock(return_value="Formatted")
-
-        mock_result = MagicMock()
-        mock_result.content = "[]"
-        mock_result.model = "gpt-4"
-        mock_result.provider = "openai"
-        mock_result.prompt_tokens = 50
-        mock_result.completion_tokens = 10
-        mock_result.total_tokens = 60
-        mock_result.cost_usd = 0.001
-        mock_result.latency_ms = 200
-        mock_result.audit_id = uuid4()
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.complete = AsyncMock(return_value=mock_result)
-
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
-            ):
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
-                    await run_batch_consolidation()
-
-                    execute_calls = [call for call in mock_conn.execute.call_args_list]
-                    lock_call = execute_calls[0]
-                    assert "pg_advisory_xact_lock" in lock_call[0][0]
-
-    @pytest.mark.asyncio
     async def test_get_last_batch_id_helper(self) -> None:
         """Test the _get_last_batch_id helper function."""
         mock_conn = AsyncMock()

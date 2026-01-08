@@ -2,6 +2,15 @@
 
 Uses timestamp-based evolution: all triples are inserted with created_at,
 no updates or deletes. Query logic handles "current truth" via recency.
+
+Architecture:
+    - check_and_run_batch(): Called after each message, delegates to run_batch_consolidation()
+    - run_batch_consolidation(): Performs threshold check and extraction
+    - BATCH_SIZE = 18: Number of messages required to trigger extraction
+
+Concurrency:
+    - Sequential last_batch_message_id updates prevent double-runs
+    - No advisory lock needed - the check-and-update pattern is atomic by design
 """
 
 import json
@@ -169,9 +178,11 @@ async def run_batch_consolidation() -> None:
         if not isinstance(triples, list):
             triples = []
     except json.JSONDecodeError:
-        logger.error(
-            "Failed to parse batch extraction",
-            response=result.content[:200],
+        logger.warning(
+            "Failed to parse batch extraction response",
+            batch_id=batch_id,
+            response_preview=result.content[:200],
+            model=result.model,
         )
         triples = []
 

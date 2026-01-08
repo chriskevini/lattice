@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS raw_messages (
     user_timezone TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_raw_messages_timestamp ON raw_messages(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_message_id);
+CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_message_id);
 
 -- ----------------------------------------------------------------------------
 -- message_extractions: Query extraction output with audit trail
