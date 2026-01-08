@@ -89,10 +89,10 @@ Use these placeholder names consistently across all prompts:
 | Placeholder | Contains | Example |
 |-------------|----------|---------|
 | `{episodic_context}` | Recent conversation history (~15 messages) | "User: What's the status?\nBot: All systems operational." |
-| `{semantic_context}` | Relevant facts from knowledge graph | "user has_goal: launch v1 | launch v1 due_by: 2026-01-15" |
+| `{semantic_context}` | Relevant facts from knowledge graph | "user has_goal: run a marathon | run a marathon due_by: 2026-10-01" |
 | `{bigger_episodic_context}` | Full batch of new messages for extraction (~18 messages) | "User: Hello\nBot: Hi there!" |
 | `{user_message}` | The user's current message | "How's the project going?" |
-| `{objectives_context}` | Active goals from knowledge graph | "user has_goal: launch v1 (due_by: 2026-01-15, priority: high)" |
+| `{objectives_context}` | Active goals from knowledge graph | "user has_goal: run a marathon (due_by: 2026-10-01, priority: high)" |
 | `{current_time}` | ISO timestamp for time-sensitive decisions | "2026-01-07T21:30:00Z" |
 | `{scheduler_current_interval}` | Scheduler check interval (minutes between proactive checks) | 15 |
 | `{feedback_samples}` | Feedback samples for prompt optimization (user + response + feedback) | See PROMPT_OPTIMIZATION template |
