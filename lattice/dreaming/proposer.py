@@ -211,12 +211,12 @@ async def propose_optimization(
     experience_cases = _format_experience_cases(detailed_samples, lightweight_samples)
 
     # Build context for the optimization prompt
-    episodic_context = (
+    feedback_samples = (
         experience_cases
         if experience_cases != "(none)"
         else "No recent feedback samples."
     )
-    semantic_context = (
+    metrics_context = (
         f"Success rate: {metrics.success_rate:.1%} "
         f"({metrics.positive_feedback} positive, {metrics.negative_feedback} negative). "
         f"Total uses: {metrics.total_uses}. "
@@ -225,13 +225,13 @@ async def propose_optimization(
 
     # Format the optimization prompt using database template
     optimization_prompt = optimization_prompt_template.safe_format(
-        episodic_context=episodic_context,
-        semantic_context=semantic_context,
+        feedback_samples=feedback_samples,
+        metrics=metrics_context,
         current_template=prompt_template.template,
+        current_template_key=metrics.prompt_key,
         total_uses=metrics.total_uses,
         success_rate=f"{metrics.success_rate:.1%}",
         current_version=metrics.version,
-        experience_cases=experience_cases,
     )
 
     # Call LLM to generate proposal with timeout

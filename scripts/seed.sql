@@ -157,24 +157,17 @@ ON CONFLICT (prompt_key) DO NOTHING;
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, template, temperature, version)
-VALUES ('PROMPT_OPTIMIZATION', E'## Context
-**Recent conversation history:**
-{episodic_context}
-
-**Relevant facts from past conversations:**
-{semantic_context}
-
-**Current template being evaluated:**
-{current_template}
-
-**Template version:** {current_version}
+VALUES ('PROMPT_OPTIMIZATION', E'## Feedback Samples
+{feedback_samples}
 
 ## Metrics
-- Total uses: {total_uses}
-- Success rate: {success_rate}
+{metrics}
 
-## User Feedback
-{experience_cases}
+## Current Template
+**Template key:** {current_template_key}
+**Template version:** {current_version}
+
+{total_uses} total uses | {success_rate} success rate
 
 ## Task
 Synthesize a recurring pain point from feedback and propose ONE minimal fix.

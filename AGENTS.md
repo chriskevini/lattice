@@ -90,15 +90,13 @@ Use these placeholder names consistently across all prompts:
 |-------------|----------|---------|
 | `{episodic_context}` | Recent conversation history (~15 messages) | "User: What's the status?\nBot: All systems operational." |
 | `{semantic_context}` | Relevant facts from knowledge graph | "user has_goal: launch v1, due_by: 2026-01-15" |
-| `{user_message}` | The user's current message | "How's the project going?" |
-| `{message_content}` | Same as `{user_message}` (legacy alias) | |
-| `{objectives_context}` | Active goals from knowledge graph | "user has_goal: launch v1 (due_by: 2026-01-15)" |
 | `{bigger_episodic_context}` | Full batch of new messages for extraction (~18 messages) | "User: Hello\nBot: Hi there!" |
+| `{user_message}` | The user's current message | "How's the project going?" |
+| `{objectives_context}` | Active goals from knowledge graph | "user has_goal: launch v1 (due_by: 2026-01-15)" |
 | `{current_time}` | ISO timestamp for time-sensitive decisions | "2026-01-07T21:30:00Z" |
 | `{scheduler_current_interval}` | Scheduler check interval (minutes between proactive checks) | 15 |
-| `{success_rate}` | Percentage of positive feedback | "75%" |
-| `{total_uses}` | Number of times prompt was used | 42 |
-| `{experience_cases}` | Feedback samples for optimization | See PROMPT_OPTIMIZATION template |
+| `{feedback_samples}` | Feedback samples for prompt optimization (user + response + feedback) | See PROMPT_OPTIMIZATION template |
+| `{metrics}` | Performance metrics string for prompt optimization | "75% success rate (15 positive, 5 negative). 100 total uses." |
 
 **Rules**:
 - New placeholders must be documented here
