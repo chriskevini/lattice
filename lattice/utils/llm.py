@@ -218,6 +218,7 @@ class _LLMClient:
 
 _llm_client: _LLMClient | None = None
 _auditing_client: "AuditingLLMClient | None" = None
+_discord_bot: Any | None = None
 
 
 def _get_llm_client() -> "_LLMClient":
@@ -248,6 +249,25 @@ def get_auditing_llm_client() -> "AuditingLLMClient":
     return _auditing_client
 
 
+def set_discord_bot(bot: Any) -> None:
+    """Set the global Discord bot instance for error mirroring.
+
+    Args:
+        bot: Discord bot instance
+    """
+    global _discord_bot
+    _discord_bot = bot
+
+
+def get_discord_bot() -> Any | None:
+    """Get the global Discord bot instance.
+
+    Returns:
+        Discord bot instance or None if not set
+    """
+    return _discord_bot
+
+
 class AuditingLLMClient:
     """Wrapper around LLMClient that automatically audits every LLM call.
 
@@ -269,8 +289,10 @@ class AuditingLLMClient:
         main_discord_message_id: int | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        dream_channel_id: int | None = None,
+        bot: Any | None = None,
     ) -> AuditResult:
-        """Complete a prompt with automatic audit tracking.
+        """Complete a prompt with automatic audit tracking and error mirroring.
 
         Args:
             prompt: The prompt to complete
@@ -279,50 +301,156 @@ class AuditingLLMClient:
             main_discord_message_id: Discord message ID for audit linkage
             temperature: Sampling temperature (0.0-1.0)
             max_tokens: Maximum tokens to generate
+            dream_channel_id: Optional dream channel ID for error mirroring
+            bot: Optional Discord bot instance for error mirroring
 
         Returns:
             AuditResult with content, metadata, and audit_id
         """
-        result = await self._client.complete(
-            prompt=prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        try:
+            result = await self._client.complete(
+                prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
-        audit_id: UUID | None = None
-        if main_discord_message_id is not None:
-            from lattice.memory import prompt_audits
+            audit_id: UUID | None = None
+            if main_discord_message_id is not None:
+                from lattice.memory import prompt_audits
 
-            audit_id = await prompt_audits.store_prompt_audit(
-                prompt_key=prompt_key or "UNKNOWN",
-                rendered_prompt=prompt,
-                response_content=result.content,
-                main_discord_message_id=main_discord_message_id,
-                template_version=template_version,
+                audit_id = await prompt_audits.store_prompt_audit(
+                    prompt_key=prompt_key or "UNKNOWN",
+                    rendered_prompt=prompt,
+                    response_content=result.content,
+                    main_discord_message_id=main_discord_message_id,
+                    template_version=template_version,
+                    model=result.model,
+                    provider=result.provider,
+                    prompt_tokens=result.prompt_tokens,
+                    completion_tokens=result.completion_tokens,
+                    cost_usd=result.cost_usd,
+                    latency_ms=result.latency_ms,
+                )
+                logger.info(
+                    "Audited LLM call",
+                    audit_id=str(audit_id),
+                    prompt_key=prompt_key,
+                    model=result.model,
+                )
+
+            return AuditResult(
+                content=result.content,
                 model=result.model,
                 provider=result.provider,
                 prompt_tokens=result.prompt_tokens,
                 completion_tokens=result.completion_tokens,
+                total_tokens=result.total_tokens,
                 cost_usd=result.cost_usd,
                 latency_ms=result.latency_ms,
-            )
-            logger.info(
-                "Audited LLM call",
-                audit_id=str(audit_id),
+                temperature=result.temperature,
+                audit_id=audit_id,
                 prompt_key=prompt_key,
-                model=result.model,
             )
 
-        return AuditResult(
-            content=result.content,
-            model=result.model,
-            provider=result.provider,
-            prompt_tokens=result.prompt_tokens,
-            completion_tokens=result.completion_tokens,
-            total_tokens=result.total_tokens,
-            cost_usd=result.cost_usd,
-            latency_ms=result.latency_ms,
-            temperature=result.temperature,
-            audit_id=audit_id,
-            prompt_key=prompt_key,
+        except Exception as e:
+            logger.error(
+                "LLM call failed",
+                error=str(e),
+                prompt_key=prompt_key,
+                error_type=type(e).__name__,
+            )
+
+            effective_bot = bot if bot is not None else _discord_bot
+            effective_dream_channel_id = (
+                dream_channel_id
+                if dream_channel_id
+                else (effective_bot.dream_channel_id if effective_bot else None)
+            )
+
+            if effective_dream_channel_id and effective_bot:
+                await self._mirror_error_to_dream(
+                    bot=effective_bot,
+                    dream_channel_id=effective_dream_channel_id,
+                    prompt_key=prompt_key or "UNKNOWN",
+                    error_type=type(e).__name__,
+                    error_message=str(e)[:500],
+                    prompt_preview=prompt[:200],
+                )
+
+            from lattice.memory import prompt_audits
+
+            failed_audit_id = await prompt_audits.store_prompt_audit(
+                prompt_key=prompt_key or "UNKNOWN",
+                rendered_prompt=prompt,
+                response_content=f"ERROR: {type(e).__name__}: {str(e)}",
+                main_discord_message_id=main_discord_message_id or 0,
+                template_version=template_version,
+                model="FAILED",
+                provider=None,
+                prompt_tokens=0,
+                completion_tokens=0,
+                cost_usd=0,
+                latency_ms=0,
+            )
+
+            return AuditResult(
+                content="",
+                model="FAILED",
+                provider=None,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                cost_usd=0,
+                latency_ms=0,
+                temperature=temperature,
+                audit_id=failed_audit_id,
+                prompt_key=prompt_key,
+            )
+
+    async def _mirror_error_to_dream(
+        self,
+        bot: Any,
+        dream_channel_id: int,
+        prompt_key: str,
+        error_type: str,
+        error_message: str,
+        prompt_preview: str,
+    ) -> None:
+        """Mirror LLM error to dream channel for visibility.
+
+        Args:
+            bot: Discord bot instance
+            dream_channel_id: Dream channel ID
+            prompt_key: Prompt that failed
+            error_type: Type of error (e.g., "ValueError", "OpenAIError")
+            error_message: Error message (truncated to 500 chars)
+            prompt_preview: First 200 chars of the prompt
+        """
+        import discord
+
+        dream_channel = bot.get_channel(dream_channel_id)
+        if not isinstance(dream_channel, discord.TextChannel):
+            logger.warning(
+                "Dream channel not found for error mirror",
+                dream_channel_id=dream_channel_id,
+            )
+            return
+
+        embed = discord.Embed(
+            title="⚠️ LLM Call Failed",
+            color=discord.Color.red(),
         )
+        embed.add_field(name="Prompt", value=f"```{prompt_preview}```", inline=False)
+        embed.add_field(name="Error Type", value=error_type, inline=True)
+        embed.add_field(name="Error", value=error_message, inline=False)
+        embed.add_field(name="Prompt Key", value=prompt_key, inline=True)
+
+        try:
+            await dream_channel.send(embed=embed)
+            logger.info(
+                "Mirrored LLM error to dream channel",
+                prompt_key=prompt_key,
+                error_type=error_type,
+            )
+        except discord.DiscordException:
+            logger.exception("Failed to mirror LLM error to dream channel")

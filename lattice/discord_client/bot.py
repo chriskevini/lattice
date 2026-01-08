@@ -138,6 +138,12 @@ class LatticeBot(commands.Bot):
             )
             await self._dreaming_scheduler.start()
 
+            # Register bot instance for LLM error mirroring
+            from lattice.utils.llm import set_discord_bot
+
+            set_discord_bot(self)
+            logger.info("Bot registered for LLM error mirroring")
+
             # Register persistent views for bot restart resilience
             # Note: TemplateComparisonView (DesignerView) doesn't support persistent views
             # Proposals are ephemeral - buttons work only while bot is running
@@ -443,17 +449,6 @@ class LatticeBot(commands.Bot):
                         "cost_usd": response_result.cost_usd or 0,
                     },
                 )
-
-            # Start async consolidation (creates its own TRIPLE_EXTRACTION audit)
-            await memory_orchestrator.consolidate_message_async(
-                message_id=user_message_id,
-                content=message.content,
-                context=[msg.content for msg in recent_messages[-5:]],
-                bot=self,
-                dream_channel_id=self.dream_channel_id,
-                main_message_url=message.jump_url,
-                main_message_id=message.id,
-            )
 
             self._consecutive_failures = 0
             logger.info("Response sent successfully")

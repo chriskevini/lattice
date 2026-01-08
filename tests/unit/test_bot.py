@@ -345,6 +345,7 @@ class TestLatticeBot:
                 patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
                 patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
                 patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch("lattice.discord_client.bot.prompt_audits"),
             ):
                 mock_context = MagicMock()
                 mock_context.valid = False
@@ -406,6 +407,7 @@ class TestLatticeBot:
                 patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
                 patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
                 patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch("lattice.discord_client.bot.prompt_audits"),
             ):
                 # Setup mocks
                 mock_context = MagicMock()
@@ -413,6 +415,7 @@ class TestLatticeBot:
                 mock_get_context.return_value = mock_context
 
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
+                mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
 
                 mock_recent_message = MagicMock()
                 mock_recent_message.content = "Previous message"
@@ -447,6 +450,9 @@ class TestLatticeBot:
                         {"template": "UNIFIED_RESPONSE", "template_version": 1},
                         str(uuid4()),
                     )
+                )
+                mock_response.split_response = MagicMock(
+                    return_value=["It's sunny today!"]
                 )
 
                 with patch.object(message.channel, "send", AsyncMock()) as mock_send:
@@ -562,7 +568,6 @@ class TestLatticeBot:
                 audit_id = uuid4()
                 mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
                 mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=audit_id)
-                mock_memory.consolidate_message_async = AsyncMock()
 
                 with (
                     patch.object(
@@ -677,7 +682,6 @@ class TestLatticeBot:
                 mock_prompt_audits.store_prompt_audit = AsyncMock(
                     side_effect=[uuid4(), uuid4()]
                 )
-                mock_memory.consolidate_message_async = AsyncMock()
 
                 send_call_count = 0
 
@@ -789,7 +793,6 @@ class TestLatticeBot:
                 audit_id = uuid4()
                 mock_memory.store_bot_message = AsyncMock(return_value=message_id)
                 mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=audit_id)
-                mock_memory.consolidate_message_async = AsyncMock()
 
                 with (
                     patch.object(
@@ -818,130 +821,6 @@ class TestLatticeBot:
                     assert call_args.kwargs["cost_usd"] == 0.01
                     assert call_args.kwargs["latency_ms"] == 500
                     assert call_args.kwargs["message_id"] == message_id
-
-    @pytest.mark.asyncio
-    async def test_on_message_triggers_consolidation(self) -> None:
-        """Test async consolidation is triggered with correct context."""
-        with patch.dict(
-            "os.environ",
-            {"DISCORD_MAIN_CHANNEL_ID": "123", "DISCORD_DREAM_CHANNEL_ID": "456"},
-        ):
-            bot = LatticeBot()
-            mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
-            bot._user_timezone = "UTC"
-
-            message = MagicMock(spec=discord.Message)
-            message.author = MagicMock(id=111, name="TestUser")
-            message.channel.id = 123
-            message.id = 555
-            message.content = "Test consolidation"
-            message.guild = None
-            message.jump_url = "https://discord.com/channels/123/456/555"
-
-            user_message_id = uuid4()
-
-            with (
-                patch.object(
-                    type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-                ),
-                patch.object(
-                    bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
-                ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
-                patch(
-                    "lattice.discord_client.bot.entity_extraction"
-                ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
-                patch(
-                    "lattice.discord_client.bot.get_system_health",
-                    AsyncMock(return_value=15),
-                ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
-                patch("lattice.discord_client.bot.prompt_audits") as mock_prompt_audits,
-            ):
-                mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
-
-                # Recent messages for context
-                recent_msgs = [
-                    MagicMock(content="Message 1"),
-                    MagicMock(content="Message 2"),
-                    MagicMock(content="Message 3"),
-                    MagicMock(content="Message 4"),
-                    MagicMock(content="Message 5"),
-                ]
-                mock_episodic.get_recent_messages = AsyncMock(return_value=recent_msgs)
-
-                mock_extraction_result = MagicMock()
-                mock_extraction_result.entities = []
-                mock_extraction.extract_query_structure = AsyncMock(
-                    return_value=mock_extraction_result
-                )
-
-                mock_response_obj = MagicMock()
-                mock_response_obj.content = "Response"
-                mock_response_obj.model = "gpt-4"
-                mock_response_obj.provider = "openai"
-                mock_response_obj.temperature = 0.7
-                mock_response_obj.prompt_tokens = 100
-                mock_response_obj.completion_tokens = 50
-                mock_response_obj.total_tokens = 150
-                mock_response_obj.cost_usd = 0.01
-                mock_response_obj.latency_ms = 500
-
-                mock_memory.retrieve_context = AsyncMock(return_value=(recent_msgs, []))
-                mock_response.generate_response = AsyncMock(
-                    return_value=(
-                        mock_response_obj,
-                        "rendered_prompt",
-                        {"template": "ACTIVITY_RESPONSE", "template_version": 1},
-                        "ACTIVITY_RESPONSE",
-                    )
-                )
-                mock_response.split_response = MagicMock(return_value=["Response"])
-
-                mock_bot_message = MagicMock(spec=discord.Message)
-                mock_bot_message.id = 999
-                mock_bot_message.channel.id = 123
-                mock_bot_message.content = "Response"
-
-                mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
-                mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=uuid4())
-                mock_memory.consolidate_message_async = AsyncMock()
-
-                with (
-                    patch.object(
-                        message.channel,
-                        "send",
-                        AsyncMock(return_value=mock_bot_message),
-                    ),
-                    patch.object(bot, "_mirror_to_dream_channel", AsyncMock()),
-                ):
-                    await bot.on_message(message)
-
-                    # Verify consolidation was triggered
-                    mock_memory.consolidate_message_async.assert_called_once()
-                    call_args = mock_memory.consolidate_message_async.call_args
-
-                    assert call_args.kwargs["message_id"] == user_message_id
-                    assert call_args.kwargs["content"] == "Test consolidation"
-                    assert call_args.kwargs["context"] == [
-                        "Message 1",
-                        "Message 2",
-                        "Message 3",
-                        "Message 4",
-                        "Message 5",
-                    ]
-                    assert call_args.kwargs["bot"] == bot
-                    assert call_args.kwargs["dream_channel_id"] == 456
-                    assert (
-                        call_args.kwargs["main_message_url"]
-                        == "https://discord.com/channels/123/456/555"
-                    )
-                    assert call_args.kwargs["main_message_id"] == 555
 
     @pytest.mark.asyncio
     async def test_on_message_resets_failure_counter_on_success(self) -> None:
@@ -1023,7 +902,6 @@ class TestLatticeBot:
 
                 mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
                 mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=uuid4())
-                mock_memory.consolidate_message_async = AsyncMock()
 
                 with (
                     patch.object(
@@ -1131,7 +1009,6 @@ class TestLatticeBot:
 
                 mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
                 mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=uuid4())
-                mock_memory.consolidate_message_async = AsyncMock()
 
                 with (
                     patch.object(
@@ -1231,7 +1108,6 @@ class TestLatticeBot:
 
                 mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
                 mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=uuid4())
-                mock_memory.consolidate_message_async = AsyncMock()
 
                 with (
                     patch.object(
