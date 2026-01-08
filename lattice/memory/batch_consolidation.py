@@ -5,13 +5,16 @@ no updates or deletes. Query logic handles "current truth" via recency.
 
 Architecture:
     - check_and_run_batch(): Fast threshold check, called after each message
-    - run_batch_consolidation(): Double-check threshold under lock, then process
+    - run_batch_consolidation(): Re-checks threshold, then processes messages
     - BATCH_SIZE = 18: Number of messages required to trigger extraction
 
 Concurrency:
-    - Threshold check in check_and_run_batch() is fast and lock-free
-    - run_batch_consolidation() re-checks threshold under lock to prevent races
-    - Sequential last_batch_message_id updates prevent double-runs
+    - check_and_run_batch() performs a fast threshold check outside of any lock
+    - run_batch_consolidation() re-checks threshold before processing
+    - Race condition is theoretically possible but extremely unlikely in practice
+      (Discord handlers run sequentially; asyncio.create_task only schedules work)
+    - Even if duplicate processing occurs, it's harmless: triples are append-only
+      with created_at timestamps, and query logic uses recency for "current truth"
 """
 
 import json
