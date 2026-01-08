@@ -124,6 +124,7 @@ Extract durable facts from the new messages to build the knowledge graph.
 - Ignore transient chatter, questions, hypotheticals, greetings, opinions.
 - Do not infer beyond what is explicitly stated or very strongly implied.
 - Always use "user" as subject for facts about the primary conversant.
+- Goal metadata (due_by, priority, status) uses the goal description as subject, not "user".
 - If new information contradicts prior memory, output the new fact — downstream merging will handle overrides.
 
 ## Predicates
@@ -145,9 +146,10 @@ Each triple:
 ## Examples
 [
   {"subject": "user", "predicate": "lives_in", "object": "Richmond, British Columbia"},
-  {"subject": "user", "predicate": "has_goal", "object": "run a marathon"},
-  {"subject": "user", "predicate": "due_by", "object": "2026-10-01"},
-  {"subject": "user", "predicate": "has_pet", "object": "cat named Luna"}
+  {"subject": "user", "predicate": "has_pet", "object": "cat named Luna"},
+  {"subject": "run a marathon", "predicate": "due_by", "object": "2026-10-01"},
+  {"subject": "run a marathon", "predicate": "priority", "object": "high"},
+  {"subject": "run a marathon", "predicate": "status", "object": "active"}
 ]$TPL$, 0.2);
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
