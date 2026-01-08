@@ -229,8 +229,6 @@ async def propose_optimization(
         metrics=metrics_context,
         current_template=prompt_template.template,
         current_template_key=metrics.prompt_key,
-        total_uses=metrics.total_uses,
-        success_rate=f"{metrics.success_rate:.1%}",
         current_version=metrics.version,
     )
 

@@ -167,8 +167,6 @@ VALUES ('PROMPT_OPTIMIZATION', E'## Feedback Samples
 **Template key:** {current_template_key}
 **Template version:** {current_version}
 
-{total_uses} total uses | {success_rate} success rate
-
 ## Task
 Synthesize a recurring pain point from feedback and propose ONE minimal fix.
 
