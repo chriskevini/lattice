@@ -163,7 +163,7 @@ VALUES ('PROMPT_OPTIMIZATION', E'## Feedback Samples
 ## Metrics
 {metrics}
 
-## Current Template (v{current_version})
+## Current Template
 ```
 {current_template}
 ```

@@ -228,7 +228,6 @@ async def propose_optimization(
         feedback_samples=feedback_samples,
         metrics=metrics_context,
         current_template=prompt_template.template,
-        current_version=metrics.version,
     )
 
     # Call LLM to generate proposal with timeout
