@@ -36,6 +36,15 @@ RELATIVE_PATTERNS = [
     (r"\bnext year\b", lambda d: (d + timedelta(days=365)).strftime("%Y-%m-%d")),
 ]
 
+DATE_RANGE_PATTERNS = {
+    "last_week": re.compile(r"\blast\s+week\b", re.IGNORECASE),
+    "this_week": re.compile(r"\bthis\s+week\b", re.IGNORECASE),
+    "last_month": re.compile(r"\blast\s+month\b", re.IGNORECASE),
+    "yesterday": re.compile(r"\byesterday\b", re.IGNORECASE),
+    "today": re.compile(r"\btoday\b", re.IGNORECASE),
+    "last_days": re.compile(r"\blast\s+(\d+)\s+days?\b", re.IGNORECASE),
+}
+
 
 class DateResolutionError(Exception):
     """Base exception for date resolution errors."""
@@ -418,25 +427,21 @@ def parse_relative_date_range(
     now = user_dt.now
     message_lower = message.lower()
 
-    # Calculate start of current week (Monday)
     current_weekday = now.weekday()
     days_since_monday = current_weekday if current_weekday != 0 else 7
     start_of_week = now - timedelta(days=days_since_monday)
     start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # "last week" pattern
-    if re.search(r"\blast\s+week\b", message_lower):
+    if DATE_RANGE_PATTERNS["last_week"].search(message_lower):
         last_week_start = start_of_week - timedelta(weeks=1)
         last_week_end = last_week_start + timedelta(days=6)
         last_week_end = last_week_end.replace(hour=23, minute=59, second=59)
         return DateRange(start=last_week_start, end=last_week_end)
 
-    # "this week" pattern
-    if re.search(r"\bthis\s+week\b", message_lower):
+    if DATE_RANGE_PATTERNS["this_week"].search(message_lower):
         return DateRange(start=start_of_week, end=now)
 
-    # "last month" pattern
-    if re.search(r"\blast\s+month\b", message_lower):
+    if DATE_RANGE_PATTERNS["last_month"].search(message_lower):
         if now.month == 1:
             last_month = now.replace(year=now.year - 1, month=12)
         else:
@@ -446,19 +451,16 @@ def parse_relative_date_range(
         last_month_end = last_month.replace(day=last_day, hour=23, minute=59, second=59)
         return DateRange(start=last_month_start, end=last_month_end)
 
-    # "yesterday" pattern
-    if re.search(r"\byesterday\b", message_lower):
+    if DATE_RANGE_PATTERNS["yesterday"].search(message_lower):
         yesterday_start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0)
         yesterday_end = yesterday_start.replace(hour=23, minute=59, second=59)
         return DateRange(start=yesterday_start, end=yesterday_end)
 
-    # "today" pattern
-    if re.search(r"\btoday\b", message_lower):
+    if DATE_RANGE_PATTERNS["today"].search(message_lower):
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         return DateRange(start=today_start, end=now)
 
-    # "last X days" pattern (e.g., "last 7 days", "last 30 days")
-    last_days_match = re.search(r"\blast\s+(\d+)\s+days?\b", message_lower)
+    last_days_match = DATE_RANGE_PATTERNS["last_days"].search(message_lower)
     if last_days_match:
         num_days = int(last_days_match.group(1))
         range_start = now - timedelta(days=num_days)

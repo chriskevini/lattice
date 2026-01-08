@@ -348,25 +348,30 @@ class LatticeBot(commands.Bot):
                     message_preview=message.content[:50],
                 )
 
-                # Parse date range from message
-                date_range = parse_relative_date_range(
-                    message.content, self._user_timezone
-                )
-
-                # Query graph for matching triples
-                graph_traverser = GraphTraversal(db_pool.pool)
-                for predicate in detected_predicates:
-                    results = await graph_traverser.find_by_predicate(
-                        predicate=predicate,
-                        start_date=date_range.start if date_range else None,
-                        end_date=date_range.end if date_range else None,
-                        limit=50,
+                try:
+                    date_range = parse_relative_date_range(
+                        message.content, self._user_timezone
                     )
-                    predicate_triples.extend(results)
-                    logger.info(
-                        "Predicate query completed",
-                        predicate=predicate,
-                        result_count=len(results),
+
+                    graph_traverser = GraphTraversal(db_pool.pool)
+                    for predicate in detected_predicates:
+                        results = await graph_traverser.find_by_predicate(
+                            predicate=predicate,
+                            start_date=date_range.start if date_range else None,
+                            end_date=date_range.end if date_range else None,
+                            limit=50,
+                        )
+                        predicate_triples.extend(results)
+                        logger.info(
+                            "Predicate query completed",
+                            predicate=predicate,
+                            result_count=len(results),
+                        )
+                except Exception as e:
+                    logger.error(
+                        "Predicate query failed",
+                        predicates=detected_predicates,
+                        error=str(e),
                     )
 
             # Retrieve context using determined limits

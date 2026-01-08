@@ -28,14 +28,31 @@ logger = structlog.get_logger(__name__)
 
 
 ACTIVITY_QUERY_PATTERNS = [
-    (r"\bwhat did i (do|work|build)\b", "performed_activity"),
-    (r"\bhow did i spend my time\b", "performed_activity"),
-    (r"\bsummarize my activit(y|ies)\b", "performed_activity"),
-    (r"\bwhat have i been up to\b", "performed_activity"),
-    (r"\bwhat have i been doing\b", "performed_activity"),
-    (r"\bwhat did i do (yesterday|last week|last month)\b", "performed_activity"),
-    (r"\bhow was my (day|week|month)\b", "performed_activity"),
-    (r"\bwhat activities did i (do|complete)\b", "performed_activity"),
+    (
+        re.compile(r"\bwhat did i (do|work|build)\b", re.IGNORECASE),
+        "performed_activity",
+    ),
+    (re.compile(r"\bhow did i spend my time\b", re.IGNORECASE), "performed_activity"),
+    (
+        re.compile(r"\bsummarize my activit(y|ies)\b", re.IGNORECASE),
+        "performed_activity",
+    ),
+    (re.compile(r"\bwhat have i been up to\b", re.IGNORECASE), "performed_activity"),
+    (re.compile(r"\bwhat have i been doing\b", re.IGNORECASE), "performed_activity"),
+    (
+        re.compile(
+            r"\bwhat did i do (yesterday|last week|last month)\b", re.IGNORECASE
+        ),
+        "performed_activity",
+    ),
+    (
+        re.compile(r"\bhow was my (day|week|month)\b", re.IGNORECASE),
+        "performed_activity",
+    ),
+    (
+        re.compile(r"\bwhat activities did i (do|complete)\b", re.IGNORECASE),
+        "performed_activity",
+    ),
 ]
 
 
@@ -267,7 +284,7 @@ def extract_predicates(message: str) -> list[str]:
     message_lower = message.lower()
 
     for pattern, predicate in ACTIVITY_QUERY_PATTERNS:
-        if re.search(pattern, message_lower):
+        if pattern.search(message_lower):
             if predicate not in detected_predicates:
                 detected_predicates.append(predicate)
 

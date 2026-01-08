@@ -11,14 +11,14 @@ BFS Traversal Design:
 - Cycle detection prevents infinite loops by tracking visited entities
 """
 
-import logging
 from datetime import datetime
 from typing import Any
 
 import asyncpg
+import structlog
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 MAX_ENTITY_NAME_LENGTH = 255
 
@@ -215,28 +215,50 @@ class GraphTraversal:
         Returns:
             List of triples with keys: subject, predicate, object, created_at
         """
-        async with self.db_pool.acquire() as conn:
-            query = """
-                SELECT
-                    subject,
-                    predicate,
-                    object,
-                    created_at
-                FROM semantic_triple
-                WHERE predicate = $1
-            """
-            params: list[Any] = [predicate]
+        logger.info(
+            "Finding triples by predicate",
+            predicate=predicate,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+        try:
+            async with self.db_pool.acquire() as conn:
+                query = """
+                    SELECT
+                        subject,
+                        predicate,
+                        object,
+                        created_at
+                    FROM semantic_triple
+                    WHERE predicate = $1
+                """
+                params: list[Any] = [predicate]
 
-            if start_date is not None:
-                query += " AND created_at >= $" + str(len(params) + 1)
-                params.append(start_date)
+                if start_date is not None:
+                    query += " AND created_at >= $" + str(len(params) + 1)
+                    params.append(start_date)
 
-            if end_date is not None:
-                query += " AND created_at <= $" + str(len(params) + 1)
-                params.append(end_date)
+                if end_date is not None:
+                    query += " AND created_at <= $" + str(len(params) + 1)
+                    params.append(end_date)
 
-            query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
-            params.append(limit)
+                query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
+                params.append(limit)
 
-            rows = await conn.fetch(query, *params)
-            return [dict(row) for row in rows]
+                rows = await conn.fetch(query, *params)
+                results = [dict(row) for row in rows]
+
+                logger.info(
+                    "Predicate query completed",
+                    predicate=predicate,
+                    result_count=len(results),
+                )
+                return results
+        except Exception as e:
+            logger.error(
+                "Predicate query failed",
+                predicate=predicate,
+                error=str(e),
+            )
+            return []
