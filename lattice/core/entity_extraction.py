@@ -15,8 +15,10 @@ from typing import TypeAlias
 
 import structlog
 
+from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
+from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 
 
@@ -90,14 +92,12 @@ async def extract_entities(
     llm_client = get_auditing_llm_client()
     bot = get_discord_bot()
 
-    extraction_data, result = await llm_client.complete_and_parse(
+    # Call LLM
+    result = await llm_client.complete(
         prompt=rendered_prompt,
         prompt_key="ENTITY_EXTRACTION",
-        parser="json_entities",
         main_discord_message_id=int(message_id),
         temperature=prompt_template.temperature,
-        dream_channel_id=bot.dream_channel_id if bot else None,
-        bot=bot,
     )
     raw_response = result.content
     extraction_method = "api"
@@ -110,6 +110,28 @@ async def extract_entities(
         latency_ms=result.latency_ms,
     )
 
+    # Parse JSON response
+    try:
+        extraction_data = parse_llm_json_response(
+            content=result.content,
+            audit_result=result,
+            prompt_key="ENTITY_EXTRACTION",
+        )
+    except JSONParseError as e:
+        # Notify to dream channel if bot is available
+        if bot:
+            await notify_parse_error_to_dream(
+                bot=bot,
+                error=e,
+                context={
+                    "message_id": message_id,
+                    "parser_type": "json_entities",
+                    "rendered_prompt": rendered_prompt,
+                },
+            )
+        raise
+
+    # Validate required fields
     required_fields = ["entities"]
     for field in required_fields:
         if field not in extraction_data:

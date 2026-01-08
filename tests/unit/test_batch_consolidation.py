@@ -305,12 +305,7 @@ class TestRunBatchConsolidation:
         mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
-        mock_llm_client.complete_and_parse = AsyncMock(
-            return_value=(
-                [{"subject": "user", "predicate": "lives_in", "object": "Vancouver"}],
-                mock_result,
-            )
-        )
+        mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
@@ -323,16 +318,26 @@ class TestRunBatchConsolidation:
                     return_value=mock_llm_client,
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_triples"
-                    ) as mock_store:
-                        await run_batch_consolidation()
-                        mock_store.assert_called_once()
-                        call_args = mock_store.call_args
-                        assert len(call_args[0][1]) == 1
-                        assert call_args[0][1][0]["subject"] == "user"
-                        assert call_args[0][1][0]["predicate"] == "lives_in"
-                        assert call_args[0][1][0]["object"] == "Vancouver"
-                        assert call_args.kwargs["source_batch_id"] == "101"
+                        "lattice.memory.batch_consolidation.parse_llm_json_response",
+                        return_value=[
+                            {
+                                "subject": "user",
+                                "predicate": "lives_in",
+                                "object": "Vancouver",
+                            }
+                        ],
+                    ):
+                        with patch(
+                            "lattice.memory.batch_consolidation.store_semantic_triples"
+                        ) as mock_store:
+                            await run_batch_consolidation()
+                            mock_store.assert_called_once()
+                            call_args = mock_store.call_args
+                            assert len(call_args[0][1]) == 1
+                            assert call_args[0][1][0]["subject"] == "user"
+                            assert call_args[0][1][0]["predicate"] == "lives_in"
+                            assert call_args[0][1][0]["object"] == "Vancouver"
+                            assert call_args.kwargs["source_batch_id"] == "101"
 
     @pytest.mark.asyncio
     async def test_updates_last_batch_message_id(self) -> None:
@@ -389,9 +394,9 @@ class TestRunBatchConsolidation:
         mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
-        mock_llm_client.complete_and_parse = AsyncMock(
-            side_effect=json.JSONDecodeError("Expecting value", "", 0)
-        )
+        mock_llm_client.complete = AsyncMock(return_value=mock_result)
+
+        from lattice.utils.json_parser import JSONParseError
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
@@ -404,10 +409,20 @@ class TestRunBatchConsolidation:
                     return_value=mock_llm_client,
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_triples"
-                    ) as mock_store:
-                        await run_batch_consolidation()
-                        mock_store.assert_not_called()
+                        "lattice.memory.batch_consolidation.parse_llm_json_response",
+                        side_effect=JSONParseError(
+                            raw_content="not valid json",
+                            parse_error=json.JSONDecodeError("Expecting value", "", 0),
+                        ),
+                    ):
+                        with patch(
+                            "lattice.memory.batch_consolidation.notify_parse_error_to_dream"
+                        ):
+                            with patch(
+                                "lattice.memory.batch_consolidation.store_semantic_triples"
+                            ) as mock_store:
+                                await run_batch_consolidation()
+                                mock_store.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_message_history_format(self) -> None:
@@ -472,7 +487,7 @@ class TestRunBatchConsolidation:
         mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
-        mock_llm_client.complete_and_parse = AsyncMock(return_value=([], mock_result))
+        mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
@@ -560,7 +575,7 @@ class TestRunBatchConsolidation:
         mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
-        mock_llm_client.complete_and_parse = AsyncMock(return_value=([], mock_result))
+        mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
@@ -634,7 +649,7 @@ class TestRunBatchConsolidation:
         mock_result.audit_id = uuid4()
 
         mock_llm_client = MagicMock()
-        mock_llm_client.complete_and_parse = AsyncMock(return_value=([], mock_result))
+        mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool

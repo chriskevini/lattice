@@ -109,11 +109,13 @@ class TestExtractEntities:
                 "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
             patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch(
+                "lattice.core.entity_extraction.parse_llm_json_response",
+                return_value=extraction_data,
+            ),
         ):
             mock_client = AsyncMock()
-            mock_client.complete_and_parse = AsyncMock(
-                return_value=(extraction_data, mock_generation_result)
-            )
+            mock_client.complete = AsyncMock(return_value=mock_generation_result)
             mock_llm_client.return_value = mock_client
 
             mock_conn = AsyncMock()
@@ -148,9 +150,12 @@ class TestExtractEntities:
     async def test_extract_entities_invalid_json(
         self,
         mock_prompt_template: PromptTemplate,
+        mock_generation_result: AuditResult,
     ) -> None:
         """Test extraction with invalid JSON response."""
         message_id = uuid.uuid4()
+
+        from lattice.utils.json_parser import JSONParseError
 
         with (
             patch(
@@ -160,14 +165,25 @@ class TestExtractEntities:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
+            patch(
+                "lattice.core.entity_extraction.parse_llm_json_response",
+            ) as mock_parse,
+            patch(
+                "lattice.core.entity_extraction.notify_parse_error_to_dream",
+            ),
         ):
             mock_client = AsyncMock()
-            mock_client.complete_and_parse = AsyncMock(
-                side_effect=json.JSONDecodeError("Expecting value", "", 0)
-            )
+            mock_client.complete = AsyncMock(return_value=mock_generation_result)
             mock_llm_client.return_value = mock_client
 
-            with pytest.raises(json.JSONDecodeError):
+            # Simulate parse error
+            parse_error = JSONParseError(
+                raw_content="not json",
+                parse_error=json.JSONDecodeError("Expecting value", "", 0),
+            )
+            mock_parse.side_effect = parse_error
+
+            with pytest.raises(JSONParseError):
                 await extract_entities(
                     message_id=message_id,
                     message_content="Test message",
@@ -204,11 +220,13 @@ class TestExtractEntities:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
+            patch(
+                "lattice.core.entity_extraction.parse_llm_json_response",
+                return_value=incomplete_data,
+            ),
         ):
             mock_client = AsyncMock()
-            mock_client.complete_and_parse = AsyncMock(
-                return_value=(incomplete_data, mock_result)
-            )
+            mock_client.complete = AsyncMock(return_value=mock_result)
             mock_llm_client.return_value = mock_client
 
             with pytest.raises(ValueError, match="Missing required field"):
@@ -249,11 +267,13 @@ class TestExtractEntities:
                 "lattice.core.entity_extraction.get_auditing_llm_client",
             ) as mock_llm_client,
             patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch(
+                "lattice.core.entity_extraction.parse_llm_json_response",
+                return_value=extraction_data,
+            ),
         ):
             mock_client = AsyncMock()
-            mock_client.complete_and_parse = AsyncMock(
-                return_value=(extraction_data, mock_result)
-            )
+            mock_client.complete = AsyncMock(return_value=mock_result)
             mock_llm_client.return_value = mock_client
 
             mock_conn = AsyncMock()
