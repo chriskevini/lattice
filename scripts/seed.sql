@@ -239,11 +239,32 @@ User: Actually, what's the weather like?
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('BATCH_MEMORY_EXTRACTION', 1, $TPL$# Batch Memory Extraction for User Knowledge Graph
 
-You are extracting durable facts about the user to build a persistent knowledge graph.
+## Task
+Extract durable facts as semantic triples. Use canonical forms where possible. Create new entities/predicates when needed.
+
+## Guidelines
+- Ignore transient chatter, questions, hypotheticals, greetings, opinions
+- Always use "User" as subject for facts about the primary conversant
+- If new info contradicts prior memory, output the new fact
+- When extracting dates, use ISO format from hints
+- Match to canonical entities when confident ("mom" → "Mother")
+- Match to canonical predicates when confident ("loves" → "likes")
+- Proper nouns and people are capitalized (Mother, IKEA, etc.)
+- Predicates are space-separated common English phrases
+- Activities: "did activity", "lasted for", "at location"
+- Goals: "has goal", "due by", "has priority", "has status"
+- General facts: "likes", "lives in", "works at", etc.
+- Use clarifications from conversation
 
 ## Context
 **Date resolution hints:**
 {date_resolution_hints}
+
+**Canonical entities:**
+{canonical_entities}
+
+**Canonical predicates:**
+{canonical_predicates}
 
 **Relevant facts from past conversations:**
 {semantic_context}
@@ -251,68 +272,65 @@ You are extracting durable facts about the user to build a persistent knowledge 
 **New messages to extract from:**
 {bigger_episodic_context}
 
-## Task
-Extract durable facts from the new messages to build the knowledge graph.
-
-## Guidelines
-- Extract all durable facts from new messages, even if they appear in Previous Memories. Duplicate extractions are intentional — they reinforce importance and update timestamps.
-- Ignore transient chatter, questions, hypotheticals, greetings, opinions.
-- Do not infer beyond what is explicitly stated or very strongly implied.
-- Always use "user" as subject for facts about the primary conversant.
-- Goal metadata (due_by, priority, status) uses the goal description as subject, not "user".
-- If new information contradicts prior memory, output the new fact — downstream merging will handle overrides.
-- When extracting dates, use the ISO date format from the hints (e.g., "2026-01-10" instead of "Friday").
-
-## Predicates
-### Preferred controlled
-lives_in, works_as, studied_at, knows_language, has_pet, has_family_member
-
-### Goal-related (use together when applicable)
-has_goal, due_by (ISO date), priority (high/medium/low), status (active/completed/abandoned)
-
-### Activity-related (use together when applicable)
-performed_activity, has_duration (e.g., "3 hours", "30 minutes")
-
-### Other open (use sparingly, keep reusable)
-prefers_*, favorite_*, owns_*, born_in, born_on, etc.
-
 ## Output Format
-Output ONLY a valid JSON array of triples. No explanations.
-
-Each triple:
-{"subject": string, "predicate": string, "object": string}
+Return ONLY valid JSON (no markdown, no explanation):
+{"triples": [...]}
+Each triple: {"subject": string, "predicate": string, "object": string}
 
 ## Examples
-[
-  {"subject": "user", "predicate": "lives_in", "object": "Seattle, Washington"},
-  {"subject": "user", "predicate": "has_goal", "object": "run a marathon"},
-  {"subject": "user", "predicate": "has_pet", "object": "dog named Max"},
-  {"subject": "run a marathon", "predicate": "due_by", "object": "2026-10-01"},
-  {"subject": "run a marathon", "predicate": "priority", "object": "high"},
-  {"subject": "run a marathon", "predicate": "status", "object": "active"}
-]
 
-**Date Resolution Hints:** Friday → 2026-01-10, tomorrow → 2026-01-09
+**Canonical Entities:** Mother, Boyfriend, IKEA
+**Canonical Predicates:** likes, works at, did activity
+**Date Resolution Hints:** Friday → 2026-01-10
 **New Messages:**
 User: I need to finish the mobile app by Friday
-User: Call me tomorrow about the design
+User: Mom loves cooking
 **Output:**
-[
-  {"subject": "mobile app", "predicate": "due_by", "object": "2026-01-10"},
-  {"subject": "design", "predicate": "due_by", "object": "2026-01-09"}
-]
+{"triples": [
+  {"subject": "User", "predicate": "has goal", "object": "finish mobile app"},
+  {"subject": "finish mobile app", "predicate": "due by", "object": "2026-01-10"},
+  {"subject": "Mother", "predicate": "likes", "object": "cooking"}
+]}
 
-**Date Resolution Hints:** (empty)
+**Canonical Entities:** Mother, Boyfriend
+**Canonical Predicates:** likes, did activity
+**Date Resolution Hints:** today → 2026-03-09
 **New Messages:**
 User: Spent 3 hours coding today
-User: Went for a 30 minute run this morning
+Bot: Nice session! How'd it go?
+User: My bf and I hung out at IKEA
 **Output:**
-[
-  {"subject": "user", "predicate": "performed_activity", "object": "coding"},
-  {"subject": "coding", "predicate": "has_duration", "object": "3 hours"},
-  {"subject": "user", "predicate": "performed_activity", "object": "running"},
-  {"subject": "running", "predicate": "has_duration", "object": "30 minutes"}
-]$TPL$, 0.2);
+{"triples": [
+  {"subject": "User", "predicate": "did activity", "object": "coding"},
+  {"subject": "coding", "predicate": "lasted for", "object": "3 hours"},
+  {"subject": "User", "predicate": "did activity", "object": "hanging out with boyfriend"},
+  {"subject": "hanging out with boyfriend", "predicate": "at location", "object": "IKEA"}
+]}
+
+**Canonical Entities:** (empty)
+**Canonical Predicates:** (empty)
+**Date Resolution Hints:** October → 2026-10-01
+**New Messages:**
+User: I want to run a marathon by October
+User: I need to buy running shoes
+**Output:**
+{"triples": [
+  {"subject": "User", "predicate": "has goal", "object": "run a marathon"},
+  {"subject": "run a marathon", "predicate": "due by", "object": "2026-10-01"},
+  {"subject": "User", "predicate": "has goal", "object": "buy running shoes"}
+]}
+
+**Canonical Entities:** Boyfriend, IKEA
+**Canonical Predicates:** did activity, at location
+**New Messages:**
+User: bf and I hung out at ikea
+Bot: By "bf", do you mean your boyfriend?
+User: Yes!
+**Output:**
+{"triples": [
+  {"subject": "User", "predicate": "did activity", "object": "hanging out with boyfriend"},
+  {"subject": "hanging out with boyfriend", "predicate": "at location", "object": "IKEA"}
+]}$TPL$, 0.2);
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)

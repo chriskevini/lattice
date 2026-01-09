@@ -22,6 +22,14 @@ from typing import Any
 import structlog
 
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
+from lattice.memory.canonical import (
+    extract_canonical_forms,
+    get_canonical_entities_list,
+    get_canonical_entities_set,
+    get_canonical_predicates_list,
+    get_canonical_predicates_set,
+    store_canonical_forms,
+)
 from lattice.memory.episodic import store_semantic_triples
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
@@ -171,10 +179,19 @@ async def run_batch_consolidation() -> None:
     if messages:
         user_tz = messages[0].get("user_timezone") or "UTC"
 
+    canonical_entities_list = await get_canonical_entities_list()
+    canonical_predicates_list = await get_canonical_predicates_list()
+
     rendered_prompt = prompt_template.safe_format(
         semantic_context=memory_context,
         bigger_episodic_context=message_history,
         date_resolution_hints=resolve_relative_dates(combined_message, user_tz),
+        canonical_entities=", ".join(canonical_entities_list)
+        if canonical_entities_list
+        else "(empty)",
+        canonical_predicates=", ".join(canonical_predicates_list)
+        if canonical_predicates_list
+        else "(empty)",
     )
 
     llm_client = get_auditing_llm_client()
@@ -196,8 +213,14 @@ async def run_batch_consolidation() -> None:
             audit_result=result,
             prompt_key="BATCH_MEMORY_EXTRACTION",
         )
-        # Extract triples from parsed data
-        triples = parsed_data if isinstance(parsed_data, list) else []
+        if isinstance(parsed_data, dict) and "triples" in parsed_data:
+            triples = (
+                parsed_data["triples"]
+                if isinstance(parsed_data["triples"], list)
+                else []
+            )
+        elif isinstance(parsed_data, list):
+            triples = parsed_data
     except JSONParseError as e:
         # Notify to dream channel if bot is available
         if bot:
@@ -210,7 +233,6 @@ async def run_batch_consolidation() -> None:
                     "rendered_prompt": rendered_prompt,
                 },
             )
-        # Continue with empty triples rather than failing the batch
         logger.warning(
             "Parse error in batch extraction, continuing with empty triples",
             batch_id=batch_id,
@@ -225,6 +247,22 @@ async def run_batch_consolidation() -> None:
     )
 
     if triples:
+        known_entities = await get_canonical_entities_set()
+        known_predicates = await get_canonical_predicates_set()
+
+        new_entities, new_predicates = extract_canonical_forms(
+            triples, known_entities, known_predicates
+        )
+
+        if new_entities or new_predicates:
+            store_result = await store_canonical_forms(new_entities, new_predicates)
+            logger.info(
+                "Stored canonical forms from batch extraction",
+                batch_id=batch_id,
+                new_entities=store_result["entities"],
+                new_predicates=store_result["predicates"],
+            )
+
         message_id = messages[-1]["id"]
         await store_semantic_triples(message_id, triples, source_batch_id=batch_id)
         logger.info(
