@@ -783,3 +783,72 @@ class TestRetrievalPlanningPipeline:
                     message_content="Test message",
                     recent_messages=[],
                 )
+
+
+class TestRetrieveContext:
+    """Integration tests for the retrieve_context() function.
+
+    Tests the Phase 4 context retrieval using flags from RETRIEVAL_PLANNING.
+    """
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_returns_structure(self) -> None:
+        """Test retrieve_context returns expected dict structure."""
+        context = await entity_extraction.retrieve_context(
+            entities=[],
+            context_flags=[],
+            triple_depth=2,
+        )
+
+        assert isinstance(context, dict)
+        assert "semantic_context" in context
+        assert "goal_context" in context
+        assert "activity_context" in context
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_empty_inputs(self) -> None:
+        """Test retrieve_context with no entities and no flags."""
+        context = await entity_extraction.retrieve_context(
+            entities=[],
+            context_flags=[],
+            triple_depth=2,
+        )
+
+        assert context["semantic_context"] == "No relevant context found."
+        assert context["goal_context"] in ("", "No active goals.")
+        assert context["activity_context"] == ""
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_activity_flag(self) -> None:
+        """Test retrieve_context with activity_context flag."""
+        context = await entity_extraction.retrieve_context(
+            entities=[],
+            context_flags=["activity_context"],
+            triple_depth=0,
+        )
+
+        assert "activity_context" in context
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_goal_flag(self) -> None:
+        """Test retrieve_context with goal_context flag."""
+        context = await entity_extraction.retrieve_context(
+            entities=[],
+            context_flags=["goal_context"],
+            triple_depth=0,
+        )
+
+        assert "goal_context" in context
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_multiple_flags(self) -> None:
+        """Test retrieve_context with multiple context flags."""
+        context = await entity_extraction.retrieve_context(
+            entities=["test"],
+            context_flags=["goal_context", "activity_context"],
+            triple_depth=2,
+        )
+
+        assert "semantic_context" in context
+        assert "goal_context" in context
+        assert "activity_context" in context

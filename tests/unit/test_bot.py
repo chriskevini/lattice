@@ -388,7 +388,7 @@ class TestLatticeBot:
             message.content = "What's the weather?"
 
             user_message_id = uuid4()
-            extraction_id = uuid4()
+            planning_id = uuid4()
 
             with (
                 patch.object(
@@ -424,11 +424,21 @@ class TestLatticeBot:
                     return_value=[mock_recent_message]
                 )
 
-                mock_extraction_result = MagicMock()
-                mock_extraction_result.id = extraction_id
-                mock_extraction_result.entities = ["weather"]
-                mock_extraction.extract_entities = AsyncMock(
-                    return_value=mock_extraction_result
+                # Mock retrieval_planning instead of extract_entities (Phase 4)
+                mock_planning_result = MagicMock()
+                mock_planning_result.id = planning_id
+                mock_planning_result.entities = []
+                mock_planning_result.context_flags = []
+                mock_planning_result.unknown_entities = []
+                mock_extraction.retrieval_planning = AsyncMock(
+                    return_value=mock_planning_result
+                )
+                mock_extraction.retrieve_context = AsyncMock(
+                    return_value={
+                        "semantic_context": "No relevant context found.",
+                        "goal_context": "",
+                        "activity_context": "",
+                    }
                 )
 
                 mock_memory.retrieve_context = AsyncMock(return_value=([], []))
@@ -461,7 +471,7 @@ class TestLatticeBot:
 
                     # Verify pipeline steps
                     mock_memory.store_user_message.assert_called_once()
-                    mock_extraction.extract_entities.assert_called_once()
+                    mock_extraction.retrieval_planning.assert_called_once()
                     mock_response.generate_response.assert_called_once()
                     mock_send.assert_called_once()
 

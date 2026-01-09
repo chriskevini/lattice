@@ -6,6 +6,7 @@ Extracted entities are used as starting points for multi-hop knowledge retrieval
 Templates:
 - ENTITY_EXTRACTION: Extracts entity mentions for graph traversal (reactive flow)
 - RETRIEVAL_PLANNING: Analyzes conversation window for entities, context flags, and unknown entities
+- CONTEXT_RETRIEVAL: Fetches context based on entities and context flags
 """
 
 import json
@@ -13,7 +14,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import structlog
 
@@ -630,3 +631,129 @@ async def get_message_extraction(message_id: uuid.UUID) -> QueryExtraction | Non
             extraction_method=extraction_data.get("_extraction_method", "api"),
             created_at=row["created_at"],
         )
+
+
+DEFAULT_TRIPLE_DEPTH = 2
+
+
+async def retrieve_context(
+    entities: list[str],
+    context_flags: list[str],
+    triple_depth: int = DEFAULT_TRIPLE_DEPTH,
+) -> dict[str, str]:
+    """Retrieve context based on entities and context flags.
+
+    This function implements Phase 4's context retrieval using flags from
+    RETRIEVAL_PLANNING. It fetches:
+    - Graph triples for entity relationships (if entities present)
+    - Goal context (if goal_context flag present)
+    - Activity triples (if activity_context flag present)
+
+    Args:
+        entities: Extracted entity mentions from retrieval_planning()
+        context_flags: Context flags from retrieval_planning() (e.g., ["goal_context"])
+        triple_depth: Graph traversal depth (default 2 for multi-hop relationships)
+
+    Returns:
+        Dictionary with context strings:
+        - semantic_context: Formatted graph triples (empty if no entities)
+        - goal_context: Formatted goals and predicates (empty if no goal_context flag)
+        - activity_context: Activity triples (empty if no activity_context flag)
+
+    Example:
+        >>> planning = await retrieval_planning(...)
+        >>> context = await retrieve_context(
+        ...     entities=planning.entities,
+        ...     context_flags=planning.context_flags,
+        ... )
+        >>> # Use context["semantic_context"], context["goal_context"], etc.
+    """
+    from lattice.memory.graph import GraphTraversal
+    from lattice.utils.database import db_pool
+
+    context: dict[str, str] = {
+        "semantic_context": "",
+        "goal_context": "",
+        "activity_context": "",
+    }
+
+    graph_triples: list[dict[str, Any]] = []
+
+    if entities and triple_depth > 0:
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=triple_depth)
+
+            import asyncio
+
+            traverse_tasks = [
+                traverser.traverse_from_entity(entity_name, max_hops=triple_depth)
+                for entity_name in entities
+            ]
+
+            if traverse_tasks:
+                traverse_results = await asyncio.gather(*traverse_tasks)
+                seen_triple_ids: set[tuple[str, str, str]] = set()
+                for result in traverse_results:
+                    for triple in result:
+                        triple_key = (
+                            triple.get("subject", ""),
+                            triple.get("predicate", ""),
+                            triple.get("object", ""),
+                        )
+                        if triple_key not in seen_triple_ids and all(triple_key):
+                            graph_triples.append(triple)
+                            seen_triple_ids.add(triple_key)
+
+                logger.debug(
+                    "Graph traversal completed",
+                    depth=triple_depth,
+                    entities_explored=len(entities),
+                    triples_found=len(graph_triples),
+                )
+        else:
+            logger.warning("Database pool not initialized, skipping graph traversal")
+
+    if graph_triples:
+        relationships = []
+        for triple in graph_triples[:10]:
+            subject = triple.get("subject", "")
+            predicate = triple.get("predicate", "")
+            obj = triple.get("object", "")
+            if subject and predicate and obj:
+                relationships.append(f"{subject} {predicate} {obj}")
+
+        if relationships:
+            context["semantic_context"] = (
+                "Relevant knowledge from past conversations:\n"
+                + "\n".join(f"- {rel}" for rel in relationships)
+            )
+        else:
+            context["semantic_context"] = "No relevant context found."
+    else:
+        context["semantic_context"] = "No relevant context found."
+
+    if "goal_context" in context_flags:
+        from lattice.core import response_generator
+
+        context["goal_context"] = await response_generator.get_goal_context()
+
+    if "activity_context" in context_flags:
+        activity_triples: list[dict[str, Any]] = []
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=1)
+            activity_triples = await traverser.find_by_predicate(
+                predicate="did activity",
+                limit=20,
+            )
+
+        if activity_triples:
+            activities = []
+            for triple in activity_triples:
+                obj = triple.get("object", "")
+                if obj:
+                    activities.append(f"- {obj}")
+            context["activity_context"] = "Recent activities:\n" + "\n".join(activities)
+        else:
+            context["activity_context"] = "No recent activities found."
+
+    return context

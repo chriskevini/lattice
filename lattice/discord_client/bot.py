@@ -3,6 +3,7 @@
 Phase 1: Basic connectivity, episodic logging, semantic recall, and prompt registry.
 Phase 2: Invisible alignment (feedback, North Star goals).
 Phase 3: Proactive scheduling.
+Phase 4: Context retrieval using flags from RETRIEVAL_PLANNING.
 """
 
 import asyncio
@@ -18,12 +19,9 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, entity_extraction, response_generator
-from lattice.core.entity_extraction import extract_predicates
 from lattice.discord_client.dream import AuditViewBuilder, AuditView
 from lattice.memory.graph import GraphTraversal
-from lattice.utils.date_resolution import parse_relative_date_range
 
-# No longer importing ProposalApprovalView - using TemplateComparisonView (Components V2)
 from lattice.memory import episodic, prompt_audits
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.adaptive import update_active_hours
@@ -47,6 +45,40 @@ DB_INIT_RETRY_INTERVAL = 0.5  # seconds
 # Scheduler settings
 SCHEDULER_BASE_INTERVAL_DEFAULT = 15  # minutes
 MAX_CONSECUTIVE_FAILURES = 5
+
+
+def _parse_graph_triples_from_context(semantic_context: str) -> list[dict[str, Any]]:
+    """Parse semantic context string into graph triples.
+
+    Args:
+        semantic_context: Formatted semantic context string
+
+    Returns:
+        List of triples in dict format
+    """
+    import re
+
+    triples: list[dict[str, Any]] = []
+
+    for line in semantic_context.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("Relevant") or line.startswith("No "):
+            continue
+        if line.startswith("-"):
+            triple_str = line[1:].strip()
+            match = re.match(r"(.+?)\s+(.+?)\s+(.+)", triple_str)
+            if match:
+                triples.append(
+                    {
+                        "subject": match.group(1),
+                        "predicate": match.group(2),
+                        "object": match.group(3),
+                        "origin_id": None,
+                        "depth": 0,
+                    }
+                )
+
+    return triples
 
 
 class LatticeBot(commands.Bot):
@@ -280,46 +312,42 @@ class LatticeBot(commands.Bot):
                 timezone=self._user_timezone,
             )
 
-            # Extract structured query information
-            # This analyzes message type, entities, predicates, etc. for routing and retrieval
-            extraction = None
+            # RETRIEVAL_PLANNING: Analyze conversation window for entities, flags, and unknowns
+            # This replaces the old extract_entities() call with window-based analysis
+            planning: entity_extraction.RetrievalPlanning | None = None
             try:
-                # Build context from recent messages for extraction
-                # Retrieve 5 messages but use only last 3 for context to balance:
-                # - Enough context to understand conversation flow
-                # - Minimal token usage for extraction prompt (2GB RAM constraint)
-                recent_msgs_for_context = await episodic.get_recent_messages(
+                # Build conversation window for retrieval planning
+                recent_msgs_for_planning = await episodic.get_recent_messages(
                     channel_id=message.channel.id,
                     limit=5,
                 )
-                context_str = "\n".join(
-                    [f"{msg.content}" for msg in recent_msgs_for_context[-3:]]
-                )
 
-                extraction = await entity_extraction.extract_entities(
+                planning = await entity_extraction.retrieval_planning(
                     message_id=user_message_id,
                     message_content=message.content,
-                    context=context_str,
+                    recent_messages=recent_msgs_for_planning,
                     user_timezone=self._user_timezone,
                 )
 
-                if extraction:
+                if planning:
                     logger.info(
-                        "Entity extraction completed",
-                        entity_count=len(extraction.entities),
-                        extraction_id=str(extraction.id),
+                        "Retrieval planning completed",
+                        entity_count=len(planning.entities),
+                        context_flags=planning.context_flags,
+                        unknown_entities=planning.unknown_entities,
+                        planning_id=str(planning.id),
                     )
                 else:
-                    logger.warning("Extraction failed")
-                    extraction = None
+                    logger.warning("Retrieval planning returned None")
+                    planning = None
 
             except Exception as e:
                 logger.warning(
-                    "Entity extraction failed, continuing without extraction",
+                    "Retrieval planning failed, continuing without planning",
                     error=str(e),
                     message_preview=message.content[:50],
                 )
-                # Continue processing without extraction - templates will use UNIFIED_RESPONSE
+                # Continue processing without planning - will use fallback context retrieval
 
             # Update scheduler interval
             base_interval = int(
@@ -330,85 +358,63 @@ class LatticeBot(commands.Bot):
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
-            # Determine context limits based on extraction (Design D: entity-driven)
-            # Always fetch 15 messages, but only traverse graph if entities present
-            if extraction and extraction.entities:
-                triple_depth = 2  # WITH_ENTITY_TRIPLE_DEPTH
+            # Determine entities and context flags from planning
+            entities: list[str] = []
+            context_flags: list[str] = []
+            if planning:
+                entities = planning.entities
+                context_flags = planning.context_flags
             else:
-                triple_depth = 0  # NO_ENTITY_TRIPLE_DEPTH
+                entities = []
 
-            # Check for predicate queries (activity tracking - issue #147)
-            detected_predicates = extract_predicates(message.content)
-            predicate_triples: list[dict[str, Any]] = []
+            # CONTEXT_RETRIEVAL: Fetch targeted context based on entities and flags
+            # This replaces the old regex-based predicate detection approach
+            graph_triples: list[dict[str, Any]] = []
+            goal_context: str = ""
+            activity_context: str = ""
 
-            if detected_predicates:
-                logger.info(
-                    "Detected predicate query",
-                    predicates=detected_predicates,
-                    message_preview=message.content[:50],
+            if planning:
+                context_result = await entity_extraction.retrieve_context(
+                    entities=entities,
+                    context_flags=context_flags,
+                    triple_depth=2 if entities else 0,
                 )
-
-                try:
-                    date_range = parse_relative_date_range(
-                        message.content, self._user_timezone
-                    )
-
-                    graph_traverser = GraphTraversal(db_pool.pool)
-                    for predicate in detected_predicates:
-                        results = await graph_traverser.find_by_predicate(
-                            predicate=predicate,
-                            start_date=date_range.start if date_range else None,
-                            end_date=date_range.end if date_range else None,
-                            limit=50,
+                graph_triples = _parse_graph_triples_from_context(
+                    context_result.get("semantic_context", "")
+                )
+                goal_context = context_result.get("goal_context", "")
+                activity_context = context_result.get("activity_context", "")
+            else:
+                if entities:
+                    try:
+                        graph_traverser = GraphTraversal(db_pool.pool)
+                        for entity_name in entities:
+                            triples = await graph_traverser.traverse_from_entity(
+                                entity_name, max_hops=2
+                            )
+                            for triple in triples:
+                                if triple not in graph_triples:
+                                    graph_triples.append(triple)
+                    except Exception as e:
+                        logger.warning(
+                            "Fallback graph traversal failed",
+                            entities=entities,
+                            error=str(e),
                         )
-                        predicate_triples.extend(results)
-                        logger.info(
-                            "Predicate query completed",
-                            predicate=predicate,
-                            result_count=len(results),
-                        )
-                except Exception as e:
-                    logger.error(
-                        "Predicate query failed",
-                        predicates=detected_predicates,
-                        error=str(e),
-                    )
 
-            # Retrieve context using determined limits
+            # Retrieve episodic context for response generation
             (
                 recent_messages,
-                graph_triples,
+                _unused_graph_triples,
             ) = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,
-                episodic_limit=15,  # EPISODIC_LIMIT
-                triple_depth=triple_depth,
-                entity_names=extraction.entities if extraction else [],
+                episodic_limit=15,
+                triple_depth=0,
+                entity_names=[],
             )
 
-            # Inject predicate query results into graph triples for response generation
-            # These are formatted as semantic triples for semantic_context
-            if predicate_triples:
-                # Convert to semantic triple format
-                activity_triples = [
-                    {
-                        "subject": t["subject"],
-                        "predicate": t["predicate"],
-                        "object": t["object"],
-                        "origin_id": None,
-                        "depth": 0,
-                    }
-                    for t in predicate_triples
-                ]
-                # Prepend activity triples to graph triples
-                graph_triples = activity_triples + graph_triples
-                logger.info(
-                    "Injected activity triples",
-                    activity_count=len(activity_triples),
-                    total_count=len(graph_triples),
-                )
-
-            # Generate response with extraction for template selection
+            # Generate response with planning for template selection
             (
                 response_result,
                 rendered_prompt,
@@ -418,7 +424,8 @@ class LatticeBot(commands.Bot):
                 user_message=message.content,
                 recent_messages=recent_messages,
                 graph_triples=graph_triples,
-                extraction=extraction,
+                goal_context=goal_context if goal_context else None,
+                activity_context=activity_context if activity_context else None,
                 user_discord_message_id=message.id,
             )
 
