@@ -170,7 +170,7 @@ Return ONLY valid JSON (no markdown, no explanation):
   "unknown_entities": []
 }
 ## Examples
-**Canonical Entities:** Mother, Boyfriend, marathon
+**Canonical Entities:** Mother, boyfriend, marathon
 **Recent Conversation:**
 User: How's my marathon training going?
 Bot: Making good progress!
@@ -206,7 +206,7 @@ User: It went well
 User: Hey, what's up?
 **Output:**
 {"entities": [], "context_flags": [], "unknown_entities": []}
-**Canonical Entities:** Mother, Boyfriend, Best Friend, IKEA
+**Canonical Entities:** Mother, boyfriend, best friend, IKEA
 **Recent Conversation:**
 User: Going out today
 User: bf and I hung out at ikea

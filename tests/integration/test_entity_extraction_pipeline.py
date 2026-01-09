@@ -483,7 +483,7 @@ class TestRetrievalPlanningPipeline:
     async def test_retrieval_planning_detects_unknown_entities(self) -> None:
         """Test retrieval planning identifies entities needing clarification."""
         message_id = uuid.uuid4()
-        message_content = "bf and I hung out at IKEA"
+        message_content = "bf and I hung out at ikea"
 
         with (
             patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
