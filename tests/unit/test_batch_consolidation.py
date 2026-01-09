@@ -327,7 +327,7 @@ class TestRunBatchConsolidation:
                         "lattice.memory.batch_consolidation.parse_llm_json_response",
                         return_value=[
                             {
-                                "subject": "user",
+                                "subject": "User",
                                 "predicate": "lives_in",
                                 "object": "Vancouver",
                             }
@@ -367,24 +367,21 @@ class TestRunBatchConsolidation:
                                                     mock_store.assert_called_once()
                                                     call_args = mock_store.call_args
                                                     assert len(call_args[0][1]) == 1
-                                                    assert (
-                                                        call_args[0][1][0]["subject"]
-                                                        == "user"
-                                                    )
-                                                    assert (
-                                                        call_args[0][1][0]["predicate"]
-                                                        == "lives_in"
-                                                    )
-                                                    assert (
-                                                        call_args[0][1][0]["object"]
-                                                        == "Vancouver"
-                                                    )
-                                                    assert (
-                                                        call_args.kwargs[
-                                                            "source_batch_id"
-                                                        ]
-                                                        == "101"
-                                                    )
+                                            assert (
+                                                call_args[0][1][0]["subject"] == "User"
+                                            )
+                                            assert (
+                                                call_args[0][1][0]["predicate"]
+                                                == "lives_in"
+                                            )
+                                            assert (
+                                                call_args[0][1][0]["object"]
+                                                == "Vancouver"
+                                            )
+                                            assert (
+                                                call_args.kwargs["source_batch_id"]
+                                                == "101"
+                                            )
 
     @pytest.mark.asyncio
     async def test_updates_last_batch_message_id(self) -> None:
