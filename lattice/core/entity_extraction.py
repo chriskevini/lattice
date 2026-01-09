@@ -98,12 +98,15 @@ def build_smaller_episodic_context(
         Formatted conversation window with all messages
     """
     from lattice.utils.context import format_episodic_messages
+    from datetime import datetime, UTC
 
     window = recent_messages[-(window_size - 1) :] if window_size > 1 else []
 
     lines = [format_episodic_messages([msg]) for msg in window]
 
-    lines.append(f"USER: {current_message}")
+    # Use current time for the user message to maintain timestamp consistency
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
+    lines.append(f"[{now}] USER: {current_message}")
 
     return "\n".join(lines)
 

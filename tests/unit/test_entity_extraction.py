@@ -425,7 +425,7 @@ class TestBuildSmallerEpisodicContext:
             window_size=5,
         )
 
-        assert context == "USER: Hello there"
+        assert "USER: Hello there" in context
 
     def test_build_smaller_episodic_context_window_limit(self) -> None:
         """Test that window respects size limit."""
@@ -469,7 +469,7 @@ class TestBuildSmallerEpisodicContext:
             window_size=1,
         )
 
-        assert context == "USER: New message"
+        assert "USER: New message" in context
 
     def test_build_smaller_episodic_context_default_window_size(self) -> None:
         """Test using default window size."""

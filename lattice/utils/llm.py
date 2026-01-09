@@ -357,43 +357,58 @@ class AuditingLLMClient:
 
                 if effective_bot and effective_dream_channel_id:
                     params = audit_view_params or {}
-                    from lattice.discord_client.dream import AuditViewBuilder
-
-                    # Prepare metadata
-                    metadata = params.get("metadata", [])
-                    metadata.append(f"{result.latency_ms}ms")
-                    if result.cost_usd:
-                        metadata.append(f"${result.cost_usd:.4f}")
-                    if params.get("main_message_url"):
-                        metadata.append(f"[LINK]({params['main_message_url']})")
-
-                    embed, view = AuditViewBuilder.build_standard_audit(
-                        prompt_key=prompt_key or "UNKNOWN",
-                        version=template_version or 1,
-                        input_text=params.get("input_text", prompt[:200] + "..."),
-                        output_text=params.get("output_text", result.content),
-                        metadata_parts=metadata,
-                        audit_id=audit_id,
-                        rendered_prompt=prompt,
-                    )
-
-                    try:
-                        import discord
-
-                        dream_channel = effective_bot.get_channel(
-                            effective_dream_channel_id
+                    # Mirroring via bot method instead of direct AuditViewBuilder use to decouple utils from UI
+                    if hasattr(effective_bot, "mirror_audit"):
+                        await effective_bot.mirror_audit(
+                            audit_id=audit_id,
+                            prompt_key=prompt_key or "UNKNOWN",
+                            template_version=template_version or 1,
+                            rendered_prompt=prompt,
+                            result=result,
+                            params=params,
                         )
-                        if isinstance(dream_channel, discord.TextChannel):
-                            dream_msg = await dream_channel.send(embed=embed, view=view)
-                            if audit_id:
-                                from lattice.memory import prompt_audits
+                    else:
+                        # Fallback for when bot hasn't implemented mirror_audit yet (transition period)
+                        from lattice.discord_client.dream import AuditViewBuilder
 
-                                await prompt_audits.update_audit_dream_message(
-                                    audit_id=audit_id,
-                                    dream_discord_message_id=dream_msg.id,
+                        metadata = params.get("metadata", [])
+                        metadata.append(f"{result.latency_ms}ms")
+                        if result.cost_usd:
+                            metadata.append(f"${result.cost_usd:.4f}")
+                        if params.get("main_message_url"):
+                            metadata.append(f"[LINK]({params['main_message_url']})")
+
+                        embed, view = AuditViewBuilder.build_standard_audit(
+                            prompt_key=prompt_key or "UNKNOWN",
+                            version=template_version or 1,
+                            input_text=params.get("input_text", prompt[:200] + "..."),
+                            output_text=params.get("output_text", result.content),
+                            metadata_parts=metadata,
+                            audit_id=audit_id,
+                            rendered_prompt=prompt,
+                        )
+
+                        try:
+                            import discord
+
+                            dream_channel = effective_bot.get_channel(
+                                effective_dream_channel_id
+                            )
+                            if isinstance(dream_channel, discord.TextChannel):
+                                dream_msg = await dream_channel.send(
+                                    embed=embed, view=view
                                 )
-                    except Exception:
-                        logger.exception("Failed to send AuditView to dream channel")
+                                if audit_id:
+                                    from lattice.memory import prompt_audits
+
+                                    await prompt_audits.update_audit_dream_message(
+                                        audit_id=audit_id,
+                                        dream_discord_message_id=dream_msg.id,
+                                    )
+                        except Exception:
+                            logger.exception(
+                                "Failed to send AuditView to dream channel (fallback)"
+                            )
 
             return AuditResult(
                 content=result.content,
