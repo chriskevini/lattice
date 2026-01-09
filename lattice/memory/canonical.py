@@ -9,8 +9,8 @@ Example:
 """
 
 import asyncio
-from datetime import UTC, datetime
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 
 import asyncpg
 import structlog
@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 
 _cache_lock = asyncio.Lock()
 _entities_cache: dict[str, tuple[set[str], str | None]] | None = None
-_predicates_cache: set[str] | None = None
+_predicates_cache: dict[str, str] | None = None
 _cache_timestamp: datetime | None = None
 
 CACHE_TTL_SECONDS = 300
@@ -63,7 +63,7 @@ async def _refresh_cache() -> None:
                     variants.add(canonical.lower())
                     entities[canonical] = (variants, row["category"])
 
-                predicates: set[str] = set()
+                predicates: dict[str, str] = {}
                 pred_rows = await conn.fetch(
                     "SELECT canonical_form, variants FROM canonical_predicates"
                 )
@@ -71,7 +71,12 @@ async def _refresh_cache() -> None:
                     canonical = row["canonical_form"]
                     variants = set(row["variants"])
                     variants.add(canonical)
-                    predicates.add(canonical)
+                    for variant in variants:
+                        predicates[variant.lower()] = canonical
+
+                _entities_cache = entities
+                _predicates_cache = predicates
+                _cache_timestamp = datetime.now(UTC)
 
                 _entities_cache = entities
                 _predicates_cache = predicates
@@ -195,9 +200,8 @@ async def get_canonical_predicate(variant: str) -> str:
         raise CanonicalRegistryError("Predicate cache not initialized")
 
     variant_lower = variant.lower()
-    for canonical in _predicates_cache:
-        if variant_lower == canonical.lower():
-            return canonical
+    if variant_lower in _predicates_cache:
+        return _predicates_cache[variant_lower]
 
     raise PredicateNotFoundError(f"Predicate variant not found: {variant}")
 
@@ -223,7 +227,7 @@ async def get_all_canonical_predicates() -> set[str]:
     await _ensure_cache_valid()
     if _predicates_cache is None:
         return set()
-    return _predicates_cache
+    return set(_predicates_cache.values())
 
 
 async def list_entities_by_category(category: str) -> list[str]:

@@ -275,7 +275,8 @@ VALUES
     ('Father', ARRAY['dad', 'dada', 'pa', 'papa'], 'family'),
     ('Spouse', ARRAY['wife', 'husband', 'partner', 'bf', 'gf', 'boyfriend', 'girlfriend'], 'family'),
     ('Child', ARRAY['son', 'daughter', 'kid', 'kids'], 'family'),
-    ('Sibling', ARRAY['brother', 'sister', 'sis', 'bro'], 'family');
+    ('Sibling', ARRAY['brother', 'sister', 'sis', 'bro'], 'family')
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Time units and references
 INSERT INTO canonical_entities (canonical_form, variants, category)
@@ -291,7 +292,8 @@ VALUES
     ('Tomorrow', ARRAY['tomorrow', 'tmr', 'tomrw'], 'relative_date'),
     ('Yesterday', ARRAY['yesterday', 'yesterday'], 'relative_date'),
     ('ThisWeek', ARRAY['this week', 'thisweek'], 'relative_date'),
-    ('NextWeek', ARRAY['next week', 'nextweek'], 'relative_date');
+    ('NextWeek', ARRAY['next week', 'nextweek'], 'relative_date')
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Common activities
 INSERT INTO canonical_entities (canonical_form, variants, category)
@@ -303,7 +305,8 @@ VALUES
     ('Meeting', ARRAY['meeting', 'mtg', 'sync', 'call'], 'activity'),
     ('Lunch', ARRAY['lunch', 'lunchtime'], 'meal'),
     ('Dinner', ARRAY['dinner', 'dinnertime'], 'meal'),
-    ('Breakfast', ARRAY['breakfast', 'breakfasttime'], 'meal');
+    ('Breakfast', ARRAY['breakfast', 'breakfasttime'], 'meal')
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Work-related
 INSERT INTO canonical_entities (canonical_form, variants, category)
@@ -311,7 +314,8 @@ VALUES
     ('Work', ARRAY['work', 'job', 'office', 'wfh'], 'work'),
     ('Home', ARRAY['home', 'house', 'apartment'], 'location'),
     ('Remote', ARRAY['remote', 'from home', 'working from home'], 'work_location'),
-    ('Office', ARRAY['office', 'in office', 'at work'], 'work_location');
+    ('Office', ARRAY['office', 'in office', 'at work'], 'work_location')
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Technology
 INSERT INTO canonical_entities (canonical_form, variants, category)
@@ -320,7 +324,8 @@ VALUES
     ('Database', ARRAY['database', 'db', 'postgres', 'postgresql'], 'technology'),
     ('API', ARRAY['api', 'apis', 'backend'], 'technology'),
     ('Frontend', ARRAY['frontend', 'ui', 'ux', 'front-end'], 'technology'),
-    ('Testing', ARRAY['testing', 'tests', 'qa', 'test suite'], 'activity');
+    ('Testing', ARRAY['testing', 'tests', 'qa', 'test suite'], 'activity')
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
 -- CANONICAL_PREDICATES: Initial seed data for predicate normalization
@@ -331,7 +336,8 @@ VALUES
     ('lives_in', ARRAY['lives in', 'lives at', 'resides in', 'resides at']),
     ('works_as', ARRAY['works as', 'works at', 'employed as', 'job title']),
     ('born_in', ARRAY['born in', 'born at']),
-    ('located_in', ARRAY['located in', 'located at']);
+    ('located_in', ARRAY['located in', 'located at'])
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Goal-related predicates
 INSERT INTO canonical_predicates (canonical_form, variants)
@@ -340,14 +346,16 @@ VALUES
     ('due_by', ARRAY['due by', 'deadline', 'by']),
     ('priority', ARRAY['priority', 'important']),
     ('status', ARRAY['status', 'current status']),
-    ('has_subgoal', ARRAY['has subgoal', 'subgoal', 'milestone']);
+    ('has_subgoal', ARRAY['has subgoal', 'subgoal', 'milestone'])
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Activity predicates
 INSERT INTO canonical_predicates (canonical_form, variants)
 VALUES
     ('performed_activity', ARRAY['performed activity', 'did', 'worked on', 'spent time on']),
     ('has_duration', ARRAY['has duration', 'for', 'duration']),
-    ('frequency', ARRAY['frequency', 'often', 'usually']);
+    ('frequency', ARRAY['frequency', 'often', 'usually'])
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Relationship predicates
 INSERT INTO canonical_predicates (canonical_form, variants)
@@ -355,7 +363,8 @@ VALUES
     ('knows', ARRAY['knows', 'know', 'met', 'knows about']),
     ('has_family_member', ARRAY['has family member', 'family member']),
     ('friend_with', ARRAY['friend with', 'friends with', 'friend']),
-    ('married_to', ARRAY['married to', 'married', 'spouse']);
+    ('married_to', ARRAY['married to', 'married', 'spouse'])
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Preference predicates
 INSERT INTO canonical_predicates (canonical_form, variants)
@@ -364,7 +373,8 @@ VALUES
     ('favorite', ARRAY['favorite', 'favourite', 'loves']),
     ('dislikes', ARRAY['dislikes', 'hates', "doesn't like"]),
     ('owns', ARRAY['owns', 'has', 'possesses']),
-    ('interested_in', ARRAY['interested in', 'interested']);
+    ('interested_in', ARRAY['interested in', 'interested'])
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- Project/work predicates
 INSERT INTO canonical_predicates (canonical_form, variants)
@@ -373,11 +383,13 @@ VALUES
     ('collaborates_with', ARRAY['collaborates with', 'works with', 'collab']),
     ('created_by', ARRAY['created by', 'made by', 'built by']),
     ('depends_on', ARRAY['depends on', 'requires', 'needs']),
-    ('has_component', ARRAY['has component', 'includes', 'has part']);
+    ('has_component', ARRAY['has component', 'includes', 'has part'])
+ON CONFLICT (canonical_form) DO NOTHING;
 
 -- State predicates
 INSERT INTO canonical_predicates (canonical_form, variants)
 VALUES
     ('has_status', ARRAY['has status', 'is', 'status is']),
     ('has_progress', ARRAY['has progress', 'progress', 'percentage']),
-    ('has_difficulty', ARRAY['has difficulty', 'struggling', 'hard', 'challenge']);
+    ('has_difficulty', ARRAY['has difficulty', 'struggling', 'hard', 'challenge'])
+ON CONFLICT (canonical_form) DO NOTHING;

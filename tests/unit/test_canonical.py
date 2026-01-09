@@ -16,18 +16,20 @@ class TestCacheManagement:
         self._original_entities = canonical_module._entities_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
+        self._original_ttl = canonical_module.CACHE_TTL_SECONDS
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
+        canonical_module.CACHE_TTL_SECONDS = self._original_ttl
 
     @pytest.mark.asyncio
     async def test_invalidate_cache_clears_state(self) -> None:
         """Test that invalidate_cache clears all cache state."""
         canonical_module._entities_cache = {"Test": ({"test"}, None)}
-        canonical_module._predicates_cache = {"test_pred"}
+        canonical_module._predicates_cache = {"test_pred": "test_pred"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         await canonical_module.invalidate_cache()
@@ -35,6 +37,20 @@ class TestCacheManagement:
         assert canonical_module._entities_cache is None
         assert canonical_module._predicates_cache is None
         assert canonical_module._cache_timestamp is None
+
+    @pytest.mark.asyncio
+    async def test_cache_refresh_on_stale_timestamp(self) -> None:
+        """Test that cache is refreshed when TTL expires."""
+        canonical_module._entities_cache = {}
+        canonical_module._predicates_cache = {}
+        canonical_module._cache_timestamp = datetime.now(UTC)
+
+        with patch.object(
+            canonical_module, "_refresh_cache", new_callable=AsyncMock
+        ) as mock_refresh:
+            canonical_module.CACHE_TTL_SECONDS = 0
+            await canonical_module._ensure_cache_valid()
+            mock_refresh.assert_called_once()
 
 
 class TestGetCanonicalEntity:
@@ -58,7 +74,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum", "mama", "ma", "mother"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_entity("mom")
@@ -73,7 +89,7 @@ class TestGetCanonicalEntity:
                 "family",
             ),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_entity("bf")
@@ -85,7 +101,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum", "mama", "ma", "mother"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_entity("MOM")
@@ -100,7 +116,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         with pytest.raises(canonical_module.EntityNotFoundError) as exc_info:
@@ -114,7 +130,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_entity(
@@ -131,7 +147,7 @@ class TestGetCanonicalEntity:
                 "activity",
             ),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         assert await canonical_module.get_canonical_entity("coding") == "Coding"
@@ -162,7 +178,7 @@ class TestGetCanonicalEntities:
             "Father": ({"dad"}, "family"),
             "Coding": ({"coding"}, "activity"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_entities(["mom", "dad", "coding"])
@@ -174,7 +190,7 @@ class TestGetCanonicalEntities:
         canonical_module._entities_cache = {
             "Mother": ({"mom"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_entities(
@@ -186,7 +202,7 @@ class TestGetCanonicalEntities:
     async def test_empty_input_returns_empty_list(self) -> None:
         """Test that empty input returns empty list."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_entities([])
@@ -215,7 +231,7 @@ class TestGetCanonicalEntityWithCategory:
             "Mother": ({"mom", "mum"}, "family"),
             "Coding": ({"coding"}, "activity"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         canonical, category = await canonical_module.get_canonical_entity_with_category(
@@ -230,7 +246,7 @@ class TestGetCanonicalEntityWithCategory:
         canonical_module._entities_cache = {
             "TestEntity": ({"test"}, None),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         canonical, category = await canonical_module.get_canonical_entity_with_category(
@@ -259,17 +275,43 @@ class TestGetCanonicalPredicate:
     async def test_lookup_lives_in(self) -> None:
         """Test looking up 'lives_in' returns 'lives_in'."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in"}
+        canonical_module._predicates_cache = {"lives_in": "lives_in"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_predicate("lives_in")
         assert result == "lives_in"
 
     @pytest.mark.asyncio
-    async def test_lookup_works_at(self) -> None:
-        """Test looking up 'works_as' returns 'works_as'."""
+    async def test_lookup_variant_lives_in(self) -> None:
+        """Test looking up 'lives in' (variant) returns 'lives_in' (canonical)."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"works_as"}
+        canonical_module._predicates_cache = {
+            "lives in": "lives_in",
+            "lives_in": "lives_in",
+        }
+        canonical_module._cache_timestamp = datetime.now(UTC)
+
+        result = await canonical_module.get_canonical_predicate("lives in")
+        assert result == "lives_in"
+
+    @pytest.mark.asyncio
+    async def test_lookup_variant_works_at(self) -> None:
+        """Test looking up 'works at' (variant) returns 'works_as' (canonical)."""
+        canonical_module._entities_cache = {}
+        canonical_module._predicates_cache = {
+            "works at": "works_as",
+            "works_as": "works_as",
+        }
+        canonical_module._cache_timestamp = datetime.now(UTC)
+
+        result = await canonical_module.get_canonical_predicate("works at")
+        assert result == "works_as"
+
+    @pytest.mark.asyncio
+    async def test_lookup_works_as(self) -> None:
+        """Test looking up 'works_as' (canonical) returns 'works_as'."""
+        canonical_module._entities_cache = {}
+        canonical_module._predicates_cache = {"works_as": "works_as"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_canonical_predicate("works_as")
@@ -279,10 +321,13 @@ class TestGetCanonicalPredicate:
     async def test_lookup_case_insensitive(self) -> None:
         """Test that predicate lookup is case-insensitive."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in"}
+        canonical_module._predicates_cache = {
+            "lives in": "lives_in",
+            "lives_in": "lives_in",
+        }
         canonical_module._cache_timestamp = datetime.now(UTC)
 
-        result = await canonical_module.get_canonical_predicate("LIVES_IN")
+        result = await canonical_module.get_canonical_predicate("LIVES IN")
         assert result == "lives_in"
 
         result = await canonical_module.get_canonical_predicate("Lives_In")
@@ -292,7 +337,7 @@ class TestGetCanonicalPredicate:
     async def test_lookup_unknown_predicate_raises_error(self) -> None:
         """Test that unknown predicate raises PredicateNotFoundError."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in"}
+        canonical_module._predicates_cache = {"lives_in": "lives_in"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         with pytest.raises(canonical_module.PredicateNotFoundError) as exc_info:
@@ -323,7 +368,7 @@ class TestGetAllCanonicalEntities:
             "Mother": ({"mom", "mum"}, "family"),
             "Father": ({"dad"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_all_canonical_entities()
@@ -336,7 +381,7 @@ class TestGetAllCanonicalEntities:
     async def test_returns_empty_when_cache_empty(self) -> None:
         """Test that empty cache returns empty dict."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_all_canonical_entities()
@@ -362,7 +407,11 @@ class TestGetAllCanonicalPredicates:
     async def test_returns_all_predicates(self) -> None:
         """Test that function returns all cached predicates."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in", "works_as", "has_goal"}
+        canonical_module._predicates_cache = {
+            "lives_in": "lives_in",
+            "works_as": "works_as",
+            "has_goal": "has_goal",
+        }
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_all_canonical_predicates()
@@ -376,7 +425,7 @@ class TestGetAllCanonicalPredicates:
     async def test_returns_empty_when_cache_empty(self) -> None:
         """Test that empty cache returns empty set."""
         canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.get_all_canonical_predicates()
@@ -406,7 +455,7 @@ class TestListEntitiesByCategory:
             "Father": ({"dad"}, "family"),
             "Coding": ({"coding"}, "activity"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.list_entities_by_category("family")
@@ -423,7 +472,7 @@ class TestListEntitiesByCategory:
             "Running": ({"running"}, "activity"),
             "Mother": ({"mom"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.list_entities_by_category("activity")
@@ -438,7 +487,7 @@ class TestListEntitiesByCategory:
         canonical_module._entities_cache = {
             "Mother": ({"mom"}, "family"),
         }
-        canonical_module._predicates_cache = set()
+        canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         result = await canonical_module.list_entities_by_category("nonexistent")
