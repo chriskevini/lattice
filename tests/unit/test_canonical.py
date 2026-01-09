@@ -14,6 +14,7 @@ class TestCacheManagement:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
         self._original_ttl = canonical_module.CACHE_TTL_SECONDS
@@ -21,6 +22,7 @@ class TestCacheManagement:
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
         canonical_module.CACHE_TTL_SECONDS = self._original_ttl
@@ -29,12 +31,14 @@ class TestCacheManagement:
     async def test_invalidate_cache_clears_state(self) -> None:
         """Test that invalidate_cache clears all cache state."""
         canonical_module._entities_cache = {"Test": ({"test"}, None)}
+        canonical_module._entity_variants_cache = {"test": "Test"}
         canonical_module._predicates_cache = {"test_pred": "test_pred"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
         await canonical_module.invalidate_cache()
 
         assert canonical_module._entities_cache is None
+        assert canonical_module._entity_variants_cache is None
         assert canonical_module._predicates_cache is None
         assert canonical_module._cache_timestamp is None
 
@@ -42,6 +46,7 @@ class TestCacheManagement:
     async def test_cache_refresh_on_stale_timestamp(self) -> None:
         """Test that cache is refreshed when TTL expires."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -59,12 +64,14 @@ class TestGetCanonicalEntity:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
 
@@ -74,6 +81,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum", "mama", "ma", "mother"}, "family"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother", "mother": "Mother"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -89,6 +97,7 @@ class TestGetCanonicalEntity:
                 "family",
             ),
         }
+        canonical_module._entity_variants_cache = {"bf": "Spouse", "wife": "Spouse"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -101,6 +110,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum", "mama", "ma", "mother"}, "family"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother", "mother": "Mother"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -116,6 +126,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum"}, "family"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -130,6 +141,7 @@ class TestGetCanonicalEntity:
         canonical_module._entities_cache = {
             "Mother": ({"mom", "mum"}, "family"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -147,6 +159,11 @@ class TestGetCanonicalEntity:
                 "activity",
             ),
         }
+        canonical_module._entity_variants_cache = {
+            "coding": "Coding",
+            "programming": "Coding",
+            "dev": "Coding",
+        }
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -161,12 +178,14 @@ class TestGetCanonicalEntities:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
 
@@ -177,6 +196,11 @@ class TestGetCanonicalEntities:
             "Mother": ({"mom"}, "family"),
             "Father": ({"dad"}, "family"),
             "Coding": ({"coding"}, "activity"),
+        }
+        canonical_module._entity_variants_cache = {
+            "mom": "Mother",
+            "dad": "Father",
+            "coding": "Coding",
         }
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
@@ -190,6 +214,7 @@ class TestGetCanonicalEntities:
         canonical_module._entities_cache = {
             "Mother": ({"mom"}, "family"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -202,6 +227,7 @@ class TestGetCanonicalEntities:
     async def test_empty_input_returns_empty_list(self) -> None:
         """Test that empty input returns empty list."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -215,12 +241,14 @@ class TestGetCanonicalEntityWithCategory:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
 
@@ -231,6 +259,7 @@ class TestGetCanonicalEntityWithCategory:
             "Mother": ({"mom", "mum"}, "family"),
             "Coding": ({"coding"}, "activity"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother", "coding": "Coding"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -246,6 +275,7 @@ class TestGetCanonicalEntityWithCategory:
         canonical_module._entities_cache = {
             "TestEntity": ({"test"}, None),
         }
+        canonical_module._entity_variants_cache = {"test": "TestEntity"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -262,12 +292,14 @@ class TestGetCanonicalPredicate:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
 
@@ -275,6 +307,7 @@ class TestGetCanonicalPredicate:
     async def test_lookup_lives_in(self) -> None:
         """Test looking up 'lives_in' returns 'lives_in'."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {"lives_in": "lives_in"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -285,6 +318,7 @@ class TestGetCanonicalPredicate:
     async def test_lookup_variant_lives_in(self) -> None:
         """Test looking up 'lives in' (variant) returns 'lives_in' (canonical)."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {
             "lives in": "lives_in",
             "lives_in": "lives_in",
@@ -298,6 +332,7 @@ class TestGetCanonicalPredicate:
     async def test_lookup_variant_works_at(self) -> None:
         """Test looking up 'works at' (variant) returns 'works_as' (canonical)."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {
             "works at": "works_as",
             "works_as": "works_as",
@@ -311,6 +346,7 @@ class TestGetCanonicalPredicate:
     async def test_lookup_works_as(self) -> None:
         """Test looking up 'works_as' (canonical) returns 'works_as'."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {"works_as": "works_as"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -321,6 +357,7 @@ class TestGetCanonicalPredicate:
     async def test_lookup_case_insensitive(self) -> None:
         """Test that predicate lookup is case-insensitive."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {
             "lives in": "lives_in",
             "lives_in": "lives_in",
@@ -337,6 +374,7 @@ class TestGetCanonicalPredicate:
     async def test_lookup_unknown_predicate_raises_error(self) -> None:
         """Test that unknown predicate raises PredicateNotFoundError."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {"lives_in": "lives_in"}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -352,12 +390,14 @@ class TestGetAllCanonicalEntities:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
 
@@ -368,6 +408,7 @@ class TestGetAllCanonicalEntities:
             "Mother": ({"mom", "mum"}, "family"),
             "Father": ({"dad"}, "family"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother", "dad": "Father"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -381,6 +422,7 @@ class TestGetAllCanonicalEntities:
     async def test_returns_empty_when_cache_empty(self) -> None:
         """Test that empty cache returns empty dict."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -394,12 +436,14 @@ class TestGetAllCanonicalPredicates:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
 
@@ -407,6 +451,7 @@ class TestGetAllCanonicalPredicates:
     async def test_returns_all_predicates(self) -> None:
         """Test that function returns all cached predicates."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {
             "lives_in": "lives_in",
             "works_as": "works_as",
@@ -425,6 +470,7 @@ class TestGetAllCanonicalPredicates:
     async def test_returns_empty_when_cache_empty(self) -> None:
         """Test that empty cache returns empty set."""
         canonical_module._entities_cache = {}
+        canonical_module._entity_variants_cache = {}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -438,12 +484,14 @@ class TestListEntitiesByCategory:
     def setup_method(self) -> None:
         """Save original cache state."""
         self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
         self._original_predicates = canonical_module._predicates_cache
         self._original_timestamp = canonical_module._cache_timestamp
 
     def teardown_method(self) -> None:
         """Restore original cache state."""
         canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
         canonical_module._predicates_cache = self._original_predicates
         canonical_module._cache_timestamp = self._original_timestamp
 
@@ -454,6 +502,11 @@ class TestListEntitiesByCategory:
             "Mother": ({"mom"}, "family"),
             "Father": ({"dad"}, "family"),
             "Coding": ({"coding"}, "activity"),
+        }
+        canonical_module._entity_variants_cache = {
+            "mom": "Mother",
+            "dad": "Father",
+            "coding": "Coding",
         }
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
@@ -472,6 +525,11 @@ class TestListEntitiesByCategory:
             "Running": ({"running"}, "activity"),
             "Mother": ({"mom"}, "family"),
         }
+        canonical_module._entity_variants_cache = {
+            "coding": "Coding",
+            "running": "Running",
+            "mom": "Mother",
+        }
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -487,6 +545,7 @@ class TestListEntitiesByCategory:
         canonical_module._entities_cache = {
             "Mother": ({"mom"}, "family"),
         }
+        canonical_module._entity_variants_cache = {"mom": "Mother"}
         canonical_module._predicates_cache = {}
         canonical_module._cache_timestamp = datetime.now(UTC)
 
@@ -496,6 +555,20 @@ class TestListEntitiesByCategory:
 
 class TestSeedCanonicalEntities:
     """Tests for seed_canonical_entities function."""
+
+    def setup_method(self) -> None:
+        """Save original cache state."""
+        self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
+        self._original_predicates = canonical_module._predicates_cache
+        self._original_timestamp = canonical_module._cache_timestamp
+
+    def teardown_method(self) -> None:
+        """Restore original cache state."""
+        canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
+        canonical_module._predicates_cache = self._original_predicates
+        canonical_module._cache_timestamp = self._original_timestamp
 
     @pytest.mark.asyncio
     async def test_seed_entities_calls_db(self) -> None:
@@ -550,6 +623,20 @@ class TestSeedCanonicalEntities:
 
 class TestSeedCanonicalPredicates:
     """Tests for seed_canonical_predicates function."""
+
+    def setup_method(self) -> None:
+        """Save original cache state."""
+        self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
+        self._original_predicates = canonical_module._predicates_cache
+        self._original_timestamp = canonical_module._cache_timestamp
+
+    def teardown_method(self) -> None:
+        """Restore original cache state."""
+        canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
+        canonical_module._predicates_cache = self._original_predicates
+        canonical_module._cache_timestamp = self._original_timestamp
 
     @pytest.mark.asyncio
     async def test_seed_predicates_calls_db(self) -> None:

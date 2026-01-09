@@ -22,6 +22,7 @@ logger = structlog.get_logger(__name__)
 
 _cache_lock = asyncio.Lock()
 _entities_cache: dict[str, tuple[set[str], str | None]] | None = None
+_entity_variants_cache: dict[str, str] | None = None
 _predicates_cache: dict[str, str] | None = None
 _cache_timestamp: datetime | None = None
 
@@ -48,12 +49,13 @@ class PredicateNotFoundError(CanonicalRegistryError):
 
 async def _refresh_cache() -> None:
     """Refresh the in-memory cache of canonical forms."""
-    global _entities_cache, _predicates_cache, _cache_timestamp
+    global _entities_cache, _entity_variants_cache, _predicates_cache, _cache_timestamp
 
     async with _cache_lock:
         try:
             async with db_pool.pool.acquire() as conn:
                 entities: dict[str, tuple[set[str], str | None]] = {}
+                entity_variants: dict[str, str] = {}
                 rows = await conn.fetch(
                     "SELECT canonical_form, variants, category FROM canonical_entities"
                 )
@@ -62,6 +64,8 @@ async def _refresh_cache() -> None:
                     variants = set(row["variants"])
                     variants.add(canonical.lower())
                     entities[canonical] = (variants, row["category"])
+                    for variant in variants:
+                        entity_variants[variant.lower()] = canonical
 
                 predicates: dict[str, str] = {}
                 pred_rows = await conn.fetch(
@@ -75,10 +79,7 @@ async def _refresh_cache() -> None:
                         predicates[variant.lower()] = canonical
 
                 _entities_cache = entities
-                _predicates_cache = predicates
-                _cache_timestamp = datetime.now(UTC)
-
-                _entities_cache = entities
+                _entity_variants_cache = entity_variants
                 _predicates_cache = predicates
                 _cache_timestamp = datetime.now(UTC)
 
@@ -98,6 +99,7 @@ async def _ensure_cache_valid() -> None:
     now = datetime.now(UTC)
     needs_refresh = (
         _entities_cache is None
+        or _entity_variants_cache is None
         or _predicates_cache is None
         or _cache_timestamp is None
         or (now - _cache_timestamp).total_seconds() > CACHE_TTL_SECONDS
@@ -124,13 +126,12 @@ async def get_canonical_entity(
     """
     await _ensure_cache_valid()
 
-    if _entities_cache is None:
+    if _entity_variants_cache is None:
         raise CanonicalRegistryError("Entity cache not initialized")
 
     variant_lower = variant.lower()
-    for canonical, (variants, _) in _entities_cache.items():
-        if variant_lower in variants:
-            return canonical
+    if variant_lower in _entity_variants_cache:
+        return _entity_variants_cache[variant_lower]
 
     if default_on_missing:
         return variant
@@ -171,13 +172,14 @@ async def get_canonical_entity_with_category(variant: str) -> tuple[str, str | N
     """
     await _ensure_cache_valid()
 
-    if _entities_cache is None:
+    if _entity_variants_cache is None or _entities_cache is None:
         raise CanonicalRegistryError("Entity cache not initialized")
 
     variant_lower = variant.lower()
-    for canonical, (variants, category) in _entities_cache.items():
-        if variant_lower in variants:
-            return canonical, category
+    if variant_lower in _entity_variants_cache:
+        canonical = _entity_variants_cache[variant_lower]
+        _, category = _entities_cache[canonical]
+        return canonical, category
 
     raise EntityNotFoundError(f"Entity variant not found: {variant}")
 
@@ -312,8 +314,9 @@ async def seed_canonical_predicates(
 
 async def invalidate_cache() -> None:
     """Invalidate the in-memory cache, forcing refresh on next access."""
-    global _entities_cache, _predicates_cache, _cache_timestamp
+    global _entities_cache, _entity_variants_cache, _predicates_cache, _cache_timestamp
     _entities_cache = None
+    _entity_variants_cache = None
     _predicates_cache = None
     _cache_timestamp = None
     logger.debug("Invalidated canonical registry cache")
