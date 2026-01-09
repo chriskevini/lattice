@@ -15,7 +15,7 @@ import structlog
 from lattice.memory.episodic import EpisodicMessage, get_recent_messages
 from lattice.memory.procedural import get_prompt
 from lattice.scheduler.adaptive import is_within_active_hours
-from lattice.utils.database import db_pool, get_system_health, set_system_health
+from lattice.utils.database import get_system_health, set_system_health
 from lattice.utils.llm import get_auditing_llm_client
 
 
