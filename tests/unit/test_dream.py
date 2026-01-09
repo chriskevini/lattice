@@ -107,15 +107,11 @@ class TestAuditViewBuilder:
                 "object": "extraction_system",
             },
         ]
-        objectives = [
-            {"description": "Ship v2", "saliency": 0.9, "status": "pending"},
-        ]
 
         embed, _ = AuditViewBuilder.build_extraction_audit(
             user_message="I'm planning to ship v2 by end of month.",
             main_message_url="https://discord.com/channels/123/456/789",
             triples=triples,
-            objectives=objectives,
             prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
             rendered_prompt="Extract memory from: I'm planning to ship v2...",
@@ -131,22 +127,19 @@ class TestAuditViewBuilder:
 
         assert embed.fields[1].name == "OUTPUT"
         assert "🔗 2 triples" in embed.fields[1].value
-        assert "🎯 1 objective" in embed.fields[1].value
         assert "lattice → has_deadline → end_of_month" in embed.fields[1].value
 
         assert embed.fields[2].name == "METADATA"
         assert "2 triples" in embed.fields[2].value
-        assert "1 objective" in embed.fields[2].value
 
     @pytest.mark.asyncio
     async def test_build_extraction_audit_empty(self) -> None:
-        """Test extraction audit with no triples or objectives."""
+        """Test extraction audit with no triples."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_extraction_audit(
             user_message="Hello!",
             main_message_url="https://discord.com/channels/123/456/789",
             triples=[],
-            objectives=[],
             prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
         )
@@ -220,7 +213,6 @@ class TestAuditViewBuilder:
             user_message="test",
             main_message_url="url",
             triples=[],
-            objectives=[],
             prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
         )
@@ -269,7 +261,6 @@ class TestAuditViewBuilder:
             user_message="test",
             main_message_url="url",
             triples=[],
-            objectives=[],
             prompt_key="BATCH_MEMORY_EXTRACTION",
             audit_id=audit_id,
         )

@@ -81,7 +81,7 @@ async def get_conversation_context(limit: int = 20) -> str:
 async def get_goal_context() -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
-    Fetches all has_goal predicates, then for each unique goal node,
+    Fetches all has goal predicates, then for each unique goal node,
     retrieves all predicates attached to that goal to display a tree hierarchy.
 
     Returns:
@@ -91,7 +91,7 @@ async def get_goal_context() -> str:
         goals = await conn.fetch(
             """
             SELECT DISTINCT object FROM semantic_triple
-            WHERE predicate = 'has_goal'
+            WHERE predicate = 'has goal'
             ORDER BY object
             """
         )

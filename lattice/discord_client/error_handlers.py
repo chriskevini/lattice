@@ -72,7 +72,6 @@ async def notify_parse_error_to_dream(
             user_message=f"[{parser_type.upper()}] Parse failed",
             main_message_url="",
             triples=[],
-            objectives=[],
             prompt_key=error.prompt_key or "UNKNOWN",
             audit_id=error.audit_result.audit_id,
             rendered_prompt=rendered_prompt,

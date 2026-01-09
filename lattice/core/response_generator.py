@@ -28,20 +28,6 @@ MAX_GRAPH_TRIPLES = 10
 
 MAX_GOALS_CONTEXT = 50
 
-PLANNING_KEYWORDS = {
-    "goal",
-    "goals",
-    "objective",
-    "objectives",
-    "deadline",
-    "due",
-    "milestone",
-    "my plan",
-    "my tasks",
-    "my priorities",
-    "what are my",
-}
-
 AVAILABLE_PLACEHOLDERS = {
     "episodic_context": "Recent conversation history with timestamps",
     "semantic_context": "Relevant facts and graph relationships",
@@ -101,7 +87,7 @@ async def fetch_goal_names() -> list[str]:
     """Fetch all goal names from the knowledge graph.
 
     Returns:
-        List of goal names (objects of has_goal predicates)
+        List of goal names (objects of has goal predicates)
     """
     from lattice.utils.database import db_pool
 
@@ -114,7 +100,7 @@ async def fetch_goal_names() -> list[str]:
             goals = await conn.fetch(
                 f"""
                 SELECT DISTINCT object FROM semantic_triple
-                WHERE predicate = 'has_goal'
+                WHERE predicate = 'has goal'
                 ORDER BY object
                 LIMIT {MAX_GOALS_CONTEXT}
                 """
@@ -175,66 +161,6 @@ async def get_goal_context(goal_names: list[str] | None = None) -> str:
                 lines.append(f"{pred_prefix}{pred_goal_prefix}{pred}: {obj}")
 
     return "\n".join(lines)
-
-
-def _has_planning_intent(message: str) -> bool:
-    """Check if message contains planning-related keywords.
-
-    Args:
-        message: The user's message
-
-    Returns:
-        True if message suggests user is asking about goals/plans
-    """
-    message_lower = message.lower()
-    return any(kw in message_lower for kw in PLANNING_KEYWORDS)
-
-
-def _has_entity_goal_overlap(entities: list[str], goal_names: list[str]) -> bool:
-    """Check if any extracted entities overlap with goal names.
-
-    Args:
-        entities: Extracted entities from the message
-        goal_names: Goal names from the knowledge graph
-
-    Returns:
-        True if there's meaningful overlap
-    """
-    if not entities or not goal_names:
-        return False
-
-    for entity in entities:
-        entity_lower = entity.lower()
-        for goal in goal_names:
-            goal_lower = goal.lower()
-            if entity_lower in goal_lower or goal_lower in entity_lower:
-                return True
-    return False
-
-
-async def get_relevant_goal_context(
-    entities: list[str], user_message: str
-) -> str | None:
-    """Get goal context if message is relevant to goals.
-
-    Args:
-        entities: Extracted entities from the message
-        user_message: The user's message
-
-    Returns:
-        Formatted goal context, or None if not relevant
-    """
-    goal_names = await fetch_goal_names()
-    if not goal_names:
-        return None
-
-    if _has_planning_intent(user_message):
-        return await get_goal_context(goal_names=goal_names)
-
-    if _has_entity_goal_overlap(entities, goal_names):
-        return await get_goal_context(goal_names=goal_names)
-
-    return None
 
 
 async def generate_response(

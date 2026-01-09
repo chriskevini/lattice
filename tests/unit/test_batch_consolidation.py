@@ -327,7 +327,7 @@ class TestRunBatchConsolidation:
                         "lattice.memory.batch_consolidation.parse_llm_json_response",
                         return_value=[
                             {
-                                "subject": "user",
+                                "subject": "User",
                                 "predicate": "lives_in",
                                 "object": "Vancouver",
                             }
@@ -369,7 +369,7 @@ class TestRunBatchConsolidation:
                                                     assert len(call_args[0][1]) == 1
                                                     assert (
                                                         call_args[0][1][0]["subject"]
-                                                        == "user"
+                                                        == "User"
                                                     )
                                                     assert (
                                                         call_args[0][1][0]["predicate"]
@@ -636,7 +636,7 @@ class TestRunBatchConsolidation:
             },
             {
                 "subject": "user",
-                "predicate": "has_goal",
+                "predicate": "has goal",
                 "object": "run a marathon",
                 "created_at": datetime.now(UTC),
             },
@@ -732,7 +732,7 @@ class TestRunBatchConsolidation:
                                                 "user --lives_in--> Richmond" in context
                                             )
                                             assert (
-                                                "user --has_goal--> run a marathon"
+                                                "user --has goal--> run a marathon"
                                                 in context
                                             )
 
