@@ -43,7 +43,7 @@ class TestTripleStorage:
         message_id = await episodic.store_message(message)
 
         # Store triple
-        triples = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
+        triples = [{"subject": "User", "predicate": "works_at", "object": "OpenAI"}]
         await episodic.store_semantic_triples(message_id, triples)
 
         # Verify triple was stored
@@ -89,7 +89,7 @@ class TestTripleStorage:
         batch_id = "test_batch_12346"
         triples = [
             {"subject": "user", "predicate": "works_at", "object": "OpenAI"},
-            {"subject": "user", "predicate": "likes", "object": "Python"},
+            {"subject": "User", "predicate": "likes", "object": "Python"},
         ]
         await episodic.store_semantic_triples(
             message_id, triples, source_batch_id=batch_id
@@ -125,7 +125,7 @@ class TestTripleStorage:
         # Mix of valid and invalid triples
         batch_id = "test_batch_12348"
         triples = [
-            {"subject": "user", "predicate": "works_at", "object": "OpenAI"},  # Valid
+            {"subject": "User", "predicate": "works_at", "object": "OpenAI"},  # Valid
             {
                 "subject": "",
                 "predicate": "likes",
