@@ -368,7 +368,8 @@ class TestRunBatchConsolidation:
                                                     call_args = mock_store.call_args
                                                     assert len(call_args[0][1]) == 1
                                                     assert (
-                                                        call_args[0][1][0]["subject"] == "User"
+                                                        call_args[0][1][0]["subject"]
+                                                        == "User"
                                                     )
                                                     assert (
                                                         call_args[0][1][0]["predicate"]
@@ -379,7 +380,9 @@ class TestRunBatchConsolidation:
                                                         == "Vancouver"
                                                     )
                                                     assert (
-                                                        call_args.kwargs["source_batch_id"]
+                                                        call_args.kwargs[
+                                                            "source_batch_id"
+                                                        ]
                                                         == "101"
                                                     )
 
