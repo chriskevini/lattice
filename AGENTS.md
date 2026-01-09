@@ -6,119 +6,126 @@
 - **Stack**: Python 3.12+, PostgreSQL 15+, py-cord 2.7+.
 - **Core Goal**: Total evolvability via metadata-driven logic.
 
----
+## 🏗️ Core Architecture
 
-## 🏗️ [Core Architecture](#core-architecture)
-### [Three-Tier Memory (ENGRAM)](#three-tier-memory-engram)
-1. **[Episodic](#episodic-memory)** (`raw_messages`): Immutable conversation log.
-2. **[Semantic](#semantic-memory)** (`entities` + `semantic_triples`): Graph-first knowledge with entity extraction (replacing vector embeddings).
-3. **[Procedural](#procedural-memory)** (`prompt_registry`): Evolving templates via the [Dreaming Cycle](#dreaming-cycle).
+### Three-Tier Memory (ENGRAM)
+1. **Episodic** (`raw_messages`): Immutable conversation log.
+2. **Semantic** (`semantic_triples` + `canonical registries`): Graph-first knowledge with entity extraction. Includes `entities` and `predicates` tables for canonical form normalization.
+3. **Procedural** (`prompt_registry`): Evolving templates via the Dreaming Cycle.
 
-### [Key Design Principles](#key-design-principles)
-- **Canonical Integrity**: No internal thoughts in public channels.
-- **Unified Pipeline**: Same flow for reactive and proactive inputs.
-- **Strict Channel Separation**:
-  - `DISCORD_MAIN_CHANNEL_ID`: Stored episodic memory.
-  - `DISCORD_DREAM_CHANNEL_ID`: Meta-discussion & approvals (never stored).
-
----
-
-## 📂 [Project Structure](#project-structure)
+## 📂 Project Structure
 - `lattice/core/`: Pipeline & ingestion logic.
-- `lattice/memory/`: [ENGRAM](#three-tier-memory-engram) implementations.
-- `lattice/discord_client/`: Bot interface & [Dream Channel](#strict-channel-separation) UI.
+- `lattice/memory/`: ENGRAM implementations.
+- `lattice/discord_client/`: Bot interface & UI.
 - `lattice/prompts/`: Templates & extraction strategies.
-- `tests/`: [Unit and Integration tests](#development-workflow).
+- `tests/`: Unit and integration tests.
 
----
+### Discord Channel Separation
+- **Main channels**: Normal user conversations (ingested into episodic/semantic memory).
+- **Dream Channel**: Meta-discussions about prompts, feedback, and Dreaming Cycle output. Messages here are processed separately and do not affect user memory.
 
-## 🛠️ [Development Workflow](#development-workflow)
+## 🛠️ Development Workflow
+
 ### Quick Start
 ```bash
-make install        # Install deps + hooks
-make test           # Run tests
-make check-all      # Lint, type-check, and test
+make install # Install deps + hooks
+make test # Run tests
+make check-all # Lint, type-check, and test
 ```
 
 ### Standards
 - **Strict Typing**: All functions must have type annotations.
 - **Documentation**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff (linting/formatting) and Mypy.
-- **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) required.
-- **Rendered Prompt Storage**: Always store the fully rendered prompt sent to LLM (not just ingredients). Enables auditability and Dreaming Cycle optimization.
-- **Testing**: Write tests for all new features. See [TESTING.md](docs/TESTING.md) for guidelines on mock completeness, type correctness, and common pitfalls.
+- **Commits**: Conventional Commits required.
+- **Auditable**: A unified `AuditingLLMClient` ensures all LLM generations are auditable and optimizable.
+- **Testing**: Write tests for all new features. See [TESTING.md](docs/TESTING.md) for guidelines.
 
----
+## ⚙️ Key Implementation Details
 
-## ⚙️ [Key Implementation Details](#key-implementation-details)
+### Pipeline Flow
+1. **Ingestion + Logging**: Store message in episodic memory.
+2. **Retrieval Planning**: Analysis of recent messages (10 including current) for entities, context flags, and unknown entities.
+3. **Context Retrieval**: Fetch context from `semantic_triples` (see Context Strategy).
+4. **Response Generation**: Using UNIFIED_RESPONSE template. May proactively clarify unknown entities.
+5. **Batch Memory Extraction**: Async extraction of entities, triples, and activities.
+6. **Canonicalization**: Deterministic storage of new entities/predicates in canonical registries.
 
-### [Pipeline Flow](#pipeline-flow)
-1. **Ingestion**: Message or proactive trigger.
-2. **Short-Circuit**: North Star or feedback detection.
-3. **Logging**: Episodic storage.
-4. **Query Extraction**: Simplified 2-field extraction (message type, entities).
-5. **Retrieval**: Entity-driven adaptive context (see [Context Strategy](#context-strategy)).
-6. **Generation**: `prompt_registry` template execution.
-7. **Consolidation**: Async extraction of entities, triples, and activities.
+**Notes**:
+- Dates are resolved and available via `{date_resolution_hints}`.
 
-### [Entity Extraction System](#entity-extraction-system)
-Extracts entity mentions from messages for graph traversal:
-- **Entities**: Array of named entities referenced in the message
-  - Used for entity-driven graph traversal (see [Context Strategy](#context-strategy))
-  - Example: `["lattice project", "Friday", "PostgreSQL"]`
+### Entity Extraction System
+Entity extraction occurs in two distinct pipeline steps:
 
-**Design Philosophy**:
-- Message intent (questions, goals, activities) is inferred naturally by the UNIFIED_RESPONSE template
-- Simpler extraction = more reliable, faster, easier to maintain
+- **Step 3: Retrieval Planning**  
+  Analyzes the smaller conversation window (10 messages including current).  
+  Outputs:  
+  • Regular entities (canonical or previously seen; used for graph traversal)  
+  • Context flags (e.g., `goal_context`, `activity_context`)  
+  • Unknown entities (new abbreviations or unclear references, e.g., "bf", "lkea") — passed to Response Generation for clarification.
 
-### [Context Strategy](#context-strategy)
-**Entity-Driven Adaptive Retrieval**:
+- **Step 6: Batch Memory Extraction**  
+  Performs deeper extraction on the larger window (20 messages including current) and canonicalizes new entities/predicates into the `entities` and `predicates` tables.
 
-Always retrieves **15 recent messages** (generous conversation history), but graph traversal is adaptive:
-- **No entities**: `triple_depth=0` (self-contained messages like greetings, simple activities)
-- **Has entities**: `triple_depth=2` (deep graph traversal for multi-hop relationships)
+### Context Strategy
+Adaptive retrieval based on entities and flags from Retrieval Planning:
 
-**Rationale**:
-- Conversation history is cheap and always useful
-- Graph traversal is expensive; only do it when entities provide starting points
-- Depth=2 finds multi-hop relationships (e.g., project → deadline → date)
+**Entity-Based Retrieval**:
+- No entities detected → no semantic context (response relies on episodic history)
+- Entities present → retrieve with triple_depth=2 (multi-hop relationships, e.g., User → Vancouver → Canada)
 
-### [Canonical Placeholders](#canonical-placeholders)
+**Context Flags** (from Retrieval Planning):
+
+| Flag | Trigger | Retrieval |
+|------|---------|-----------|
+| `goal_context` | User mentions goals, todos, deadlines | Fetch triples with `has goal` predicate |
+| `activity_context` | User asks "what did I do" | Fetch all triples with `did activity` predicate |
+
+Flags are passed to Response Generation which handles them appropriately.
+
+### Canonical Placeholders
 Use these placeholder names consistently across all prompts:
 
-| Placeholder | Contains | Example |
-|-------------|----------|---------|
-| `{episodic_context}` | Recent conversation history (~15 messages) | "User: What's the status?\nBot: All systems operational." |
-| `{semantic_context}` | Relevant facts from knowledge graph | "user has_goal: run a marathon | run a marathon due_by: 2026-10-01" |
-| `{bigger_episodic_context}` | Full batch of new messages for extraction (~18 messages) | "User: Hello\nBot: Hi there!" |
-| `{user_message}` | The user's current message | "How's the project going?" |
-| `{goal_context}` | Active goals from knowledge graph | "user has_goal: complete project | complete project due_by: 2026-01-15 | complete project priority: high" |
-| `{local_date}` | Current date with day of week for date-sensitive decisions | "2026/01/08, Thursday" |
-| `{local_time}` | Current time for time-sensitive proactive decisions | "14:30" |
-| `{date_resolution_hints}` | Resolved relative dates to ISO format | "Friday → 2026-01-10, tomorrow → 2026-01-09" |
-| `{scheduler_current_interval}` | Scheduler check interval (minutes between proactive checks) | 15 |
-| `{feedback_samples}` | Feedback samples for prompt optimization (user + response + feedback) | See PROMPT_OPTIMIZATION template |
-| `{metrics}` | Performance metrics string for prompt optimization | "95% success rate (15 positive, 5 negative, 80 neutral). 100 total uses." |
+| Placeholder                  | Contains                                                                 | Example                                                                 |
+|------------------------------|--------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| `{episodic_context}`         | 14 recent messages (current message NOT included)                        | "User: ...\nBot: ..."                |
+| `{semantic_context}`         | Relevant facts from knowledge graph                                      | "User lives in Vancouver"  |
+| `{bigger_episodic_context}`  | 20 messages for extraction (includes current)                            | Full batch of new messages for Batch Memory Extraction                   |
+| `{smaller_episodic_context}` | 10 messages including current for Retrieval Planning analysis            | Small batch of new messages for Retrieval Planning          |
+| `{user_message}`             | The user's current message                                               | "How's the project going?"                                              |
+| `{goal_context}`             | Active goals from knowledge graph                                        | "User has goal complete project\ncomplete project due by: 2026-01-15" |
+| `{local_date}`               | Current date with day of week                                            | "2026/01/08, Thursday"                                                  |
+| `{local_time}`               | Current time                                                             | "14:30"                                                                 |
+| `{date_resolution_hints}`    | Resolved relative dates to ISO format                                    | "Friday → 2026-01-10, tomorrow → 2026-01-09"                             |
+| `{scheduler_current_interval}` | Scheduler check interval (minutes)                                      | 15                                                                      |
+| `{feedback_samples}`         | Feedback samples for prompt optimization                                 | See PROMPT_OPTIMIZATION template                                        |
+| `{metrics}`                  | Performance metrics string                                               | "95% success rate (15 positive, 5 negative, 80 neutral)."               |
+| `{canonical_entities}`       | Direct list from canonical `entities` table                              | "Mother, Boyfriend, marathon, IKEA"                                     |
+| `{canonical_predicates}`     | Direct list from canonical `predicates` table                            | "likes, works at, did activity, has goal"                               |
+| `{unknown_entities}`         | Detected in Retrieval Planning; intended for clarification before canonicalization (e.g., "bf", "lkea") | "bf, lkea"                                                              |
 
-**Rules**:
-- New placeholders must be documented here
-- Use existing placeholders before creating new ones
-- Placeholders in templates are validated at `response_generator.py:validate_template_placeholders`
+**Placeholder Consistency Rules**:
+- Analysis tasks (Retrieval Planning, Batch Memory Extraction) include current message in context.
+- Response tasks separate current message as `{user_message}` for emphasis.
+- New placeholders must be documented here.
+- Use existing placeholders before creating new ones.
+- Placeholders are validated at `response_generator.py:validate_template_placeholders`.
 
-### [Memory Optimization](#memory-optimization)
-- **Streaming**: Use async generators for large message sets.
-- **Pooling**: Strict connection limits (`min_size=2, max_size=5`).
+## 🧠 Dreaming Cycle
+Autonomous prompt optimization using feedback and metrics.
 
----
+### Flow
+1. **Analyze** (`lattice/dreaming/analyzer.py`): Queries audits + feedback for templates with 10+ uses. Calculates priority score (negative_rate × usage).
+2. **Propose** (`lattice/dreaming/proposer.py`): LLM generates optimized templates from feedback samples. Validates placeholders.
+3. **Review**: Proposals stored in `dreaming_proposals` (status: pending). Human approves/rejects in Dream Channel.
+4. **Apply**: Approved proposals create new `prompt_registry` version (append-only).
 
-## 📚 [Resources](#resources)
-- **[README.md](README.md)**: Installation, [Database Schema](README.md#database-schema), and Config.
+### Scheduling
+- Daily at 3:00 AM UTC (configurable)
+- Manual trigger: `!dream` command
+- Controlled by: `dreaming_enabled`, `dreaming_min_uses` in `system_health`
+
+## 📚 Resources
+- **[README.md](README.md)**: Installation, Database Schema, and Config.
 - **[DEVELOPMENT.md](docs/DEVELOPMENT.md)**: Setup and troubleshooting.
 - **[TESTING.md](docs/TESTING.md)**: Testing guidelines and best practices.
-
----
-
-## 🎯 Philosophy
-1. **Logic as Data**: Prompts and archetypes live in the DB.
-2. **Respect Constraints**: 2GB RAM is a hard wall.
-3. **Document "Why"**: The "what" is in the code.
