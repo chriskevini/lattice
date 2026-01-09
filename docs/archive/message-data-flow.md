@@ -270,7 +270,7 @@ JOIN stable_facts sf_object ON tt.object_id = sf_object.id;
 "User prefers Python" ──[is_related_to]──> "AI/ML projects"
 "PyTorch learning" ──[is_part_of]──> "Deep learning journey"
 "Production ML systems" ──[goal_for]──> "Career development"
-"Sentiment analysis project" ──[uses]──> "Python + Transformers"
+"Sentiment analysis project" ──[uses]──> "Python + transformers"
 ```
 
 ---
