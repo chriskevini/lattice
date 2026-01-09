@@ -361,13 +361,13 @@ class TestFindByPredicate:
             return_value=[
                 {
                     "subject": "user",
-                    "predicate": "performed_activity",
+                    "predicate": "did activity",
                     "object": "coding",
                     "created_at": datetime.now(UTC),
                 },
                 {
                     "subject": "user",
-                    "predicate": "performed_activity",
+                    "predicate": "did activity",
                     "object": "running",
                     "created_at": datetime.now(UTC),
                 },
@@ -377,10 +377,9 @@ class TestFindByPredicate:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_by_predicate("performed_activity", limit=50)
-
+        result = await traverser.find_by_predicate("did activity", limit=50)
         assert len(result) == 2
-        assert result[0]["predicate"] == "performed_activity"
+        assert result[0]["predicate"] == "did activity"
         assert result[0]["subject"] == "user"
         assert result[0]["object"] == "coding"
 
@@ -395,7 +394,7 @@ class TestFindByPredicate:
             return_value=[
                 {
                     "subject": "user",
-                    "predicate": "performed_activity",
+                    "predicate": "did activity",
                     "object": "coding",
                     "created_at": datetime(2026, 1, 5, tzinfo=UTC),
                 },
@@ -406,7 +405,7 @@ class TestFindByPredicate:
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_by_predicate(
-            "performed_activity",
+            "did activity",
             start_date=start_date,
             end_date=end_date,
             limit=50,
@@ -438,7 +437,7 @@ class TestFindByPredicate:
         triples = [
             {
                 "subject": "user",
-                "predicate": "performed_activity",
+                "predicate": "did activity",
                 "object": f"activity_{i}",
                 "created_at": datetime.now(UTC),
             }
@@ -449,7 +448,7 @@ class TestFindByPredicate:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_by_predicate("performed_activity", limit=5)
+        result = await traverser.find_by_predicate("did activity", limit=5)
 
         assert len(result) == 5
 
@@ -463,11 +462,20 @@ class TestFindByPredicate:
             return_value=[
                 {
                     "subject": "user",
-                    "predicate": "performed_activity",
+                    "predicate": "did activity",
                     "object": "coding",
                     "created_at": datetime(2026, 1, 10, tzinfo=UTC),
                 },
             ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_by_predicate(
+            "did activity",
+            start_date=start_date,
+            limit=50,
         )
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
@@ -491,7 +499,7 @@ class TestFindByPredicate:
             return_value=[
                 {
                     "subject": "user",
-                    "predicate": "performed_activity",
+                    "predicate": "did activity",
                     "object": "coding",
                     "created_at": datetime(2026, 1, 5, tzinfo=UTC),
                 },
@@ -502,7 +510,7 @@ class TestFindByPredicate:
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_by_predicate(
-            "performed_activity",
+            "did activity",
             end_date=end_date,
             limit=50,
         )

@@ -167,11 +167,11 @@ class GraphTraversal:
     ) -> list[dict[str, Any]]:
         """Find all triples with a specific predicate within a date range.
 
-        Enables predicate-based queries like finding all "performed_activity" triples
+        Enables predicate-based queries like finding all "did activity" triples
         for activity tracking queries.
 
         Args:
-            predicate: The predicate to search for (e.g., "performed_activity")
+            predicate: The predicate to search for (e.g., "did activity")
             start_date: Optional start of date range filter
             end_date: Optional end of date range filter
             limit: Maximum number of results (default 50)

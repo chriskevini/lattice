@@ -1197,7 +1197,7 @@ class TestLatticeBot:
                 )
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={
-                        "semantic_context": "User did activity coding\ncoding has duration 3 hours",
+                        "semantic_context": "User did activity coding\ncoding lasted for 180 minutes",
                         "goal_context": "",
                     }
                 )
