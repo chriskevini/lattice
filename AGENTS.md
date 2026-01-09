@@ -10,7 +10,7 @@
 
 ### Three-Tier Memory (ENGRAM)
 1. **Episodic** (`raw_messages`): Immutable conversation log.
-2. **Semantic** (`semantic_triples` + `canonical registries`): Graph-first knowledge with entity extraction. Includes `entities` and `predicates` tables for canonical form normalization.
+2. **Semantic** (`semantic_memories` + `canonical registries`): Graph-first knowledge with entity resolution. Includes `entities` and `predicates` tables for canonical form normalization.
 3. **Procedural** (`prompt_registry`): Evolving templates via the Dreaming Cycle.
 
 ## 📂 Project Structure
@@ -45,10 +45,10 @@ make check-all # Lint, type-check, and test
 
 ### Pipeline Flow
 1. **Ingestion + Logging**: Store message in episodic memory.
-2. **Retrieval Planning**: Analysis of recent messages (10 including current) for entities, context flags, and unknown entities.
-3. **Context Retrieval**: Fetch context from `semantic_triples` (see Context Strategy).
-4. **Response Generation**: Using UNIFIED_RESPONSE template. May proactively clarify unknown entities.
-5. **Batch Memory Extraction**: Async extraction of entities, triples, and activities.
+2. **Context Strategy**: Analysis of recent messages (10 including current) for entities, context flags, and unresolved entities.
+3. **Context Retrieval**: Fetch context from `semantic_memories` (see Context Strategy).
+4. **Response Generation**: Using UNIFIED_RESPONSE template. May proactively clarify unresolved entities.
+5. **Memory Consolidation**: Async extraction of entities, memories, and activities.
 6. **Canonicalization**: Deterministic storage of new entities/predicates in canonical registries.
 
 **Notes**:
@@ -57,29 +57,29 @@ make check-all # Lint, type-check, and test
 ### Entity Extraction System
 Entity extraction occurs in two distinct pipeline steps:
 
-- **Step 3: Retrieval Planning**  
+- **Step 3: Context Strategy**  
   Analyzes the smaller conversation window (10 messages including current).  
   Outputs:  
   • Regular entities (canonical or previously seen; used for graph traversal)  
   • Context flags (e.g., `goal_context`, `activity_context`)  
-  • Unknown entities (new abbreviations or unclear references, e.g., "bf", "lkea") — passed to Response Generation for clarification.
+  • Unresolved entities (new abbreviations or unclear references, e.g., "bf", "lkea") — passed to Response Generation for clarification.
 
-- **Step 6: Batch Memory Extraction**  
+- **Step 6: Memory Consolidation**  
   Performs deeper extraction on the larger window (20 messages including current) and canonicalizes new entities/predicates into the `entities` and `predicates` tables.
 
 ### Context Strategy
-Adaptive retrieval based on entities and flags from Retrieval Planning:
+Adaptive retrieval based on entities and flags from Context Strategy:
 
 **Entity-Based Retrieval**:
 - No entities detected → no semantic context (response relies on episodic history)
-- Entities present → retrieve with triple_depth=2 (multi-hop relationships, e.g., User → Vancouver → Canada)
+- Entities present → retrieve with memory_depth=2 (multi-hop relationships, e.g., User → Vancouver → Canada)
 
-**Context Flags** (from Retrieval Planning):
+**Context Flags** (from Context Strategy):
 
 | Flag | Trigger | Retrieval |
 |------|---------|-----------|
-| `goal_context` | User mentions goals, todos, deadlines | Fetch triples with `has goal` predicate |
-| `activity_context` | User asks "what did I do" | Fetch all triples with `did activity` predicate |
+| `goal_context` | User mentions goals, todos, deadlines | Fetch memories with `has goal` predicate |
+| `activity_context` | User asks "what did I do" | Fetch all memories with `did activity` predicate |
 
 Flags are passed to Response Generation which handles them appropriately.
 
@@ -105,7 +105,7 @@ Use these placeholder names consistently across all prompts:
 | `{unknown_entities}`         | Detected in Retrieval Planning; intended for clarification before canonicalization (e.g., "bf", "lkea") | "bf, lkea"                                                              |
 
 **Placeholder Consistency Rules**:
-- Analysis tasks (Retrieval Planning, Batch Memory Extraction) include current message in context.
+- Analysis tasks (Context Strategy, Memory Consolidation) include current message in context.
 - Response tasks separate current message as `{user_message}` for emphasis.
 - New placeholders must be documented here.
 - Use existing placeholders before creating new ones.

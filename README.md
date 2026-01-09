@@ -25,11 +25,11 @@ Lattice operates on the principle that **logic is data**. By moving prompts and 
 
 ### Memory Tiers
 1.  **Episodic ([`raw_messages`](#1-episodic-memory-raw_messages))**: Immutable, time-ordered interaction log.
-2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_triples`](#3-semantic-relationships-semantic_triples))**: Graph-based knowledge using entity extraction.
+2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_memories`](#3-semantic-relationships-semantic_memories))**: Graph-based knowledge using entity resolution.
 3.  **Procedural ([`prompt_registry`](#4-procedural-memory-prompt_registry))**: Versioned templates and behavioral strategies.
 
 ### Unified Pipeline
-`Ingestion → Short-Circuit → Query Extraction → Graph Retrieval → Generation → Consolidation`
+`Ingestion → Short-Circuit → Context Strategy → Semantic Retrieval → Generation → Memory Consolidation`
 
 For a deep dive into the technical implementation, see **[AGENTS.md](AGENTS.md)**.
 
@@ -58,7 +58,7 @@ make run            # Start the orchestrator
 Lattice enforces strict bounds to stay within 2GB RAM:
 ```env
 MAX_EPISODIC_CONTEXT_TURNS=20
-MAX_TRIPLE_DEPTH=3
+MAX_MEMORY_DEPTH=3
 ```
 
 ### Discord Channels
@@ -77,7 +77,7 @@ See [scripts/schema.sql](scripts/schema.sql) for the canonical schema.
 | `raw_messages` | Stored Discord messages |
 | `message_extractions` | Query extraction output |
 | `entities` | Entity registry |
-| `semantic_triples` | Graph relationships |
+| `semantic_memories` | Graph relationships |
 | `objectives` | User goals |
 | `prompt_registry` | Prompt templates |
 | `prompt_audits` | LLM call tracking |
