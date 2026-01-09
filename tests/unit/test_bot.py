@@ -1205,7 +1205,7 @@ class TestLatticeBot:
                 mock_memory.retrieve_context = AsyncMock(return_value=([], []))
 
                 mock_response_obj = MagicMock()
-                mock_response_obj.content = "Last week you spent 3 hours coding."
+                mock_response_obj.content = "Last week you spent 180 minutes coding."
                 mock_response_obj.model = "gpt-4"
                 mock_response_obj.provider = "openai"
                 mock_response_obj.temperature = 0.7
@@ -1224,13 +1224,13 @@ class TestLatticeBot:
                     )
                 )
                 mock_response.split_response = MagicMock(
-                    return_value=["Last week you spent 3 hours coding."]
+                    return_value=["Last week you spent 180 minutes coding."]
                 )
 
                 mock_bot_message = MagicMock(spec=discord.Message)
                 mock_bot_message.id = 999
                 mock_bot_message.channel.id = 123
-                mock_bot_message.content = "Last week you spent 3 hours coding."
+                mock_bot_message.content = "Last week you spent 180 minutes coding."
 
                 mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
                 mock_prompt_audits.store_prompt_audit = AsyncMock(return_value=uuid4())

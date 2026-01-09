@@ -158,92 +158,27 @@ class GraphTraversal:
 
         return all_triples
 
-    async def find_by_predicate(
-        self,
-        predicate: str,
-        start_date: datetime | None = None,
-        end_date: datetime | None = None,
-        limit: int = 50,
-    ) -> list[dict[str, Any]]:
-        """Find all triples with a specific predicate within a date range.
-
-        Enables predicate-based queries like finding all "did activity" triples
-        for activity tracking queries.
-
-        Args:
-            predicate: The predicate to search for (e.g., "did activity")
-            start_date: Optional start of date range filter
-            end_date: Optional end of date range filter
-            limit: Maximum number of results (default 50)
-
-        Returns:
-            List of triples with keys: subject, predicate, object, created_at
-        """
-        logger.info(
-            "Finding triples by predicate",
-            predicate=predicate,
-            start_date=start_date,
-            end_date=end_date,
-            limit=limit,
-        )
-        try:
-            async with self.db_pool.acquire() as conn:
-                query = """
-                    SELECT
-                        subject,
-                        predicate,
-                        object,
-                        created_at
-                    FROM semantic_triple
-                    WHERE predicate = $1
-                """
-                params: list[Any] = [predicate]
-
-                if start_date is not None:
-                    query += " AND created_at >= $" + str(len(params) + 1)
-                    params.append(start_date)
-
-                if end_date is not None:
-                    query += " AND created_at <= $" + str(len(params) + 1)
-                    params.append(end_date)
-
-                query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
-                params.append(limit)
-
-                rows = await conn.fetch(query, *params)
-                results = [dict(row) for row in rows]
-
-                logger.info(
-                    "Predicate query completed",
-                    predicate=predicate,
-                    result_count=len(results),
-                )
-                return results
-        except Exception as e:
-            logger.error(
-                "Predicate query failed",
-                predicate=predicate,
-                error=str(e),
-            )
-            return []
-
     async def find_triples(
         self,
         subject: str | None = None,
         predicate: str | None = None,
         object: str | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        """Find triples matching any combination of subject, predicate, and object.
+        """Find triples matching any combination of criteria.
 
         Provides flexible querying for semantic triples. Any combination of
-        subject, predicate, and object can be specified - omitted fields are
-        not filtered.
+        subject, predicate, object, and date range can be specified - omitted
+        fields are not filtered.
 
         Args:
             subject: Optional subject to filter by (exact match)
             predicate: Optional predicate to filter by (exact match)
             object: Optional object to filter by (exact match)
+            start_date: Optional start of date range filter
+            end_date: Optional end of date range filter
             limit: Maximum number of results (default 50)
 
         Returns:
@@ -253,8 +188,12 @@ class GraphTraversal:
             # Find all activities
             await find_triples(predicate="did activity")
 
-            # Find User's activities
-            await find_triples(subject="User", predicate="did activity")
+            # Find User's activities from last week
+            await find_triples(
+                subject="User",
+                predicate="did activity",
+                start_date=datetime.now(UTC) - timedelta(days=7)
+            )
 
             # Find all triples about a specific object
             await find_triples(object="ran 5k")
@@ -264,6 +203,8 @@ class GraphTraversal:
             subject=subject,
             predicate=predicate,
             object=object,
+            start_date=start_date,
+            end_date=end_date,
             limit=limit,
         )
         try:
@@ -290,6 +231,14 @@ class GraphTraversal:
                 if object is not None:
                     query += " AND object = $" + str(len(params) + 1)
                     params.append(object)
+
+                if start_date is not None:
+                    query += " AND created_at >= $" + str(len(params) + 1)
+                    params.append(start_date)
+
+                if end_date is not None:
+                    query += " AND created_at <= $" + str(len(params) + 1)
+                    params.append(end_date)
 
                 query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
                 params.append(limit)
