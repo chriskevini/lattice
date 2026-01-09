@@ -247,6 +247,13 @@ async def run_batch_consolidation() -> None:
     )
 
     if triples:
+        triples.sort(
+            key=lambda t: (
+                t.get("subject", ""),
+                t.get("predicate", ""),
+                t.get("object", ""),
+            )
+        )
         known_entities = await get_canonical_entities_set()
         known_predicates = await get_canonical_predicates_set()
 

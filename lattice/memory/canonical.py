@@ -196,7 +196,7 @@ def extract_canonical_forms(
     triples: list[dict[str, str]],
     known_entities: set[str],
     known_predicates: set[str],
-) -> tuple[set[str], set[str]]:
+) -> tuple[list[str], list[str]]:
     """Extract new canonical entities and predicates from triples.
 
     This is deterministic logic (no LLM involved).
@@ -207,7 +207,7 @@ def extract_canonical_forms(
         known_predicates: Set of already-known predicate names
 
     Returns:
-        Tuple of (new_entities, new_predicates) sets
+        Tuple of (new_entities, new_predicates) lists, sorted alphabetically
     """
     new_entities: set[str] = set()
     new_predicates: set[str] = set()
@@ -226,23 +226,23 @@ def extract_canonical_forms(
         if _is_entity_like(obj) and obj not in known_entities:
             new_entities.add(obj)
 
-    return new_entities, new_predicates
+    return sorted(new_entities), sorted(new_predicates)
 
 
 async def store_canonical_forms(
-    new_entities: set[str], new_predicates: set[str]
+    new_entities: list[str], new_predicates: list[str]
 ) -> dict[str, int]:
     """Store new canonical entities and predicates in database.
 
     Args:
-        new_entities: Set of new entity names to store
-        new_predicates: Set of new predicate names to store
+        new_entities: Sorted list of new entity names to store
+        new_predicates: Sorted list of new predicate names to store
 
     Returns:
         Dictionary with 'entities' and 'predicates' counts of items stored
     """
-    entity_count = await store_canonical_entities(list(new_entities))
-    predicate_count = await store_canonical_predicates(list(new_predicates))
+    entity_count = await store_canonical_entities(new_entities)
+    predicate_count = await store_canonical_predicates(new_predicates)
 
     if new_entities or new_predicates:
         logger.info(

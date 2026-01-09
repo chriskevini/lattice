@@ -399,8 +399,8 @@ class TestExtractCanonicalForms:
             triples, known_entities, known_predicates
         )
 
-        assert new_entities == set()
-        assert new_predicates == set()
+        assert new_entities == []
+        assert new_predicates == []
 
     def test_handles_empty_triples(self) -> None:
         """Test empty triples list."""
@@ -408,8 +408,8 @@ class TestExtractCanonicalForms:
             [], set(), set()
         )
 
-        assert new_entities == set()
-        assert new_predicates == set()
+        assert new_entities == []
+        assert new_predicates == []
 
 
 class TestStoreCanonicalForms:
@@ -424,7 +424,7 @@ class TestStoreCanonicalForms:
 
         with patch.object(canonical_module, "db_pool", mock_pool):
             result = await canonical_module.store_canonical_forms(
-                {"new entity"}, {"new predicate"}
+                ["new entity"], ["new predicate"]
             )
 
             assert result["entities"] == 1
@@ -432,13 +432,13 @@ class TestStoreCanonicalForms:
 
     @pytest.mark.asyncio
     async def test_returns_zero_counts_for_empty(self) -> None:
-        """Test that empty sets return zero counts."""
+        """Test that empty lists return zero counts."""
         mock_conn = AsyncMock()
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
         with patch.object(canonical_module, "db_pool", mock_pool):
-            result = await canonical_module.store_canonical_forms(set(), set())
+            result = await canonical_module.store_canonical_forms([], [])
 
             assert result["entities"] == 0
             assert result["predicates"] == 0
