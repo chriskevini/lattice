@@ -252,6 +252,7 @@ Extract durable facts as semantic triples. Use canonical forms where possible. C
 - Proper nouns and people are capitalized (Mother, IKEA, etc.)
 - Predicates are space-separated common English phrases
 - Activities: "did activity", "lasted for", "at location"
+- Always convert activity durations to minutes (e.g., "3 hours" → "180 minutes")
 - Goals: "has goal", "due by", "has priority", "has status"
 - General facts: "likes", "lives in", "works at", etc.
 - Use clarifications from conversation
@@ -302,7 +303,7 @@ User: My bf and I hung out at IKEA
 **Output:**
 {"triples": [
   {"subject": "User", "predicate": "did activity", "object": "coding"},
-  {"subject": "coding", "predicate": "lasted for", "object": "3 hours"},
+  {"subject": "coding", "predicate": "lasted for", "object": "180 minutes"},
   {"subject": "User", "predicate": "did activity", "object": "hanging out with boyfriend"},
   {"subject": "hanging out with boyfriend", "predicate": "at location", "object": "IKEA"}
 ]}
