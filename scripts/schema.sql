@@ -83,23 +83,6 @@ CREATE INDEX IF NOT EXISTS idx_semantic_triple_created_at ON semantic_triple(cre
 CREATE INDEX IF NOT EXISTS idx_semantic_triple_source_batch ON semantic_triple(source_batch_id);
 
 -- ----------------------------------------------------------------------------
--- objectives: DEPRECATED - User goals and commitments
--- Note: This table is fully deprecated. Goal tracking is now
--- exclusively done via semantic_triple with predicates like has_goal, due_by,
--- priority, and status. This table should be removed in a future migration.
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS objectives (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    description TEXT NOT NULL,
-    saliency_score FLOAT DEFAULT 0.5,
-    status TEXT CHECK (status IN ('pending', 'completed', 'archived')) DEFAULT 'pending',
-    origin_id UUID REFERENCES raw_messages(id),
-    last_updated TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_objectives_description ON objectives(LOWER(description));
-CREATE INDEX IF NOT EXISTS idx_objectives_status ON objectives(status);
-
--- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prompt_audits (
@@ -193,3 +176,27 @@ INSERT INTO system_health (metric_key, metric_value) VALUES
     ('active_hours_last_updated', NOW()::TEXT),
     ('last_batch_message_id', '0')
 ON CONFLICT (metric_key) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- entities: Canonical entity names for LLM-based entity normalization
+-- ----------------------------------------------------------------------------
+-- Stores canonical entity names for conversational context tracking.
+-- No UUID primary key - name is the canonical identifier.
+-- Example: "bf" → "boyfriend", "mom" → "Mother"
+CREATE TABLE IF NOT EXISTS entities (
+    name TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_entities_created_at ON entities(created_at DESC);
+
+-- ----------------------------------------------------------------------------
+-- predicates: Canonical predicate names for LLM-based predicate normalization
+-- ----------------------------------------------------------------------------
+-- Stores canonical predicate names for knowledge graph consistency.
+-- Predicates use space-separated natural English phrases.
+-- Example: "loves" → "likes", "works at" → "work at"
+CREATE TABLE IF NOT EXISTS predicates (
+    name TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_predicates_created_at ON predicates(created_at DESC);
