@@ -610,9 +610,10 @@ async def retrieve_context(
         triple_depth: Graph traversal depth (default 2 for multi-hop relationships)
 
     Returns:
-        Dictionary with context strings:
+        Dictionary with context strings and metadata:
         - semantic_context: Formatted graph triples (empty if no entities)
         - goal_context: Formatted goals and predicates (empty if no goal_context flag)
+        - triple_origins: Set of message UUIDs that these triples originated from
 
     Example:
         >>> planning = await retrieval_planning(...)
@@ -625,9 +626,10 @@ async def retrieve_context(
     from lattice.memory.graph import GraphTraversal
     from lattice.utils.database import db_pool
 
-    context: dict[str, str] = {
+    context: dict[str, Any] = {
         "semantic_context": "",
         "goal_context": "",
+        "triple_origins": set(),
     }
 
     graph_triples: list[dict[str, Any]] = []
@@ -698,6 +700,8 @@ async def retrieve_context(
                         if triple_key not in seen_triple_ids and all(triple_key):
                             graph_triples.append(triple)
                             seen_triple_ids.add(triple_key)
+                            if origin_id := triple.get("origin_id"):
+                                context["triple_origins"].add(origin_id)
 
                 logger.debug(
                     "Graph traversal completed",

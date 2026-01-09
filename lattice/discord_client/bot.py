@@ -335,6 +335,7 @@ class LatticeBot(commands.Bot):
                 triple_depth=2 if entities else 0,
             )
             semantic_context = context_result.get("semantic_context", "")
+            triple_origins = context_result.get("triple_origins", set())
 
             # Retrieve episodic context for response generation
             (
@@ -371,9 +372,16 @@ class LatticeBot(commands.Bot):
 
             # Split response for Discord length limits
             response_content = response_result.content
-            # Source links injection logic remains here if needed, but semantic_context is now just a string
-            # For Phase 4 we might want to keep triple origin IDs, but generate_response is pure string-to-string.
-            # We'll skip source link injection for now to keep the orchestrator clean, or refactor it later.
+
+            # Inject source links for transparent attribution
+            from lattice.utils.source_links import build_source_map, inject_source_links
+
+            source_map = build_source_map(recent_messages)
+            response_content = inject_source_links(
+                response=response_content,
+                source_map=source_map,
+                triple_origins=triple_origins,
+            )
 
             response_messages = response_generator.split_response(response_content)
             bot_messages: list[discord.Message] = []

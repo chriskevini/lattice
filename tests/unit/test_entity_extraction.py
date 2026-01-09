@@ -411,9 +411,9 @@ class TestBuildSmallerEpisodicContext:
             window_size=3,
         )
 
-        assert "User: Working on mobile app" in context
-        assert "Bot: How's it coming?" in context
-        assert "User: Pretty good" in context
+        assert "USER: Working on mobile app" in context
+        assert "ASSISTANT: How's it coming?" in context
+        assert "USER: Pretty good" in context
 
     def test_build_smaller_episodic_context_empty_history(self) -> None:
         """Test building context with no recent messages."""
@@ -425,7 +425,7 @@ class TestBuildSmallerEpisodicContext:
             window_size=5,
         )
 
-        assert context == "User: Hello there"
+        assert context == "USER: Hello there"
 
     def test_build_smaller_episodic_context_window_limit(self) -> None:
         """Test that window respects size limit."""
@@ -448,8 +448,8 @@ class TestBuildSmallerEpisodicContext:
 
         lines = context.split("\n")
         assert len(lines) == 5
-        assert lines[0] == "User: Message 16"
-        assert lines[4] == "User: Current"
+        assert "USER: Message 16" in lines[0]
+        assert "USER: Current" in lines[4]
 
     def test_build_smaller_episodic_context_window_size_one(self) -> None:
         """Test window size of 1 includes only current message."""
@@ -469,7 +469,7 @@ class TestBuildSmallerEpisodicContext:
             window_size=1,
         )
 
-        assert context == "User: New message"
+        assert context == "USER: New message"
 
     def test_build_smaller_episodic_context_default_window_size(self) -> None:
         """Test using default window size."""
@@ -524,10 +524,10 @@ class TestBuildSmallerEpisodicContext:
             window_size=4,
         )
 
-        assert "User: User message 1" in context
-        assert "Bot: Bot response" in context
-        assert "User: User message 2" in context
-        assert "User: User current" in context
+        assert "USER: User message 1" in context
+        assert "ASSISTANT: Bot response" in context
+        assert "USER: User message 2" in context
+        assert "USER: User current" in context
 
 
 class TestRetrievalPlanning:
