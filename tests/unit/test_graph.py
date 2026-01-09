@@ -99,17 +99,16 @@ class TestGraphTraversal:
     """Tests for GraphTraversal class with text-based triples."""
 
     @pytest.mark.asyncio
-    async def test_find_entity_relationships(self) -> None:
-        """Test finding all relationships involving an entity."""
-        # Create mock pool and connection
+    async def test_find_triples_by_predicate(self) -> None:
+        """Test finding triples by predicate only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
-                    "predicate": "works_at",
-                    "object": "Company X",
+                    "predicate": "did activity",
+                    "object": "coding",
                     "created_at": datetime.now(UTC),
                 }
             ]
@@ -117,18 +116,41 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        # Create traverser with mock pool
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_entity_relationships("Company X", limit=10)
+        result = await traverser.find_triples(predicate="did activity")
 
         assert len(result) == 1
-        assert result[0]["subject"] == "user"
-        assert result[0]["predicate"] == "works_at"
-        assert result[0]["object"] == "Company X"
+        assert result[0]["predicate"] == "did activity"
+        assert result[0]["object"] == "coding"
 
     @pytest.mark.asyncio
-    async def test_find_entity_relationships_case_insensitive(self) -> None:
-        """Test that entity search is case-insensitive."""
+    async def test_find_triples_by_subject_and_predicate(self) -> None:
+        """Test finding triples by subject and predicate."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "User",
+                    "predicate": "did activity",
+                    "object": "running",
+                    "created_at": datetime.now(UTC),
+                }
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_triples(subject="User", predicate="did activity")
+
+        assert len(result) == 1
+        assert result[0]["subject"] == "User"
+        assert result[0]["predicate"] == "did activity"
+
+    @pytest.mark.asyncio
+    async def test_find_triples_no_filters(self) -> None:
+        """Test finding triples with no filters returns all."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(
@@ -136,7 +158,7 @@ class TestGraphTraversal:
                 {
                     "subject": "user",
                     "predicate": "lives_in",
-                    "object": "Richmond, BC",
+                    "object": "Vancouver",
                     "created_at": datetime.now(UTC),
                 }
             ]
@@ -145,59 +167,30 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_entity_relationships("richmond", limit=10)
-
-        # Verify ILIKE pattern was used (case-insensitive)
-        assert len(result) == 1
-        assert "Richmond" in result[0]["object"]
-
-    @pytest.mark.asyncio
-    async def test_find_entity_partial_match(self) -> None:
-        """Test that entity search uses partial matching."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
-            return_value=[
-                {
-                    "subject": "user",
-                    "predicate": "has goal",
-                    "object": "run a marathon",
-                    "created_at": datetime.now(UTC),
-                }
-            ]
-        )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
-
-        traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_entity_relationships("marathon", limit=10)
+        result = await traverser.find_triples()
 
         assert len(result) == 1
-        assert "marathon" in result[0]["object"]
 
     @pytest.mark.asyncio
-    async def test_empty_result(self) -> None:
-        """Test traversal returns empty list when no relationships exist."""
-        # Create mock pool and connection
+    async def test_find_triples_empty_result(self) -> None:
+        """Test finding triples returns empty list when no matches."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        # Create traverser with mock pool
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_entity_relationships("nonexistent")
+        result = await traverser.find_triples(subject="nonexistent")
 
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_respects_limit(self) -> None:
+    async def test_find_triples_respects_limit(self) -> None:
         """Test that limit parameter is respected."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
 
-        # Create multiple triples
         triples = [
             {
                 "subject": "user",
@@ -207,14 +200,14 @@ class TestGraphTraversal:
             }
             for i in range(5)
         ]
-        mock_conn.fetch = AsyncMock(return_value=triples[:3])  # Simulates LIMIT 3
+        mock_conn.fetch = AsyncMock(return_value=triples[:2])
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_entity_relationships("user", limit=3)
+        result = await traverser.find_triples(limit=2)
 
-        assert len(result) == 3
+        assert len(result) == 2
 
 
 class TestSanitizationFunctions:

@@ -158,42 +158,6 @@ class GraphTraversal:
 
         return all_triples
 
-    async def find_entity_relationships(
-        self,
-        entity_name: str,
-        limit: int = 10,
-    ) -> list[dict[str, Any]]:
-        """Find all relationships involving a specific entity by name.
-
-        Uses text-based matching against subject and object columns.
-        Returns most recent triples first (timestamp-based evolution).
-
-        Args:
-            entity_name: Entity name to search for (case-insensitive partial match)
-            limit: Maximum number of results
-
-        Returns:
-            List of triples with keys: subject, predicate, object, created_at
-        """
-        async with self.db_pool.acquire() as conn:
-            sanitized_name = _sanitize_entity_name(entity_name)
-            rows = await conn.fetch(
-                """
-                SELECT
-                    subject,
-                    predicate,
-                    object,
-                    created_at
-                FROM semantic_triple
-                WHERE subject ILIKE $1 OR object ILIKE $1
-                ORDER BY created_at DESC
-                LIMIT $2
-                """,
-                f"%{sanitized_name}%",
-                limit,
-            )
-            return [dict(row) for row in rows]
-
     async def find_by_predicate(
         self,
         predicate: str,

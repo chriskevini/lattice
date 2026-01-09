@@ -623,6 +623,31 @@ async def retrieve_context(
 
     graph_triples: list[dict[str, Any]] = []
 
+    if "activity_context" in context_flags:
+        activity_triples: list[dict[str, Any]] = []
+
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=1)
+            activity_triples = await traverser.find_triples(
+                subject="User",
+                predicate="did activity",
+                limit=20,
+            )
+
+        if activity_triples:
+            activity_objects = [
+                triple.get("object", "")
+                for triple in activity_triples
+                if triple.get("object")
+            ]
+            entities = list(entities) + activity_objects
+
+            logger.debug(
+                "Activity context processed",
+                activity_count=len(activity_objects),
+                activities=activity_objects,
+            )
+
     if entities and triple_depth > 0:
         if db_pool.is_initialized():
             traverser = GraphTraversal(db_pool.pool, max_depth=triple_depth)
@@ -680,31 +705,5 @@ async def retrieve_context(
         from lattice.core import response_generator
 
         context["goal_context"] = await response_generator.get_goal_context()
-
-    if "activity_context" in context_flags:
-        # Hybrid approach: fetch User → activity triples and add activities to entities
-        activity_triples: list[dict[str, Any]] = []
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=1)
-            activity_triples = await traverser.find_triples(
-                subject="User",
-                predicate="did activity",
-                limit=20,
-            )
-
-        if activity_triples:
-            # Extract activity objects and add to entities for graph traversal
-            activity_objects = [
-                triple.get("object", "")
-                for triple in activity_triples
-                if triple.get("object")
-            ]
-            entities.extend(activity_objects)
-
-            logger.debug(
-                "Activity context processed",
-                activity_count=len(activity_objects),
-                activities=activity_objects,
-            )
 
     return context
