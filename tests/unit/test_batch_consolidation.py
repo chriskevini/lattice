@@ -636,7 +636,7 @@ class TestRunBatchConsolidation:
             },
             {
                 "subject": "user",
-                "predicate": "has_goal",
+                "predicate": "has goal",
                 "object": "run a marathon",
                 "created_at": datetime.now(UTC),
             },
@@ -732,7 +732,7 @@ class TestRunBatchConsolidation:
                                                 "user --lives_in--> Richmond" in context
                                             )
                                             assert (
-                                                "user --has_goal--> run a marathon"
+                                                "user --has goal--> run a marathon"
                                                 in context
                                             )
 

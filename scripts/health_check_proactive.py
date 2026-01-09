@@ -285,7 +285,7 @@ async def check_goals(conn: asyncpg.Connection) -> int:
                COUNT(CASE WHEN st2.predicate = 'priority' THEN 1 END) as has_priority
         FROM semantic_triple st
         LEFT JOIN semantic_triple st2 ON st.object = st2.subject
-        WHERE st.predicate = 'has_goal'
+        WHERE st.predicate = 'has goal'
         GROUP BY st.object
         ORDER BY COUNT(st2.subject) DESC
         LIMIT 5

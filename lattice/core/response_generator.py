@@ -87,7 +87,7 @@ async def fetch_goal_names() -> list[str]:
     """Fetch all goal names from the knowledge graph.
 
     Returns:
-        List of goal names (objects of has_goal predicates)
+        List of goal names (objects of has goal predicates)
     """
     from lattice.utils.database import db_pool
 

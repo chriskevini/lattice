@@ -160,7 +160,7 @@ class TestGraphTraversal:
             return_value=[
                 {
                     "subject": "user",
-                    "predicate": "has_goal",
+                    "predicate": "has goal",
                     "object": "run a marathon",
                     "created_at": datetime.now(UTC),
                 }
