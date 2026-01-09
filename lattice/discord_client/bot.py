@@ -370,7 +370,6 @@ class LatticeBot(commands.Bot):
             # CONTEXT_RETRIEVAL: Fetch targeted context based on entities and flags
             # This replaces the old regex-based predicate detection approach
             graph_triples: list[dict[str, Any]] = []
-            goal_context: str = ""
 
             if planning:
                 context_result = await entity_extraction.retrieve_context(
@@ -381,7 +380,6 @@ class LatticeBot(commands.Bot):
                 graph_triples = _parse_graph_triples_from_context(
                     context_result.get("semantic_context", "")
                 )
-                goal_context = context_result.get("goal_context", "")
             else:
                 if entities:
                     try:
@@ -422,7 +420,6 @@ class LatticeBot(commands.Bot):
                 user_message=message.content,
                 recent_messages=recent_messages,
                 graph_triples=graph_triples,
-                goal_context=goal_context if goal_context else None,
                 user_discord_message_id=message.id,
                 unknown_entities=planning.unknown_entities if planning else None,
             )

@@ -78,61 +78,6 @@ async def get_conversation_context(limit: int = 20) -> str:
     return "\n".join(lines)
 
 
-async def get_goal_context() -> str:
-    """Get user's goals from knowledge graph with hierarchical predicate display.
-
-    Fetches all has goal predicates, then for each unique goal node,
-    retrieves all predicates attached to that goal to display a tree hierarchy.
-
-    Returns:
-        Formatted goals string showing goals and their predicates
-    """
-    async with db_pool.pool.acquire() as conn:
-        goals = await conn.fetch(
-            """
-            SELECT DISTINCT object FROM semantic_triple
-            WHERE predicate = 'has goal'
-            ORDER BY object
-            """
-        )
-
-    if not goals:
-        return "No active goals."
-
-    goal_names = [g["object"] for g in goals]
-
-    if not goal_names:
-        return "No active goals."
-
-    async with db_pool.pool.acquire() as conn:
-        placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
-        query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
-        predicates = await conn.fetch(query, *goal_names)
-
-    goal_predicates: dict[str, list[tuple[str, str]]] = {}
-    for pred in predicates:
-        goal_name = pred["subject"]
-        if goal_name not in goal_predicates:
-            goal_predicates[goal_name] = []
-        goal_predicates[goal_name].append((pred["predicate"], pred["object"]))
-
-    lines = ["User goals:"]
-    for i, goal_name in enumerate(goal_names):
-        is_last = i == len(goal_names) - 1
-        goal_prefix = "└── " if is_last else "├── "
-        lines.append(f"{goal_prefix}{goal_name}")
-
-        if goal_name in goal_predicates:
-            preds = goal_predicates[goal_name]
-            for j, (pred, obj) in enumerate(preds):
-                pred_is_last = j == len(preds) - 1
-                pred_prefix = "    " if is_last else "│   "
-                pred_goal_prefix = "└── " if pred_is_last else "├── "
-                lines.append(f"{pred_prefix}{pred_goal_prefix}{pred}: {obj}")
-
-    return "\n".join(lines)
-
-
 async def get_default_channel_id() -> int | None:
     """Get the main channel for proactive messages from environment variable.
 
@@ -170,7 +115,11 @@ async def decide_proactive() -> ProactiveDecision:
         )
 
     conversation = await get_conversation_context()
-    goals = await get_goal_context()
+
+    from lattice.core import response_generator
+
+    goals = await response_generator.get_goal_context()
+
     channel_id = await get_default_channel_id()
     current_interval = await get_current_interval()
     current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")

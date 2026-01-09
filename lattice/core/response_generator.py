@@ -17,6 +17,7 @@ from lattice.utils.date_resolution import (
     resolve_relative_dates,
 )
 from lattice.utils.llm import AuditResult, get_auditing_llm_client
+from lattice.utils.database import db_pool
 
 if TYPE_CHECKING:
     from lattice.core.entity_extraction import EntityExtraction
@@ -84,13 +85,11 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
 
 
 async def fetch_goal_names() -> list[str]:
-    """Fetch all goal names from the knowledge graph.
+    """Fetch unique goal names from knowledge graph.
 
     Returns:
-        List of goal names (objects of has goal predicates)
+        List of unique goal strings
     """
-    from lattice.utils.database import db_pool
-
     if not db_pool.is_initialized():
         logger.warning("Database pool not initialized, cannot fetch goal names")
         return []
@@ -122,8 +121,6 @@ async def get_goal_context(goal_names: list[str] | None = None) -> str:
     Returns:
         Formatted goals string showing goals and their predicates
     """
-    from lattice.utils.database import db_pool
-
     if goal_names is None:
         goal_names = await fetch_goal_names()
 
@@ -169,7 +166,6 @@ async def generate_response(
     graph_triples: list[dict[str, Any]] | None = None,
     extraction: "EntityExtraction | None" = None,
     user_discord_message_id: int | None = None,
-    goal_context: str | None = None,
     unknown_entities: list[str] | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any], UUID | None]:
     """Generate a response using the unified prompt template.
@@ -184,7 +180,6 @@ async def generate_response(
         graph_triples: Related facts from graph traversal
         extraction: Entity extraction for graph traversal
         user_discord_message_id: Discord message ID to exclude from episodic context.
-        goal_context: Pre-fetched goal context from retrieve_context()
         unknown_entities: Entities requiring clarification (e.g., ["bf", "lkea"])
                          BATCH_MEMORY_EXTRACTION handles these naturally in next cycle.
 
@@ -243,13 +238,15 @@ async def generate_response(
         format_with_timestamp(msg) for msg in filtered_messages
     )
 
-    semantic_lines = []
-    if goal_context:
-        semantic_lines.append(goal_context)
-
+    semantic_context = "No relevant context found."
     if graph_triples:
+        # Sort triples by subject to keep related facts together
+        sorted_triples = sorted(
+            graph_triples, key=lambda t: (t.get("subject", ""), t.get("predicate", ""))
+        )
+
         relationships = []
-        for triple in graph_triples[:MAX_GRAPH_TRIPLES]:
+        for triple in sorted_triples[:15]:
             subject = triple.get("subject", "")
             predicate = triple.get("predicate", "")
             obj = triple.get("object", "")
@@ -257,28 +254,22 @@ async def generate_response(
                 relationships.append(f"{subject} {predicate} {obj}")
 
         if relationships:
-            if semantic_lines:
-                semantic_lines.append("")
-            semantic_lines.append("Relevant knowledge from past conversations:")
-            semantic_lines.extend([f"- {rel}" for rel in relationships])
-
-    semantic_context = (
-        "\n".join(semantic_lines) if semantic_lines else "No relevant context found."
-    )
-
-    combined_semantic_context = semantic_context
+            semantic_context = (
+                "Relevant knowledge from past conversations:\n"
+                + "\n".join(f"- {rel}" for rel in relationships)
+            )
 
     logger.debug(
         "Context built for generation",
         episodic_context_preview=episodic_context[:200],
-        semantic_context_preview=combined_semantic_context[:200],
+        semantic_context_preview=semantic_context[:200],
         user_message=user_message[:100],
         template_name=template_name,
     )
 
     template_params = {
         "episodic_context": episodic_context or "No recent conversation.",
-        "semantic_context": combined_semantic_context,
+        "semantic_context": semantic_context,
         "user_message": user_message,
         "unknown_entities": ", ".join(unknown_entities)
         if unknown_entities

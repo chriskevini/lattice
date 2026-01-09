@@ -19,9 +19,9 @@ from lattice.scheduler.triggers import (
     get_conversation_context,
     get_current_interval,
     get_default_channel_id,
-    get_goal_context,
     set_current_interval,
 )
+from lattice.core.response_generator import get_goal_context
 
 
 class TestFormatMessage:
@@ -102,7 +102,7 @@ class TestDecideProactive:
                 return_value="No recent conversation history.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_goal_context",
+                "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
@@ -135,7 +135,7 @@ class TestDecideProactive:
                 return_value="No recent conversation history.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_goal_context",
+                "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
@@ -181,7 +181,7 @@ class TestDecideProactive:
                 return_value="No recent conversation history.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_goal_context",
+                "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
@@ -230,7 +230,7 @@ class TestDecideProactive:
                 return_value="No recent conversation history.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_goal_context",
+                "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
@@ -278,7 +278,7 @@ class TestDecideProactive:
                 return_value="No recent conversation history.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_goal_context",
+                "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
@@ -324,7 +324,7 @@ class TestDecideProactive:
                 return_value="No recent conversation history.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_goal_context",
+                "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
@@ -372,7 +372,7 @@ class TestDecideProactive:
                 return_value="No recent conversation history.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_goal_context",
+                "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
@@ -477,7 +477,7 @@ class TestGetGoalContext:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        with patch("lattice.scheduler.triggers.db_pool") as mock_pool:
+        with patch("lattice.core.response_generator.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -514,7 +514,7 @@ class TestGetGoalContext:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(side_effect=[goals, predicates])
 
-        with patch("lattice.scheduler.triggers.db_pool") as mock_pool:
+        with patch("lattice.core.response_generator.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
