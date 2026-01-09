@@ -242,6 +242,8 @@ async def generate_response(
     graph_triples: list[dict[str, Any]] | None = None,
     extraction: "EntityExtraction | None" = None,
     user_discord_message_id: int | None = None,
+    goal_context: str | None = None,
+    activity_context: str | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any], UUID | None]:
     """Generate a response using the unified prompt template.
 
@@ -255,6 +257,8 @@ async def generate_response(
         graph_triples: Related facts from graph traversal
         extraction: Entity extraction for graph traversal
         user_discord_message_id: Discord message ID to exclude from episodic context.
+        goal_context: Pre-fetched goal context from retrieve_context()
+        activity_context: Pre-fetched activity context from retrieve_context()
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
@@ -312,10 +316,17 @@ async def generate_response(
     )
 
     semantic_lines = []
+    if goal_context:
+        semantic_lines.append(goal_context)
+
+    if activity_context:
+        if semantic_lines:
+            semantic_lines.append("")
+        semantic_lines.append(activity_context)
+
     if graph_triples:
         relationships = []
         for triple in graph_triples[:MAX_GRAPH_TRIPLES]:
-            # Text-based triples use "subject" and "object" keys directly
             subject = triple.get("subject", "")
             predicate = triple.get("predicate", "")
             obj = triple.get("object", "")
@@ -323,6 +334,8 @@ async def generate_response(
                 relationships.append(f"{subject} {predicate} {obj}")
 
         if relationships:
+            if semantic_lines:
+                semantic_lines.append("")
             semantic_lines.append("Relevant knowledge from past conversations:")
             semantic_lines.extend([f"- {rel}" for rel in relationships])
 
@@ -330,29 +343,19 @@ async def generate_response(
         "\n".join(semantic_lines) if semantic_lines else "No relevant context found."
     )
 
-    if extraction:
-        relevant_goal_context = await get_relevant_goal_context(
-            entities=extraction.entities,
-            user_message=user_message,
-        )
-        if relevant_goal_context:
-            semantic_context = f"{relevant_goal_context}\n\n{semantic_context}"
-            logger.debug(
-                "Injected goal context",
-                goal_context_preview=relevant_goal_context[:200],
-            )
+    combined_semantic_context = semantic_context
 
     logger.debug(
         "Context built for generation",
         episodic_context_preview=episodic_context[:200],
-        semantic_context_preview=semantic_context[:200],
+        semantic_context_preview=combined_semantic_context[:200],
         user_message=user_message[:100],
         template_name=template_name,
     )
 
     template_params = {
         "episodic_context": episodic_context or "No recent conversation.",
-        "semantic_context": semantic_context,
+        "semantic_context": combined_semantic_context,
         "user_message": user_message,
     }
 
