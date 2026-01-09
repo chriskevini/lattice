@@ -408,9 +408,6 @@ class TestProactiveScheduler:
                 "lattice.scheduler.runner.prompt_audits.store_prompt_audit",
                 return_value=uuid4(),
             ),
-            patch.object(
-                scheduler, "_mirror_proactive_to_dream", AsyncMock()
-            ) as mock_mirror,
             patch(
                 "lattice.scheduler.runner.get_system_health",
                 return_value="15",
@@ -424,8 +421,6 @@ class TestProactiveScheduler:
 
             # Should reset to base interval
             mock_set.assert_called_once_with(15)
-            # Should mirror to dream channel
-            mock_mirror.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_run_proactive_check_send_failure(self) -> None:
@@ -487,101 +482,6 @@ class TestProactiveScheduler:
 
             # Should cap at max: min(1000 * 2, 1440) = 1440
             mock_set.assert_called_once_with(1440)
-
-    @pytest.mark.asyncio
-    async def test_mirror_proactive_to_dream_no_channel(self) -> None:
-        """Test mirror skips when dream channel not configured."""
-        mock_bot = MagicMock()
-        scheduler = ProactiveScheduler(bot=mock_bot, dream_channel_id=None)
-
-        mock_message = MagicMock(spec=discord.Message)
-        mock_message.content = "Test"
-        mock_message.id = 999
-        mock_message.jump_url = "https://discord.com/channels/123/456/999"
-
-        # Should return early without errors
-        await scheduler._mirror_proactive_to_dream(
-            bot_message=mock_message,
-            reasoning="Test reason",
-        )
-
-    @pytest.mark.asyncio
-    async def test_mirror_proactive_to_dream_channel_not_found(self) -> None:
-        """Test mirror handles missing dream channel gracefully."""
-        mock_bot = MagicMock()
-        mock_bot.get_channel.return_value = None
-        scheduler = ProactiveScheduler(bot=mock_bot, dream_channel_id=12345)
-
-        mock_message = MagicMock(spec=discord.Message)
-        mock_message.content = "Test"
-        mock_message.id = 999
-        mock_message.jump_url = "https://discord.com/channels/123/456/999"
-
-        # Should handle missing channel gracefully
-        await scheduler._mirror_proactive_to_dream(
-            bot_message=mock_message,
-            reasoning="Test reason",
-        )
-
-    @pytest.mark.asyncio
-    async def test_mirror_proactive_to_dream_success(self) -> None:
-        """Test successful mirroring to dream channel."""
-        mock_dream_channel = AsyncMock()
-        mock_bot = MagicMock()
-        mock_bot.get_channel.return_value = mock_dream_channel
-        scheduler = ProactiveScheduler(bot=mock_bot, dream_channel_id=12345)
-
-        mock_message = MagicMock(spec=discord.Message)
-        mock_message.content = "Hey! How's it going?"
-        mock_message.id = 999
-        mock_message.jump_url = "https://discord.com/channels/123/456/999"
-
-        mock_embed = MagicMock()
-        mock_view = MagicMock()
-
-        with patch(
-            "lattice.scheduler.runner.AuditViewBuilder.build_proactive_audit",
-            return_value=(mock_embed, mock_view),
-        ):
-            await scheduler._mirror_proactive_to_dream(
-                bot_message=mock_message,
-                reasoning="Deadline approaching",
-                audit_id=uuid4(),
-                prompt_key="PROACTIVE_CHECKIN",
-                template_version=1,
-                rendered_prompt="[prompt]",
-            )
-
-            mock_dream_channel.send.assert_called_once_with(
-                embed=mock_embed, view=mock_view
-            )
-
-    @pytest.mark.asyncio
-    async def test_mirror_proactive_to_dream_handles_exceptions(self) -> None:
-        """Test mirror handles exceptions during send."""
-        mock_dream_channel = AsyncMock()
-        mock_dream_channel.send.side_effect = Exception("Discord API error")
-        mock_bot = MagicMock()
-        mock_bot.get_channel.return_value = mock_dream_channel
-        scheduler = ProactiveScheduler(bot=mock_bot, dream_channel_id=12345)
-
-        mock_message = MagicMock(spec=discord.Message)
-        mock_message.content = "Test"
-        mock_message.id = 999
-        mock_message.jump_url = "https://discord.com/channels/123/456/999"
-
-        mock_embed = MagicMock()
-        mock_view = MagicMock()
-
-        with patch(
-            "lattice.scheduler.runner.AuditViewBuilder.build_proactive_audit",
-            return_value=(mock_embed, mock_view),
-        ):
-            # Should not raise exception
-            await scheduler._mirror_proactive_to_dream(
-                bot_message=mock_message,
-                reasoning="Test reason",
-            )
 
 
 if __name__ == "__main__":

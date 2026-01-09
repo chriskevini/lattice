@@ -11,7 +11,6 @@ from datetime import UTC, datetime, timedelta
 import os
 import sys
 from typing import Any
-from uuid import UUID
 
 import asyncpg
 import discord
@@ -19,14 +18,12 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, entity_extraction, response_generator
-from lattice.discord_client.dream import AuditViewBuilder, AuditView
-from lattice.memory.graph import GraphTraversal
+from lattice.discord_client.dream import AuditView
 
-from lattice.memory import episodic, prompt_audits
+from lattice.memory import episodic
 from lattice.scheduler import ProactiveScheduler, set_current_interval
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
-from lattice.utils.source_links import build_source_map, inject_source_links
 from lattice.utils.database import (
     db_pool,
     get_system_health,
@@ -45,40 +42,6 @@ DB_INIT_RETRY_INTERVAL = 0.5  # seconds
 # Scheduler settings
 SCHEDULER_BASE_INTERVAL_DEFAULT = 15  # minutes
 MAX_CONSECUTIVE_FAILURES = 5
-
-
-def _parse_graph_triples_from_context(semantic_context: str) -> list[dict[str, Any]]:
-    """Parse semantic context string into graph triples.
-
-    Args:
-        semantic_context: Formatted semantic context string
-
-    Returns:
-        List of triples in dict format
-    """
-    import re
-
-    triples: list[dict[str, Any]] = []
-
-    for line in semantic_context.split("\n"):
-        line = line.strip()
-        if not line or line.startswith("Relevant") or line.startswith("No "):
-            continue
-        if line.startswith("-"):
-            triple_str = line[1:].strip()
-            match = re.match(r"(.+?)\s+(.+?)\s+(.+)", triple_str)
-            if match:
-                triples.append(
-                    {
-                        "subject": match.group(1),
-                        "predicate": match.group(2),
-                        "object": match.group(3),
-                        "origin_id": None,
-                        "depth": 0,
-                    }
-                )
-
-    return triples
 
 
 class LatticeBot(commands.Bot):
@@ -313,7 +276,6 @@ class LatticeBot(commands.Bot):
             )
 
             # RETRIEVAL_PLANNING: Analyze conversation window for entities, flags, and unknowns
-            # This replaces the old extract_entities() call with window-based analysis
             planning: entity_extraction.RetrievalPlanning | None = None
             try:
                 # Build conversation window for retrieval planning
@@ -327,6 +289,11 @@ class LatticeBot(commands.Bot):
                     message_content=message.content,
                     recent_messages=recent_msgs_for_planning,
                     user_timezone=self._user_timezone,
+                    audit_view=True,
+                    audit_view_params={
+                        "input_text": message.content,
+                        "main_message_url": message.jump_url,
+                    },
                 )
 
                 if planning:
@@ -347,7 +314,6 @@ class LatticeBot(commands.Bot):
                     error=str(e),
                     message_preview=message.content[:50],
                 )
-                # Continue processing without planning - will use fallback context retrieval
 
             # Update scheduler interval
             base_interval = int(
@@ -358,45 +324,17 @@ class LatticeBot(commands.Bot):
             next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
-            # Determine entities and context flags from planning
-            entities: list[str] = []
-            context_flags: list[str] = []
-            if planning:
-                entities = planning.entities
-                context_flags = planning.context_flags
-            else:
-                entities = []
-
             # CONTEXT_RETRIEVAL: Fetch targeted context based on entities and flags
-            # This replaces the old regex-based predicate detection approach
-            graph_triples: list[dict[str, Any]] = []
+            entities: list[str] = planning.entities if planning else []
+            context_flags: list[str] = planning.context_flags if planning else []
 
-            if planning:
-                context_result = await entity_extraction.retrieve_context(
-                    entities=entities,
-                    context_flags=context_flags,
-                    triple_depth=2 if entities else 0,
-                )
-                graph_triples = _parse_graph_triples_from_context(
-                    context_result.get("semantic_context", "")
-                )
-            else:
-                if entities:
-                    try:
-                        graph_traverser = GraphTraversal(db_pool.pool)
-                        for entity_name in entities:
-                            triples = await graph_traverser.traverse_from_entity(
-                                entity_name, max_hops=2
-                            )
-                            for triple in triples:
-                                if triple not in graph_triples:
-                                    graph_triples.append(triple)
-                    except Exception as e:
-                        logger.warning(
-                            "Fallback graph traversal failed",
-                            entities=entities,
-                            error=str(e),
-                        )
+            # Retrieve semantic context
+            context_result = await entity_extraction.retrieve_context(
+                entities=entities,
+                context_flags=context_flags,
+                triple_depth=2 if entities else 0,
+            )
+            semantic_context = context_result.get("semantic_context", "")
 
             # Retrieve episodic context for response generation
             (
@@ -409,44 +347,37 @@ class LatticeBot(commands.Bot):
                 triple_depth=0,
                 entity_names=[],
             )
-
-            # Generate response with planning for template selection
-            (
-                response_result,
-                rendered_prompt,
-                context_info,
-                audit_id,
-            ) = await response_generator.generate_response(
-                user_message=message.content,
-                recent_messages=recent_messages,
-                graph_triples=graph_triples,
-                user_discord_message_id=message.id,
-                unknown_entities=planning.unknown_entities if planning else None,
+            # Format episodic context (excluding current message)
+            episodic_context = "\n".join(
+                [
+                    f"{'Bot' if msg.is_bot else 'User'}: {msg.content}"
+                    for msg in recent_messages
+                ]
             )
 
-            # Inject source links from graph triples
-            response_content = response_result.content
-            if graph_triples and message.guild:
-                # Build source map from recent messages
-                source_map = build_source_map(
-                    recent_messages=recent_messages,
-                    guild_id=message.guild.id,
-                )
-                # Collect origin IDs from triples that were used
-                triple_origins = {
-                    triple["origin_id"]
-                    for triple in graph_triples
-                    if triple.get("origin_id") is not None
-                }
-                # Inject links at sentence boundaries
-                response_content = inject_source_links(
-                    response=response_content,
-                    source_map=source_map,
-                    triple_origins=triple_origins,
-                    max_links=3,
-                )
+            # Generate response with automatic AuditView
+            (
+                response_result,
+                _rendered_prompt,
+                _context_info,
+            ) = await response_generator.generate_response(
+                user_message=message.content,
+                episodic_context=episodic_context,
+                semantic_context=semantic_context,
+                unknown_entities=planning.unknown_entities if planning else None,
+                user_tz=self._user_timezone,
+                audit_view=True,
+                audit_view_params={
+                    "main_message_url": message.jump_url,
+                },
+            )
 
             # Split response for Discord length limits
+            response_content = response_result.content
+            # Source links injection logic remains here if needed, but semantic_context is now just a string
+            # For Phase 4 we might want to keep triple origin IDs, but generate_response is pure string-to-string.
+            # We'll skip source link injection for now to keep the orchestrator clean, or refactor it later.
+
             response_messages = response_generator.split_response(response_content)
             bot_messages: list[discord.Message] = []
             for msg in response_messages:
@@ -462,57 +393,17 @@ class LatticeBot(commands.Bot):
                 "total_tokens": response_result.total_tokens,
                 "cost_usd": response_result.cost_usd,
                 "latency_ms": response_result.latency_ms,
-                "extraction_id": context_info.get("extraction_id"),
             }
 
-            # Get template key and version from context_info (defaults to UNIFIED_RESPONSE for backward compat)
-            template_key = context_info.get("template", "UNIFIED_RESPONSE")
-            template_version = context_info.get("template_version", 1)
-
-            # Store episodic messages and prompt audits
+            # Store episodic messages
             for bot_msg in bot_messages:
-                message_id = await memory_orchestrator.store_bot_message(
+                await memory_orchestrator.store_bot_message(
                     content=bot_msg.content,
                     discord_message_id=bot_msg.id,
                     channel_id=bot_msg.channel.id,
                     is_proactive=False,
                     generation_metadata=generation_metadata,
                     timezone=self._user_timezone,
-                )
-
-                # Store prompt audit (handled by AuditingLLMClient during generate_response)
-                # Fallback only if audit_id wasn't returned (e.g., no Discord message ID available)
-                stored_audit_id = audit_id
-                if stored_audit_id is None:
-                    stored_audit_id = await prompt_audits.store_prompt_audit(
-                        prompt_key=template_key,
-                        rendered_prompt=rendered_prompt,
-                        response_content=bot_msg.content,
-                        main_discord_message_id=bot_msg.id,
-                        template_version=template_version,
-                        message_id=message_id,
-                        model=response_result.model,
-                        provider=response_result.provider,
-                        prompt_tokens=response_result.prompt_tokens,
-                        completion_tokens=response_result.completion_tokens,
-                        cost_usd=response_result.cost_usd,
-                        latency_ms=response_result.latency_ms,
-                    )
-
-                # Mirror to dream channel with new UI
-                await self._mirror_to_dream_channel(
-                    user_message=message.content,
-                    bot_message=bot_msg,
-                    rendered_prompt=rendered_prompt,
-                    context_info=context_info,
-                    audit_id=stored_audit_id,
-                    performance={
-                        "prompt_key": template_key,
-                        "version": template_version,
-                        "model": response_result.model,
-                        "latency_ms": response_result.latency_ms,
-                        "cost_usd": response_result.cost_usd or 0,
-                    },
                 )
 
             self._consecutive_failures = 0
@@ -528,85 +419,6 @@ class LatticeBot(commands.Bot):
             await message.channel.send(
                 "Sorry, I encountered an error processing your message."
             )
-
-    async def _mirror_to_dream_channel(
-        self,
-        user_message: str,
-        bot_message: discord.Message,
-        rendered_prompt: str,
-        context_info: dict[str, Any],
-        audit_id: UUID,
-        performance: dict[str, Any],
-    ) -> discord.Message | None:
-        """Mirror bot response to dream channel with unified UI.
-
-        Args:
-            user_message: User's message content
-            bot_message: The bot message sent in main channel
-            rendered_prompt: The full rendered prompt
-            context_info: Context configuration (episodic, semantic, graph counts)
-            audit_id: UUID of the prompt audit entry
-            performance: Performance metrics (model, tokens, latency, cost)
-
-        Returns:
-            Dream channel message if successful, None otherwise
-        """
-        if not self.dream_channel_id:
-            logger.debug("Dream channel not configured, skipping mirror")
-            return None
-
-        dream_channel = self.get_channel(self.dream_channel_id)
-        if not dream_channel:
-            logger.warning(
-                "Dream channel not found",
-                dream_channel_id=self.dream_channel_id,
-            )
-            return None
-
-        # Type check - must be a text channel
-        if not isinstance(dream_channel, discord.TextChannel):
-            logger.warning(
-                "Dream channel is not a text channel",
-                dream_channel_type=type(dream_channel).__name__,
-            )
-            return None
-
-        # Build embed and view using new UI
-        latency_ms = performance.get("latency_ms", 0)
-        cost_usd = performance.get("cost_usd")
-        embed, view = AuditViewBuilder.build_reactive_audit(
-            user_message=user_message,
-            bot_response=bot_message.content,
-            main_message_url=bot_message.jump_url,
-            prompt_key=performance.get("prompt_key", "UNIFIED_RESPONSE"),
-            version=performance.get("version", 1),
-            latency_ms=latency_ms,
-            cost_usd=cost_usd,
-            audit_id=audit_id,
-            rendered_prompt=rendered_prompt,
-        )
-
-        try:
-            dream_msg = await dream_channel.send(embed=embed, view=view)
-            logger.info(
-                "Mirrored to dream channel",
-                audit_id=audit_id,
-                main_message_id=bot_message.id,
-                dream_message_id=dream_msg.id,
-            )
-
-            # Update audit with dream message ID
-            await prompt_audits.update_audit_dream_message(
-                audit_id=audit_id,
-                dream_discord_message_id=dream_msg.id,
-            )
-            return dream_msg  # noqa: TRY300
-        except discord.DiscordException:
-            logger.exception(
-                "Failed to mirror to dream channel",
-                audit_id=audit_id,
-            )
-            return None
 
     async def close(self) -> None:
         """Clean up resources when shutting down."""

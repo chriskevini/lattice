@@ -302,6 +302,8 @@ async def retrieval_planning(
     message_content: str,
     recent_messages: list["EpisodicMessage"],
     user_timezone: str | None = None,
+    audit_view: bool = False,
+    audit_view_params: dict[str, Any] | None = None,
 ) -> RetrievalPlanning:
     """Perform retrieval planning on conversation window.
 
@@ -319,6 +321,8 @@ async def retrieval_planning(
         message_content: The user's message text
         recent_messages: Recent conversation history
         user_timezone: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        audit_view: Whether to send an AuditView to the dream channel
+        audit_view_params: Parameters for the AuditView
 
     Returns:
         RetrievalPlanning object with structured fields
@@ -366,8 +370,11 @@ async def retrieval_planning(
     result = await llm_client.complete(
         prompt=rendered_prompt,
         prompt_key="RETRIEVAL_PLANNING",
+        template_version=prompt_template.version,
         main_discord_message_id=int(message_id),
         temperature=prompt_template.temperature,
+        audit_view=audit_view,
+        audit_view_params=audit_view_params,
     )
     raw_response = result.content
     extraction_method = "api"

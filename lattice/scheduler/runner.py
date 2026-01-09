@@ -10,11 +10,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-import discord
 import structlog
 
 from lattice.core.pipeline import UnifiedPipeline
-from lattice.discord_client.dream import AuditViewBuilder
 from lattice.memory import episodic, prompt_audits
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.triggers import (
@@ -205,16 +203,6 @@ class ProactiveScheduler:
                             audit_id=str(audit_id),
                         )
 
-                    # Mirror to dream channel
-                    await self._mirror_proactive_to_dream(
-                        bot_message=result,
-                        reasoning=decision.reason or "No specific reason provided",
-                        audit_id=audit_id,
-                        prompt_key="PROACTIVE_CHECKIN",
-                        template_version=decision.template_version or 1,
-                        rendered_prompt=decision.rendered_prompt,
-                    )
-
                     # Reset to base interval after successful message
                     base_interval = int(
                         await get_system_health("scheduler_base_interval") or 15
@@ -247,55 +235,3 @@ class ProactiveScheduler:
             next_check=next_check.isoformat(),
             reason=decision.reason,
         )
-
-    async def _mirror_proactive_to_dream(
-        self,
-        bot_message: discord.Message,
-        reasoning: str,
-        audit_id: UUID | None = None,
-        prompt_key: str | None = None,
-        template_version: int | None = None,
-        rendered_prompt: str | None = None,
-    ) -> None:
-        """Mirror proactive message to dream channel.
-
-        Args:
-            bot_message: The bot's proactive message
-            reasoning: AI reasoning for sending the message
-            audit_id: UUID of prompt audit record
-            prompt_key: Template key used for generation
-            template_version: Version of template used
-            rendered_prompt: Full rendered prompt sent to LLM
-        """
-        if not self.dream_channel_id:
-            logger.debug("Dream channel not configured, skipping proactive mirror")
-            return
-
-        dream_channel = self.bot.get_channel(self.dream_channel_id)
-        if not dream_channel:
-            logger.warning(
-                "Dream channel not found",
-                dream_channel_id=self.dream_channel_id,
-            )
-            return
-
-        try:
-            # Build embed and view with audit info
-            # Only show audit view if we have a real audit_id
-            embed, view = AuditViewBuilder.build_proactive_audit(
-                reasoning=reasoning,
-                bot_message=bot_message.content,
-                main_message_url=bot_message.jump_url,
-                prompt_key=prompt_key or "PROACTIVE_CHECKIN",
-                version=template_version or 1,
-                confidence=0.5,
-                audit_id=audit_id,
-                rendered_prompt=rendered_prompt,
-            )
-
-            # Send to dream channel
-            await dream_channel.send(embed=embed, view=view)
-            logger.info("Proactive message mirrored to dream channel")
-
-        except Exception:
-            logger.exception("Failed to mirror proactive message to dream channel")

@@ -5,12 +5,10 @@ Handles prompt formatting, LLM generation, and message splitting for Discord.
 
 import re
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
-from lattice.memory import episodic, procedural
+from lattice.memory import procedural
 from lattice.utils.date_resolution import (
     format_current_date,
     format_current_time,
@@ -20,7 +18,7 @@ from lattice.utils.llm import AuditResult, get_auditing_llm_client
 from lattice.utils.database import db_pool
 
 if TYPE_CHECKING:
-    from lattice.core.entity_extraction import EntityExtraction
+    pass
 
 
 logger = structlog.get_logger(__name__)
@@ -162,33 +160,27 @@ async def get_goal_context(goal_names: list[str] | None = None) -> str:
 
 async def generate_response(
     user_message: str,
-    recent_messages: list[episodic.EpisodicMessage],
-    graph_triples: list[dict[str, Any]] | None = None,
-    extraction: "EntityExtraction | None" = None,
-    user_discord_message_id: int | None = None,
+    episodic_context: str,
+    semantic_context: str,
     unknown_entities: list[str] | None = None,
-) -> tuple[AuditResult, str, dict[str, Any], UUID | None]:
+    user_tz: str = "UTC",
+    audit_view: bool = False,
+    audit_view_params: dict[str, Any] | None = None,
+) -> tuple[AuditResult, str, dict[str, Any]]:
     """Generate a response using the unified prompt template.
-
-    Uses UNIFIED_RESPONSE for all message types. The template handles different
-    interaction patterns (questions, goals, activities, conversation) based on
-    the user message content.
 
     Args:
         user_message: The user's message
-        recent_messages: Recent conversation history
-        graph_triples: Related facts from graph traversal
-        extraction: Entity extraction for graph traversal
-        user_discord_message_id: Discord message ID to exclude from episodic context.
-        unknown_entities: Entities requiring clarification (e.g., ["bf", "lkea"])
-                         BATCH_MEMORY_EXTRACTION handles these naturally in next cycle.
+        episodic_context: Recent conversation history pre-formatted
+        semantic_context: Relevant facts from graph pre-formatted
+        unknown_entities: Entities requiring clarification
+        user_tz: IANA timezone string for date resolution
+        audit_view: Whether to send an AuditView to the dream channel
+        audit_view_params: Parameters for the AuditView
 
     Returns:
-        Tuple of (GenerationResult, rendered_prompt, context_info)
+        Tuple of (AuditResult, rendered_prompt, context_info)
     """
-    if graph_triples is None:
-        graph_triples = []
-
     # Get unified response template
     template_name = "UNIFIED_RESPONSE"
     prompt_template = await procedural.get_prompt(template_name)
@@ -209,67 +201,11 @@ async def generate_response(
             ),
             "",
             {},
-            None,
         )
-
-    def format_with_timestamp(msg: episodic.EpisodicMessage) -> str:
-        try:
-            user_tz = ZoneInfo(msg.user_timezone)
-            local_ts = msg.timestamp.astimezone(user_tz)
-            ts_str = local_ts.strftime("%Y-%m-%d %H:%M")
-        except (ZoneInfoNotFoundError, ValueError, KeyError) as e:
-            logger.warning(
-                "Timezone conversion failed", timezone=msg.user_timezone, error=str(e)
-            )
-            ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M UTC")
-        return f"[{ts_str}] {msg.role}: {msg.content}"
-
-    if user_discord_message_id is not None:
-        filtered_messages = [
-            msg
-            for msg in recent_messages
-            if msg.discord_message_id != user_discord_message_id
-        ]
-    else:
-        filtered_messages = [
-            msg for msg in recent_messages if msg.is_bot or msg.content != user_message
-        ]
-    episodic_context = "\n".join(
-        format_with_timestamp(msg) for msg in filtered_messages
-    )
-
-    semantic_context = "No relevant context found."
-    if graph_triples:
-        # Sort triples by subject to keep related facts together
-        sorted_triples = sorted(
-            graph_triples, key=lambda t: (t.get("subject", ""), t.get("predicate", ""))
-        )
-
-        relationships = []
-        for triple in sorted_triples[:15]:
-            subject = triple.get("subject", "")
-            predicate = triple.get("predicate", "")
-            obj = triple.get("object", "")
-            if subject and predicate and obj:
-                relationships.append(f"{subject} {predicate} {obj}")
-
-        if relationships:
-            semantic_context = (
-                "Relevant knowledge from past conversations:\n"
-                + "\n".join(f"- {rel}" for rel in relationships)
-            )
-
-    logger.debug(
-        "Context built for generation",
-        episodic_context_preview=episodic_context[:200],
-        semantic_context_preview=semantic_context[:200],
-        user_message=user_message[:100],
-        template_name=template_name,
-    )
 
     template_params = {
         "episodic_context": episodic_context or "No recent conversation.",
-        "semantic_context": semantic_context,
+        "semantic_context": semantic_context or "No relevant context found.",
         "user_message": user_message,
         "unknown_entities": ", ".join(unknown_entities)
         if unknown_entities
@@ -277,10 +213,6 @@ async def generate_response(
     }
 
     template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
-
-    user_tz: str | None = None
-    if recent_messages:
-        user_tz = getattr(recent_messages[0], "user_timezone", None) or "UTC"
 
     filtered_params = {
         key: value
@@ -305,13 +237,11 @@ async def generate_response(
         "Filled prompt for generation",
         prompt_preview=filled_prompt[:500],
         template_name=template_name,
-        extraction_available=extraction is not None,
     )
 
     context_info = {
         "template": template_name,
         "template_version": prompt_template.version,
-        "extraction_id": str(extraction.id) if extraction else None,
     }
 
     temperature = (
@@ -323,10 +253,11 @@ async def generate_response(
         prompt=filled_prompt,
         prompt_key=template_name,
         template_version=prompt_template.version,
-        main_discord_message_id=user_discord_message_id,
         temperature=temperature,
+        audit_view=audit_view,
+        audit_view_params=audit_view_params,
     )
-    return result, filled_prompt, context_info, getattr(result, "audit_id", None)
+    return result, filled_prompt, context_info
 
 
 def split_response(response: str, max_length: int = 1900) -> list[str]:

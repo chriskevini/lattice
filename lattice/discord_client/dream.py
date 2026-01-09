@@ -374,55 +374,50 @@ def _truncate_for_message(text: str, max_length: int = DISCORD_MESSAGE_LIMIT) ->
 class AuditViewBuilder:
     """Builder for creating concise audit view messages.
 
-    Three audit types:
-    - REACTIVE: User message + bot response (UNIFIED_RESPONSE)
-    - PROACTIVE: Bot-initiated check-in (PROACTIVE_CHECKIN)
-    - REASONING: Internal decision/analysis (PROACTIVE_CHECKIN)
-    - EXTRACTION: Batch semantic analysis (BATCH_MEMORY_EXTRACTION)
+    Unified audit structure for all LLM calls:
+    - REACTIVE: User message + bot response
+    - PROACTIVE: Bot-initiated check-in
+    - ANALYSIS: Planning, extraction, and reasoning
     """
 
-    _EMOJI_MAP = {
-        "UNIFIED_RESPONSE": "💬",
-        "PROACTIVE_CHECKIN": "🌟",
-        "BATCH_MEMORY_EXTRACTION": "🧠",
-    }
-
-    _COLOR_MAP = {
-        "UNIFIED_RESPONSE": discord.Color.blurple(),
-        "PROACTIVE_CHECKIN": discord.Color.gold(),
-        "BATCH_MEMORY_EXTRACTION": discord.Color.purple(),
+    _STYLE_MAP = {
+        "UNIFIED_RESPONSE": ("💬", discord.Color.blurple()),
+        "GOAL_RESPONSE": ("💬", discord.Color.blurple()),
+        "CONVERSATION_RESPONSE": ("💬", discord.Color.blurple()),
+        "PROACTIVE_CHECKIN": ("🌟", discord.Color.gold()),
+        "BATCH_MEMORY_EXTRACTION": ("🧠", discord.Color.purple()),
+        "RETRIEVAL_PLANNING": ("🔍", discord.Color.blue()),
+        "ENTITY_EXTRACTION": ("🏷️", discord.Color.teal()),
+        "TRIPLE_EXTRACTION": ("🔗", discord.Color.dark_purple()),
     }
 
     @staticmethod
-    def build_reactive_audit(
-        user_message: str,
-        bot_response: str,
-        main_message_url: str,
+    def build_standard_audit(
         prompt_key: str,
         version: int,
-        latency_ms: int,
-        cost_usd: float | None,
+        input_text: str,
+        output_text: str,
+        metadata_parts: list[str],
         audit_id: UUID | None,
         rendered_prompt: str,
     ) -> tuple[discord.Embed, AuditView]:
-        """Build REACTIVE audit - user message + bot response.
+        """Build a unified audit message for any LLM call.
 
         Args:
-            user_message: User's message content
-            bot_response: Bot's response content
-            main_message_url: Jump URL to main channel message
             prompt_key: Prompt template key (e.g., UNIFIED_RESPONSE)
             version: Template version
-            latency_ms: Response latency in milliseconds
-            cost_usd: Cost in USD
+            input_text: Primary input trigger (user message, reasoning, or context)
+            output_text: The LLM response (response content, triples, or decision)
+            metadata_parts: List of metadata strings to be joined by " | "
             audit_id: Prompt audit UUID
             rendered_prompt: Full rendered prompt
 
         Returns:
             Tuple of (embed, view) for the audit message
         """
-        emoji = AuditViewBuilder._EMOJI_MAP.get(prompt_key, "💬")
-        color = AuditViewBuilder._COLOR_MAP.get(prompt_key, discord.Color.blurple())
+        emoji, color = AuditViewBuilder._STYLE_MAP.get(
+            prompt_key, ("🤖", discord.Color.default())
+        )
 
         embed = discord.Embed(
             title=f"{emoji} {prompt_key} v{version}",
@@ -431,227 +426,60 @@ class AuditViewBuilder:
 
         embed.add_field(
             name="INPUT",
-            value=_truncate_for_field(user_message),
+            value=_truncate_for_field(input_text),
             inline=False,
         )
 
-        embed.add_field(
-            name="OUTPUT",
-            value=_truncate_for_field(bot_response),
-            inline=False,
-        )
-
-        cost_str = f" | ${cost_usd:.4f}" if cost_usd else ""
-        metadata = f"{latency_ms}ms{cost_str} | [LINK]({main_message_url})"
-        embed.add_field(
-            name="METADATA",
-            value=metadata,
-            inline=False,
-        )
-
-        view = AuditView(
-            audit_id=audit_id,
-            message_id=None,
-            prompt_key=prompt_key,
-            version=version,
-            rendered_prompt=rendered_prompt,
-        )
-
-        return embed, view
-
-    @staticmethod
-    def build_proactive_audit(
-        reasoning: str,
-        bot_message: str,
-        main_message_url: str,
-        prompt_key: str,
-        version: int,
-        confidence: float,
-        audit_id: UUID | None,
-        rendered_prompt: str | None = None,
-    ) -> tuple[discord.Embed, AuditView]:
-        """Build PROACTIVE audit - bot-initiated check-in.
-
-        Args:
-            reasoning: AI reasoning for sending proactive message
-            bot_message: Bot's proactive message content
-            main_message_url: Jump URL to main channel message
-            prompt_key: Prompt template key (e.g., PROACTIVE_CHECKIN)
-            version: Template version
-            confidence: Confidence score (0-1)
-            audit_id: Prompt audit UUID
-            rendered_prompt: Full rendered prompt
-
-        Returns:
-            Tuple of (embed, view) for the audit message
-        """
-        emoji = AuditViewBuilder._EMOJI_MAP.get(prompt_key, "🌟")
-        color = AuditViewBuilder._COLOR_MAP.get(prompt_key, discord.Color.gold())
-
-        embed = discord.Embed(
-            title=f"{emoji} {prompt_key} v{version}",
-            color=color,
-        )
-
-        embed.add_field(
-            name="INPUT",
-            value=_truncate_for_field(reasoning),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="OUTPUT",
-            value=_truncate_for_field(bot_message),
-            inline=False,
-        )
-
-        confidence_pct = int(confidence * 100)
-        metadata = f"confidence: {confidence_pct}% | [LINK]({main_message_url})"
-        embed.add_field(
-            name="METADATA",
-            value=metadata,
-            inline=False,
-        )
-
-        view = AuditView(
-            audit_id=audit_id,
-            message_id=None,
-            prompt_key=prompt_key,
-            version=version,
-            rendered_prompt=rendered_prompt,
-        )
-
-        return embed, view
-
-    @staticmethod
-    def build_extraction_audit(
-        user_message: str,
-        main_message_url: str,
-        triples: list[dict[str, str]],
-        prompt_key: str,
-        audit_id: UUID | None,
-        rendered_prompt: str | None = None,
-    ) -> tuple[discord.Embed, AuditView]:
-        """Build EXTRACTION audit - internal semantic analysis.
-
-        Args:
-            user_message: User's message that was analyzed
-            main_message_url: Jump URL to main channel message
-            triples: Extracted semantic triples
-            prompt_key: Prompt template key (e.g., TRIPLE_EXTRACTION)
-            audit_id: Prompt audit UUID
-            rendered_prompt: Full rendered prompt
-
-        Returns:
-            Tuple of (embed, view) for the audit message
-        """
-        emoji = AuditViewBuilder._EMOJI_MAP.get(prompt_key, "🧠")
-        color = AuditViewBuilder._COLOR_MAP.get(prompt_key, discord.Color.purple())
-
-        embed = discord.Embed(
-            title=f"{emoji} {prompt_key} v1",
-            color=color,
-        )
-
-        embed.add_field(
-            name="INPUT",
-            value=_truncate_for_field(user_message),
-            inline=False,
-        )
-
-        output_parts = []
-        if triples:
-            triple_lines = [
-                f"{t.get('subject', '')} → {t.get('predicate', '')} → {t.get('object', '')}"
-                for t in triples
-            ]
-            output_parts.append(f"🔗 {len(triples)} triples")
-            output_parts.extend(triple_lines)
-
-        output_text = "\n".join(output_parts) if output_parts else "Nothing extracted"
         embed.add_field(
             name="OUTPUT",
             value=_truncate_for_field(output_text),
             inline=False,
         )
 
-        metadata = f"{len(triples)} triples | [LINK]({main_message_url})"
-        embed.add_field(
-            name="METADATA",
-            value=metadata,
-            inline=False,
-        )
+        if metadata_parts:
+            embed.add_field(
+                name="METADATA",
+                value=" | ".join(metadata_parts),
+                inline=False,
+            )
 
         view = AuditView(
             audit_id=audit_id,
             message_id=None,
             prompt_key=prompt_key,
-            version=1,
+            version=version,
             rendered_prompt=rendered_prompt,
         )
 
         return embed, view
 
     @staticmethod
-    def build_reasoning_audit(
-        input_context: str,
-        decision: str,
-        prompt_key: str,
-        confidence: float,
-        latency_ms: int,
-        audit_id: UUID | None,
-        rendered_prompt: str | None = None,
-    ) -> tuple[discord.Embed, AuditView]:
-        """Build REASONING audit - internal decision/analysis LLM call.
+    def format_triples(triples: list[dict[str, Any]]) -> str:
+        """Helper to format triples for the OUTPUT field."""
+        if not triples:
+            return "Nothing extracted"
 
-        Args:
-            input_context: Input context for the decision
-            decision: The decision or analysis result
-            prompt_key: Prompt template key (e.g., PROACTIVE_CHECKIN)
-            confidence: Confidence score (0-1)
-            latency_ms: Processing latency
-            audit_id: Prompt audit UUID
-            rendered_prompt: Full rendered prompt
+        lines = [f"🔗 {len(triples)} triples"]
+        for t in triples:
+            subject = t.get("subject") or t.get("s", "")
+            predicate = t.get("predicate") or t.get("p", "")
+            obj = t.get("object") or t.get("o", "")
+            if subject and predicate and obj:
+                lines.append(f"• {subject} → {predicate} → {obj}")
 
-        Returns:
-            Tuple of (embed, view) for the audit message
-        """
-        emoji = AuditViewBuilder._EMOJI_MAP.get(prompt_key, "🧠")
-        color = AuditViewBuilder._COLOR_MAP.get(prompt_key, discord.Color.magenta())
+        return "\n".join(lines)
 
-        embed = discord.Embed(
-            title=f"{emoji} {prompt_key} v1",
-            color=color,
-        )
+    @staticmethod
+    def format_planning(
+        entities: list[str], context_flags: list[str], unknowns: list[str]
+    ) -> str:
+        """Helper to format retrieval planning result for the OUTPUT field."""
+        lines = []
+        if entities:
+            lines.append(f"**Entities:** {', '.join(entities)}")
+        if context_flags:
+            lines.append(f"**Flags:** {', '.join([f'`{f}`' for f in context_flags])}")
+        if unknowns:
+            lines.append(f"**Unknowns:** {', '.join(unknowns)}")
 
-        embed.add_field(
-            name="INPUT",
-            value=_truncate_for_field(input_context),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="OUTPUT",
-            value=_truncate_for_field(decision),
-            inline=False,
-        )
-
-        confidence_bar = "▓" * int(confidence * 10) + "░" * (10 - int(confidence * 10))
-        metadata = (
-            f"confidence: {confidence_bar} {int(confidence * 100)}% | {latency_ms}ms"
-        )
-        embed.add_field(
-            name="METADATA",
-            value=metadata,
-            inline=False,
-        )
-
-        view = AuditView(
-            audit_id=audit_id,
-            message_id=None,
-            prompt_key=prompt_key,
-            version=1,
-            rendered_prompt=rendered_prompt,
-        )
-
-        return embed, view
+        return "\n".join(lines) if lines else "No context needed"

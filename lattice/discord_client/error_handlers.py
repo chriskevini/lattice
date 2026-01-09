@@ -68,14 +68,16 @@ async def notify_parse_error_to_dream(
     rendered_prompt = context.get("rendered_prompt", "")
 
     try:
-        embed, view = AuditViewBuilder.build_extraction_audit(
-            user_message=f"[{parser_type.upper()}] Parse failed",
-            main_message_url="",
-            triples=[],
+        embed, view = AuditViewBuilder.build_standard_audit(
             prompt_key=error.prompt_key or "UNKNOWN",
+            version=1,
+            input_text=f"[{parser_type.upper()}] Parse failed",
+            output_text=truncated_response,
+            metadata_parts=[f"Error: {error.parse_error}"],
             audit_id=error.audit_result.audit_id,
             rendered_prompt=rendered_prompt,
         )
+
         embed.description = f"❌ **Parse Error**: {error.parse_error}"
         embed.add_field(
             name="RAW RESPONSE",

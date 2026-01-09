@@ -148,6 +148,10 @@ async def decide_proactive() -> ProactiveDecision:
             template_version=prompt_template.version,
             main_discord_message_id=0,  # Placeholder since no message exists yet
             temperature=prompt_template.temperature,
+            audit_view=True,
+            audit_view_params={
+                "input_text": "Proactive check-in check",
+            },
         )
     except (ValueError, ImportError) as e:
         logger.exception("LLM call failed")
