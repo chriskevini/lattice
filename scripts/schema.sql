@@ -66,9 +66,9 @@ CREATE INDEX IF NOT EXISTS idx_extractions_entities ON message_extractions USING
 CREATE INDEX IF NOT EXISTS idx_extractions_created_at ON message_extractions(created_at DESC);
 
 -- ----------------------------------------------------------------------------
--- semantic_triple: Text-based knowledge triples with timestamp evolution
+-- semantic_memories: Text-based knowledge triples with timestamp evolution
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS semantic_triple (
+CREATE TABLE IF NOT EXISTS semantic_memories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subject TEXT NOT NULL,
     predicate TEXT NOT NULL,
@@ -76,11 +76,11 @@ CREATE TABLE IF NOT EXISTS semantic_triple (
     source_batch_id TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_semantic_triple_subject ON semantic_triple(subject);
-CREATE INDEX IF NOT EXISTS idx_semantic_triple_predicate ON semantic_triple(predicate);
-CREATE INDEX IF NOT EXISTS idx_semantic_triple_object ON semantic_triple(object);
-CREATE INDEX IF NOT EXISTS idx_semantic_triple_created_at ON semantic_triple(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_semantic_triple_source_batch ON semantic_triple(source_batch_id);
+CREATE INDEX IF NOT EXISTS idx_semantic_memories_subject ON semantic_memories(subject);
+CREATE INDEX IF NOT EXISTS idx_semantic_memories_predicate ON semantic_memories(predicate);
+CREATE INDEX IF NOT EXISTS idx_semantic_memories_object ON semantic_memories(object);
+CREATE INDEX IF NOT EXISTS idx_semantic_memories_created_at ON semantic_memories(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_semantic_memories_source_batch ON semantic_memories(source_batch_id);
 
 -- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage

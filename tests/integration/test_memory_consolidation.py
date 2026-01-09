@@ -1,4 +1,4 @@
-"""Integration tests for semantic triple extraction and graph traversal."""
+"""Integration tests for semantic memory extraction and graph traversal."""
 
 import asyncio
 from collections.abc import Generator
@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from lattice.memory.graph import GraphTraversal
-from lattice.utils.triple_parsing import parse_triples
+from lattice.utils.memory_parsing import parse_semantic_memories as parse_triples
 
 
 @pytest.fixture(scope="session")
@@ -63,7 +63,7 @@ class TestMultiHopReasoningIntegration:
 
         # Create traverser with mock pool
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.traverse_from_entity("Alice", max_hops=3)
+        result = await traverser.find_semantic_memories(subject="Alice")
 
         assert len(result) == 3
         assert result[0]["subject"] == "Alice"
@@ -103,10 +103,10 @@ class TestMultiHopReasoningIntegration:
 
 
 class TestTextFormatParsingIntegration:
-    """Integration tests for text format triple parsing."""
+    """Integration tests for text format memory parsing."""
 
-    def test_parse_triples_arrow_format(self) -> None:
-        """Test parsing triples with -> separator."""
+    def test_parse_memories_arrow_format(self) -> None:
+        """Test parsing memories with -> separator."""
         result = parse_triples("alice -> works_at -> Acme Corp\nbob -> likes -> pizza")
         assert len(result) == 2
         assert result[0]["subject"] == "alice"
@@ -115,27 +115,27 @@ class TestTextFormatParsingIntegration:
         assert result[1]["subject"] == "bob"
         assert result[1]["predicate"] == "likes"
 
-    def test_parse_triples_unicode_arrow(self) -> None:
-        """Test parsing triples with unicode arrow separator."""
+    def test_parse_memories_unicode_arrow(self) -> None:
+        """Test parsing memories with unicode arrow separator."""
         result = parse_triples("alice → works_at → Acme Corp")
         assert len(result) == 1
         assert result[0]["subject"] == "alice"
         assert result[0]["predicate"] == "works_at"
 
-    def test_parse_triples_dash_arrow(self) -> None:
-        """Test parsing triples with dash-arrow separator."""
+    def test_parse_memories_dash_arrow(self) -> None:
+        """Test parsing memories with dash-arrow separator."""
         result = parse_triples("alice --> works_at --> Acme Corp")
         assert len(result) == 1
         assert result[0]["subject"] == "alice"
         assert result[0]["predicate"] == "works_at"
         assert result[0]["object"] == "Acme Corp"
 
-    def test_parse_triples_with_header(self) -> None:
-        """Test parsing triples with Triples: header."""
-        result = parse_triples("Triples:\nalice -> works_at -> Acme Corp")
+    def test_parse_memories_with_header(self) -> None:
+        """Test parsing memories with Memories: header."""
+        result = parse_triples("Memories:\nalice -> works_at -> Acme Corp")
         assert len(result) == 1
 
-    def test_parse_triples_mixed_format(self) -> None:
+    def test_parse_memories_mixed_format(self) -> None:
         """Test parsing mixed JSON and text format."""
         json_result = parse_triples(
             '[{"subject": "Alice", "predicate": "works_at", "object": "Acme"}]'

@@ -386,9 +386,9 @@ class AuditViewBuilder:
         "CONVERSATION_RESPONSE": ("💬", discord.Color.blurple()),
         "PROACTIVE_CHECKIN": ("🌟", discord.Color.gold()),
         "BATCH_MEMORY_EXTRACTION": ("🧠", discord.Color.purple()),
-        "RETRIEVAL_PLANNING": ("🔍", discord.Color.blue()),
+        "CONTEXT_STRATEGY": ("🔍", discord.Color.blue()),
         "ENTITY_EXTRACTION": ("🏷️", discord.Color.teal()),
-        "TRIPLE_EXTRACTION": ("🔗", discord.Color.dark_purple()),
+        "MEMORY_EXTRACTION": ("🔗", discord.Color.dark_purple()),
     }
 
     @staticmethod
@@ -454,32 +454,32 @@ class AuditViewBuilder:
         return embed, view
 
     @staticmethod
-    def format_triples(triples: list[dict[str, Any]]) -> str:
-        """Helper to format triples for the OUTPUT field."""
-        if not triples:
+    def format_memories(memories: list[dict[str, Any]]) -> str:
+        """Helper to format semantic memories for the OUTPUT field."""
+        if not memories:
             return "Nothing extracted"
 
-        lines = [f"🔗 {len(triples)} triples"]
-        for t in triples:
-            subject = t.get("subject") or t.get("s", "")
-            predicate = t.get("predicate") or t.get("p", "")
-            obj = t.get("object") or t.get("o", "")
+        lines = [f"🔗 {len(memories)} memories"]
+        for m in memories:
+            subject = m.get("subject") or m.get("s", "")
+            predicate = m.get("predicate") or m.get("p", "")
+            obj = m.get("object") or m.get("o", "")
             if subject and predicate and obj:
                 lines.append(f"• {subject} → {predicate} → {obj}")
 
         return "\n".join(lines)
 
     @staticmethod
-    def format_planning(
-        entities: list[str], context_flags: list[str], unknowns: list[str]
+    def format_context_strategy(
+        entities: list[str], context_flags: list[str], unresolved: list[str]
     ) -> str:
-        """Helper to format retrieval planning result for the OUTPUT field."""
+        """Helper to format context strategy result for the OUTPUT field."""
         lines = []
         if entities:
             lines.append(f"**Entities:** {', '.join(entities)}")
         if context_flags:
             lines.append(f"**Flags:** {', '.join([f'`{f}`' for f in context_flags])}")
-        if unknowns:
-            lines.append(f"**Unknowns:** {', '.join(unknowns)}")
+        if unresolved:
+            lines.append(f"**Unresolved:** {', '.join(unresolved)}")
 
         return "\n".join(lines) if lines else "No context needed"

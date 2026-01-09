@@ -1,4 +1,4 @@
-"""Unit tests for graph traversal and triple parsing utilities."""
+"""Unit tests for graph traversal and semantic memory parsing utilities."""
 
 from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, UTC
@@ -6,15 +6,15 @@ from datetime import datetime, UTC
 import pytest
 
 from lattice.memory.graph import GraphTraversal
-from lattice.utils.triple_parsing import parse_triples
+from lattice.utils.memory_parsing import parse_semantic_memories
 
 
-class TestParseTriples:
-    """Tests for parse_triples function."""
+class TestParseSemanticMemories:
+    """Tests for parse_semantic_memories function."""
 
     def test_valid_json_array(self) -> None:
-        """Test parsing valid JSON array of triples."""
-        result = parse_triples(
+        """Test parsing valid JSON array of memories."""
+        result = parse_semantic_memories(
             '[{"subject": "Alice", "predicate": "works_at", "object": "Company X"}]'
         )
         assert len(result) == 1
@@ -22,9 +22,9 @@ class TestParseTriples:
         assert result[0]["predicate"] == "works_at"
         assert result[0]["object"] == "Company X"
 
-    def test_multiple_triples(self) -> None:
-        """Test parsing multiple triples."""
-        result = parse_triples(
+    def test_multiple_memories(self) -> None:
+        """Test parsing multiple memories."""
+        result = parse_semantic_memories(
             '[{"subject": "Alice", "predicate": "works_at", "object": "Acme"},'
             '{"subject": "Bob", "predicate": "likes", "object": "Pizza"}]'
         )
@@ -34,29 +34,31 @@ class TestParseTriples:
 
     def test_empty_array(self) -> None:
         """Test parsing empty array."""
-        assert parse_triples("[]") == []
+        assert parse_semantic_memories("[]") == []
 
     def test_malformed_json(self) -> None:
         """Test parsing malformed JSON returns empty list."""
-        assert parse_triples("not json") == []
-        assert parse_triples("{invalid}") == []
+        assert parse_semantic_memories("not json") == []
+        assert parse_semantic_memories("{invalid}") == []
 
     def test_missing_fields(self) -> None:
         """Test parsing JSON with missing fields."""
-        assert parse_triples('[{"subject": "Alice"}]') == []
-        assert parse_triples('[{"predicate": "works_at"}]') == []
-        assert parse_triples('[{"object": "Acme"}]') == []
+        assert parse_semantic_memories('[{"subject": "Alice"}]') == []
+        assert parse_semantic_memories('[{"predicate": "works_at"}]') == []
+        assert parse_semantic_memories('[{"object": "Acme"}]') == []
 
     def test_invalid_field_types(self) -> None:
         """Test parsing JSON with invalid field types."""
         assert (
-            parse_triples('[{"subject": "Alice", "predicate": 123, "object": "Acme"}]')
+            parse_semantic_memories(
+                '[{"subject": "Alice", "predicate": 123, "object": "Acme"}]'
+            )
             == []
         )
 
     def test_with_markdown_code_block(self) -> None:
         """Test parsing JSON with markdown code block."""
-        result = parse_triples(
+        result = parse_semantic_memories(
             '```json\n[{"subject": "Bob", "predicate": "likes", "object": "Pizza"}]\n```'
         )
         assert len(result) == 1
@@ -64,14 +66,14 @@ class TestParseTriples:
 
     def test_with_json_code_block(self) -> None:
         """Test parsing JSON with json language marker."""
-        result = parse_triples(
+        result = parse_semantic_memories(
             '```\n[{"subject": "Bob", "predicate": "likes", "object": "Pizza"}]\n```'
         )
         assert len(result) == 1
 
     def test_predicate_normalization(self) -> None:
         """Test that predicates are normalized to lowercase."""
-        result = parse_triples(
+        result = parse_semantic_memories(
             '[{"subject": "Alice", "predicate": "WORKS_AT", "object": "Acme"}]'
         )
         assert len(result) == 1
@@ -79,7 +81,7 @@ class TestParseTriples:
 
     def test_whitespace_stripping(self) -> None:
         """Test that whitespace is stripped from values."""
-        result = parse_triples(
+        result = parse_semantic_memories(
             '[  {"subject": "  Alice  ", "predicate": "likes", "object": "  Pizza  "}  ]'
         )
         assert len(result) == 1
@@ -88,7 +90,7 @@ class TestParseTriples:
 
     def test_case_insensitive_content(self) -> None:
         """Test that subject/object content is not normalized."""
-        result = parse_triples(
+        result = parse_semantic_memories(
             '[{"subject": "Alice", "predicate": "likes", "object": "TECHNOLOGY"}]'
         )
         assert len(result) == 1
@@ -96,11 +98,11 @@ class TestParseTriples:
 
 
 class TestGraphTraversal:
-    """Tests for GraphTraversal class with text-based triples."""
+    """Tests for GraphTraversal class with text-based memories."""
 
     @pytest.mark.asyncio
-    async def test_find_triples_by_predicate(self) -> None:
-        """Test finding triples by predicate only."""
+    async def test_find_semantic_memories_by_predicate(self) -> None:
+        """Test finding memories by predicate only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(
@@ -117,15 +119,15 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(predicate="did activity")
+        result = await traverser.find_semantic_memories(predicate="did activity")
 
         assert len(result) == 1
         assert result[0]["predicate"] == "did activity"
         assert result[0]["object"] == "coding"
 
     @pytest.mark.asyncio
-    async def test_find_triples_by_subject_and_predicate(self) -> None:
-        """Test finding triples by subject and predicate."""
+    async def test_find_semantic_memories_by_subject_and_predicate(self) -> None:
+        """Test finding memories by subject and predicate."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(
@@ -142,15 +144,17 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(subject="User", predicate="did activity")
+        result = await traverser.find_semantic_memories(
+            subject="User", predicate="did activity"
+        )
 
         assert len(result) == 1
         assert result[0]["subject"] == "User"
         assert result[0]["predicate"] == "did activity"
 
     @pytest.mark.asyncio
-    async def test_find_triples_no_filters(self) -> None:
-        """Test finding triples with no filters returns all."""
+    async def test_find_semantic_memories_no_filters(self) -> None:
+        """Test finding memories with no filters returns all."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(
@@ -167,13 +171,13 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples()
+        result = await traverser.find_semantic_memories()
 
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_find_triples_empty_result(self) -> None:
-        """Test finding triples returns empty list when no matches."""
+    async def test_find_semantic_memories_empty_result(self) -> None:
+        """Test finding memories returns empty list when no matches."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
@@ -181,13 +185,13 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(subject="nonexistent")
+        result = await traverser.find_semantic_memories(subject="nonexistent")
 
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_find_triples_with_date_range(self) -> None:
-        """Test finding triples by criteria within date range."""
+    async def test_find_semantic_memories_with_date_range(self) -> None:
+        """Test finding memories by criteria within date range."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         start_date = datetime(2026, 1, 1, tzinfo=UTC)
@@ -206,7 +210,7 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(
+        result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
             end_date=end_date,
@@ -217,8 +221,8 @@ class TestGraphTraversal:
         assert result[0]["object"] == "coding"
 
     @pytest.mark.asyncio
-    async def test_find_triples_with_start_date_only(self) -> None:
-        """Test finding triples with start date only."""
+    async def test_find_semantic_memories_with_start_date_only(self) -> None:
+        """Test finding memories with start date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         start_date = datetime(2026, 1, 1, tzinfo=UTC)
@@ -236,7 +240,7 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(
+        result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
             limit=50,
@@ -245,8 +249,8 @@ class TestGraphTraversal:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_find_triples_with_end_date_only(self) -> None:
-        """Test finding triples with end date only."""
+    async def test_find_semantic_memories_with_end_date_only(self) -> None:
+        """Test finding memories with end date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         end_date = datetime(2026, 1, 8, tzinfo=UTC)
@@ -264,7 +268,7 @@ class TestGraphTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(
+        result = await traverser.find_semantic_memories(
             predicate="did activity",
             end_date=end_date,
             limit=50,
@@ -273,12 +277,12 @@ class TestGraphTraversal:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_find_triples_respects_limit(self) -> None:
+    async def test_find_semantic_memories_respects_limit(self) -> None:
         """Test that limit parameter is respected."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
 
-        triples = [
+        memories = [
             {
                 "subject": "user",
                 "predicate": f"predicate_{i}",
@@ -287,12 +291,12 @@ class TestGraphTraversal:
             }
             for i in range(5)
         ]
-        mock_conn.fetch = AsyncMock(return_value=triples[:2])
+        mock_conn.fetch = AsyncMock(return_value=memories[:2])
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(limit=2)
+        result = await traverser.find_semantic_memories(limit=2)
 
         assert len(result) == 2
 
@@ -347,12 +351,12 @@ class TestBFSTraversal:
 
         Creates A -> B -> C -> A cycle and verifies:
         - No infinite loop (algorithm terminates)
-        - Only unique triples returned (no duplicates)
+        - Only unique memories returned (no duplicates)
         """
         mock_pool = MagicMock()
         mock_conn = MagicMock()
 
-        cycle_triples = [
+        cycle_memories = [
             {
                 "subject": "A",
                 "predicate": "connects_to",
@@ -373,7 +377,7 @@ class TestBFSTraversal:
             },
         ]
 
-        mock_conn.fetch = AsyncMock(return_value=cycle_triples)
+        mock_conn.fetch = AsyncMock(return_value=cycle_memories)
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
@@ -382,7 +386,7 @@ class TestBFSTraversal:
 
         subject_objects = {(t["subject"], t["object"]) for t in result}
         assert len(subject_objects) == 3, (
-            f"Expected 3 unique triples, got {len(subject_objects)}: {subject_objects}"
+            f"Expected 3 unique memories, got {len(subject_objects)}: {subject_objects}"
         )
 
         seen_subjects = {t["subject"] for t in result}
@@ -411,7 +415,7 @@ class TestBFSTraversal:
 
     @pytest.mark.asyncio
     async def test_bfs_returns_depth_info(self) -> None:
-        """Test that BFS returns triples with depth metadata."""
+        """Test that BFS returns memories with depth metadata."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
 
@@ -436,8 +440,8 @@ class TestBFSTraversal:
         assert result[0]["depth"] == 1
 
     @pytest.mark.asyncio
-    async def test_find_triples_with_date_range(self) -> None:
-        """Test finding triples by predicate within date range."""
+    async def test_find_semantic_memories_with_date_range(self) -> None:
+        """Test finding memories by predicate within date range."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         start_date = datetime(2026, 1, 1, tzinfo=UTC)
@@ -456,7 +460,7 @@ class TestBFSTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(
+        result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
             end_date=end_date,
@@ -467,8 +471,8 @@ class TestBFSTraversal:
         assert result[0]["object"] == "coding"
 
     @pytest.mark.asyncio
-    async def test_find_triples_with_start_date_only(self) -> None:
-        """Test finding triples with start date only."""
+    async def test_find_semantic_memories_with_start_date_only(self) -> None:
+        """Test finding memories with start date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         start_date = datetime(2026, 1, 1, tzinfo=UTC)
@@ -486,7 +490,7 @@ class TestBFSTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(
+        result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
             limit=50,
@@ -495,8 +499,8 @@ class TestBFSTraversal:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_find_triples_with_end_date_only(self) -> None:
-        """Test finding triples with end date only."""
+    async def test_find_semantic_memories_with_end_date_only(self) -> None:
+        """Test finding memories with end date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         end_date = datetime(2026, 1, 8, tzinfo=UTC)
@@ -514,7 +518,7 @@ class TestBFSTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(
+        result = await traverser.find_semantic_memories(
             predicate="did activity",
             end_date=end_date,
             limit=50,
@@ -524,8 +528,8 @@ class TestBFSTraversal:
         assert result[0]["object"] == "coding"
 
     @pytest.mark.asyncio
-    async def test_find_triples_with_dates(self) -> None:
-        """Test finding triples with date filtering."""
+    async def test_find_semantic_memories_with_dates(self) -> None:
+        """Test finding memories with date filtering."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         start_date = datetime(2026, 1, 1, tzinfo=UTC)
@@ -545,7 +549,7 @@ class TestBFSTraversal:
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
-        result = await traverser.find_triples(
+        result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
             end_date=end_date,

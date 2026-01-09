@@ -1,9 +1,12 @@
-"""Unit tests for triple parsing utilities."""
+"""Unit tests for semantic memory parsing utilities."""
 
 import json
 import logging
 
-from lattice.utils.triple_parsing import normalize_predicate, parse_triples
+from lattice.utils.memory_parsing import (
+    normalize_predicate,
+    parse_semantic_memories as parse_triples,
+)
 
 
 class TestNormalizePredicate:
@@ -21,11 +24,11 @@ class TestNormalizePredicate:
         assert normalize_predicate("UNKNOWN") == "unknown"
 
 
-class TestParseTriples:
-    """Tests for parse_triples function."""
+class TestParseSemanticMemories:
+    """Tests for parse_semantic_memories function."""
 
-    def test_parse_valid_json_triples(self) -> None:
-        """Test parsing valid JSON list of triples."""
+    def test_parse_valid_json_memories(self) -> None:
+        """Test parsing valid JSON list of memories."""
         raw_output = json.dumps(
             [
                 {"subject": "Alice", "predicate": "likes", "object": "Python"},
@@ -95,8 +98,8 @@ class TestParseTriples:
         assert result == []
         assert any("expected list" in rec.message for rec in caplog.records)
 
-    def test_parse_triples_with_predicate_normalization(self) -> None:
-        """Test triples have predicates normalized to canonical form."""
+    def test_parse_memories_with_predicate_normalization(self) -> None:
+        """Test memories have predicates normalized to canonical form."""
         raw_output = json.dumps(
             [
                 {"subject": "Alice", "predicate": "enjoys", "object": "Coffee"},
@@ -110,8 +113,8 @@ class TestParseTriples:
         assert result[0]["predicate"] == "enjoys"
         assert result[1]["predicate"] == "employed_at"
 
-    def test_parse_triples_strips_whitespace(self) -> None:
-        """Test triple fields have whitespace stripped."""
+    def test_parse_memories_strips_whitespace(self) -> None:
+        """Test memory fields have whitespace stripped."""
         raw_output = json.dumps(
             [
                 {
@@ -131,8 +134,8 @@ class TestParseTriples:
             "object": "Python",
         }
 
-    def test_parse_invalid_triple_missing_field(self, caplog) -> None:
-        """Test parsing triple missing required field skips it."""
+    def test_parse_invalid_memory_missing_field(self, caplog) -> None:
+        """Test parsing memory missing required field skips it."""
         raw_output = json.dumps(
             [
                 {"subject": "Alice", "predicate": "likes"},  # Missing object
@@ -145,9 +148,9 @@ class TestParseTriples:
 
         assert len(result) == 1
         assert result[0]["subject"] == "Bob"
-        assert any("invalid triple format" in rec.message for rec in caplog.records)
+        assert any("invalid memory format" in rec.message for rec in caplog.records)
 
-    def test_parse_invalid_triple_non_dict(self, caplog) -> None:
+    def test_parse_invalid_memory_non_dict(self, caplog) -> None:
         """Test parsing list with non-dict item skips it."""
         raw_output = json.dumps(
             [
@@ -164,8 +167,8 @@ class TestParseTriples:
         assert result[0]["subject"] == "Alice"
         assert result[1]["subject"] == "Bob"
 
-    def test_parse_invalid_triple_non_string_field(self, caplog) -> None:
-        """Test parsing triple with non-string field skips it."""
+    def test_parse_invalid_memory_non_string_field(self, caplog) -> None:
+        """Test parsing memory with non-string field skips it."""
         raw_output = json.dumps(
             [
                 {"subject": 123, "predicate": "likes", "object": "Python"},
@@ -181,7 +184,7 @@ class TestParseTriples:
 
     def test_parse_text_format_arrow(self) -> None:
         """Test parsing text format with -> separator."""
-        raw_output = """Triples:
+        raw_output = """Memories:
 Alice -> likes -> Python
 Bob -> works_at -> Company"""
 
@@ -224,7 +227,7 @@ Bob → created → Project"""
         }
 
     def test_parse_text_format_with_predicate_normalization(self) -> None:
-        """Test text format triples have predicates normalized."""
+        """Test text format memories have predicates normalized."""
         raw_output = "Alice -> enjoys -> Coffee"
 
         result = parse_triples(raw_output)
@@ -233,8 +236,8 @@ Bob → created → Project"""
         assert result[0]["predicate"] == "enjoys"
 
     def test_parse_text_format_skips_header_lines(self) -> None:
-        """Test text format parsing skips 'Triples:' header."""
-        raw_output = """triples:
+        """Test text format parsing skips 'Memories:' header."""
+        raw_output = """memories:
 Alice -> likes -> Python
 TRIPLE LIST
 Bob -> works_at -> Company"""
@@ -311,8 +314,8 @@ Bob -> works_at -> Company"""
 
         assert result == []
 
-    def test_parse_complex_valid_triples(self) -> None:
-        """Test parsing multiple valid triples with all fields."""
+    def test_parse_complex_valid_memories(self) -> None:
+        """Test parsing multiple valid memories with all fields."""
         raw_output = json.dumps(
             [
                 {"subject": "Alice", "predicate": "likes", "object": "Python"},

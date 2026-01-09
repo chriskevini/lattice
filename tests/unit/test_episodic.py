@@ -12,7 +12,7 @@ from lattice.memory.episodic import (
     EpisodicMessage,
     get_recent_messages,
     store_message,
-    store_semantic_triples,
+    store_semantic_memories,
 )
 
 
@@ -406,22 +406,22 @@ class TestGetRecentMessages:
             assert messages[0].user_timezone == "UTC"
 
 
-class TestStoreSemanticTriples:
-    """Tests for store_semantic_triples function."""
+class TestStoreSemanticMemories:
+    """Tests for store_semantic_memories function."""
 
     @pytest.mark.asyncio
-    async def test_store_semantic_triples_empty_list(self) -> None:
-        """Test that empty triples list returns early without DB access."""
-        result = await store_semantic_triples(uuid4(), [])
+    async def test_store_semantic_memories_empty_list(self) -> None:
+        """Test that empty memories list returns early without DB access."""
+        result = await store_semantic_memories(uuid4(), [])
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_store_semantic_triples_valid_triple(self) -> None:
-        """Test storing a valid semantic triple."""
+    async def test_store_semantic_memories_valid_memory(self) -> None:
+        """Test storing a valid semantic memory."""
         message_id = uuid4()
 
-        triples = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
+        memories = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
@@ -429,23 +429,23 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            await store_semantic_triples(message_id, triples)
+            await store_semantic_memories(message_id, memories)
 
-            # Verify triple was inserted
+            # Verify memory was inserted
             mock_conn.execute.assert_called_once()
             call_args = mock_conn.execute.call_args
-            assert "INSERT INTO semantic_triple" in call_args[0][0]
+            assert "INSERT INTO semantic_memories" in call_args[0][0]
             assert call_args[0][1] == "Alice"
             assert call_args[0][2] == "likes"
             assert call_args[0][3] == "Python"
             assert call_args[0][4] is None  # source_batch_id
 
     @pytest.mark.asyncio
-    async def test_store_semantic_triples_skips_invalid(self) -> None:
-        """Test that invalid triples (missing fields) are skipped with warning."""
+    async def test_store_semantic_memories_skips_invalid(self) -> None:
+        """Test that invalid memories (missing fields) are skipped with warning."""
         message_id = uuid4()
 
-        invalid_triples = [
+        invalid_memories = [
             {"subject": "", "predicate": "likes", "object": "Python"},  # Empty subject
             {
                 "subject": "Alice",
@@ -462,17 +462,17 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            await store_semantic_triples(message_id, invalid_triples)
+            await store_semantic_memories(message_id, invalid_memories)
 
-            # Should not insert any triples (all invalid)
+            # Should not insert any memories (all invalid)
             mock_conn.execute.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_store_semantic_triples_continues_on_error(self) -> None:
-        """Test that errors executing INSERT don't stop other triples."""
+    async def test_store_semantic_memories_continues_on_error(self) -> None:
+        """Test that errors executing INSERT don't stop other memories."""
         message_id = uuid4()
 
-        triples = [
+        memories = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
             {"subject": "Bob", "predicate": "uses", "object": "Java"},
         ]
@@ -486,18 +486,18 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            # Should not raise exception, continues to process all triples
-            await store_semantic_triples(message_id, triples)
+            # Should not raise exception, continues to process all memories
+            await store_semantic_memories(message_id, memories)
 
-            # Both triples attempted
+            # Both memories attempted
             assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_store_semantic_triples_continues_on_execute_error(self) -> None:
-        """Test that errors executing INSERT don't stop other triples."""
+    async def test_store_semantic_memories_continues_on_execute_error(self) -> None:
+        """Test that errors executing INSERT don't stop other memories."""
         message_id = uuid4()
 
-        triples = [
+        memories = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
             {"subject": "Bob", "predicate": "knows", "object": "Carol"},
         ]
@@ -511,17 +511,17 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            # Should not raise exception, continues to process all triples
-            await store_semantic_triples(message_id, triples)
+            # Should not raise exception, continues to process all memories
+            await store_semantic_memories(message_id, memories)
 
-            # Both triples attempted
+            # Both memories attempted
             assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_store_semantic_triples_uses_transaction(self) -> None:
-        """Test that store_semantic_triples uses a transaction."""
+    async def test_store_semantic_memories_uses_transaction(self) -> None:
+        """Test that store_semantic_memories uses a transaction."""
         message_id = uuid4()
-        triples = [{"subject": "A", "predicate": "rel", "object": "B"}]
+        memories = [{"subject": "A", "predicate": "rel", "object": "B"}]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
@@ -529,7 +529,7 @@ class TestStoreSemanticTriples:
         with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
-            await store_semantic_triples(message_id, triples)
+            await store_semantic_memories(message_id, memories)
 
             # Verify transaction was used
             mock_conn.transaction.assert_called_once()

@@ -1,11 +1,11 @@
-"""Entity extraction module - extracts entity mentions from user messages.
+"""Context strategy module - analyzes conversation for memory retrieval.
 
-This module provides entity extraction for graph traversal.
-Extracted entities are used as starting points for multi-hop knowledge retrieval.
+This module provides analysis for memory retrieval.
+Extracted entities are used as starting points for multi-hop memory retrieval.
 
 Templates:
 - ENTITY_EXTRACTION: Extracts entity mentions for graph traversal (reactive flow)
-- RETRIEVAL_PLANNING: Analyzes conversation window for entities, context flags, and unknown entities
+- CONTEXT_STRATEGY: Analyzes conversation window for entities, context flags, and unresolved entities
 - CONTEXT_RETRIEVAL: Fetches context based on entities and context flags
 """
 
@@ -36,20 +36,20 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class RetrievalPlanning:
-    """Represents retrieval planning from conversation window analysis.
+class ContextStrategy:
+    """Represents context strategy from conversation window analysis.
 
     Analyzes a conversation window (including current message) to extract:
     - entities: Canonical or known entity mentions for graph traversal
     - context_flags: Flags indicating what additional context is needed
-    - unknown_entities: Entities requiring clarification before canonicalization
+    - unresolved_entities: Entities requiring clarification before canonicalization
     """
 
     id: uuid.UUID
     message_id: uuid.UUID
     entities: list[str]
     context_flags: list[str]
-    unknown_entities: list[str]
+    unresolved_entities: list[str]
     rendered_prompt: str
     raw_response: str
     extraction_method: str
@@ -71,10 +71,11 @@ class EntityExtraction:
     extraction_method: str
     created_at: datetime
     context_flags: list[str] | None = None
-    unknown_entities: list[str] | None = None
+    unresolved_entities: list[str] | None = None
 
 
 # Type alias for backward compatibility
+RetrievalPlanning: TypeAlias = ContextStrategy
 QueryExtraction: TypeAlias = EntityExtraction
 
 
@@ -83,7 +84,7 @@ def build_smaller_episodic_context(
     current_message: str,
     window_size: int = SMALLER_EPISODIC_WINDOW_SIZE,
 ) -> str:
-    """Build smaller episodic context for RETRIEVAL_PLANNING.
+    """Build smaller episodic context for CONTEXT_STRATEGY.
 
     Includes up to window_size messages INCLUDING the current message.
     For analysis tasks (not response tasks), the current message is part
@@ -97,18 +98,21 @@ def build_smaller_episodic_context(
     Returns:
         Formatted conversation window with all messages
     """
-    from lattice.utils.context import format_episodic_messages
     from datetime import datetime, UTC
 
     window = recent_messages[-(window_size - 1) :] if window_size > 1 else []
 
-    lines = [format_episodic_messages([msg]) for msg in window]
+    formatted_lines = []
+    for msg in window:
+        role = "ASSISTANT" if msg.is_bot else "USER"
+        ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M")
+        formatted_lines.append(f"[{ts_str}] {role}: {msg.content}")
 
     # Use current time for the user message to maintain timestamp consistency
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
-    lines.append(f"[{now}] USER: {current_message}")
+    formatted_lines.append(f"[{now}] USER: {current_message}")
 
-    return "\n".join(lines)
+    return "\n".join(formatted_lines)
 
 
 async def extract_entities(
@@ -256,7 +260,7 @@ async def extract_entities(
         extraction_method=extraction_method,
     )
 
-    return QueryExtraction(
+    return EntityExtraction(
         id=extraction_id,
         message_id=message_id,
         entities=extraction_data["entities"],
@@ -267,53 +271,18 @@ async def extract_entities(
     )
 
 
-async def get_extraction(extraction_id: uuid.UUID) -> QueryExtraction | None:
-    """Retrieve a stored extraction by ID.
-
-    Args:
-        extraction_id: UUID of the extraction to retrieve
-
-    Returns:
-        QueryExtraction object or None if not found
-    """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT
-                id, message_id, extraction, rendered_prompt, raw_response, created_at
-            FROM message_extractions
-            WHERE id = $1
-            """,
-            extraction_id,
-        )
-
-        if not row:
-            return None
-
-        extraction_data = row["extraction"]
-        return EntityExtraction(
-            id=row["id"],
-            message_id=row["message_id"],
-            entities=extraction_data["entities"],
-            rendered_prompt=row["rendered_prompt"],
-            raw_response=row["raw_response"],
-            extraction_method=extraction_data.get("_extraction_method", "api"),
-            created_at=row["created_at"],
-        )
-
-
-async def retrieval_planning(
+async def context_strategy(
     message_id: uuid.UUID,
     message_content: str,
     recent_messages: list["EpisodicMessage"],
     user_timezone: str | None = None,
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
-) -> RetrievalPlanning:
-    """Perform retrieval planning on conversation window.
+) -> ContextStrategy:
+    """Perform context strategy analysis on conversation window.
 
     This function:
-    1. Fetches the RETRIEVAL_PLANNING prompt template
+    1. Fetches the CONTEXT_STRATEGY prompt template
     2. Builds smaller episodic context (including current message)
     3. Fetches canonical entities from database
     4. Renders the prompt with context
@@ -330,7 +299,7 @@ async def retrieval_planning(
         audit_view_params: Parameters for the AuditView
 
     Returns:
-        RetrievalPlanning object with structured fields
+        ContextStrategy object with structured fields
 
     Raises:
         ValueError: If prompt template not found
@@ -338,9 +307,9 @@ async def retrieval_planning(
     """
     from lattice.memory.canonical import get_canonical_entities_list
 
-    prompt_template = await get_prompt("RETRIEVAL_PLANNING")
+    prompt_template = await get_prompt("CONTEXT_STRATEGY")
     if not prompt_template:
-        msg = "RETRIEVAL_PLANNING prompt template not found in prompt_registry"
+        msg = "CONTEXT_STRATEGY prompt template not found in prompt_registry"
         raise ValueError(msg)
 
     user_tz = user_timezone or "UTC"
@@ -363,7 +332,7 @@ async def retrieval_planning(
     )
 
     logger.info(
-        "Running retrieval planning",
+        "Running context strategy",
         message_id=str(message_id),
         message_length=len(message_content),
         entity_count=len(canonical_entities),
@@ -374,7 +343,7 @@ async def retrieval_planning(
 
     result = await llm_client.complete(
         prompt=rendered_prompt,
-        prompt_key="RETRIEVAL_PLANNING",
+        prompt_key="CONTEXT_STRATEGY",
         template_version=prompt_template.version,
         main_discord_message_id=int(message_id),
         temperature=prompt_template.temperature,
@@ -385,7 +354,7 @@ async def retrieval_planning(
     extraction_method = "api"
 
     logger.info(
-        "Retrieval planning completed",
+        "Context strategy completed",
         message_id=str(message_id),
         model=result.model,
         tokens=result.total_tokens,
@@ -396,7 +365,7 @@ async def retrieval_planning(
         extraction_data = parse_llm_json_response(
             content=result.content,
             audit_result=result,
-            prompt_key="RETRIEVAL_PLANNING",
+            prompt_key="CONTEXT_STRATEGY",
         )
     except JSONParseError as e:
         if bot:
@@ -405,13 +374,13 @@ async def retrieval_planning(
                 error=e,
                 context={
                     "message_id": message_id,
-                    "parser_type": "json_retrieval_planning",
+                    "parser_type": "json_context_strategy",
                     "rendered_prompt": rendered_prompt,
                 },
             )
         raise
 
-    required_fields = ["entities", "context_flags", "unknown_entities"]
+    required_fields = ["entities", "context_flags", "unresolved_entities"]
     for field in required_fields:
         if field not in extraction_data:
             msg = f"Missing required field in extraction: {field}"
@@ -452,21 +421,21 @@ async def retrieval_planning(
         )
 
     logger.info(
-        "Retrieval planning completed",
+        "Context strategy stored",
         extraction_id=str(extraction_id),
         message_id=str(message_id),
         entity_count=len(extraction_data["entities"]),
         context_flag_count=len(extraction_data["context_flags"]),
-        unknown_entity_count=len(extraction_data["unknown_entities"]),
+        unresolved_entity_count=len(extraction_data["unresolved_entities"]),
         extraction_method=extraction_method,
     )
 
-    return RetrievalPlanning(
+    return ContextStrategy(
         id=extraction_id,
         message_id=message_id,
         entities=extraction_data["entities"],
         context_flags=extraction_data["context_flags"],
-        unknown_entities=extraction_data["unknown_entities"],
+        unresolved_entities=extraction_data["unresolved_entities"],
         rendered_prompt=rendered_prompt,
         raw_response=raw_response,
         extraction_method=extraction_method,
@@ -474,16 +443,16 @@ async def retrieval_planning(
     )
 
 
-async def get_retrieval_planning(
+async def get_context_strategy(
     extraction_id: uuid.UUID,
-) -> RetrievalPlanning | None:
-    """Retrieve a stored retrieval planning by ID.
+) -> ContextStrategy | None:
+    """Retrieve a stored context strategy by ID.
 
     Args:
-        extraction_id: UUID of the retrieval planning to retrieve
+        extraction_id: UUID of the strategy to retrieve
 
     Returns:
-        RetrievalPlanning object or None if not found
+        ContextStrategy object or None if not found
     """
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -500,12 +469,12 @@ async def get_retrieval_planning(
             return None
 
         extraction_data = row["extraction"]
-        return RetrievalPlanning(
+        return ContextStrategy(
             id=row["id"],
             message_id=row["message_id"],
             entities=extraction_data["entities"],
             context_flags=extraction_data.get("context_flags", []),
-            unknown_entities=extraction_data.get("unknown_entities", []),
+            unresolved_entities=extraction_data.get("unresolved_entities", []),
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
             extraction_method=extraction_data.get("_extraction_method", "api"),
@@ -513,16 +482,161 @@ async def get_retrieval_planning(
         )
 
 
+async def retrieve_context(
+    entities: list[str],
+    context_flags: list[str],
+    memory_depth: int = 2,
+) -> dict[str, str]:
+    """Retrieve context based on entities and context flags.
+
+    This function implements context retrieval using flags from
+    CONTEXT_STRATEGY. It fetches:
+    - Semantic memories for entity relationships (if entities present)
+    - Goal context (if goal_context flag present)
+    - Activity memories (if activity_context flag present)
+
+    Args:
+        entities: Extracted entity mentions from context_strategy()
+        context_flags: Context flags from context_strategy() (e.g., ["goal_context"])
+        memory_depth: Graph traversal depth (default 2 for multi-hop relationships)
+
+    Returns:
+        Dictionary with context strings and metadata:
+        - semantic_context: Formatted semantic memories (empty if no entities)
+        - goal_context: Formatted goals and predicates (empty if no goal_context flag)
+        - memory_origins: Set of message UUIDs that these memories originated from
+    """
+    from lattice.memory.graph import GraphTraversal
+    from lattice.utils.database import db_pool
+
+    context: dict[str, Any] = {
+        "semantic_context": "",
+        "goal_context": "",
+        "memory_origins": set(),
+    }
+
+    semantic_memories: list[dict[str, Any]] = []
+
+    if "activity_context" in context_flags or "goal_context" in context_flags:
+        additional_entities = []
+
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=1)
+
+            if "activity_context" in context_flags:
+                activity_memories = await traverser.find_semantic_memories(
+                    subject="User",
+                    predicate="did activity",
+                    limit=20,
+                )
+                additional_entities.extend(
+                    [
+                        memory.get("object", "")
+                        for memory in activity_memories
+                        if memory.get("object")
+                    ]
+                )
+
+            if "goal_context" in context_flags:
+                goal_memories = await traverser.find_semantic_memories(
+                    predicate="has goal",
+                    limit=10,
+                )
+                additional_entities.extend(
+                    [
+                        memory.get("object", "")
+                        for memory in goal_memories
+                        if memory.get("object")
+                    ]
+                )
+
+        if additional_entities:
+            entities = list(entities) + additional_entities
+
+            logger.debug(
+                "Hybrid context processed",
+                additional_entity_count=len(additional_entities),
+                entities=additional_entities,
+            )
+
+    if entities and memory_depth > 0:
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
+
+            import asyncio
+
+            traverse_tasks = [
+                traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
+                for entity_name in entities
+            ]
+
+            if traverse_tasks:
+                traverse_results = await asyncio.gather(*traverse_tasks)
+                seen_memory_ids: set[tuple[str, str, str]] = set()
+                for result in traverse_results:
+                    for memory in result:
+                        memory_key = (
+                            memory.get("subject", ""),
+                            memory.get("predicate", ""),
+                            memory.get("object", ""),
+                        )
+                        if memory_key not in seen_memory_ids and all(memory_key):
+                            semantic_memories.append(memory)
+                            seen_memory_ids.add(memory_key)
+                            if origin_id := memory.get("origin_id"):
+                                context["memory_origins"].add(origin_id)
+
+                logger.debug(
+                    "Graph traversal completed",
+                    depth=memory_depth,
+                    entities_explored=len(entities),
+                    memories_found=len(semantic_memories),
+                )
+        else:
+            logger.warning("Database pool not initialized, skipping graph traversal")
+
+    if semantic_memories:
+        relationships = []
+        for memory in semantic_memories[:10]:
+            subject = memory.get("subject", "")
+            predicate = memory.get("predicate", "")
+            obj = memory.get("object", "")
+            if subject and predicate and obj:
+                relationships.append(f"{subject} {predicate} {obj}")
+
+        if relationships:
+            context["semantic_context"] = (
+                "Relevant knowledge from past conversations:\n"
+                + "\n".join(f"- {rel}" for rel in relationships)
+            )
+        else:
+            context["semantic_context"] = "No relevant context found."
+    else:
+        context["semantic_context"] = "No relevant context found."
+
+    return context
+
+
+async def retrieval_planning(*args, **kwargs):
+    """Backwards compatibility wrapper for context_strategy."""
+    return await context_strategy(*args, **kwargs)
+
+
+async def get_retrieval_planning(*args, **kwargs):
+    """Backwards compatibility wrapper for get_context_strategy."""
+    return await get_context_strategy(*args, **kwargs)
+
+
 async def get_message_retrieval_planning(
     message_id: uuid.UUID,
-) -> RetrievalPlanning | None:
-    """Retrieve retrieval planning for a specific message.
+) -> ContextStrategy | None:
+    """Retrieve context strategy for a specific message.
 
     Args:
         message_id: UUID of the message
 
     Returns:
-        RetrievalPlanning object or None if not found
+        ContextStrategy object or None if not found
     """
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -530,7 +644,7 @@ async def get_message_retrieval_planning(
             SELECT
                 id, message_id, extraction, rendered_prompt, raw_response, created_at
             FROM message_extractions
-            WHERE message_id = $1 AND prompt_key = 'RETRIEVAL_PLANNING'
+            WHERE message_id = $1 AND prompt_key = 'CONTEXT_STRATEGY'
             ORDER BY created_at DESC
             LIMIT 1
             """,
@@ -538,15 +652,30 @@ async def get_message_retrieval_planning(
         )
 
         if not row:
+            # Fallback to RETRIEVAL_PLANNING for old records
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    id, message_id, extraction, rendered_prompt, raw_response, created_at
+                FROM message_extractions
+                WHERE message_id = $1 AND prompt_key = 'RETRIEVAL_PLANNING'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                message_id,
+            )
+
+        if not row:
             return None
 
         extraction_data = row["extraction"]
-        return RetrievalPlanning(
+        return ContextStrategy(
             id=row["id"],
             message_id=row["message_id"],
             entities=extraction_data["entities"],
             context_flags=extraction_data.get("context_flags", []),
-            unknown_entities=extraction_data.get("unknown_entities", []),
+            unresolved_entities=extraction_data.get("unresolved_entities")
+            or extraction_data.get("unknown_entities", []),
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
             extraction_method=extraction_data.get("_extraction_method", "api"),
@@ -554,14 +683,14 @@ async def get_message_retrieval_planning(
         )
 
 
-async def get_message_extraction(message_id: uuid.UUID) -> QueryExtraction | None:
+async def get_message_extraction(message_id: uuid.UUID) -> EntityExtraction | None:
     """Retrieve extraction for a specific message.
 
     Args:
         message_id: UUID of the message
 
     Returns:
-        QueryExtraction object or None if not found
+        EntityExtraction object or None if not found
     """
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -589,149 +718,3 @@ async def get_message_extraction(message_id: uuid.UUID) -> QueryExtraction | Non
             extraction_method=extraction_data.get("_extraction_method", "api"),
             created_at=row["created_at"],
         )
-
-
-DEFAULT_TRIPLE_DEPTH = 2
-
-
-async def retrieve_context(
-    entities: list[str],
-    context_flags: list[str],
-    triple_depth: int = DEFAULT_TRIPLE_DEPTH,
-) -> dict[str, str]:
-    """Retrieve context based on entities and context flags.
-
-    This function implements Phase 4's context retrieval using flags from
-    RETRIEVAL_PLANNING. It fetches:
-    - Graph triples for entity relationships (if entities present)
-    - Goal context (if goal_context flag present)
-    - Activity triples (if activity_context flag present)
-
-    Args:
-        entities: Extracted entity mentions from retrieval_planning()
-        context_flags: Context flags from retrieval_planning() (e.g., ["goal_context"])
-        triple_depth: Graph traversal depth (default 2 for multi-hop relationships)
-
-    Returns:
-        Dictionary with context strings and metadata:
-        - semantic_context: Formatted graph triples (empty if no entities)
-        - goal_context: Formatted goals and predicates (empty if no goal_context flag)
-        - triple_origins: Set of message UUIDs that these triples originated from
-
-    Example:
-        >>> planning = await retrieval_planning(...)
-        >>> context = await retrieve_context(
-        ...     entities=planning.entities,
-        ...     context_flags=planning.context_flags,
-        ... )
-        >>> # Use context["semantic_context"], context["goal_context"], etc.
-    """
-    from lattice.memory.graph import GraphTraversal
-    from lattice.utils.database import db_pool
-
-    context: dict[str, Any] = {
-        "semantic_context": "",
-        "goal_context": "",
-        "triple_origins": set(),
-    }
-
-    graph_triples: list[dict[str, Any]] = []
-
-    if "activity_context" in context_flags or "goal_context" in context_flags:
-        additional_entities = []
-
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=1)
-
-            if "activity_context" in context_flags:
-                activity_triples = await traverser.find_triples(
-                    subject="User",
-                    predicate="did activity",
-                    limit=20,
-                )
-                additional_entities.extend(
-                    [
-                        triple.get("object", "")
-                        for triple in activity_triples
-                        if triple.get("object")
-                    ]
-                )
-
-            if "goal_context" in context_flags:
-                goal_triples = await traverser.find_triples(
-                    predicate="has goal",
-                    limit=10,
-                )
-                additional_entities.extend(
-                    [
-                        triple.get("object", "")
-                        for triple in goal_triples
-                        if triple.get("object")
-                    ]
-                )
-
-        if additional_entities:
-            entities = list(entities) + additional_entities
-
-            logger.debug(
-                "Hybrid context processed",
-                additional_entity_count=len(additional_entities),
-                entities=additional_entities,
-            )
-
-    if entities and triple_depth > 0:
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=triple_depth)
-
-            import asyncio
-
-            traverse_tasks = [
-                traverser.traverse_from_entity(entity_name, max_hops=triple_depth)
-                for entity_name in entities
-            ]
-
-            if traverse_tasks:
-                traverse_results = await asyncio.gather(*traverse_tasks)
-                seen_triple_ids: set[tuple[str, str, str]] = set()
-                for result in traverse_results:
-                    for triple in result:
-                        triple_key = (
-                            triple.get("subject", ""),
-                            triple.get("predicate", ""),
-                            triple.get("object", ""),
-                        )
-                        if triple_key not in seen_triple_ids and all(triple_key):
-                            graph_triples.append(triple)
-                            seen_triple_ids.add(triple_key)
-                            if origin_id := triple.get("origin_id"):
-                                context["triple_origins"].add(origin_id)
-
-                logger.debug(
-                    "Graph traversal completed",
-                    depth=triple_depth,
-                    entities_explored=len(entities),
-                    triples_found=len(graph_triples),
-                )
-        else:
-            logger.warning("Database pool not initialized, skipping graph traversal")
-
-    if graph_triples:
-        relationships = []
-        for triple in graph_triples[:10]:
-            subject = triple.get("subject", "")
-            predicate = triple.get("predicate", "")
-            obj = triple.get("object", "")
-            if subject and predicate and obj:
-                relationships.append(f"{subject} {predicate} {obj}")
-
-        if relationships:
-            context["semantic_context"] = (
-                "Relevant knowledge from past conversations:\n"
-                + "\n".join(f"- {rel}" for rel in relationships)
-            )
-        else:
-            context["semantic_context"] = "No relevant context found."
-    else:
-        context["semantic_context"] = "No relevant context found."
-
-    return context

@@ -14,12 +14,20 @@ from lattice.core.entity_extraction import (
     EntityExtraction,
     build_smaller_episodic_context,
     extract_entities,
-    get_extraction,
     get_message_extraction,
-    retrieval_planning,
-    get_retrieval_planning,
+    context_strategy,
+    get_context_strategy,
     get_message_retrieval_planning,
 )
+
+
+async def get_extraction(*args, **kwargs):
+    """Mock for backwards compatibility in tests."""
+    from lattice.core.entity_extraction import get_message_extraction
+
+    return await get_message_extraction(*args, **kwargs)
+
+
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
 from lattice.utils.llm import AuditResult
@@ -530,47 +538,47 @@ class TestBuildSmallerEpisodicContext:
         assert "USER: User current" in context
 
 
-class TestRetrievalPlanning:
-    """Tests for the RetrievalPlanning dataclass."""
+class TestContextStrategy:
+    """Tests for the ContextStrategy dataclass."""
 
-    def test_retrieval_planning_init(self) -> None:
-        """Test RetrievalPlanning initialization."""
-        from lattice.core.entity_extraction import RetrievalPlanning
+    def test_context_strategy_init(self) -> None:
+        """Test ContextStrategy initialization."""
+        from lattice.core.entity_extraction import ContextStrategy
 
         extraction_id = uuid.uuid4()
         message_id = uuid.uuid4()
         now = datetime.now()
 
-        planning = RetrievalPlanning(
+        strategy = ContextStrategy(
             id=extraction_id,
             message_id=message_id,
             entities=["mobile app", "marathon"],
             context_flags=["goal_context"],
-            unknown_entities=["bf"],
+            unresolved_entities=["bf"],
             rendered_prompt="test prompt",
             raw_response="test response",
             extraction_method="api",
             created_at=now,
         )
 
-        assert planning.entities == ["mobile app", "marathon"]
-        assert planning.context_flags == ["goal_context"]
-        assert planning.unknown_entities == ["bf"]
-        assert planning.rendered_prompt == "test prompt"
-        assert planning.raw_response == "test response"
-        assert planning.extraction_method == "api"
-        assert planning.created_at == now
+        assert strategy.entities == ["mobile app", "marathon"]
+        assert strategy.context_flags == ["goal_context"]
+        assert strategy.unresolved_entities == ["bf"]
+        assert strategy.rendered_prompt == "test prompt"
+        assert strategy.raw_response == "test response"
+        assert strategy.extraction_method == "api"
+        assert strategy.created_at == now
 
 
-class TestRetrievalPlanningFunction:
-    """Tests for the retrieval_planning function."""
+class TestContextStrategyFunction:
+    """Tests for the context_strategy function."""
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_success(self) -> None:
-        """Test successful retrieval planning."""
+    async def test_context_strategy_success(self) -> None:
+        """Test successful context strategy."""
         message_id = uuid.uuid4()
         mock_prompt_template = PromptTemplate(
-            prompt_key="RETRIEVAL_PLANNING",
+            prompt_key="CONTEXT_STRATEGY",
             template="Test template {local_date}",
             temperature=0.2,
             version=1,
@@ -579,7 +587,7 @@ class TestRetrievalPlanningFunction:
         extraction_data = {
             "entities": ["mobile app"],
             "context_flags": ["goal_context"],
-            "unknown_entities": [],
+            "unresolved_entities": [],
         }
         mock_result = AuditResult(
             content=json.dumps(extraction_data),
@@ -629,40 +637,40 @@ class TestRetrievalPlanningFunction:
                 ),
             ]
 
-            planning = await retrieval_planning(
+            strategy = await context_strategy(
                 message_id=message_id,
                 message_content="I need to finish by Friday",
                 recent_messages=recent_messages,
             )
 
-            assert planning.message_id == message_id
-            assert planning.entities == ["mobile app"]
-            assert planning.context_flags == ["goal_context"]
-            assert planning.unknown_entities == []
-            assert planning.extraction_method == "api"
+            assert strategy.message_id == message_id
+            assert strategy.entities == ["mobile app"]
+            assert strategy.context_flags == ["goal_context"]
+            assert strategy.unresolved_entities == []
+            assert strategy.extraction_method == "api"
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_missing_prompt_template(self) -> None:
-        """Test retrieval planning with missing prompt template."""
+    async def test_context_strategy_missing_prompt_template(self) -> None:
+        """Test context strategy with missing prompt template."""
         message_id = uuid.uuid4()
 
         with patch(
             "lattice.core.entity_extraction.get_prompt",
             return_value=None,
         ):
-            with pytest.raises(ValueError, match="RETRIEVAL_PLANNING prompt template"):
-                await retrieval_planning(
+            with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
+                await context_strategy(
                     message_id=message_id,
                     message_content="Test message",
                     recent_messages=[],
                 )
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_missing_required_fields(self) -> None:
-        """Test retrieval planning with missing required fields."""
+    async def test_context_strategy_missing_required_fields(self) -> None:
+        """Test context strategy with missing required fields."""
         message_id = uuid.uuid4()
         mock_prompt_template = PromptTemplate(
-            prompt_key="RETRIEVAL_PLANNING",
+            prompt_key="CONTEXT_STRATEGY",
             template="Test template",
             temperature=0.2,
             version=1,
@@ -680,7 +688,7 @@ class TestRetrievalPlanningFunction:
             latency_ms=0,
             temperature=0.0,
             audit_id=None,
-            prompt_key="RETRIEVAL_PLANNING",
+            prompt_key="CONTEXT_STRATEGY",
         )
 
         with (
@@ -705,19 +713,19 @@ class TestRetrievalPlanningFunction:
             mock_llm_client.return_value = mock_client
 
             with pytest.raises(ValueError, match="Missing required field"):
-                await retrieval_planning(
+                await context_strategy(
                     message_id=message_id,
                     message_content="Test message",
                     recent_messages=[],
                 )
 
 
-class TestGetRetrievalPlanning:
-    """Tests for the get_retrieval_planning function."""
+class TestGetContextStrategy:
+    """Tests for the get_context_strategy function."""
 
     @pytest.mark.asyncio
-    async def test_get_retrieval_planning_success(self) -> None:
-        """Test retrieving a retrieval planning."""
+    async def test_get_context_strategy_success(self) -> None:
+        """Test retrieving a context strategy."""
         extraction_id = uuid.uuid4()
         message_id = uuid.uuid4()
 
@@ -727,7 +735,7 @@ class TestGetRetrievalPlanning:
             "extraction": {
                 "entities": ["marathon"],
                 "context_flags": ["goal_context", "activity_context"],
-                "unknown_entities": ["bf"],
+                "unresolved_entities": ["bf"],
             },
             "rendered_prompt": "test prompt",
             "raw_response": "test response",
@@ -739,17 +747,17 @@ class TestGetRetrievalPlanning:
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            planning = await get_retrieval_planning(extraction_id)
+            strategy = await get_context_strategy(extraction_id)
 
-            assert planning is not None
-            assert planning.id == extraction_id
-            assert planning.entities == ["marathon"]
-            assert planning.context_flags == ["goal_context", "activity_context"]
-            assert planning.unknown_entities == ["bf"]
+            assert strategy is not None
+            assert strategy.id == extraction_id
+            assert strategy.entities == ["marathon"]
+            assert strategy.context_flags == ["goal_context", "activity_context"]
+            assert strategy.unresolved_entities == ["bf"]
 
     @pytest.mark.asyncio
-    async def test_get_retrieval_planning_not_found(self) -> None:
-        """Test retrieving a non-existent retrieval planning."""
+    async def test_get_context_strategy_not_found(self) -> None:
+        """Test retrieving a non-existent context strategy."""
         extraction_id = uuid.uuid4()
 
         with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
@@ -757,17 +765,17 @@ class TestGetRetrievalPlanning:
             mock_conn.fetchrow = AsyncMock(return_value=None)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            planning = await get_retrieval_planning(extraction_id)
+            strategy = await get_context_strategy(extraction_id)
 
-            assert planning is None
+            assert strategy is None
 
 
-class TestGetMessageRetrievalPlanning:
-    """Tests for the get_message_retrieval_planning function."""
+class TestGetMessageContextStrategy:
+    """Tests for the get_message_context_strategy function."""
 
     @pytest.mark.asyncio
-    async def test_get_message_retrieval_planning_success(self) -> None:
-        """Test retrieving retrieval planning by message ID."""
+    async def test_get_message_context_strategy_success(self) -> None:
+        """Test retrieving context strategy by message ID."""
         extraction_id = uuid.uuid4()
         message_id = uuid.uuid4()
 
@@ -777,7 +785,7 @@ class TestGetMessageRetrievalPlanning:
             "extraction": {
                 "entities": ["mobile app"],
                 "context_flags": [],
-                "unknown_entities": [],
+                "unresolved_entities": [],
             },
             "rendered_prompt": "test prompt",
             "raw_response": "test response",
@@ -789,15 +797,15 @@ class TestGetMessageRetrievalPlanning:
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            planning = await get_message_retrieval_planning(message_id)
+            strategy = await get_message_retrieval_planning(message_id)
 
-            assert planning is not None
-            assert planning.message_id == message_id
-            assert planning.entities == ["mobile app"]
+            assert strategy is not None
+            assert strategy.message_id == message_id
+            assert strategy.entities == ["mobile app"]
 
     @pytest.mark.asyncio
-    async def test_get_message_retrieval_planning_not_found(self) -> None:
-        """Test retrieving non-existent message retrieval planning."""
+    async def test_get_message_context_strategy_not_found(self) -> None:
+        """Test retrieving non-existent message context strategy."""
         message_id = uuid.uuid4()
 
         with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
@@ -805,6 +813,6 @@ class TestGetMessageRetrievalPlanning:
             mock_conn.fetchrow = AsyncMock(return_value=None)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            planning = await get_message_retrieval_planning(message_id)
+            strategy = await get_message_retrieval_planning(message_id)
 
-            assert planning is None
+            assert strategy is None

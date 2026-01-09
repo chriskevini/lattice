@@ -353,7 +353,7 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 # Extraction fails
-                mock_extraction.retrieval_planning = AsyncMock(
+                mock_extraction.context_strategy = AsyncMock(
                     side_effect=Exception("Extraction error")
                 )
                 mock_extraction.retrieve_context = AsyncMock(
@@ -431,13 +431,13 @@ class TestLatticeBot:
                     return_value=[mock_recent_message]
                 )
 
-                # Mock retrieval_planning instead of extract_entities (Phase 4)
+                # Mock context_strategy instead of retrieval_planning
                 mock_planning_result = MagicMock()
                 mock_planning_result.id = planning_id
                 mock_planning_result.entities = []
                 mock_planning_result.context_flags = []
-                mock_planning_result.unknown_entities = []
-                mock_extraction.retrieval_planning = AsyncMock(
+                mock_planning_result.unresolved_entities = []
+                mock_extraction.context_strategy = AsyncMock(
                     return_value=mock_planning_result
                 )
                 mock_extraction.retrieve_context = AsyncMock(
@@ -476,7 +476,7 @@ class TestLatticeBot:
 
                     # Verify pipeline steps
                     mock_memory.store_user_message.assert_called_once()
-                    mock_extraction.retrieval_planning.assert_called_once()
+                    mock_extraction.context_strategy.assert_called_once()
                     mock_response.generate_response.assert_called_once()
                     mock_send.assert_called_once()
 
@@ -531,8 +531,8 @@ class TestLatticeBot:
                 mock_planning_result.id = uuid4()
                 mock_planning_result.entities = []
                 mock_planning_result.context_flags = []
-                mock_planning_result.unknown_entities = []
-                mock_extraction.retrieval_planning = AsyncMock(
+                mock_planning_result.unresolved_entities = []
+                mock_extraction.context_strategy = AsyncMock(
                     return_value=mock_planning_result
                 )
                 mock_extraction.retrieve_context = AsyncMock(
@@ -644,7 +644,7 @@ class TestLatticeBot:
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
-                mock_extraction.retrieval_planning = AsyncMock(return_value=None)
+                mock_extraction.context_strategy = AsyncMock(return_value=None)
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={"semantic_context": ""}
                 )
@@ -737,7 +737,7 @@ class TestLatticeBot:
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
-                mock_extraction.retrieval_planning = AsyncMock(return_value=None)
+                mock_extraction.context_strategy = AsyncMock(return_value=None)
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={"semantic_context": ""}
                 )
@@ -825,7 +825,7 @@ class TestLatticeBot:
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
-                mock_extraction.retrieval_planning = AsyncMock(return_value=None)
+                mock_extraction.context_strategy = AsyncMock(return_value=None)
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={"semantic_context": ""}
                 )
@@ -926,7 +926,7 @@ class TestLatticeBot:
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
 
                 # Extraction with empty entities
-                mock_extraction.retrieval_planning = AsyncMock(return_value=None)
+                mock_extraction.context_strategy = AsyncMock(return_value=None)
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={"semantic_context": ""}
                 )
@@ -969,10 +969,10 @@ class TestLatticeBot:
                 ):
                     await bot.on_message(message)
 
-                    # Verify retrieve_context was called with triple_depth=0 (empty entities)
+                    # Verify retrieve_context was called with memory_depth=0 (empty entities)
                     mock_memory.retrieve_context.assert_called_once()
                     call_args = mock_memory.retrieve_context.call_args
-                    assert call_args.kwargs["triple_depth"] == 0
+                    assert call_args.kwargs["memory_depth"] == 0
                     assert call_args.kwargs["entity_names"] == []
 
     @pytest.mark.asyncio
@@ -1022,8 +1022,8 @@ class TestLatticeBot:
                 mock_planning_result.id = uuid4()
                 mock_planning_result.entities = []
                 mock_planning_result.context_flags = ["activity_context"]
-                mock_planning_result.unknown_entities = []
-                mock_extraction.retrieval_planning = AsyncMock(
+                mock_planning_result.unresolved_entities = []
+                mock_extraction.context_strategy = AsyncMock(
                     return_value=mock_planning_result
                 )
                 mock_extraction.retrieve_context = AsyncMock(
@@ -1073,8 +1073,8 @@ class TestLatticeBot:
                 ):
                     await bot.on_message(message)
 
-                    # Verify retrieval_planning was called and returned activity_context flag
-                    mock_extraction.retrieval_planning.assert_called_once()
+                    # Verify context_strategy was called and returned activity_context flag
+                    mock_extraction.context_strategy.assert_called_once()
 
                     # Verify retrieve_context was called with activity_context flag
                     mock_extraction.retrieve_context.assert_called_once()

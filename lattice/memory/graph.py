@@ -1,13 +1,13 @@
-"""Graph traversal utilities for semantic triple relationships.
+"""Graph traversal utilities for semantic memory relationships.
 
-This module provides text-based semantic triple queries with BFS traversal
-capability. The semantic_triple table uses text columns (subject, predicate,
+This module provides text-based semantic memory queries with BFS traversal
+capability. The semantic_memories table uses text columns (subject, predicate,
 object) rather than entity IDs, following the timestamp-based evolution design
 from issue #131.
 
 BFS Traversal Design:
 - Multi-hop traversal is implemented iteratively using text matching
-- Each hop expands to triples containing entities discovered in the previous hop
+- Each hop expands to memories containing entities discovered in the previous hop
 - Cycle detection prevents infinite loops by tracking visited entities
 """
 
@@ -55,9 +55,9 @@ def _sanitize_entity_name(entity: str) -> str:
 
 
 class GraphTraversal:
-    """Text-based graph traversal for semantic triples.
+    """Text-based graph traversal for semantic memories.
 
-    Provides BFS traversal for multi-hop reasoning using text-based triple storage.
+    Provides BFS traversal for multi-hop reasoning using text-based memory storage.
     Unlike entity-ID based traversal, this uses iterative text matching to discover
     related entities across multiple hops.
     """
@@ -92,15 +92,15 @@ class GraphTraversal:
             max_hops: Maximum traversal depth (defaults to self.max_depth)
 
         Returns:
-            List of discovered triples with metadata including depth
+            List of discovered memories with metadata including depth
         """
         if max_hops is None:
             max_hops = self.max_depth
 
-        all_triples: list[dict[str, Any]] = []
+        all_memories: list[dict[str, Any]] = []
         visited_entities: set[str] = set()
         frontier: set[str] = {entity_name.lower()}
-        seen_triples: set[tuple[str, str, str]] = set()
+        seen_memories: set[tuple[str, str, str]] = set()
 
         async with self.db_pool.acquire() as conn:
             for depth in range(1, max_hops + 1):
@@ -116,14 +116,14 @@ class GraphTraversal:
                     visited_entities.add(entity_lower)
 
                     sanitized_entity = _sanitize_entity_name(entity)
-                    triples = await conn.fetch(
+                    memories = await conn.fetch(
                         """
                         SELECT
                             subject,
                             predicate,
                             object,
                             created_at
-                        FROM semantic_triple
+                        FROM semantic_memories
                         WHERE (subject ILIKE $1 OR object ILIKE $1)
                           AND ($2 IS NULL OR predicate = ANY($2))
                         ORDER BY created_at DESC
@@ -133,32 +133,32 @@ class GraphTraversal:
                         list(predicate_filter) if predicate_filter else None,
                     )
 
-                    for row in triples:
-                        triple = dict(row)
-                        triple_key = (
-                            triple["subject"].lower(),
-                            triple["predicate"].lower(),
-                            triple["object"].lower(),
+                    for row in memories:
+                        memory = dict(row)
+                        memory_key = (
+                            memory["subject"].lower(),
+                            memory["predicate"].lower(),
+                            memory["object"].lower(),
                         )
-                        if triple_key in seen_triples:
+                        if memory_key in seen_memories:
                             continue
-                        seen_triples.add(triple_key)
-                        triple["depth"] = depth
-                        all_triples.append(triple)
+                        seen_memories.add(memory_key)
+                        memory["depth"] = depth
+                        all_memories.append(memory)
 
                         discovered_entity = (
-                            triple["object"]
-                            if triple["subject"].lower() == entity_lower
-                            else triple["subject"]
+                            memory["object"]
+                            if memory["subject"].lower() == entity_lower
+                            else memory["subject"]
                         )
                         if discovered_entity.lower() not in visited_entities:
                             next_frontier.add(discovered_entity)
 
                 frontier = next_frontier
 
-        return all_triples
+        return all_memories
 
-    async def find_triples(
+    async def find_semantic_memories(
         self,
         subject: str | None = None,
         predicate: str | None = None,
@@ -167,9 +167,9 @@ class GraphTraversal:
         end_date: datetime | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        """Find triples matching any combination of criteria.
+        """Find memories matching any combination of criteria.
 
-        Provides flexible querying for semantic triples. Any combination of
+        Provides flexible querying for semantic memories. Any combination of
         subject, predicate, object, and date range can be specified - omitted
         fields are not filtered.
 
@@ -182,24 +182,24 @@ class GraphTraversal:
             limit: Maximum number of results (default 50)
 
         Returns:
-            List of triples with keys: subject, predicate, object, created_at
+            List of memories with keys: subject, predicate, object, created_at
 
         Examples:
             # Find all activities
-            await find_triples(predicate="did activity")
+            await find_semantic_memories(predicate="did activity")
 
             # Find User's activities from last week
-            await find_triples(
+            await find_semantic_memories(
                 subject="User",
                 predicate="did activity",
                 start_date=datetime.now(UTC) - timedelta(days=7)
             )
 
-            # Find all triples about a specific object
-            await find_triples(object="ran 5k")
+            # Find all memories about a specific object
+            await find_semantic_memories(object="ran 5k")
         """
         logger.info(
-            "Finding triples by criteria",
+            "Finding memories by criteria",
             subject=subject,
             predicate=predicate,
             object=object,
@@ -215,7 +215,7 @@ class GraphTraversal:
                         predicate,
                         object,
                         created_at
-                    FROM semantic_triple
+                    FROM semantic_memories
                     WHERE 1=1
                 """
                 params: list[Any] = []
@@ -247,7 +247,7 @@ class GraphTraversal:
                 results = [dict(row) for row in rows]
 
                 logger.info(
-                    "Triple query completed",
+                    "Memory query completed",
                     subject=subject,
                     predicate=predicate,
                     object=object,
@@ -256,7 +256,7 @@ class GraphTraversal:
                 return results
         except Exception as e:
             logger.error(
-                "Triple query failed",
+                "Memory query failed",
                 subject=subject,
                 predicate=predicate,
                 object=object,

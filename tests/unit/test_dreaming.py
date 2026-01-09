@@ -123,6 +123,10 @@ class TestProposer:
                     return mock_template
                 elif prompt_key == "PROMPT_OPTIMIZATION":
                     return mock_optimization_template
+                elif prompt_key == "MEMORY_CONSOLIDATION":
+                    return mock_template
+                elif prompt_key == "CONTEXT_STRATEGY":
+                    return mock_template
                 return None
 
             mock_get_prompt.side_effect = get_prompt_side_effect
