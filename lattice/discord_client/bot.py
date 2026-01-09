@@ -392,8 +392,8 @@ class LatticeBot(commands.Bot):
 
             response_messages = response_generator.split_response(response_content)
             bot_messages: list[discord.Message] = []
-            for msg in response_messages:
-                bot_msg = await message.channel.send(msg)
+            for response_text in response_messages:
+                bot_msg = await message.channel.send(response_text)
                 bot_messages.append(bot_msg)
 
             generation_metadata = {

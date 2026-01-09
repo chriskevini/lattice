@@ -19,6 +19,9 @@ from lattice.core.entity_extraction import (
     get_context_strategy,
     get_message_retrieval_planning,
 )
+from lattice.memory.episodic import EpisodicMessage
+from lattice.memory.procedural import PromptTemplate
+from lattice.utils.llm import AuditResult
 
 
 async def get_extraction(*args, **kwargs):
@@ -26,11 +29,6 @@ async def get_extraction(*args, **kwargs):
     from lattice.core.entity_extraction import get_message_extraction
 
     return await get_message_extraction(*args, **kwargs)
-
-
-from lattice.memory.episodic import EpisodicMessage
-from lattice.memory.procedural import PromptTemplate
-from lattice.utils.llm import AuditResult
 
 
 @pytest.fixture
