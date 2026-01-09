@@ -374,7 +374,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info, _ = await generate_response(
-                user_message="Spent 3 hours coding today",
+                user_message="Spent 180 minutes coding today",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_activity,
             )
@@ -383,7 +383,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
             # User message should be in prompt
-            assert "Spent 3 hours coding today" in rendered_prompt
+            assert "Spent 180 minutes coding today" in rendered_prompt
 
     @pytest.mark.asyncio
     async def test_generate_with_none_extraction(
@@ -996,7 +996,7 @@ class TestExtractionFieldsNotInPrompts:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info, _ = await generate_response(
-                user_message="Spent 3 hours coding today",
+                user_message="Spent 180 minutes coding today",
                 recent_messages=mock_recent_messages,
                 extraction=mock_extraction_activity,
             )
@@ -1007,7 +1007,7 @@ class TestExtractionFieldsNotInPrompts:
             assert "Entities mentioned:" not in rendered_prompt
 
             # Verify core fields ARE present
-            assert "Spent 3 hours coding today" in rendered_prompt
+            assert "Spent 180 minutes coding today" in rendered_prompt
 
     @pytest.mark.asyncio
     async def test_conversation_response_no_extraction_fields(

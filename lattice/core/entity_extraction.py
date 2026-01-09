@@ -604,7 +604,6 @@ async def retrieve_context(
         Dictionary with context strings:
         - semantic_context: Formatted graph triples (empty if no entities)
         - goal_context: Formatted goals and predicates (empty if no goal_context flag)
-        - activity_context: Activity triples (empty if no activity_context flag)
 
     Example:
         >>> planning = await retrieval_planning(...)
@@ -620,10 +619,51 @@ async def retrieve_context(
     context: dict[str, str] = {
         "semantic_context": "",
         "goal_context": "",
-        "activity_context": "",
     }
 
     graph_triples: list[dict[str, Any]] = []
+
+    if "activity_context" in context_flags or "goal_context" in context_flags:
+        additional_entities = []
+
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=1)
+
+            if "activity_context" in context_flags:
+                activity_triples = await traverser.find_triples(
+                    subject="User",
+                    predicate="did activity",
+                    limit=20,
+                )
+                additional_entities.extend(
+                    [
+                        triple.get("object", "")
+                        for triple in activity_triples
+                        if triple.get("object")
+                    ]
+                )
+
+            if "goal_context" in context_flags:
+                goal_triples = await traverser.find_triples(
+                    predicate="has goal",
+                    limit=10,
+                )
+                additional_entities.extend(
+                    [
+                        triple.get("object", "")
+                        for triple in goal_triples
+                        if triple.get("object")
+                    ]
+                )
+
+        if additional_entities:
+            entities = list(entities) + additional_entities
+
+            logger.debug(
+                "Hybrid context processed",
+                additional_entity_count=len(additional_entities),
+                entities=additional_entities,
+            )
 
     if entities and triple_depth > 0:
         if db_pool.is_initialized():
@@ -677,29 +717,5 @@ async def retrieve_context(
             context["semantic_context"] = "No relevant context found."
     else:
         context["semantic_context"] = "No relevant context found."
-
-    if "goal_context" in context_flags:
-        from lattice.core import response_generator
-
-        context["goal_context"] = await response_generator.get_goal_context()
-
-    if "activity_context" in context_flags:
-        activity_triples: list[dict[str, Any]] = []
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=1)
-            activity_triples = await traverser.find_by_predicate(
-                predicate="did activity",
-                limit=20,
-            )
-
-        if activity_triples:
-            activities = []
-            for triple in activity_triples:
-                obj = triple.get("object", "")
-                if obj:
-                    activities.append(f"- {obj}")
-            context["activity_context"] = "Recent activities:\n" + "\n".join(activities)
-        else:
-            context["activity_context"] = "No recent activities found."
 
     return context

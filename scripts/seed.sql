@@ -44,7 +44,7 @@ If clarification is needed and has not already been discussed, ask the user brie
 ## Examples
 
 **User:** "What did I work on yesterday?"
-**Response:** "Yesterday you worked on the mobile app for about 3 hours."
+**Response:** "Yesterday you worked on the mobile app for about 180 minutes."
 
 **User:** "I need to finish this by Friday"
 **Response:** "Got it—Friday deadline. How's it coming along?"
@@ -109,7 +109,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 {"entities": ["2026-01-09"]}
 
 **Date Resolution Hints:** (empty)
-**Current User Message:** Spent 3 hours coding today
+**Current User Message:** Spent 180 minutes coding today
 **Output:**
 {"entities": ["coding"]}
 
@@ -297,7 +297,7 @@ User: Mom loves cooking
 **Canonical Predicates:** likes, did activity
 **Date Resolution Hints:** today → 2026-03-09
 **New Messages:**
-User: Spent 3 hours coding today
+User: Spent 180 minutes coding today
 Bot: Nice session! How'd it go?
 User: My bf and I hung out at IKEA
 **Output:**

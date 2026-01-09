@@ -296,7 +296,7 @@ class TestIsEntityLike:
 
     def test_returns_false_for_durations(self) -> None:
         """Test that durations are NOT recognized as entities."""
-        assert canonical_module._is_entity_like("3 hours") is False
+        assert canonical_module._is_entity_like("180 minutes") is False
         assert canonical_module._is_entity_like("30 minutes") is False
         assert canonical_module._is_entity_like("1 hour") is False
         assert canonical_module._is_entity_like("2 weeks") is False
@@ -373,7 +373,7 @@ class TestExtractCanonicalForms:
         """Test extraction with multiple new forms."""
         triples = [
             {"subject": "user", "predicate": "did activity", "object": "coding"},
-            {"subject": "coding", "predicate": "lasted for", "object": "3 hours"},
+            {"subject": "coding", "predicate": "lasted for", "object": "180 minutes"},
         ]
         known_entities = {"user"}
         known_predicates: set[str] = set()
@@ -383,7 +383,7 @@ class TestExtractCanonicalForms:
         )
 
         assert "coding" in new_entities
-        assert "3 hours" not in new_entities
+        assert "180 minutes" not in new_entities
         assert "did activity" in new_predicates
         assert "lasted for" in new_predicates
 
