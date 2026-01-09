@@ -10,7 +10,6 @@ Templates:
 """
 
 import json
-import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -34,35 +33,6 @@ SMALLER_EPISODIC_WINDOW_SIZE = 10
 
 if TYPE_CHECKING:
     from lattice.memory.episodic import EpisodicMessage
-
-
-ACTIVITY_QUERY_PATTERNS = [
-    (
-        re.compile(r"\bwhat did i (do|work|build)\b", re.IGNORECASE),
-        "performed_activity",
-    ),
-    (re.compile(r"\bhow did i spend my time\b", re.IGNORECASE), "performed_activity"),
-    (
-        re.compile(r"\bsummarize my activit(y|ies)\b", re.IGNORECASE),
-        "performed_activity",
-    ),
-    (re.compile(r"\bwhat have i been up to\b", re.IGNORECASE), "performed_activity"),
-    (re.compile(r"\bwhat have i been doing\b", re.IGNORECASE), "performed_activity"),
-    (
-        re.compile(
-            r"\bwhat did i do (yesterday|last week|last month)\b", re.IGNORECASE
-        ),
-        "performed_activity",
-    ),
-    (
-        re.compile(r"\bhow was my (day|week|month)\b", re.IGNORECASE),
-        "performed_activity",
-    ),
-    (
-        re.compile(r"\bwhat activities did i (do|complete)\b", re.IGNORECASE),
-        "performed_activity",
-    ),
-]
 
 
 @dataclass
@@ -154,7 +124,7 @@ async def extract_entities(
     Args:
         message_id: UUID of the message being extracted
         message_content: The user's message text
-        context: Additional context (recent messages, objectives, etc.)
+        context: Additional context (recent messages)
         user_timezone: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
 
     Returns:
@@ -325,30 +295,6 @@ async def get_extraction(extraction_id: uuid.UUID) -> QueryExtraction | None:
             extraction_method=extraction_data.get("_extraction_method", "api"),
             created_at=row["created_at"],
         )
-
-
-def extract_predicates(message: str) -> list[str]:
-    """Detect predicate query intent from user message.
-
-    Uses regex patterns to identify queries about past activities.
-    Returns detected predicates that should trigger special query handling.
-
-    Args:
-        message: The user's message content
-
-    Returns:
-        List of predicate names detected in the message (e.g., ["performed_activity"])
-        Empty list if no predicate queries detected
-    """
-    detected_predicates: list[str] = []
-    message_lower = message.lower()
-
-    for pattern, predicate in ACTIVITY_QUERY_PATTERNS:
-        if pattern.search(message_lower):
-            if predicate not in detected_predicates:
-                detected_predicates.append(predicate)
-
-    return detected_predicates
 
 
 async def retrieval_planning(

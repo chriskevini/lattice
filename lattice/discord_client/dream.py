@@ -528,7 +528,6 @@ class AuditViewBuilder:
         user_message: str,
         main_message_url: str,
         triples: list[dict[str, str]],
-        objectives: list[dict[str, Any]],
         prompt_key: str,
         audit_id: UUID | None,
         rendered_prompt: str | None = None,
@@ -539,7 +538,6 @@ class AuditViewBuilder:
             user_message: User's message that was analyzed
             main_message_url: Jump URL to main channel message
             triples: Extracted semantic triples
-            objectives: Extracted objectives
             prompt_key: Prompt template key (e.g., TRIPLE_EXTRACTION)
             audit_id: Prompt audit UUID
             rendered_prompt: Full rendered prompt
@@ -570,11 +568,6 @@ class AuditViewBuilder:
             output_parts.append(f"🔗 {len(triples)} triples")
             output_parts.extend(triple_lines)
 
-        if objectives:
-            obj_lines = [f"• {obj.get('description', '')[:80]}" for obj in objectives]
-            output_parts.append(f"🎯 {len(objectives)} objectives")
-            output_parts.extend(obj_lines)
-
         output_text = "\n".join(output_parts) if output_parts else "Nothing extracted"
         embed.add_field(
             name="OUTPUT",
@@ -582,7 +575,7 @@ class AuditViewBuilder:
             inline=False,
         )
 
-        metadata = f"{len(triples)} triples | {len(objectives)} objectives | [LINK]({main_message_url})"
+        metadata = f"{len(triples)} triples | [LINK]({main_message_url})"
         embed.add_field(
             name="METADATA",
             value=metadata,

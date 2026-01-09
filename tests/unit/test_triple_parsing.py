@@ -9,38 +9,16 @@ from lattice.utils.triple_parsing import normalize_predicate, parse_triples
 class TestNormalizePredicate:
     """Tests for normalize_predicate function."""
 
-    def test_normalize_canonical_predicate(self) -> None:
-        """Test normalizing canonical predicate returns same value."""
+    def test_normalize_predicate(self) -> None:
+        """Test predicate normalization returns lowercased stripped value."""
         assert normalize_predicate("likes") == "likes"
-        assert normalize_predicate("works_at") == "works_at"
-        assert normalize_predicate("created") == "created"
-
-    def test_normalize_synonym_predicate(self) -> None:
-        """Test normalizing synonym predicate returns canonical form."""
-        assert normalize_predicate("enjoys") == "likes"
-        assert normalize_predicate("loves") == "likes"
-        assert normalize_predicate("employed_at") == "works_at"
-        assert normalize_predicate("built") == "created"
-        assert normalize_predicate("based_in") == "located_in"
-        assert normalize_predicate("friend_of") == "knows"
-        assert normalize_predicate("part_of") == "member_of"
-
-    def test_normalize_case_insensitive(self) -> None:
-        """Test predicate normalization is case-insensitive."""
         assert normalize_predicate("LIKES") == "likes"
-        assert normalize_predicate("Enjoys") == "likes"
-        assert normalize_predicate("WORKS_AT") == "works_at"
-
-    def test_normalize_strips_whitespace(self) -> None:
-        """Test predicate normalization strips whitespace."""
+        assert normalize_predicate("Enjoys") == "enjoys"
+        assert normalize_predicate("works_at") == "works_at"
         assert normalize_predicate("  likes  ") == "likes"
-        assert normalize_predicate("\tenjoys\n") == "likes"
-
-    def test_normalize_unknown_predicate(self) -> None:
-        """Test normalizing unknown predicate returns lowercased stripped value."""
+        assert normalize_predicate("\tenjoys\n") == "enjoys"
         assert normalize_predicate("custom_predicate") == "custom_predicate"
         assert normalize_predicate("UNKNOWN") == "unknown"
-        assert normalize_predicate("  Custom  ") == "custom"
 
 
 class TestParseTriples:
@@ -129,8 +107,8 @@ class TestParseTriples:
         result = parse_triples(raw_output)
 
         assert len(result) == 2
-        assert result[0]["predicate"] == "likes"
-        assert result[1]["predicate"] == "works_at"
+        assert result[0]["predicate"] == "enjoys"
+        assert result[1]["predicate"] == "employed_at"
 
     def test_parse_triples_strips_whitespace(self) -> None:
         """Test triple fields have whitespace stripped."""
@@ -252,7 +230,7 @@ Bob → created → Project"""
         result = parse_triples(raw_output)
 
         assert len(result) == 1
-        assert result[0]["predicate"] == "likes"
+        assert result[0]["predicate"] == "enjoys"
 
     def test_parse_text_format_skips_header_lines(self) -> None:
         """Test text format parsing skips 'Triples:' header."""

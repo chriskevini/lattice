@@ -15,18 +15,6 @@ class ParsedTriple(TypedDict):
     object: str
 
 
-PREDICATE_SYNONYMS: dict[str, list[str]] = {
-    "likes": ["likes", "enjoys", "loves", "fond_of", "appreciates"],
-    "works_at": ["works_at", "employed_at", "job_at", "position_at", "works_for"],
-    "created": ["created", "built", "made", "constructed", "developed", "authored"],
-    "located_in": ["located_in", "based_in", "situated_in", "in"],
-    "knows": ["knows", "acquainted_with", "friend_of", "familiar_with"],
-    "member_of": ["member_of", "part_of", "belongs_to", "affiliated_with"],
-}
-
-MIN_CODE_BLOCK_LINES = 2
-
-
 def _normalize_predicate(predicate: str) -> str:
     """Normalize predicate to canonical form.
 
@@ -36,11 +24,7 @@ def _normalize_predicate(predicate: str) -> str:
     Returns:
         Normalized predicate string
     """
-    normalized = predicate.lower().strip()
-    for canonical, synonyms in PREDICATE_SYNONYMS.items():
-        if normalized in synonyms:
-            return canonical
-    return normalized
+    return predicate.lower().strip()
 
 
 def _parse_triples_from_list(triples: list) -> list[ParsedTriple]:
