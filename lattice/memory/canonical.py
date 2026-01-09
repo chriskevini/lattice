@@ -152,3 +152,103 @@ async def predicate_exists(name: str) -> bool:
             "SELECT 1 FROM predicates WHERE name = $1 LIMIT 1", name
         )
         return result is not None
+
+
+def _is_entity_like(text: str) -> bool:
+    """Determine if text looks like an entity rather than a value.
+
+    Returns False for:
+    - ISO dates (2026-01-10)
+    - Durations (3 hours, 30 minutes)
+    - Status values (active, completed, high, low)
+
+    Returns True for:
+    - Proper nouns (Mother, IKEA, Seattle)
+    - Concepts (coding, mobile app, marathon)
+    """
+    import re
+
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", text):
+        return False
+
+    if re.match(r"^\d+\s+(hour|minute|day|week|month|year)s?$", text.lower()):
+        return False
+
+    if text.lower() in {
+        "active",
+        "completed",
+        "abandoned",
+        "high",
+        "medium",
+        "low",
+        "pending",
+        "yes",
+        "no",
+        "true",
+        "false",
+    }:
+        return False
+
+    return True
+
+
+def extract_canonical_forms(
+    triples: list[dict[str, str]],
+    known_entities: set[str],
+    known_predicates: set[str],
+) -> tuple[set[str], set[str]]:
+    """Extract new canonical entities and predicates from triples.
+
+    This is deterministic logic (no LLM involved).
+
+    Args:
+        triples: List of extracted triples with keys: subject, predicate, object
+        known_entities: Set of already-known entity names
+        known_predicates: Set of already-known predicate names
+
+    Returns:
+        Tuple of (new_entities, new_predicates) sets
+    """
+    new_entities: set[str] = set()
+    new_predicates: set[str] = set()
+
+    for triple in triples:
+        subject = triple["subject"]
+        predicate = triple["predicate"]
+        obj = triple["object"]
+
+        if subject not in known_entities:
+            new_entities.add(subject)
+
+        if predicate not in known_predicates:
+            new_predicates.add(predicate)
+
+        if _is_entity_like(obj) and obj not in known_entities:
+            new_entities.add(obj)
+
+    return new_entities, new_predicates
+
+
+async def store_canonical_forms(
+    new_entities: set[str], new_predicates: set[str]
+) -> dict[str, int]:
+    """Store new canonical entities and predicates in database.
+
+    Args:
+        new_entities: Set of new entity names to store
+        new_predicates: Set of new predicate names to store
+
+    Returns:
+        Dictionary with 'entities' and 'predicates' counts of items stored
+    """
+    entity_count = await store_canonical_entities(list(new_entities))
+    predicate_count = await store_canonical_predicates(list(new_predicates))
+
+    if new_entities or new_predicates:
+        logger.info(
+            "Stored canonical forms",
+            new_entities=len(new_entities),
+            new_predicates=len(new_predicates),
+        )
+
+    return {"entities": entity_count, "predicates": predicate_count}

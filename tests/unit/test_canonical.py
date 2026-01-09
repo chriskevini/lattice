@@ -269,3 +269,176 @@ class TestExceptionClass:
         """Test that the exception can be raised and caught."""
         with pytest.raises(canonical_module.CanonicalRegistryError):
             raise canonical_module.CanonicalRegistryError("test error")
+
+
+class TestIsEntityLike:
+    """Tests for _is_entity_like helper function."""
+
+    def test_returns_true_for_proper_nouns(self) -> None:
+        """Test that proper nouns are recognized as entities."""
+        assert canonical_module._is_entity_like("Mother") is True
+        assert canonical_module._is_entity_like("IKEA") is True
+        assert canonical_module._is_entity_like("Seattle") is True
+        assert canonical_module._is_entity_like("Friday") is True
+
+    def test_returns_true_for_concepts(self) -> None:
+        """Test that concepts are recognized as entities."""
+        assert canonical_module._is_entity_like("coding") is True
+        assert canonical_module._is_entity_like("mobile app") is True
+        assert canonical_module._is_entity_like("marathon") is True
+        assert canonical_module._is_entity_like("hanging out with boyfriend") is True
+
+    def test_returns_false_for_iso_dates(self) -> None:
+        """Test that ISO dates are NOT recognized as entities."""
+        assert canonical_module._is_entity_like("2026-01-10") is False
+        assert canonical_module._is_entity_like("2026-10-01") is False
+        assert canonical_module._is_entity_like("2025-12-25") is False
+
+    def test_returns_false_for_durations(self) -> None:
+        """Test that durations are NOT recognized as entities."""
+        assert canonical_module._is_entity_like("3 hours") is False
+        assert canonical_module._is_entity_like("30 minutes") is False
+        assert canonical_module._is_entity_like("1 hour") is False
+        assert canonical_module._is_entity_like("2 weeks") is False
+
+    def test_returns_false_for_status_values(self) -> None:
+        """Test that status values are NOT recognized as entities."""
+        assert canonical_module._is_entity_like("active") is False
+        assert canonical_module._is_entity_like("completed") is False
+        assert canonical_module._is_entity_like("abandoned") is False
+        assert canonical_module._is_entity_like("high") is False
+        assert canonical_module._is_entity_like("medium") is False
+        assert canonical_module._is_entity_like("low") is False
+        assert canonical_module._is_entity_like("pending") is False
+
+    def test_returns_false_for_boolean_values(self) -> None:
+        """Test that boolean-like values are NOT recognized as entities."""
+        assert canonical_module._is_entity_like("yes") is False
+        assert canonical_module._is_entity_like("no") is False
+        assert canonical_module._is_entity_like("true") is False
+        assert canonical_module._is_entity_like("false") is False
+
+
+class TestExtractCanonicalForms:
+    """Tests for extract_canonical_forms function."""
+
+    def test_extracts_new_entities_and_predicates(self) -> None:
+        """Test basic extraction of new entities and predicates."""
+        triples = [
+            {"subject": "user", "predicate": "has goal", "object": "run marathon"},
+            {"subject": "run marathon", "predicate": "due by", "object": "2026-10-01"},
+        ]
+        known_entities = {"user"}
+        known_predicates: set[str] = set()
+
+        new_entities, new_predicates = canonical_module.extract_canonical_forms(
+            triples, known_entities, known_predicates
+        )
+
+        assert "run marathon" in new_entities
+        assert "2026-10-01" not in new_entities
+        assert "has goal" in new_predicates
+        assert "due by" in new_predicates
+
+    def test_ignores_known_entities(self) -> None:
+        """Test that known entities are not extracted."""
+        triples = [
+            {"subject": "user", "predicate": "has goal", "object": "marathon"},
+        ]
+        known_entities = {"user", "marathon"}
+        known_predicates: set[str] = set()
+
+        new_entities, new_predicates = canonical_module.extract_canonical_forms(
+            triples, known_entities, known_predicates
+        )
+
+        assert "marathon" not in new_entities
+        assert "user" not in new_entities
+
+    def test_ignores_known_predicates(self) -> None:
+        """Test that known predicates are not extracted."""
+        triples = [
+            {"subject": "user", "predicate": "has goal", "object": "coding"},
+        ]
+        known_entities: set[str] = set()
+        known_predicates = {"has goal"}
+
+        new_entities, new_predicates = canonical_module.extract_canonical_forms(
+            triples, known_entities, known_predicates
+        )
+
+        assert "has goal" not in new_predicates
+
+    def test_extracts_multiple_new_forms(self) -> None:
+        """Test extraction with multiple new forms."""
+        triples = [
+            {"subject": "user", "predicate": "did activity", "object": "coding"},
+            {"subject": "coding", "predicate": "lasted for", "object": "3 hours"},
+        ]
+        known_entities = {"user"}
+        known_predicates: set[str] = set()
+
+        new_entities, new_predicates = canonical_module.extract_canonical_forms(
+            triples, known_entities, known_predicates
+        )
+
+        assert "coding" in new_entities
+        assert "3 hours" not in new_entities
+        assert "did activity" in new_predicates
+        assert "lasted for" in new_predicates
+
+    def test_returns_empty_when_all_known(self) -> None:
+        """Test empty result when all forms are already known."""
+        triples = [
+            {"subject": "user", "predicate": "has goal", "object": "marathon"},
+        ]
+        known_entities = {"user", "marathon"}
+        known_predicates = {"has goal"}
+
+        new_entities, new_predicates = canonical_module.extract_canonical_forms(
+            triples, known_entities, known_predicates
+        )
+
+        assert new_entities == set()
+        assert new_predicates == set()
+
+    def test_handles_empty_triples(self) -> None:
+        """Test empty triples list."""
+        new_entities, new_predicates = canonical_module.extract_canonical_forms(
+            [], set(), set()
+        )
+
+        assert new_entities == set()
+        assert new_predicates == set()
+
+
+class TestStoreCanonicalForms:
+    """Tests for store_canonical_forms function."""
+
+    @pytest.mark.asyncio
+    async def test_stores_entities_and_predicates(self) -> None:
+        """Test storing both entities and predicates."""
+        mock_conn = AsyncMock()
+        mock_conn.executemany = AsyncMock()
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.store_canonical_forms(
+                {"new entity"}, {"new predicate"}
+            )
+
+            assert result["entities"] == 1
+            assert result["predicates"] == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_counts_for_empty(self) -> None:
+        """Test that empty sets return zero counts."""
+        mock_conn = AsyncMock()
+        mock_conn.executemany = AsyncMock()
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.store_canonical_forms(set(), set())
+
+            assert result["entities"] == 0
+            assert result["predicates"] == 0
