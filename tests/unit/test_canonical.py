@@ -1,6 +1,5 @@
 """Unit tests for canonical entity and predicate registry."""
 
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,566 +7,265 @@ import pytest
 from lattice.memory import canonical as canonical_module
 
 
-class TestCacheManagement:
-    """Tests for cache management functionality."""
+def create_mock_pool_with_conn(mock_conn: AsyncMock) -> MagicMock:
+    """Create a mock database pool with the given connection."""
+    mock_inner_pool = MagicMock()
 
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
+    # Set up as an async context manager for acquire
+    mock_acquire = AsyncMock()
+    mock_acquire.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_acquire.__aexit__ = AsyncMock(return_value=None)
+    mock_inner_pool.acquire.return_value = mock_acquire
 
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
-
-    @pytest.mark.asyncio
-    async def test_invalidate_cache_clears_state(self) -> None:
-        """Test that invalidate_cache clears all cache state."""
-        canonical_module._entities_cache = {"Test": ({"test"}, None)}
-        canonical_module._predicates_cache = {"test_pred"}
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        await canonical_module.invalidate_cache()
-
-        assert canonical_module._entities_cache is None
-        assert canonical_module._predicates_cache is None
-        assert canonical_module._cache_timestamp is None
+    # DatabasePool has a .pool property that returns _pool
+    mock_pool = MagicMock()
+    mock_pool._pool = mock_inner_pool
+    mock_pool.pool = mock_inner_pool
+    return mock_pool
 
 
-class TestGetCanonicalEntity:
-    """Tests for get_canonical_entity function."""
-
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
-
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
+class TestGetCanonicalEntitiesList:
+    """Tests for get_canonical_entities_list function."""
 
     @pytest.mark.asyncio
-    async def test_lookup_family_member_mom(self) -> None:
-        """Test looking up 'mom' returns 'Mother'."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom", "mum", "mama", "ma", "mother"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_entity("mom")
-        assert result == "Mother"
-
-    @pytest.mark.asyncio
-    async def test_lookup_family_member_bf(self) -> None:
-        """Test looking up 'bf' returns 'Spouse'."""
-        canonical_module._entities_cache = {
-            "Spouse": (
-                {"wife", "husband", "partner", "bf", "gf", "boyfriend", "girlfriend"},
-                "family",
-            ),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_entity("bf")
-        assert result == "Spouse"
-
-    @pytest.mark.asyncio
-    async def test_lookup_case_insensitive(self) -> None:
-        """Test that entity lookup is case-insensitive."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom", "mum", "mama", "ma", "mother"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_entity("MOM")
-        assert result == "Mother"
-
-        result = await canonical_module.get_canonical_entity("Mom")
-        assert result == "Mother"
-
-    @pytest.mark.asyncio
-    async def test_lookup_unknown_entity_raises_error(self) -> None:
-        """Test that unknown entity raises EntityNotFoundError."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom", "mum"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        with pytest.raises(canonical_module.EntityNotFoundError) as exc_info:
-            await canonical_module.get_canonical_entity("unknown_entity")
-
-        assert "unknown_entity" in str(exc_info.value)
-
-    @pytest.mark.asyncio
-    async def test_lookup_unknown_entity_with_default(self) -> None:
-        """Test that unknown entity returns itself when default_on_missing=True."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom", "mum"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_entity(
-            "unknown_entity", default_on_missing=True
+    async def test_returns_list_of_entities(self) -> None:
+        """Test that it returns a list of entity names."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {"name": "Mother"},
+                {"name": "boyfriend"},
+                {"name": "marathon"},
+            ]
         )
-        assert result == "unknown_entity"
-
-    @pytest.mark.asyncio
-    async def test_lookup_activity_coding(self) -> None:
-        """Test looking up coding-related variants."""
-        canonical_module._entities_cache = {
-            "Coding": (
-                {"coding", "programming", "dev", "software development"},
-                "activity",
-            ),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        assert await canonical_module.get_canonical_entity("coding") == "Coding"
-        assert await canonical_module.get_canonical_entity("programming") == "Coding"
-        assert await canonical_module.get_canonical_entity("dev") == "Coding"
-
-
-class TestGetCanonicalEntities:
-    """Tests for get_canonical_entities function."""
-
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
-
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
-
-    @pytest.mark.asyncio
-    async def test_multiple_entities_preserves_order(self) -> None:
-        """Test that multiple entity lookup preserves order."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom"}, "family"),
-            "Father": ({"dad"}, "family"),
-            "Coding": ({"coding"}, "activity"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_entities(["mom", "dad", "coding"])
-        assert result == ["Mother", "Father", "Coding"]
-
-    @pytest.mark.asyncio
-    async def test_missing_entities_dropped(self) -> None:
-        """Test that unknown entities are dropped from results."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_entities(
-            ["mom", "unknown", "also_unknown"]
-        )
-        assert result == ["Mother"]
-
-    @pytest.mark.asyncio
-    async def test_empty_input_returns_empty_list(self) -> None:
-        """Test that empty input returns empty list."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_entities([])
-        assert result == []
-
-
-class TestGetCanonicalEntityWithCategory:
-    """Tests for get_canonical_entity_with_category function."""
-
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
-
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
-
-    @pytest.mark.asyncio
-    async def test_lookup_returns_canonical_and_category(self) -> None:
-        """Test that lookup returns both canonical form and category."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom", "mum"}, "family"),
-            "Coding": ({"coding"}, "activity"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        canonical, category = await canonical_module.get_canonical_entity_with_category(
-            "mom"
-        )
-        assert canonical == "Mother"
-        assert category == "family"
-
-    @pytest.mark.asyncio
-    async def test_lookup_returns_none_for_category(self) -> None:
-        """Test that category can be None."""
-        canonical_module._entities_cache = {
-            "TestEntity": ({"test"}, None),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        canonical, category = await canonical_module.get_canonical_entity_with_category(
-            "test"
-        )
-        assert canonical == "TestEntity"
-        assert category is None
-
-
-class TestGetCanonicalPredicate:
-    """Tests for get_canonical_predicate function."""
-
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
-
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
-
-    @pytest.mark.asyncio
-    async def test_lookup_lives_in(self) -> None:
-        """Test looking up 'lives_in' returns 'lives_in'."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in"}
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_predicate("lives_in")
-        assert result == "lives_in"
-
-    @pytest.mark.asyncio
-    async def test_lookup_works_at(self) -> None:
-        """Test looking up 'works_as' returns 'works_as'."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"works_as"}
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_predicate("works_as")
-        assert result == "works_as"
-
-    @pytest.mark.asyncio
-    async def test_lookup_case_insensitive(self) -> None:
-        """Test that predicate lookup is case-insensitive."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in"}
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_canonical_predicate("LIVES_IN")
-        assert result == "lives_in"
-
-        result = await canonical_module.get_canonical_predicate("Lives_In")
-        assert result == "lives_in"
-
-    @pytest.mark.asyncio
-    async def test_lookup_unknown_predicate_raises_error(self) -> None:
-        """Test that unknown predicate raises PredicateNotFoundError."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in"}
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        with pytest.raises(canonical_module.PredicateNotFoundError) as exc_info:
-            await canonical_module.get_canonical_predicate("unknown_predicate")
-
-        assert "unknown_predicate" in str(exc_info.value)
-
-
-class TestGetAllCanonicalEntities:
-    """Tests for get_all_canonical_entities function."""
-
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
-
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
-
-    @pytest.mark.asyncio
-    async def test_returns_all_entities(self) -> None:
-        """Test that function returns all cached entities."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom", "mum"}, "family"),
-            "Father": ({"dad"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_all_canonical_entities()
-
-        assert len(result) == 2
-        assert "Mother" in result
-        assert "Father" in result
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_when_cache_empty(self) -> None:
-        """Test that empty cache returns empty dict."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_all_canonical_entities()
-        assert result == {}
-
-
-class TestGetAllCanonicalPredicates:
-    """Tests for get_all_canonical_predicates function."""
-
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
-
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
-
-    @pytest.mark.asyncio
-    async def test_returns_all_predicates(self) -> None:
-        """Test that function returns all cached predicates."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = {"lives_in", "works_as", "has_goal"}
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_all_canonical_predicates()
-
-        assert len(result) == 3
-        assert "lives_in" in result
-        assert "works_as" in result
-        assert "has_goal" in result
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_when_cache_empty(self) -> None:
-        """Test that empty cache returns empty set."""
-        canonical_module._entities_cache = {}
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.get_all_canonical_predicates()
-        assert result == set()
-
-
-class TestListEntitiesByCategory:
-    """Tests for list_entities_by_category function."""
-
-    def setup_method(self) -> None:
-        """Save original cache state."""
-        self._original_entities = canonical_module._entities_cache
-        self._original_predicates = canonical_module._predicates_cache
-        self._original_timestamp = canonical_module._cache_timestamp
-
-    def teardown_method(self) -> None:
-        """Restore original cache state."""
-        canonical_module._entities_cache = self._original_entities
-        canonical_module._predicates_cache = self._original_predicates
-        canonical_module._cache_timestamp = self._original_timestamp
-
-    @pytest.mark.asyncio
-    async def test_filter_by_family_category(self) -> None:
-        """Test filtering entities by family category."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom"}, "family"),
-            "Father": ({"dad"}, "family"),
-            "Coding": ({"coding"}, "activity"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.list_entities_by_category("family")
-
-        assert len(result) == 2
-        assert "Mother" in result
-        assert "Father" in result
-
-    @pytest.mark.asyncio
-    async def test_filter_by_activity_category(self) -> None:
-        """Test filtering entities by activity category."""
-        canonical_module._entities_cache = {
-            "Coding": ({"coding"}, "activity"),
-            "Running": ({"running"}, "activity"),
-            "Mother": ({"mom"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.list_entities_by_category("activity")
-
-        assert len(result) == 2
-        assert "Coding" in result
-        assert "Running" in result
-
-    @pytest.mark.asyncio
-    async def test_empty_result_for_unknown_category(self) -> None:
-        """Test that unknown category returns empty list."""
-        canonical_module._entities_cache = {
-            "Mother": ({"mom"}, "family"),
-        }
-        canonical_module._predicates_cache = set()
-        canonical_module._cache_timestamp = datetime.now(UTC)
-
-        result = await canonical_module.list_entities_by_category("nonexistent")
-        assert result == []
-
-
-class TestSeedCanonicalEntities:
-    """Tests for seed_canonical_entities function."""
-
-    @pytest.mark.asyncio
-    async def test_seed_entities_calls_db(self) -> None:
-        """Test that seed_entities calls database."""
-        mock_conn = MagicMock()
-        mock_conn.execute = AsyncMock()
-        mock_tx = MagicMock()
-        mock_tx.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_tx.__aexit__ = AsyncMock(return_value=None)
-        mock_conn.transaction.return_value = mock_tx
-        mock_pool = MagicMock()
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        entities: list[dict[str, str | list[str] | None]] = [
-            {"canonical": "TestEntity", "variants": ["test", "t"], "category": "test"},
-        ]
+        mock_pool = create_mock_pool_with_conn(mock_conn)
 
         with patch.object(canonical_module, "db_pool", mock_pool):
-            await canonical_module.seed_canonical_entities(entities)
+            result = await canonical_module.get_canonical_entities_list()
 
-        mock_conn.execute.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_seed_entities_handles_multiple(self) -> None:
-        """Test seeding multiple entities."""
-        mock_conn = MagicMock()
-        mock_conn.execute = AsyncMock()
-        mock_tx = MagicMock()
-        mock_tx.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_tx.__aexit__ = AsyncMock(return_value=None)
-        mock_conn.transaction.return_value = mock_tx
-        mock_pool = MagicMock()
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        entities: list[dict[str, str | list[str] | None]] = [
-            {"canonical": "Entity1", "variants": ["e1"], "category": "cat1"},
-            {"canonical": "Entity2", "variants": ["e2"], "category": "cat2"},
-            {"canonical": "Entity3", "variants": ["e3"], "category": None},
-        ]
-
-        with patch.object(canonical_module, "db_pool", mock_pool):
-            await canonical_module.seed_canonical_entities(entities)
-
-        assert mock_conn.execute.call_count == 3
-
-
-class TestSeedCanonicalPredicates:
-    """Tests for seed_canonical_predicates function."""
+            assert isinstance(result, list)
+            assert len(result) == 3
+            assert "Mother" in result
+            assert "boyfriend" in result
+            assert "marathon" in result
+            mock_conn.fetch.assert_called_once_with(
+                "SELECT name FROM entities ORDER BY created_at DESC"
+            )
 
     @pytest.mark.asyncio
-    async def test_seed_predicates_calls_db(self) -> None:
-        """Test that seed_predicates calls database."""
-        mock_conn = MagicMock()
-        mock_conn.execute = AsyncMock()
-        mock_tx = MagicMock()
-        mock_tx.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_tx.__aexit__ = AsyncMock(return_value=None)
-        mock_conn.transaction.return_value = mock_tx
-        mock_pool = MagicMock()
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        predicates: list[dict[str, str | list[str]]] = [
-            {"canonical": "test_pred", "variants": ["test predicate"]},
-        ]
+    async def test_returns_empty_list_when_empty(self) -> None:
+        """Test that it returns empty list when no entities."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool = create_mock_pool_with_conn(mock_conn)
 
         with patch.object(canonical_module, "db_pool", mock_pool):
-            await canonical_module.seed_canonical_predicates(predicates)
+            result = await canonical_module.get_canonical_entities_list()
 
-        mock_conn.execute.assert_called_once()
+            assert result == []
+
+
+class TestGetCanonicalPredicatesList:
+    """Tests for get_canonical_predicates_list function."""
 
     @pytest.mark.asyncio
-    async def test_seed_predicates_handles_multiple(self) -> None:
-        """Test seeding multiple predicates."""
-        mock_conn = MagicMock()
-        mock_conn.execute = AsyncMock()
-        mock_tx = MagicMock()
-        mock_tx.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_tx.__aexit__ = AsyncMock(return_value=None)
-        mock_conn.transaction.return_value = mock_tx
-        mock_pool = MagicMock()
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
+    async def test_returns_list_of_predicates(self) -> None:
+        """Test that it returns a list of predicate names."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {"name": "has goal"},
+                {"name": "due by"},
+                {"name": "did activity"},
+            ]
         )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        predicates: list[dict[str, str | list[str]]] = [
-            {"canonical": "pred1", "variants": ["predicate 1"]},
-            {"canonical": "pred2", "variants": ["predicate 2"]},
-        ]
+        mock_pool = create_mock_pool_with_conn(mock_conn)
 
         with patch.object(canonical_module, "db_pool", mock_pool):
-            await canonical_module.seed_canonical_predicates(predicates)
+            result = await canonical_module.get_canonical_predicates_list()
 
-        assert mock_conn.execute.call_count == 2
+            assert isinstance(result, list)
+            assert len(result) == 3
+            assert "has goal" in result
+            assert "due by" in result
+            assert "did activity" in result
+            mock_conn.fetch.assert_called_once_with(
+                "SELECT name FROM predicates ORDER BY created_at DESC"
+            )
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_empty(self) -> None:
+        """Test that it returns empty list when no predicates."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.get_canonical_predicates_list()
+
+            assert result == []
 
 
-class TestExceptionClasses:
-    """Tests for exception classes."""
+class TestGetCanonicalEntitiesSet:
+    """Tests for get_canonical_entities_set function."""
 
-    def test_entity_not_found_error_message(self) -> None:
-        """Test EntityNotFoundError has correct message."""
-        error = canonical_module.EntityNotFoundError("test_entity")
-        assert "test_entity" in str(error)
+    @pytest.mark.asyncio
+    async def test_returns_set_of_entities(self) -> None:
+        """Test that it returns a set for O(1) lookup."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {"name": "Mother"},
+                {"name": "boyfriend"},
+            ]
+        )
+        mock_pool = create_mock_pool_with_conn(mock_conn)
 
-    def test_predicate_not_found_error_message(self) -> None:
-        """Test PredicateNotFoundError has correct message."""
-        error = canonical_module.PredicateNotFoundError("test_predicate")
-        assert "test_predicate" in str(error)
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.get_canonical_entities_set()
 
-    def test_canonical_registry_error_is_base(self) -> None:
-        """Test that CanonicalRegistryError is base class."""
-        error = canonical_module.CanonicalRegistryError("test")
-        assert isinstance(error, canonical_module.CanonicalRegistryError)
-        assert not isinstance(error, canonical_module.EntityNotFoundError)
-        assert not isinstance(error, canonical_module.PredicateNotFoundError)
+            assert isinstance(result, set)
+            assert "Mother" in result
+            assert "boyfriend" in result
+
+
+class TestGetCanonicalPredicatesSet:
+    """Tests for get_canonical_predicates_set function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_set_of_predicates(self) -> None:
+        """Test that it returns a set for O(1) lookup."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {"name": "has goal"},
+                {"name": "due by"},
+            ]
+        )
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.get_canonical_predicates_set()
+
+            assert isinstance(result, set)
+            assert "has goal" in result
+            assert "due by" in result
+
+
+class TestStoreCanonicalEntities:
+    """Tests for store_canonical_entities function."""
+
+    @pytest.mark.asyncio
+    async def test_stores_entities(self) -> None:
+        """Test that it stores entity names."""
+        mock_conn = AsyncMock()
+        mock_conn.executemany = AsyncMock()
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            count = await canonical_module.store_canonical_entities(
+                ["entity1", "entity2"]
+            )
+
+            assert count == 2
+            mock_conn.executemany.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_for_empty_list(self) -> None:
+        """Test that it returns 0 for empty input."""
+        mock_conn = AsyncMock()
+        mock_conn.executemany = AsyncMock()
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            count = await canonical_module.store_canonical_entities([])
+
+            assert count == 0
+            mock_conn.executemany.assert_not_called()
+
+
+class TestStoreCanonicalPredicates:
+    """Tests for store_canonical_predicates function."""
+
+    @pytest.mark.asyncio
+    async def test_stores_predicates(self) -> None:
+        """Test that it stores predicate names."""
+        mock_conn = AsyncMock()
+        mock_conn.executemany = AsyncMock()
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            count = await canonical_module.store_canonical_predicates(
+                ["has goal", "due by"]
+            )
+
+            assert count == 2
+            mock_conn.executemany.assert_called_once()
+
+
+class TestEntityExists:
+    """Tests for entity_exists function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_exists(self) -> None:
+        """Test that it returns True when entity exists."""
+        mock_conn = AsyncMock()
+        mock_conn.fetchval = AsyncMock(return_value=1)
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.entity_exists("Mother")
+
+            assert result is True
+            mock_conn.fetchval.assert_called_once_with(
+                "SELECT 1 FROM entities WHERE name = $1 LIMIT 1", "Mother"
+            )
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_not_exists(self) -> None:
+        """Test that it returns False when entity doesn't exist."""
+        mock_conn = AsyncMock()
+        mock_conn.fetchval = AsyncMock(return_value=None)
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.entity_exists("Unknown")
+
+            assert result is False
+
+
+class TestPredicateExists:
+    """Tests for predicate_exists function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_exists(self) -> None:
+        """Test that it returns True when predicate exists."""
+        mock_conn = AsyncMock()
+        mock_conn.fetchval = AsyncMock(return_value=1)
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.predicate_exists("has goal")
+
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_not_exists(self) -> None:
+        """Test that it returns False when predicate doesn't exist."""
+        mock_conn = AsyncMock()
+        mock_conn.fetchval = AsyncMock(return_value=None)
+        mock_pool = create_mock_pool_with_conn(mock_conn)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            result = await canonical_module.predicate_exists("unknown predicate")
+
+            assert result is False
+
+
+class TestExceptionClass:
+    """Tests for CanonicalRegistryError exception class."""
+
+    def test_can_raise_and_catch(self) -> None:
+        """Test that the exception can be raised and caught."""
+        with pytest.raises(canonical_module.CanonicalRegistryError):
+            raise canonical_module.CanonicalRegistryError("test error")

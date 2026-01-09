@@ -60,7 +60,7 @@ async def init_database() -> None:
         print(
             "Tables: prompt_registry, raw_messages, message_extractions, semantic_triples,"
         )
-        print("        objectives, prompt_audits, dreaming_proposals, user_feedback,")
+        print("        prompt_audits, dreaming_proposals, user_feedback,")
         print("        system_health, schema_migrations, entities, predicates")
         print("\nAll prompt templates seeded from seed.sql")
 
