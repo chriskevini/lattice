@@ -10,7 +10,8 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 import os
 import sys
-from typing import Any
+from typing import Any, cast
+from uuid import UUID
 
 import asyncpg
 import discord
@@ -334,8 +335,10 @@ class LatticeBot(commands.Bot):
                 context_flags=context_flags,
                 triple_depth=2 if entities else 0,
             )
-            semantic_context = context_result.get("semantic_context", "")
-            triple_origins = context_result.get("triple_origins", set())
+            semantic_context = cast(str, context_result.get("semantic_context", ""))
+            triple_origins: set[UUID] = cast(
+                set[UUID], context_result.get("triple_origins", set())
+            )
 
             # Retrieve episodic context for response generation
             (
