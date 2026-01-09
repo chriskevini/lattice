@@ -920,7 +920,7 @@ class TestCanonicalFormIntegration:
             {
                 "id": message_id,
                 "discord_message_id": 101,
-                "content": "I went to IKEA with my Boyfriend",
+                "content": "I went to IKEA with my boyfriend",
                 "is_bot": False,
                 "timestamp": datetime.now(UTC),
             }
