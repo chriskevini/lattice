@@ -49,6 +49,7 @@ AVAILABLE_PLACEHOLDERS = {
     "local_date": "Current date with day of week (e.g., 2026/01/08, Thursday)",
     "local_time": "Current time for proactive decisions (e.g., 14:30)",
     "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
+    "unknown_entities": "Entities requiring clarification (e.g., 'bf', 'lkea') - BATCH_MEMORY_EXTRACTION will handle these naturally",
 }
 
 
@@ -244,6 +245,7 @@ async def generate_response(
     user_discord_message_id: int | None = None,
     goal_context: str | None = None,
     activity_context: str | None = None,
+    unknown_entities: list[str] | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any], UUID | None]:
     """Generate a response using the unified prompt template.
 
@@ -259,6 +261,8 @@ async def generate_response(
         user_discord_message_id: Discord message ID to exclude from episodic context.
         goal_context: Pre-fetched goal context from retrieve_context()
         activity_context: Pre-fetched activity context from retrieve_context()
+        unknown_entities: Entities requiring clarification (e.g., ["bf", "lkea"])
+                         BATCH_MEMORY_EXTRACTION handles these naturally in next cycle.
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
@@ -357,6 +361,9 @@ async def generate_response(
         "episodic_context": episodic_context or "No recent conversation.",
         "semantic_context": combined_semantic_context,
         "user_message": user_message,
+        "unknown_entities": ", ".join(unknown_entities)
+        if unknown_entities
+        else "(none)",
     }
 
     template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))

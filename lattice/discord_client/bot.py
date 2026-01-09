@@ -427,6 +427,7 @@ class LatticeBot(commands.Bot):
                 goal_context=goal_context if goal_context else None,
                 activity_context=activity_context if activity_context else None,
                 user_discord_message_id=message.id,
+                unknown_entities=planning.unknown_entities if planning else None,
             )
 
             # Inject source links from graph triples
