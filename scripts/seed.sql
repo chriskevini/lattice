@@ -58,13 +58,13 @@ If clarification is needed and has not already been discussed, ask the user brie
 **User:** "Did I talk to Sarah this week?"
 **Response:** "I don't see any mentions of Sarah in this week's conversations."
 
-**User:** "bf and I hung out at ikea"
+**User:** "bf and I hung out at IKEA"
 **Clarification needed:** bf
 **Response:** "By 'bf', do you mean your boyfriend?"
 
-**User:** "lkea has some good furniture"
-**Clarification needed:** lkea
-**Response:** "Do you mean IKEA?"
+**User:** "IKEA has some good furniture"
+**Clarification needed:** IKEA
+**Response:** "By 'IKEA', do you mean the furniture store?"
 
 Respond naturally and helpfully.$TPL$, 0.7);
 
@@ -151,8 +151,8 @@ Extract entities and determine context needs from the recent conversation.
 
 ## Guidelines
 - Analyze the entire conversation window—most recent messages naturally carry more weight
-- Match entities to canonical forms when confident (e.g., "mom" → "Mother", "ikea" → "IKEA")
-- Add entities to unknown_entities if uncertain about match (e.g., "bf" could be "boyfriend" or "best friend")
+- Match entities to canonical forms when confident (e.g., "mom" → "Mother", "IKEA" → "IKEA")
+- Add entities to unknown_entities if uncertain about match (e.g., "bf" could be "Boyfriend" or "Best Friend")
 - If most recent message explicitly mentions entities, prioritize those
 - Include entities from earlier messages if they're part of ongoing discussion
 - Return empty arrays if conversation is simple chatter/greeting without ongoing topics
