@@ -97,11 +97,16 @@ def build_smaller_episodic_context(
     Returns:
         Formatted conversation window with all messages
     """
+    from lattice.utils.context import format_episodic_messages
+    from datetime import datetime, UTC
+
     window = recent_messages[-(window_size - 1) :] if window_size > 1 else []
 
-    lines = [f"{'Bot' if msg.is_bot else 'User'}: {msg.content}" for msg in window]
+    lines = [format_episodic_messages([msg]) for msg in window]
 
-    lines.append(f"User: {current_message}")
+    # Use current time for the user message to maintain timestamp consistency
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
+    lines.append(f"[{now}] USER: {current_message}")
 
     return "\n".join(lines)
 
@@ -302,6 +307,8 @@ async def retrieval_planning(
     message_content: str,
     recent_messages: list["EpisodicMessage"],
     user_timezone: str | None = None,
+    audit_view: bool = False,
+    audit_view_params: dict[str, Any] | None = None,
 ) -> RetrievalPlanning:
     """Perform retrieval planning on conversation window.
 
@@ -319,6 +326,8 @@ async def retrieval_planning(
         message_content: The user's message text
         recent_messages: Recent conversation history
         user_timezone: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        audit_view: Whether to send an AuditView to the dream channel
+        audit_view_params: Parameters for the AuditView
 
     Returns:
         RetrievalPlanning object with structured fields
@@ -366,8 +375,11 @@ async def retrieval_planning(
     result = await llm_client.complete(
         prompt=rendered_prompt,
         prompt_key="RETRIEVAL_PLANNING",
+        template_version=prompt_template.version,
         main_discord_message_id=int(message_id),
         temperature=prompt_template.temperature,
+        audit_view=audit_view,
+        audit_view_params=audit_view_params,
     )
     raw_response = result.content
     extraction_method = "api"
@@ -601,9 +613,10 @@ async def retrieve_context(
         triple_depth: Graph traversal depth (default 2 for multi-hop relationships)
 
     Returns:
-        Dictionary with context strings:
+        Dictionary with context strings and metadata:
         - semantic_context: Formatted graph triples (empty if no entities)
         - goal_context: Formatted goals and predicates (empty if no goal_context flag)
+        - triple_origins: Set of message UUIDs that these triples originated from
 
     Example:
         >>> planning = await retrieval_planning(...)
@@ -616,9 +629,10 @@ async def retrieve_context(
     from lattice.memory.graph import GraphTraversal
     from lattice.utils.database import db_pool
 
-    context: dict[str, str] = {
+    context: dict[str, Any] = {
         "semantic_context": "",
         "goal_context": "",
+        "triple_origins": set(),
     }
 
     graph_triples: list[dict[str, Any]] = []
@@ -689,6 +703,8 @@ async def retrieve_context(
                         if triple_key not in seen_triple_ids and all(triple_key):
                             graph_triples.append(triple)
                             seen_triple_ids.add(triple_key)
+                            if origin_id := triple.get("origin_id"):
+                                context["triple_origins"].add(origin_id)
 
                 logger.debug(
                     "Graph traversal completed",

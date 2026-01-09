@@ -14,14 +14,12 @@ class TestAuditViewBuilder:
     async def test_build_reactive_audit(self) -> None:
         """Test building a reactive audit embed."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_reactive_audit(
-            user_message="I'm planning to ship v2 by end of month.",
-            bot_response="Got it! I'll track this milestone.",
-            main_message_url="https://discord.com/channels/123/456/789",
+        embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="GOAL_RESPONSE",
             version=3,
-            latency_ms=245,
-            cost_usd=0.0012,
+            input_text="I'm planning to ship v2 by end of month.",
+            output_text="Got it! I'll track this milestone.",
+            metadata_parts=["245ms", "$0.0012", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="System: Track goals\nUser: I'm planning to ship v2...",
         )
@@ -43,17 +41,15 @@ class TestAuditViewBuilder:
         assert "[LINK]" in embed.fields[2].value
 
     @pytest.mark.asyncio
-    async def test_build_reactive_audit_no_cost(self) -> None:
-        """Test reactive audit without cost info."""
+    async def test_build_standard_audit_no_cost(self) -> None:
+        """Test standard audit without cost info."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_reactive_audit(
-            user_message="Hello!",
-            bot_response="Hi there!",
-            main_message_url="https://discord.com/channels/123/456/789",
+        embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="CONVERSATION_RESPONSE",
             version=1,
-            latency_ms=100,
-            cost_usd=None,
+            input_text="Hello!",
+            output_text="Hi there!",
+            metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="User: Hello!",
         )
@@ -66,13 +62,12 @@ class TestAuditViewBuilder:
     async def test_build_proactive_audit(self) -> None:
         """Test building a proactive audit embed."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_proactive_audit(
-            reasoning="User set deadline 3 days ago. No progress updates in 48h.",
-            bot_message="Hey! You mentioned shipping v2 by end of month.",
-            main_message_url="https://discord.com/channels/123/456/789",
+        embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
             version=1,
-            confidence=0.82,
+            input_text="User set deadline 3 days ago. No progress updates in 48h.",
+            output_text="Hey! You mentioned shipping v2 by end of month.",
+            metadata_parts=["confidence: 82%", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="Context: deadline approaching...",
         )
@@ -108,11 +103,12 @@ class TestAuditViewBuilder:
             },
         ]
 
-        embed, _ = AuditViewBuilder.build_extraction_audit(
-            user_message="I'm planning to ship v2 by end of month.",
-            main_message_url="https://discord.com/channels/123/456/789",
-            triples=triples,
+        embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="BATCH_MEMORY_EXTRACTION",
+            version=1,
+            input_text="I'm planning to ship v2 by end of month.",
+            output_text=AuditViewBuilder.format_triples(triples),
+            metadata_parts=["2 triples", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="Extract memory from: I'm planning to ship v2...",
         )
@@ -136,12 +132,14 @@ class TestAuditViewBuilder:
     async def test_build_extraction_audit_empty(self) -> None:
         """Test extraction audit with no triples."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_extraction_audit(
-            user_message="Hello!",
-            main_message_url="https://discord.com/channels/123/456/789",
-            triples=[],
+        embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="BATCH_MEMORY_EXTRACTION",
+            version=1,
+            input_text="Hello!",
+            output_text="Nothing extracted",
+            metadata_parts=["0 triples", "[LINK]"],
             audit_id=audit_id,
+            rendered_prompt="Extract memory from: Hello!",
         )
 
         assert isinstance(embed, discord.Embed)
@@ -154,12 +152,12 @@ class TestAuditViewBuilder:
     async def test_build_reasoning_audit(self) -> None:
         """Test building a reasoning audit embed."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_reasoning_audit(
-            input_context="deadline: 3 days, no progress updates, user prefers check-ins",
-            decision="Send proactive check-in. Deadline in 3 days, no recent progress.",
+        embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
-            confidence=0.80,
-            latency_ms=180,
+            version=1,
+            input_text="deadline: 3 days, no progress updates, user prefers check-ins",
+            output_text="Send proactive check-in. Deadline in 3 days, no recent progress.",
+            metadata_parts=["confidence: 80%", "180ms"],
             audit_id=audit_id,
             rendered_prompt="Analyze: deadline proximity, activity patterns...",
         )
@@ -185,46 +183,47 @@ class TestAuditViewBuilder:
         """Test that correct emojis are used for different template types."""
         audit_id = uuid4()
 
-        reactive_embed, _ = AuditViewBuilder.build_reactive_audit(
-            user_message="test",
-            bot_response="test",
-            main_message_url="url",
-            prompt_key="GOAL_RESPONSE",
+        reactive_embed, _ = AuditViewBuilder.build_standard_audit(
+            prompt_key="UNIFIED_RESPONSE",
             version=1,
-            latency_ms=100,
-            cost_usd=None,
+            input_text="test",
+            output_text="test",
+            metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
         )
         assert reactive_embed.title.startswith("💬")
 
-        proactive_embed, _ = AuditViewBuilder.build_proactive_audit(
-            reasoning="test",
-            bot_message="test",
-            main_message_url="url",
+        proactive_embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
             version=1,
-            confidence=0.5,
+            input_text="test",
+            output_text="test",
+            metadata_parts=["confidence: 50%", "[LINK]"],
             audit_id=audit_id,
+            rendered_prompt="test",
         )
         assert proactive_embed.title.startswith("🌟")
 
-        extraction_embed, _ = AuditViewBuilder.build_extraction_audit(
-            user_message="test",
-            main_message_url="url",
-            triples=[],
+        extraction_embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="BATCH_MEMORY_EXTRACTION",
+            version=1,
+            input_text="test",
+            output_text="test",
+            metadata_parts=["0 triples", "[LINK]"],
             audit_id=audit_id,
+            rendered_prompt="test",
         )
         assert extraction_embed.title.startswith("🧠")
 
-        reasoning_embed, _ = AuditViewBuilder.build_reasoning_audit(
-            input_context="test",
-            decision="test",
+        reasoning_embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
-            confidence=0.5,
-            latency_ms=100,
+            version=1,
+            input_text="test",
+            output_text="test",
+            metadata_parts=["confidence: 50%", "100ms"],
             audit_id=audit_id,
+            rendered_prompt="test",
         )
         assert reasoning_embed.title.startswith("🌟")
 
@@ -233,36 +232,36 @@ class TestAuditViewBuilder:
         """Test that correct colors are used for different template types."""
         audit_id = uuid4()
 
-        reactive_embed, _ = AuditViewBuilder.build_reactive_audit(
-            user_message="test",
-            bot_response="test",
-            main_message_url="url",
-            prompt_key="GOAL_RESPONSE",
+        reactive_embed, _ = AuditViewBuilder.build_standard_audit(
+            prompt_key="UNIFIED_RESPONSE",
             version=1,
-            latency_ms=100,
-            cost_usd=None,
+            input_text="test",
+            output_text="test",
+            metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
         )
         assert reactive_embed.color == discord.Color.blurple()
 
-        proactive_embed, _ = AuditViewBuilder.build_proactive_audit(
-            reasoning="test",
-            bot_message="test",
-            main_message_url="url",
+        proactive_embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
             version=1,
-            confidence=0.5,
+            input_text="test",
+            output_text="test",
+            metadata_parts=["confidence: 50%", "[LINK]"],
             audit_id=audit_id,
+            rendered_prompt="test",
         )
         assert proactive_embed.color == discord.Color.gold()
 
-        extraction_embed, _ = AuditViewBuilder.build_extraction_audit(
-            user_message="test",
-            main_message_url="url",
-            triples=[],
+        extraction_embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="BATCH_MEMORY_EXTRACTION",
+            version=1,
+            input_text="test",
+            output_text="test",
+            metadata_parts=["0 triples", "[LINK]"],
             audit_id=audit_id,
+            rendered_prompt="test",
         )
         assert extraction_embed.color == discord.Color.purple()
 
@@ -272,14 +271,12 @@ class TestAuditViewBuilder:
         audit_id = uuid4()
         long_message = "x" * 2000
 
-        embed, _ = AuditViewBuilder.build_reactive_audit(
-            user_message=long_message,
-            bot_response=long_message,
-            main_message_url="https://discord.com/channels/123/456/789",
+        embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="CONVERSATION_RESPONSE",
             version=1,
-            latency_ms=100,
-            cost_usd=None,
+            input_text=long_message,
+            output_text=long_message,
+            metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
         )

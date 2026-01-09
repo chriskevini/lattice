@@ -118,7 +118,7 @@ class TestEntityExtractionPipeline:
             assert "lattice project" in extraction.entities
 
             # Execute pipeline: Generate response with extraction
-            mock_recent_messages = [
+            [
                 episodic.EpisodicMessage(
                     content="What are you working on?",
                     discord_message_id=123,
@@ -141,19 +141,16 @@ class TestEntityExtractionPipeline:
                 result,
                 rendered_prompt,
                 context_info,
-                _audit_id,
             ) = await response_generator.generate_response(
                 user_message=message_content,
-                recent_messages=mock_recent_messages,
-                graph_triples=[],
-                extraction=extraction,
+                episodic_context="Recent conversation history",
+                semantic_context="Relevant facts",
             )
 
             # Verify response generation
             assert result is not None
             assert "Friday deadline" in result.content
             assert context_info["template"] == "UNIFIED_RESPONSE"
-            assert context_info["extraction_id"] == str(extraction.id)
 
             # Verify template placeholders were filled correctly
             assert "lattice project" in rendered_prompt or "Friday" in rendered_prompt
@@ -209,9 +206,8 @@ class TestEntityExtractionPipeline:
             mock_resp_llm_client.return_value = response_llm
 
             # Attempt extraction (should fail gracefully)
-            extraction = None
             try:
-                extraction = await entity_extraction.extract_entities(
+                await entity_extraction.extract_entities(
                     message_id=uuid.uuid4(),
                     message_content=message_content,
                     context="",
@@ -221,7 +217,7 @@ class TestEntityExtractionPipeline:
                 pass
 
             # Generate response without extraction (should use BASIC_RESPONSE)
-            mock_recent_messages = [
+            [
                 episodic.EpisodicMessage(
                     content=message_content,
                     discord_message_id=123,
@@ -236,19 +232,16 @@ class TestEntityExtractionPipeline:
                 result,
                 rendered_prompt,
                 context_info,
-                _audit_id,
             ) = await response_generator.generate_response(
                 user_message=message_content,
-                recent_messages=mock_recent_messages,
-                graph_triples=[],
-                extraction=extraction,
+                episodic_context="Recent conversation history",
+                semantic_context="Relevant facts",
             )
 
             # Verify fallback to UNIFIED_RESPONSE
             assert result is not None
             assert "Hello" in result.content
             assert context_info["template"] == "UNIFIED_RESPONSE"
-            assert context_info["extraction_id"] is None
 
     @pytest.mark.asyncio
     async def test_pipeline_query_type(self) -> None:
@@ -349,7 +342,7 @@ class TestEntityExtractionPipeline:
             assert "project" in extraction.entities
 
             # Generate response
-            mock_recent_messages = [
+            [
                 episodic.EpisodicMessage(
                     content=message_content,
                     discord_message_id=123,
@@ -364,12 +357,10 @@ class TestEntityExtractionPipeline:
                 result,
                 rendered_prompt,
                 context_info,
-                _audit_id,
             ) = await response_generator.generate_response(
                 user_message=message_content,
-                recent_messages=mock_recent_messages,
-                graph_triples=[],
-                extraction=extraction,
+                episodic_context="Recent conversation history",
+                semantic_context="Relevant facts",
             )
 
             # Verify UNIFIED_RESPONSE template was used

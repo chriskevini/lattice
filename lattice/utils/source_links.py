@@ -62,7 +62,9 @@ def inject_source_links(
 
     # Get unique source URLs from triple origins (most relevant first)
     source_urls: list[str] = []
-    for origin_id in triple_origins:
+    # triple_origins might be a set (not JSON serializable) or a list
+    origins = triple_origins if isinstance(triple_origins, (set, list)) else []
+    for origin_id in origins:
         if origin_id in source_map:
             url = source_map[origin_id]
             if url not in source_urls:
