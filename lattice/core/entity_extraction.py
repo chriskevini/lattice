@@ -97,11 +97,13 @@ def build_smaller_episodic_context(
     Returns:
         Formatted conversation window with all messages
     """
+    from lattice.utils.context import format_episodic_messages
+
     window = recent_messages[-(window_size - 1) :] if window_size > 1 else []
 
-    lines = [f"{'Bot' if msg.is_bot else 'User'}: {msg.content}" for msg in window]
+    lines = [format_episodic_messages([msg]) for msg in window]
 
-    lines.append(f"User: {current_message}")
+    lines.append(f"USER: {current_message}")
 
     return "\n".join(lines)
 

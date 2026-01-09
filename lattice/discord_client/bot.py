@@ -348,12 +348,9 @@ class LatticeBot(commands.Bot):
                 entity_names=[],
             )
             # Format episodic context (excluding current message)
-            episodic_context = "\n".join(
-                [
-                    f"{'Bot' if msg.is_bot else 'User'}: {msg.content}"
-                    for msg in recent_messages
-                ]
-            )
+            from lattice.utils.context import format_episodic_messages
+
+            episodic_context = format_episodic_messages(recent_messages)
 
             # Generate response with automatic AuditView
             (
