@@ -803,7 +803,6 @@ class TestRetrieveContext:
         assert isinstance(context, dict)
         assert "semantic_context" in context
         assert "goal_context" in context
-        assert "activity_context" in context
 
     @pytest.mark.asyncio
     async def test_retrieve_context_empty_inputs(self) -> None:
@@ -816,7 +815,6 @@ class TestRetrieveContext:
 
         assert context["semantic_context"] == "No relevant context found."
         assert context["goal_context"] in ("", "No active goals.")
-        assert context["activity_context"] == ""
 
     @pytest.mark.asyncio
     async def test_retrieve_context_activity_flag(self) -> None:
@@ -824,10 +822,13 @@ class TestRetrieveContext:
         context = await entity_extraction.retrieve_context(
             entities=[],
             context_flags=["activity_context"],
-            triple_depth=0,
+            triple_depth=2,  # Need depth to traverse from added entities
         )
 
-        assert "activity_context" in context
+        # With activity_context flag, activities are added to entities and
+        # should appear in semantic context via graph traversal
+        assert "semantic_context" in context
+        # Note: activity_context no longer returned as separate field - appears in semantic_context
 
     @pytest.mark.asyncio
     async def test_retrieve_context_goal_flag(self) -> None:
@@ -851,4 +852,4 @@ class TestRetrieveContext:
 
         assert "semantic_context" in context
         assert "goal_context" in context
-        assert "activity_context" in context
+        # Note: activity_context no longer returned as separate field - appears in semantic_context

@@ -262,3 +262,91 @@ class GraphTraversal:
                 error=str(e),
             )
             return []
+
+    async def find_triples(
+        self,
+        subject: str | None = None,
+        predicate: str | None = None,
+        object: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Find triples matching any combination of subject, predicate, and object.
+
+        Provides flexible querying for semantic triples. Any combination of
+        subject, predicate, and object can be specified - omitted fields are
+        not filtered.
+
+        Args:
+            subject: Optional subject to filter by (exact match)
+            predicate: Optional predicate to filter by (exact match)
+            object: Optional object to filter by (exact match)
+            limit: Maximum number of results (default 50)
+
+        Returns:
+            List of triples with keys: subject, predicate, object, created_at
+
+        Examples:
+            # Find all activities
+            await find_triples(predicate="did activity")
+
+            # Find User's activities
+            await find_triples(subject="User", predicate="did activity")
+
+            # Find all triples about a specific object
+            await find_triples(object="ran 5k")
+        """
+        logger.info(
+            "Finding triples by criteria",
+            subject=subject,
+            predicate=predicate,
+            object=object,
+            limit=limit,
+        )
+        try:
+            async with self.db_pool.acquire() as conn:
+                query = """
+                    SELECT
+                        subject,
+                        predicate,
+                        object,
+                        created_at
+                    FROM semantic_triple
+                    WHERE 1=1
+                """
+                params: list[Any] = []
+
+                if subject is not None:
+                    query += " AND subject = $" + str(len(params) + 1)
+                    params.append(subject)
+
+                if predicate is not None:
+                    query += " AND predicate = $" + str(len(params) + 1)
+                    params.append(predicate)
+
+                if object is not None:
+                    query += " AND object = $" + str(len(params) + 1)
+                    params.append(object)
+
+                query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
+                params.append(limit)
+
+                rows = await conn.fetch(query, *params)
+                results = [dict(row) for row in rows]
+
+                logger.info(
+                    "Triple query completed",
+                    subject=subject,
+                    predicate=predicate,
+                    object=object,
+                    result_count=len(results),
+                )
+                return results
+        except Exception as e:
+            logger.error(
+                "Triple query failed",
+                subject=subject,
+                predicate=predicate,
+                object=object,
+                error=str(e),
+            )
+            return []

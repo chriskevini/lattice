@@ -170,7 +170,6 @@ async def generate_response(
     extraction: "EntityExtraction | None" = None,
     user_discord_message_id: int | None = None,
     goal_context: str | None = None,
-    activity_context: str | None = None,
     unknown_entities: list[str] | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any], UUID | None]:
     """Generate a response using the unified prompt template.
@@ -186,7 +185,6 @@ async def generate_response(
         extraction: Entity extraction for graph traversal
         user_discord_message_id: Discord message ID to exclude from episodic context.
         goal_context: Pre-fetched goal context from retrieve_context()
-        activity_context: Pre-fetched activity context from retrieve_context()
         unknown_entities: Entities requiring clarification (e.g., ["bf", "lkea"])
                          BATCH_MEMORY_EXTRACTION handles these naturally in next cycle.
 
@@ -248,11 +246,6 @@ async def generate_response(
     semantic_lines = []
     if goal_context:
         semantic_lines.append(goal_context)
-
-    if activity_context:
-        if semantic_lines:
-            semantic_lines.append("")
-        semantic_lines.append(activity_context)
 
     if graph_triples:
         relationships = []

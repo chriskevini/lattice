@@ -436,7 +436,6 @@ class TestLatticeBot:
                     return_value={
                         "semantic_context": "No relevant context found.",
                         "goal_context": "",
-                        "activity_context": "",
                     }
                 )
 
@@ -536,7 +535,6 @@ class TestLatticeBot:
                     return_value={
                         "semantic_context": "test says hello",
                         "goal_context": "",
-                        "activity_context": "",
                     }
                 )
 
@@ -1147,7 +1145,7 @@ class TestLatticeBot:
 
     @pytest.mark.asyncio
     async def test_on_message_activity_query_integration(self) -> None:
-        """Test on_message handles activity queries with activity_context flag from retrieval planning."""
+        """Test on_message handles activity queries with activity_context flag - activities now appear in semantic_context via graph traversal."""
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
@@ -1199,9 +1197,8 @@ class TestLatticeBot:
                 )
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={
-                        "semantic_context": "No relevant context found.",
+                        "semantic_context": "User did activity coding\ncoding has duration 3 hours",
                         "goal_context": "",
-                        "activity_context": "Last week you spent 3 hours coding.",
                     }
                 )
 
