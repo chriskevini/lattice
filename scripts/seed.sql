@@ -122,6 +122,108 @@ Return ONLY valid JSON (no markdown, no explanation):
 **Output:**
 {"entities": ["database migration"]}$TPL$, 0.2);
 
+-- RETRIEVAL_PLANNING (v1, temp=0.2)
+INSERT INTO prompt_registry (prompt_key, version, template, temperature)
+VALUES ('RETRIEVAL_PLANNING', 1, $TPL$You are a conversational context tracker. Extract entities and determine what context is needed from recent conversation.
+
+## Context
+**Current date:** {local_date}
+**Date resolution hints:**
+{date_resolution_hints}
+**Canonical entities:**
+{canonical_entities}
+**Recent conversation:**
+{smaller_episodic_context}
+
+## Task
+Extract entities and determine context needs from the recent conversation.
+
+## Guidelines
+- Analyze the entire conversation window—most recent messages naturally carry more weight
+- Match entities to canonical forms when confident (e.g., "mom" → "Mother", "ikea" → "IKEA")
+- Add entities to unknown_entities if uncertain about match (e.g., "bf" could be "boyfriend" or "best friend")
+- If most recent message explicitly mentions entities, prioritize those
+- Include entities from earlier messages if they're part of ongoing discussion
+- Return empty arrays if conversation is simple chatter/greeting without ongoing topics
+- If most recent message is clearly unrelated to prior context, ignore prior entities
+## Context Flags
+| Flag | When to Use |
+|------|-------------|
+| goal_context | User mentions goals, todos, deadlines, commitments |
+| activity_context | User asks about past activities, "what did I do", "summarize my activities" |
+## Output Format
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "entities": ["entity1", "entity2"],
+  "context_flags": ["goal_context"],
+  "unknown_entities": []
+}
+## Examples
+**Canonical Entities:** Mother, boyfriend, marathon
+**Recent Conversation:**
+User: How's my marathon training going?
+Bot: Making good progress!
+User: Any updates?
+**Output:**
+{"entities": ["marathon"], "context_flags": ["goal_context", "activity_context"], "unknown_entities": []}
+
+**Canonical Entities:** (empty)
+**Recent Conversation:**
+User: I'm working on the mobile app
+Bot: How's it coming?
+User: Pretty good
+**Output:**
+{"entities": ["mobile app"], "context_flags": [], "unknown_entities": []}
+
+**Canonical Entities:** Mother, boyfriend
+**Recent Conversation:**
+User: Going out today
+User: Mom loves cooking
+**Output:**
+{"entities": ["Mother", "cooking"], "context_flags": [], "unknown_entities": []}
+
+**Canonical Entities:** (empty)
+**Recent Conversation:**
+User: Spent 4 hours coding today
+Bot: Nice work!
+User: It went well
+**Output:**
+{"entities": ["coding"], "context_flags": [], "unknown_entities": []}
+
+**Canonical Entities:** (empty)
+**Recent Conversation:**
+User: Hey, what's up?
+**Output:**
+{"entities": [], "context_flags": [], "unknown_entities": []}
+**Canonical Entities:** Mother, boyfriend, best friend, IKEA
+**Recent Conversation:**
+User: Going out today
+User: bf and I hung out at ikea
+**Output:**
+{"entities": ["IKEA"], "context_flags": [], "unknown_entities": ["bf"]}
+**Canonical Entities:** Mother, boyfriend
+**Recent Conversation:**
+User: Dinner plans tonight
+User: mom is coming over
+**Output:**
+{"entities": ["Mother"], "context_flags": [], "unknown_entities": []}
+**Canonical Entities:** mobile app, marathon
+**Recent Conversation:**
+User: Working on mobile app, due Friday
+[5 messages of other chat]
+User: Went for a run
+User: How's it going?
+**Output:**
+{"entities": ["mobile app", "marathon"], "context_flags": ["goal_context"], "unknown_entities": []}
+
+**Canonical Entities:** mobile app
+**Recent Conversation:**
+User: Working on mobile app
+[3 messages about work]
+User: Actually, what's the weather like?
+**Output:**
+{"entities": [], "context_flags": [], "unknown_entities": []}$TPL$, 0.2);
+
 -- BATCH_MEMORY_EXTRACTION (v1, temp=0.2)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('BATCH_MEMORY_EXTRACTION', 1, $TPL$# Batch Memory Extraction for User Knowledge Graph
