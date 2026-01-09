@@ -203,7 +203,7 @@ class TestExtractEntities:
         """Test extraction with missing required fields."""
         message_id = uuid.uuid4()
 
-        incomplete_data = {}
+        incomplete_data: dict[str, object] = {}
         mock_result = AuditResult(
             content="{}",
             model="test",
@@ -249,7 +249,7 @@ class TestExtractEntities:
         """Test extraction handles markdown-wrapped JSON."""
         message_id = uuid.uuid4()
 
-        extraction_data = {"entities": []}
+        extraction_data: dict[str, object] = {"entities": []}
         mock_result = AuditResult(
             content="```json\n" + json.dumps({"entities": []}) + "\n```",
             model="test",
@@ -751,7 +751,7 @@ class TestRetrievalPlanningFunction:
             version=1,
             active=True,
         )
-        incomplete_data = {"entities": []}
+        incomplete_data: dict[str, object] = {"entities": []}
         mock_result = AuditResult(
             content="{}",
             model="test",
