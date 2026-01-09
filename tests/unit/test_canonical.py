@@ -1,5 +1,6 @@
 """Unit tests for canonical entity and predicate registry."""
 
+import asyncpg
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -688,6 +689,174 @@ class TestSeedCanonicalPredicates:
         assert mock_conn.execute.call_count == 2
 
 
+class TestCacheRefreshFailure:
+    """Tests for cache refresh failure scenarios."""
+
+    def setup_method(self) -> None:
+        """Save original cache state."""
+        self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
+        self._original_predicates = canonical_module._predicates_cache
+        self._original_timestamp = canonical_module._cache_timestamp
+        self._original_ttl = canonical_module.CACHE_TTL_SECONDS
+
+    def teardown_method(self) -> None:
+        """Restore original cache state."""
+        canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
+        canonical_module._predicates_cache = self._original_predicates
+        canonical_module._cache_timestamp = self._original_timestamp
+        canonical_module.CACHE_TTL_SECONDS = self._original_ttl
+
+    @pytest.mark.asyncio
+    async def test_refresh_failure_raises_canonical_registry_error(self) -> None:
+        """Test that database failure during refresh raises appropriate error."""
+        canonical_module._entities_cache = {
+            "Mother": ({"mom"}, "family"),
+        }
+        canonical_module._entity_variants_cache = {"mom": "Mother"}
+        canonical_module._predicates_cache = {}
+        canonical_module._cache_timestamp = datetime.now(UTC)
+        canonical_module.CACHE_TTL_SECONDS = 0
+
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
+            side_effect=asyncpg.PostgresError("Connection failed")
+        )
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            with pytest.raises(canonical_module.CanonicalRegistryError):
+                await canonical_module._ensure_cache_valid()
+
+    @pytest.mark.asyncio
+    async def test_cache_not_updated_on_refresh_failure(self) -> None:
+        """Test that cache remains unchanged when refresh fails."""
+        original_cache: dict[str, tuple[set[str], str | None]] = {
+            "Mother": ({"mom"}, "family"),
+        }
+        canonical_module._entities_cache = original_cache
+        canonical_module._entity_variants_cache = {"mom": "Mother"}
+        canonical_module._predicates_cache = {}
+        canonical_module._cache_timestamp = datetime.now(UTC)
+        canonical_module.CACHE_TTL_SECONDS = 0
+
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(
+            side_effect=asyncpg.PostgresError("Connection failed")
+        )
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            try:
+                await canonical_module._ensure_cache_valid()
+            except canonical_module.CanonicalRegistryError:
+                pass
+
+            assert canonical_module._entities_cache == original_cache
+
+
+class TestSeedingErrors:
+    """Tests for seeding error handling."""
+
+    def setup_method(self) -> None:
+        """Save original cache state."""
+        self._original_entities = canonical_module._entities_cache
+        self._original_entity_variants = canonical_module._entity_variants_cache
+        self._original_predicates = canonical_module._predicates_cache
+        self._original_timestamp = canonical_module._cache_timestamp
+
+    def teardown_method(self) -> None:
+        """Restore original cache state."""
+        canonical_module._entities_cache = self._original_entities
+        canonical_module._entity_variants_cache = self._original_entity_variants
+        canonical_module._predicates_cache = self._original_predicates
+        canonical_module._cache_timestamp = self._original_timestamp
+
+    @pytest.mark.asyncio
+    async def test_seed_entities_raises_on_db_error(self) -> None:
+        """Test that seed_entities raises error on database failure."""
+        mock_conn = MagicMock()
+        mock_conn.execute = AsyncMock(
+            side_effect=asyncpg.PostgresError("Insert failed")
+        )
+        mock_tx = MagicMock()
+        mock_tx.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_tx.__aexit__ = AsyncMock(return_value=None)
+        mock_conn.transaction.return_value = mock_tx
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        entities: list[dict[str, str | list[str] | None]] = [
+            {"canonical": "TestEntity", "variants": ["test"], "category": "test"},
+        ]
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            with pytest.raises(asyncpg.PostgresError):
+                await canonical_module.seed_canonical_entities(entities)
+
+    @pytest.mark.asyncio
+    async def test_seed_predicates_raises_on_db_error(self) -> None:
+        """Test that seed_predicates raises error on database failure."""
+        mock_conn = MagicMock()
+        mock_conn.execute = AsyncMock(
+            side_effect=asyncpg.PostgresError("Insert failed")
+        )
+        mock_tx = MagicMock()
+        mock_tx.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_tx.__aexit__ = AsyncMock(return_value=None)
+        mock_conn.transaction.return_value = mock_tx
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        predicates: list[dict[str, str | list[str]]] = [
+            {"canonical": "test_pred", "variants": ["test predicate"]},
+        ]
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            with pytest.raises(asyncpg.PostgresError):
+                await canonical_module.seed_canonical_predicates(predicates)
+
+    @pytest.mark.asyncio
+    async def test_seed_entities_with_empty_variants(self) -> None:
+        """Test seeding entities with empty variants list."""
+        mock_conn = MagicMock()
+        mock_conn.execute = AsyncMock()
+        mock_tx = MagicMock()
+        mock_tx.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_tx.__aexit__ = AsyncMock(return_value=None)
+        mock_conn.transaction.return_value = mock_tx
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        entities: list[dict[str, str | list[str] | None]] = [
+            {"canonical": "TestEntity", "variants": [], "category": "test"},
+            {"canonical": "TestEntity2", "variants": None, "category": None},
+        ]
+
+        with patch.object(canonical_module, "db_pool", mock_pool):
+            await canonical_module.seed_canonical_entities(entities)
+
+        assert mock_conn.execute.call_count == 2
+
+
 class TestExceptionClasses:
     """Tests for exception classes."""
 
@@ -707,3 +876,15 @@ class TestExceptionClasses:
         assert isinstance(error, canonical_module.CanonicalRegistryError)
         assert not isinstance(error, canonical_module.EntityNotFoundError)
         assert not isinstance(error, canonical_module.PredicateNotFoundError)
+
+    def test_exception_inheritance_chain(self) -> None:
+        """Test that exceptions form correct inheritance chain."""
+        entity_error = canonical_module.EntityNotFoundError("test")
+        predicate_error = canonical_module.PredicateNotFoundError("test")
+        base_error = canonical_module.CanonicalRegistryError("test")
+
+        assert isinstance(entity_error, Exception)
+        assert isinstance(predicate_error, Exception)
+        assert isinstance(base_error, Exception)
+        assert isinstance(entity_error, canonical_module.CanonicalRegistryError)
+        assert isinstance(predicate_error, canonical_module.CanonicalRegistryError)

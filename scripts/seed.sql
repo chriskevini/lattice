@@ -290,7 +290,7 @@ VALUES
     ('Sunday', ARRAY['sun', 'this sunday'], 'day_of_week'),
     ('Today', ARRAY['today', 'right now'], 'relative_date'),
     ('Tomorrow', ARRAY['tomorrow', 'tmr', 'tomrw'], 'relative_date'),
-    ('Yesterday', ARRAY['yesterday', 'yesterday'], 'relative_date'),
+    ('Yesterday', ARRAY['yesterday'], 'relative_date'),
     ('ThisWeek', ARRAY['this week', 'thisweek'], 'relative_date'),
     ('NextWeek', ARRAY['next week', 'nextweek'], 'relative_date')
 ON CONFLICT (canonical_form) DO NOTHING;

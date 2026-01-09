@@ -344,9 +344,6 @@ async def get_canonical_entities_stream(
                 if not rows:
                     break
                 for row in rows:
-                    yield {
-                        row["canonical_form"]: (
-                            set(row["variants"]),
-                            row["category"],
-                        )
-                    }
+                    canonical = row["canonical_form"]
+                    variants = set(row["variants"]) if row["variants"] else set()
+                    yield {canonical: (variants, row["category"])}
