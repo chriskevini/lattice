@@ -374,3 +374,412 @@ class TestEntityExtractionPipeline:
 
             # Verify UNIFIED_RESPONSE template was used
             assert context_info["template"] == "UNIFIED_RESPONSE"
+
+
+class TestRetrievalPlanningPipeline:
+    """Integration tests for the RETRIEVAL_PLANNING pipeline flow.
+
+    Tests the full flow from retrieval_planning() call with:
+    - Conversation window analysis
+    - Canonical entity matching
+    - Context flag detection
+    - Unknown entity identification
+    """
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_with_conversation_window(self) -> None:
+        """Test retrieval planning analyzes conversation window."""
+        message_id = uuid.uuid4()
+        message_content = "How's it going?"
+
+        with (
+            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client"
+            ) as mock_llm_client,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list"
+            ) as mock_canonical,
+        ):
+            from lattice.memory.procedural import PromptTemplate
+            from lattice.utils.llm import AuditResult
+
+            planning_template = PromptTemplate(
+                prompt_key="RETRIEVAL_PLANNING",
+                template="Test template {local_date}\n{canonical_entities}\n{smaller_episodic_context}",
+                temperature=0.2,
+                version=1,
+                active=True,
+            )
+            mock_get_prompt.return_value = planning_template
+            mock_canonical.return_value = ["mobile app", "marathon"]
+
+            planning_llm = AsyncMock()
+            planning_result = AuditResult(
+                content='{"entities": ["mobile app"], "context_flags": ["goal_context"], "unknown_entities": []}',
+                model="anthropic/claude-3.5-sonnet",
+                provider="anthropic",
+                prompt_tokens=100,
+                completion_tokens=50,
+                total_tokens=150,
+                cost_usd=0.001,
+                latency_ms=500,
+                temperature=0.2,
+                audit_id=None,
+                prompt_key="RETRIEVAL_PLANNING",
+            )
+            planning_llm.complete.return_value = planning_result
+            mock_llm_client.return_value = planning_llm
+
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow.return_value = {
+                "id": uuid.uuid4(),
+                "message_id": message_id,
+                "extraction": {
+                    "entities": ["mobile app"],
+                    "context_flags": ["goal_context"],
+                    "unknown_entities": [],
+                    "_extraction_method": "api",
+                },
+                "rendered_prompt": "test prompt",
+                "raw_response": '{"entities": ["mobile app"], "context_flags": ["goal_context"], "unknown_entities": []}',
+                "created_at": datetime.now(UTC),
+            }
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            recent_messages = [
+                episodic.EpisodicMessage(
+                    content="I'm working on the mobile app",
+                    discord_message_id=1,
+                    channel_id=456,
+                    is_bot=False,
+                    message_id=uuid.uuid4(),
+                    timestamp=datetime(2026, 1, 8, 10, 0, tzinfo=UTC),
+                ),
+                episodic.EpisodicMessage(
+                    content="How's it coming?",
+                    discord_message_id=2,
+                    channel_id=456,
+                    is_bot=True,
+                    message_id=uuid.uuid4(),
+                    timestamp=datetime(2026, 1, 8, 10, 1, tzinfo=UTC),
+                ),
+            ]
+
+            planning = await entity_extraction.retrieval_planning(
+                message_id=message_id,
+                message_content=message_content,
+                recent_messages=recent_messages,
+            )
+
+            assert planning is not None
+            assert "mobile app" in planning.entities
+            assert "goal_context" in planning.context_flags
+            assert len(planning.unknown_entities) == 0
+            assert planning.message_id == message_id
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_detects_unknown_entities(self) -> None:
+        """Test retrieval planning identifies entities needing clarification."""
+        message_id = uuid.uuid4()
+        message_content = "bf and I hung out at ikea"
+
+        with (
+            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client"
+            ) as mock_llm_client,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list"
+            ) as mock_canonical,
+        ):
+            from lattice.memory.procedural import PromptTemplate
+            from lattice.utils.llm import AuditResult
+
+            planning_template = PromptTemplate(
+                prompt_key="RETRIEVAL_PLANNING",
+                template="Test template",
+                temperature=0.2,
+                version=1,
+                active=True,
+            )
+            mock_get_prompt.return_value = planning_template
+            mock_canonical.return_value = ["IKEA"]
+
+            planning_llm = AsyncMock()
+            planning_result = AuditResult(
+                content='{"entities": ["IKEA"], "context_flags": [], "unknown_entities": ["bf"]}',
+                model="anthropic/claude-3.5-sonnet",
+                provider="anthropic",
+                prompt_tokens=80,
+                completion_tokens=40,
+                total_tokens=120,
+                cost_usd=0.0008,
+                latency_ms=400,
+                temperature=0.2,
+                audit_id=None,
+                prompt_key="RETRIEVAL_PLANNING",
+            )
+            planning_llm.complete.return_value = planning_result
+            mock_llm_client.return_value = planning_llm
+
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow.return_value = {
+                "id": uuid.uuid4(),
+                "message_id": message_id,
+                "extraction": {
+                    "entities": ["IKEA"],
+                    "context_flags": [],
+                    "unknown_entities": ["bf"],
+                    "_extraction_method": "api",
+                },
+                "rendered_prompt": "test prompt",
+                "raw_response": '{"entities": ["IKEA"], "context_flags": [], "unknown_entities": ["bf"]}',
+                "created_at": datetime.now(UTC),
+            }
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            recent_messages: list[episodic.EpisodicMessage] = []
+
+            planning = await entity_extraction.retrieval_planning(
+                message_id=message_id,
+                message_content=message_content,
+                recent_messages=recent_messages,
+            )
+
+            assert planning is not None
+            assert "IKEA" in planning.entities
+            assert "bf" in planning.unknown_entities
+            assert len(planning.context_flags) == 0
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_activity_context(self) -> None:
+        """Test retrieval planning detects activity queries."""
+        message_id = uuid.uuid4()
+        message_content = "What did I do last week?"
+
+        with (
+            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client"
+            ) as mock_llm_client,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list"
+            ) as mock_canonical,
+        ):
+            from lattice.memory.procedural import PromptTemplate
+            from lattice.utils.llm import AuditResult
+
+            planning_template = PromptTemplate(
+                prompt_key="RETRIEVAL_PLANNING",
+                template="Test template",
+                temperature=0.2,
+                version=1,
+                active=True,
+            )
+            mock_get_prompt.return_value = planning_template
+            mock_canonical.return_value = []
+
+            planning_llm = AsyncMock()
+            planning_result = AuditResult(
+                content='{"entities": [], "context_flags": ["activity_context"], "unknown_entities": []}',
+                model="anthropic/claude-3.5-sonnet",
+                provider="anthropic",
+                prompt_tokens=60,
+                completion_tokens=30,
+                total_tokens=90,
+                cost_usd=0.0006,
+                latency_ms=300,
+                temperature=0.2,
+                audit_id=None,
+                prompt_key="RETRIEVAL_PLANNING",
+            )
+            planning_llm.complete.return_value = planning_result
+            mock_llm_client.return_value = planning_llm
+
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow.return_value = {
+                "id": uuid.uuid4(),
+                "message_id": message_id,
+                "extraction": {
+                    "entities": [],
+                    "context_flags": ["activity_context"],
+                    "unknown_entities": [],
+                    "_extraction_method": "api",
+                },
+                "rendered_prompt": "test prompt",
+                "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unknown_entities": []}',
+                "created_at": datetime.now(UTC),
+            }
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            planning = await entity_extraction.retrieval_planning(
+                message_id=message_id,
+                message_content=message_content,
+                recent_messages=[],
+            )
+
+            assert planning is not None
+            assert len(planning.entities) == 0
+            assert "activity_context" in planning.context_flags
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_topic_switch(self) -> None:
+        """Test retrieval planning returns empty when topic switches."""
+        message_id = uuid.uuid4()
+        message_content = "Actually, what's the weather like?"
+
+        with (
+            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client"
+            ) as mock_llm_client,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list"
+            ) as mock_canonical,
+        ):
+            from lattice.memory.procedural import PromptTemplate
+            from lattice.utils.llm import AuditResult
+
+            planning_template = PromptTemplate(
+                prompt_key="RETRIEVAL_PLANNING",
+                template="Test template",
+                temperature=0.2,
+                version=1,
+                active=True,
+            )
+            mock_get_prompt.return_value = planning_template
+            mock_canonical.return_value = ["mobile app", "marathon"]
+
+            planning_llm = AsyncMock()
+            planning_result = AuditResult(
+                content='{"entities": [], "context_flags": [], "unknown_entities": []}',
+                model="anthropic/claude-3.5-sonnet",
+                provider="anthropic",
+                prompt_tokens=50,
+                completion_tokens=20,
+                total_tokens=70,
+                cost_usd=0.0005,
+                latency_ms=250,
+                temperature=0.2,
+                audit_id=None,
+                prompt_key="RETRIEVAL_PLANNING",
+            )
+            planning_llm.complete.return_value = planning_result
+            mock_llm_client.return_value = planning_llm
+
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow.return_value = {
+                "id": uuid.uuid4(),
+                "message_id": message_id,
+                "extraction": {
+                    "entities": [],
+                    "context_flags": [],
+                    "unknown_entities": [],
+                    "_extraction_method": "api",
+                },
+                "rendered_prompt": "test prompt",
+                "raw_response": '{"entities": [], "context_flags": [], "unknown_entities": []}',
+                "created_at": datetime.now(UTC),
+            }
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            recent_messages = [
+                episodic.EpisodicMessage(
+                    content="Working on mobile app",
+                    discord_message_id=1,
+                    channel_id=456,
+                    is_bot=False,
+                    message_id=uuid.uuid4(),
+                    timestamp=datetime(2026, 1, 8, 10, 0, tzinfo=UTC),
+                ),
+                episodic.EpisodicMessage(
+                    content="Any blockers?",
+                    discord_message_id=2,
+                    channel_id=456,
+                    is_bot=True,
+                    message_id=uuid.uuid4(),
+                    timestamp=datetime(2026, 1, 8, 10, 1, tzinfo=UTC),
+                ),
+            ]
+
+            planning = await entity_extraction.retrieval_planning(
+                message_id=message_id,
+                message_content=message_content,
+                recent_messages=recent_messages,
+            )
+
+            assert planning is not None
+            assert len(planning.entities) == 0
+            assert len(planning.context_flags) == 0
+            assert len(planning.unknown_entities) == 0
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_missing_template(self) -> None:
+        """Test retrieval planning fails gracefully when template missing."""
+        with (
+            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+        ):
+            mock_get_prompt.return_value = None
+
+            with pytest.raises(ValueError, match="RETRIEVAL_PLANNING prompt template"):
+                await entity_extraction.retrieval_planning(
+                    message_id=uuid.uuid4(),
+                    message_content="Test message",
+                    recent_messages=[],
+                )
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_missing_fields(self) -> None:
+        """Test retrieval planning validates required fields."""
+        message_id = uuid.uuid4()
+
+        with (
+            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client"
+            ) as mock_llm_client,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list"
+            ) as mock_canonical,
+        ):
+            from lattice.memory.procedural import PromptTemplate
+            from lattice.utils.llm import AuditResult
+
+            planning_template = PromptTemplate(
+                prompt_key="RETRIEVAL_PLANNING",
+                template="Test template",
+                temperature=0.2,
+                version=1,
+                active=True,
+            )
+            mock_get_prompt.return_value = planning_template
+            mock_canonical.return_value = []
+
+            planning_llm = AsyncMock()
+            planning_result = AuditResult(
+                content='{"entities": []}',
+                model="anthropic/claude-3.5-sonnet",
+                provider="anthropic",
+                prompt_tokens=50,
+                completion_tokens=20,
+                total_tokens=70,
+                cost_usd=0.0005,
+                latency_ms=250,
+                temperature=0.2,
+                audit_id=None,
+                prompt_key="RETRIEVAL_PLANNING",
+            )
+            planning_llm.complete.return_value = planning_result
+            mock_llm_client.return_value = planning_llm
+
+            with pytest.raises(ValueError, match="Missing required field"):
+                await entity_extraction.retrieval_planning(
+                    message_id=message_id,
+                    message_content="Test message",
+                    recent_messages=[],
+                )
