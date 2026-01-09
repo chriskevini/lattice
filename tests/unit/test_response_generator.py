@@ -7,7 +7,6 @@ from lattice.core.response_generator import (
     _has_entity_goal_overlap,
     _has_planning_intent,
     PLANNING_KEYWORDS,
-    CLARIFICATION_IGNORE_THRESHOLD,
 )
 
 
@@ -106,46 +105,6 @@ class TestPlanningKeywords:
         """Keywords should be lowercase for consistent matching."""
         for kw in PLANNING_KEYWORDS:
             assert kw == kw.lower()
-
-
-class TestClarificationThreshold:
-    """Tests for clarification threshold constant."""
-
-    def test_threshold_is_three(self) -> None:
-        """Clarification threshold should be 3."""
-        assert CLARIFICATION_IGNORE_THRESHOLD == 3
-
-
-class TestShouldRequestClarification:
-    """Tests for should_request_clarification function logic.
-
-    Note: These tests verify the function structure. Full integration
-    tests would require database mocking.
-    """
-
-    def test_threshold_constant_exists(self) -> None:
-        """CLARIFICATION_IGNORE_THRESHOLD should be defined."""
-        assert hasattr(
-            __import__(
-                "lattice.core.response_generator",
-                fromlist=["CLARIFICATION_IGNORE_THRESHOLD"],
-            ),
-            "CLARIFICATION_IGNORE_THRESHOLD",
-        )
-
-    def test_threshold_value(self) -> None:
-        """Threshold should allow 3 clarification attempts before accepting."""
-        assert CLARIFICATION_IGNORE_THRESHOLD == 3
-
-    def test_function_signature(self) -> None:
-        """should_request_clarification should accept expected parameters."""
-        import inspect
-        from lattice.core.response_generator import should_request_clarification
-
-        sig = inspect.signature(should_request_clarification)
-        params = list(sig.parameters.keys())
-        assert "unknown_entity" in params
-        assert "current_message_id" in params
 
 
 class TestAvailablePlaceholders:

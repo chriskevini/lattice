@@ -415,15 +415,6 @@ class LatticeBot(commands.Bot):
             )
 
             # Generate response with planning for template selection
-            # Filter unknown_entities to only those that should be requested
-            entities_to_clarify: list[str] = []
-            if planning and planning.unknown_entities:
-                for entity in planning.unknown_entities:
-                    if await response_generator.should_request_clarification(
-                        entity, user_message_id
-                    ):
-                        entities_to_clarify.append(entity)
-
             (
                 response_result,
                 rendered_prompt,
@@ -436,19 +427,11 @@ class LatticeBot(commands.Bot):
                 goal_context=goal_context if goal_context else None,
                 activity_context=activity_context if activity_context else None,
                 user_discord_message_id=message.id,
-                unknown_entities=entities_to_clarify if entities_to_clarify else None,
+                unknown_entities=planning.unknown_entities if planning else None,
             )
 
-            # Record clarification attempts for any unknown entities we asked about
-            response_content = response_result.content
-            for entity in entities_to_clarify:
-                if entity.lower() in response_content.lower():
-                    await response_generator.record_clarification_attempt(
-                        user_message_id, entity
-                    )
-                    break
-
             # Inject source links from graph triples
+            response_content = response_result.content
             if graph_triples and message.guild:
                 # Build source map from recent messages
                 source_map = build_source_map(

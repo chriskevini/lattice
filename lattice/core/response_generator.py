@@ -3,7 +3,6 @@
 Handles prompt formatting, LLM generation, and message splitting for Discord.
 """
 
-import json
 import re
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -50,7 +49,7 @@ AVAILABLE_PLACEHOLDERS = {
     "local_date": "Current date with day of week (e.g., 2026/01/08, Thursday)",
     "local_time": "Current time for proactive decisions (e.g., 14:30)",
     "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
-    "unknown_entities": "Entities requiring clarification (e.g., 'bf', 'lkea')",
+    "unknown_entities": "Entities requiring clarification (e.g., 'bf', 'lkea') - BATCH_MEMORY_EXTRACTION will handle these naturally",
 }
 
 
@@ -263,6 +262,7 @@ async def generate_response(
         goal_context: Pre-fetched goal context from retrieve_context()
         activity_context: Pre-fetched activity context from retrieve_context()
         unknown_entities: Entities requiring clarification (e.g., ["bf", "lkea"])
+                         BATCH_MEMORY_EXTRACTION handles these naturally in next cycle.
 
     Returns:
         Tuple of (GenerationResult, rendered_prompt, context_info)
@@ -494,109 +494,3 @@ def split_response(response: str, max_length: int = 1900) -> list[str]:
         chunks.append("\n".join(current_chunk))
 
     return chunks
-
-
-CLARIFICATION_IGNORE_THRESHOLD = 3
-
-
-async def record_clarification_attempt(message_id: UUID, unknown_entity: str) -> None:
-    """Record a clarification attempt for an unknown entity.
-
-    Args:
-        message_id: The message ID where clarification was requested
-        unknown_entity: The unknown entity that clarification was requested for
-    """
-    from lattice.utils.database import db_pool
-
-    try:
-        async with db_pool.pool.acquire() as conn:
-            await conn.execute(
-                """
-                UPDATE message_extractions
-                SET extraction = extraction || $1::jsonb
-                WHERE message_id = $2
-                """,
-                json.dumps(
-                    {
-                        "_clarification_attempts": [
-                            {unknown_entity: {"requested_at": "now()"}}
-                        ]
-                    }
-                ),
-                message_id,
-            )
-    except Exception as e:
-        logger.warning(
-            "Failed to record clarification attempt",
-            message_id=str(message_id),
-            unknown_entity=unknown_entity,
-            error=str(e),
-        )
-
-
-async def get_clarification_attempt_count(
-    unknown_entity: str, since_message_id: UUID | None = None
-) -> int:
-    """Get count of clarification attempts for an entity since a given message.
-
-    Args:
-        unknown_entity: The unknown entity to check
-        since_message_id: Only count attempts after this message ID (None = all time)
-
-    Returns:
-        Number of clarification attempts made
-    """
-    from lattice.utils.database import db_pool
-
-    try:
-        if since_message_id:
-            async with db_pool.pool.acquire() as conn:
-                count = await conn.fetchval(
-                    """
-                    SELECT COUNT(*)
-                    FROM message_extractions
-                    WHERE extraction::text LIKE $1
-                    AND id > $2
-                    """,
-                    f"%{unknown_entity}%",
-                    since_message_id,
-                )
-                return count or 0
-        else:
-            async with db_pool.pool.acquire() as conn:
-                count = await conn.fetchval(
-                    """
-                    SELECT COUNT(*)
-                    FROM message_extractions
-                    WHERE extraction::text LIKE $1
-                    """,
-                    f"%{unknown_entity}%",
-                )
-                return count or 0
-    except Exception as e:
-        logger.warning(
-            "Failed to get clarification attempt count",
-            unknown_entity=unknown_entity,
-            error=str(e),
-        )
-        return 0
-
-
-async def should_request_clarification(
-    unknown_entity: str, current_message_id: UUID
-) -> bool:
-    """Determine if clarification should be requested for an unknown entity.
-
-    Logic: Ask once, if ignored after 3 messages, accept as new entity.
-
-    Args:
-        unknown_entity: The unknown entity to check
-        current_message_id: The current message ID
-
-    Returns:
-        True if clarification should be requested, False if should be accepted
-    """
-    attempt_count = await get_clarification_attempt_count(
-        unknown_entity=unknown_entity, since_message_id=None
-    )
-    return attempt_count < CLARIFICATION_IGNORE_THRESHOLD
