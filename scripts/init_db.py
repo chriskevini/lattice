@@ -57,11 +57,11 @@ async def init_database() -> None:
                 raise
 
         print("\nDatabase schema initialization complete!")
-        print("Tables: prompt_registry, raw_messages, message_extractions, entities,")
-        print("        semantic_triples, objectives, prompt_audits,")
         print(
-            "        dreaming_proposals, user_feedback, system_health, schema_migrations"
+            "Tables: prompt_registry, raw_messages, message_extractions, semantic_triples,"
         )
+        print("        objectives, prompt_audits, dreaming_proposals, user_feedback,")
+        print("        system_health, schema_migrations, entities, predicates")
         print("\nAll prompt templates seeded from seed.sql")
 
     except Exception as e:

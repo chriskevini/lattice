@@ -228,3 +228,27 @@ INSERT INTO system_health (metric_key, metric_value) VALUES
     ('active_hours_last_updated', NOW()::TEXT),
     ('last_batch_message_id', '0')
 ON CONFLICT (metric_key) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- entities: Canonical entity names for LLM-based entity normalization
+-- ----------------------------------------------------------------------------
+-- Stores canonical entity names for conversational context tracking.
+-- No UUID primary key - name is the canonical identifier.
+-- Example: "bf" → "boyfriend", "mom" → "Mother"
+CREATE TABLE IF NOT EXISTS entities (
+    name TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_entities_created_at ON entities(created_at DESC);
+
+-- ----------------------------------------------------------------------------
+-- predicates: Canonical predicate names for LLM-based predicate normalization
+-- ----------------------------------------------------------------------------
+-- Stores canonical predicate names for knowledge graph consistency.
+-- Predicates use space-separated natural English phrases.
+-- Example: "loves" → "likes", "works at" → "work at"
+CREATE TABLE IF NOT EXISTS predicates (
+    name TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_predicates_created_at ON predicates(created_at DESC);

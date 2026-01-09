@@ -4,6 +4,7 @@ Provides async PostgreSQL connection pooling.
 """
 
 import os
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfoNotFoundError
 
@@ -12,6 +13,8 @@ import structlog
 
 
 logger = structlog.get_logger(__name__)
+
+CANONICAL_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
 class DatabasePool:
@@ -163,6 +166,75 @@ async def set_user_timezone(timezone: str) -> None:
 
     await set_system_health("user_timezone", timezone)
     logger.info("System timezone updated", timezone=timezone)
+
+
+_entities_cache: list[str] | None = None
+_entities_cache_timestamp: float = 0.0
+_predicates_cache: list[str] | None = None
+_predicates_cache_timestamp: float = 0.0
+
+
+async def get_canonical_entities() -> list[str]:
+    """Fetch all canonical entity names from entities table.
+
+    Returns:
+        List of entity names sorted by creation date (newest first)
+    """
+    global _entities_cache, _entities_cache_timestamp
+
+    current_time = time.time()
+
+    if (
+        _entities_cache is not None
+        and (current_time - _entities_cache_timestamp) < CANONICAL_CACHE_TTL_SECONDS
+    ):
+        return _entities_cache
+
+    async with db_pool.pool.acquire() as conn:
+        rows = await conn.fetch("SELECT name FROM entities ORDER BY created_at DESC")
+        _entities_cache = [row["name"] for row in rows]
+        _entities_cache_timestamp = current_time
+
+    logger.debug("Fetched canonical entities from database", count=len(_entities_cache))
+    return _entities_cache
+
+
+async def get_canonical_predicates() -> list[str]:
+    """Fetch all canonical predicate names from predicates table.
+
+    Returns:
+        List of predicate names sorted by creation date (newest first)
+    """
+    global _predicates_cache, _predicates_cache_timestamp
+
+    current_time = time.time()
+
+    if (
+        _predicates_cache is not None
+        and (current_time - _predicates_cache_timestamp) < CANONICAL_CACHE_TTL_SECONDS
+    ):
+        return _predicates_cache
+
+    async with db_pool.pool.acquire() as conn:
+        rows = await conn.fetch("SELECT name FROM predicates ORDER BY created_at DESC")
+        _predicates_cache = [row["name"] for row in rows]
+        _predicates_cache_timestamp = current_time
+
+    logger.debug(
+        "Fetched canonical predicates from database", count=len(_predicates_cache)
+    )
+    return _predicates_cache
+
+
+def clear_canonical_cache() -> None:
+    """Clear the canonical entities and predicates caches.
+
+    Useful after batch operations that add new canonical forms.
+    """
+    global _entities_cache, _predicates_cache
+    _entities_cache = None
+    _predicates_cache = None
+    logger.debug("Cleared canonical caches")
 
 
 db_pool = DatabasePool()
