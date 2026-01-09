@@ -12,11 +12,16 @@ import pytest
 
 from lattice.core.entity_extraction import (
     EntityExtraction,
+    build_smaller_episodic_context,
     extract_entities,
     extract_predicates,
     get_extraction,
     get_message_extraction,
+    retrieval_planning,
+    get_retrieval_planning,
+    get_message_retrieval_planning,
 )
+from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
 from lattice.utils.llm import AuditResult
 
@@ -460,3 +465,429 @@ class TestExtractPredicates:
         )
         assert result == ["performed_activity"]
         assert len(result) == 1
+
+
+class TestBuildSmallerEpisodicContext:
+    """Tests for the build_smaller_episodic_context function."""
+
+    def test_build_smaller_episodic_context_basic(self) -> None:
+        """Test building context with recent messages."""
+        recent_messages = [
+            EpisodicMessage(
+                content="Working on mobile app",
+                discord_message_id=1,
+                channel_id=123,
+                is_bot=False,
+            ),
+            EpisodicMessage(
+                content="How's it coming?",
+                discord_message_id=2,
+                channel_id=123,
+                is_bot=True,
+            ),
+        ]
+        current_message = "Pretty good"
+
+        context = build_smaller_episodic_context(
+            recent_messages=recent_messages,
+            current_message=current_message,
+            window_size=3,
+        )
+
+        assert "User: Working on mobile app" in context
+        assert "Bot: How's it coming?" in context
+        assert "User: Pretty good" in context
+
+    def test_build_smaller_episodic_context_empty_history(self) -> None:
+        """Test building context with no recent messages."""
+        current_message = "Hello there"
+
+        context = build_smaller_episodic_context(
+            recent_messages=[],
+            current_message=current_message,
+            window_size=5,
+        )
+
+        assert context == "User: Hello there"
+
+    def test_build_smaller_episodic_context_window_limit(self) -> None:
+        """Test that window respects size limit."""
+        recent_messages = [
+            EpisodicMessage(
+                content=f"Message {i}",
+                discord_message_id=i,
+                channel_id=123,
+                is_bot=False,
+            )
+            for i in range(20)
+        ]
+        current_message = "Current"
+
+        context = build_smaller_episodic_context(
+            recent_messages=recent_messages,
+            current_message=current_message,
+            window_size=5,
+        )
+
+        lines = context.split("\n")
+        assert len(lines) == 5
+        assert lines[0] == "User: Message 16"
+        assert lines[4] == "User: Current"
+
+    def test_build_smaller_episodic_context_window_size_one(self) -> None:
+        """Test window size of 1 includes only current message."""
+        recent_messages = [
+            EpisodicMessage(
+                content="Old message",
+                discord_message_id=1,
+                channel_id=123,
+                is_bot=False,
+            ),
+        ]
+        current_message = "New message"
+
+        context = build_smaller_episodic_context(
+            recent_messages=recent_messages,
+            current_message=current_message,
+            window_size=1,
+        )
+
+        assert context == "User: New message"
+
+    def test_build_smaller_episodic_context_default_window_size(self) -> None:
+        """Test using default window size."""
+        from lattice.core.entity_extraction import SMALLER_EPISODIC_WINDOW_SIZE
+
+        recent_messages = [
+            EpisodicMessage(
+                content=f"Message {i}",
+                discord_message_id=i,
+                channel_id=123,
+                is_bot=False,
+            )
+            for i in range(15)
+        ]
+        current_message = "Current"
+
+        context = build_smaller_episodic_context(
+            recent_messages=recent_messages,
+            current_message=current_message,
+        )
+
+        lines = context.split("\n")
+        assert len(lines) == SMALLER_EPISODIC_WINDOW_SIZE
+
+    def test_build_smaller_episodic_context_mixed_bot_user(self) -> None:
+        """Test context includes both bot and user messages."""
+        recent_messages = [
+            EpisodicMessage(
+                content="User message 1",
+                discord_message_id=1,
+                channel_id=123,
+                is_bot=False,
+            ),
+            EpisodicMessage(
+                content="Bot response",
+                discord_message_id=2,
+                channel_id=123,
+                is_bot=True,
+            ),
+            EpisodicMessage(
+                content="User message 2",
+                discord_message_id=3,
+                channel_id=123,
+                is_bot=False,
+            ),
+        ]
+        current_message = "User current"
+
+        context = build_smaller_episodic_context(
+            recent_messages=recent_messages,
+            current_message=current_message,
+            window_size=4,
+        )
+
+        assert "User: User message 1" in context
+        assert "Bot: Bot response" in context
+        assert "User: User message 2" in context
+        assert "User: User current" in context
+
+
+class TestRetrievalPlanning:
+    """Tests for the RetrievalPlanning dataclass."""
+
+    def test_retrieval_planning_init(self) -> None:
+        """Test RetrievalPlanning initialization."""
+        from lattice.core.entity_extraction import RetrievalPlanning
+
+        extraction_id = uuid.uuid4()
+        message_id = uuid.uuid4()
+        now = datetime.now()
+
+        planning = RetrievalPlanning(
+            id=extraction_id,
+            message_id=message_id,
+            entities=["mobile app", "marathon"],
+            context_flags=["goal_context"],
+            unknown_entities=["bf"],
+            rendered_prompt="test prompt",
+            raw_response="test response",
+            extraction_method="api",
+            created_at=now,
+        )
+
+        assert planning.entities == ["mobile app", "marathon"]
+        assert planning.context_flags == ["goal_context"]
+        assert planning.unknown_entities == ["bf"]
+        assert planning.rendered_prompt == "test prompt"
+        assert planning.raw_response == "test response"
+        assert planning.extraction_method == "api"
+        assert planning.created_at == now
+
+
+class TestRetrievalPlanningFunction:
+    """Tests for the retrieval_planning function."""
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_success(self) -> None:
+        """Test successful retrieval planning."""
+        message_id = uuid.uuid4()
+        mock_prompt_template = PromptTemplate(
+            prompt_key="RETRIEVAL_PLANNING",
+            template="Test template {local_date}",
+            temperature=0.2,
+            version=1,
+            active=True,
+        )
+        extraction_data = {
+            "entities": ["mobile app"],
+            "context_flags": ["goal_context"],
+            "unknown_entities": [],
+        }
+        mock_result = AuditResult(
+            content=json.dumps(extraction_data),
+            model="anthropic/claude-3.5-sonnet",
+            provider="anthropic",
+            prompt_tokens=50,
+            completion_tokens=20,
+            total_tokens=70,
+            cost_usd=0.0005,
+            latency_ms=300,
+            temperature=0.2,
+            audit_id=None,
+            prompt_key=None,
+        )
+
+        with (
+            patch(
+                "lattice.core.entity_extraction.get_prompt",
+                return_value=mock_prompt_template,
+            ),
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list",
+                return_value=["Mother", "boyfriend"],
+            ),
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client",
+            ) as mock_llm_client,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch(
+                "lattice.core.entity_extraction.parse_llm_json_response",
+                return_value=extraction_data,
+            ),
+        ):
+            mock_client = AsyncMock()
+            mock_client.complete = AsyncMock(return_value=mock_result)
+            mock_llm_client.return_value = mock_client
+
+            mock_conn = AsyncMock()
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            recent_messages = [
+                EpisodicMessage(
+                    content="Working on mobile app",
+                    discord_message_id=1,
+                    channel_id=123,
+                    is_bot=False,
+                ),
+            ]
+
+            planning = await retrieval_planning(
+                message_id=message_id,
+                message_content="I need to finish by Friday",
+                recent_messages=recent_messages,
+            )
+
+            assert planning.message_id == message_id
+            assert planning.entities == ["mobile app"]
+            assert planning.context_flags == ["goal_context"]
+            assert planning.unknown_entities == []
+            assert planning.extraction_method == "api"
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_missing_prompt_template(self) -> None:
+        """Test retrieval planning with missing prompt template."""
+        message_id = uuid.uuid4()
+
+        with patch(
+            "lattice.core.entity_extraction.get_prompt",
+            return_value=None,
+        ):
+            with pytest.raises(ValueError, match="RETRIEVAL_PLANNING prompt template"):
+                await retrieval_planning(
+                    message_id=message_id,
+                    message_content="Test message",
+                    recent_messages=[],
+                )
+
+    @pytest.mark.asyncio
+    async def test_retrieval_planning_missing_required_fields(self) -> None:
+        """Test retrieval planning with missing required fields."""
+        message_id = uuid.uuid4()
+        mock_prompt_template = PromptTemplate(
+            prompt_key="RETRIEVAL_PLANNING",
+            template="Test template",
+            temperature=0.2,
+            version=1,
+            active=True,
+        )
+        incomplete_data = {"entities": []}
+        mock_result = AuditResult(
+            content="{}",
+            model="test",
+            provider=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            cost_usd=None,
+            latency_ms=0,
+            temperature=0.0,
+            audit_id=None,
+            prompt_key="RETRIEVAL_PLANNING",
+        )
+
+        with (
+            patch(
+                "lattice.core.entity_extraction.get_prompt",
+                return_value=mock_prompt_template,
+            ),
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list",
+                return_value=[],
+            ),
+            patch(
+                "lattice.core.entity_extraction.get_auditing_llm_client",
+            ) as mock_llm_client,
+            patch(
+                "lattice.core.entity_extraction.parse_llm_json_response",
+                return_value=incomplete_data,
+            ),
+        ):
+            mock_client = AsyncMock()
+            mock_client.complete = AsyncMock(return_value=mock_result)
+            mock_llm_client.return_value = mock_client
+
+            with pytest.raises(ValueError, match="Missing required field"):
+                await retrieval_planning(
+                    message_id=message_id,
+                    message_content="Test message",
+                    recent_messages=[],
+                )
+
+
+class TestGetRetrievalPlanning:
+    """Tests for the get_retrieval_planning function."""
+
+    @pytest.mark.asyncio
+    async def test_get_retrieval_planning_success(self) -> None:
+        """Test retrieving a retrieval planning."""
+        extraction_id = uuid.uuid4()
+        message_id = uuid.uuid4()
+
+        mock_row = {
+            "id": extraction_id,
+            "message_id": message_id,
+            "extraction": {
+                "entities": ["marathon"],
+                "context_flags": ["goal_context", "activity_context"],
+                "unknown_entities": ["bf"],
+            },
+            "rendered_prompt": "test prompt",
+            "raw_response": "test response",
+            "created_at": datetime.now(),
+        }
+
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            planning = await get_retrieval_planning(extraction_id)
+
+            assert planning is not None
+            assert planning.id == extraction_id
+            assert planning.entities == ["marathon"]
+            assert planning.context_flags == ["goal_context", "activity_context"]
+            assert planning.unknown_entities == ["bf"]
+
+    @pytest.mark.asyncio
+    async def test_get_retrieval_planning_not_found(self) -> None:
+        """Test retrieving a non-existent retrieval planning."""
+        extraction_id = uuid.uuid4()
+
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow = AsyncMock(return_value=None)
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            planning = await get_retrieval_planning(extraction_id)
+
+            assert planning is None
+
+
+class TestGetMessageRetrievalPlanning:
+    """Tests for the get_message_retrieval_planning function."""
+
+    @pytest.mark.asyncio
+    async def test_get_message_retrieval_planning_success(self) -> None:
+        """Test retrieving retrieval planning by message ID."""
+        extraction_id = uuid.uuid4()
+        message_id = uuid.uuid4()
+
+        mock_row = {
+            "id": extraction_id,
+            "message_id": message_id,
+            "extraction": {
+                "entities": ["mobile app"],
+                "context_flags": [],
+                "unknown_entities": [],
+            },
+            "rendered_prompt": "test prompt",
+            "raw_response": "test response",
+            "created_at": datetime.now(),
+        }
+
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            planning = await get_message_retrieval_planning(message_id)
+
+            assert planning is not None
+            assert planning.message_id == message_id
+            assert planning.entities == ["mobile app"]
+
+    @pytest.mark.asyncio
+    async def test_get_message_retrieval_planning_not_found(self) -> None:
+        """Test retrieving non-existent message retrieval planning."""
+        message_id = uuid.uuid4()
+
+        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
+            mock_conn = AsyncMock()
+            mock_conn.fetchrow = AsyncMock(return_value=None)
+            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            planning = await get_message_retrieval_planning(message_id)
+
+            assert planning is None
