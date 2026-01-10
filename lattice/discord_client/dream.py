@@ -437,11 +437,23 @@ class AuditViewBuilder:
         )
 
         if metadata_parts:
-            embed.add_field(
-                name="METADATA",
-                value=" | ".join(metadata_parts),
-                inline=False,
-            )
+            # Check for source links in metadata to highlight them
+            sources = [m for m in metadata_parts if "[SRC" in m]
+            if sources:
+                embed.add_field(
+                    name="SOURCES",
+                    value=" ".join(sources),
+                    inline=False,
+                )
+                # Filter out sources from regular metadata to avoid duplication
+                metadata_parts = [m for m in metadata_parts if "[SRC" not in m]
+
+            if metadata_parts:
+                embed.add_field(
+                    name="METADATA",
+                    value=" | ".join(metadata_parts),
+                    inline=False,
+                )
 
         view = AuditView(
             audit_id=audit_id,

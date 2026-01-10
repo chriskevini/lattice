@@ -221,6 +221,16 @@ class MessageHandler:
 
             episodic_context = "\n".join(formatted_lines)
 
+            # Prepare metadata for audit view including source links
+            audit_metadata = []
+            if memory_origins:
+                # Add source links to metadata if we have memory origins
+                # These are formatted as [SRC-XXXX] which will be picked up by AuditViewBuilder
+                source_links = [
+                    f"[SRC-{str(uid)[:4].upper()}]" for uid in memory_origins
+                ]
+                audit_metadata.extend(source_links)
+
             # Generate response with automatic AuditView
             (
                 response_result,
@@ -235,6 +245,7 @@ class MessageHandler:
                 audit_view=True,
                 audit_view_params={
                     "main_message_url": message.jump_url,
+                    "metadata": audit_metadata,
                 },
             )
 
