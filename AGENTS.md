@@ -9,8 +9,7 @@
 
 ## 🏗️ Core Architecture (ENGRAM)
 1. **Episodic** (`raw_messages`): Immutable conversation log.
-2. **Semantic** (`entities`, `semantic_memories`): Graph-first knowledge with entity resolution.
-    - **Peculiarity**: Uses a **text-based graph** (no IDs). Relationships are stored as `(subject, predicate, object)` strings to allow for natural language evolution.
+2. **Semantic** (`entities`, `semantic_memories`): Text-based knowledge graph. Relationships are stored as `(subject, predicate, object)` strings without rigid IDs, facilitating natural language evolution and iterative BFS traversal.
 3. **Procedural** (`prompt_registry`): Versioned LLM logic.
 
 Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrator.py).
