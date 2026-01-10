@@ -20,6 +20,7 @@ import structlog
 
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 
+from lattice.core.constants import CONTEXT_STRATEGY_WINDOW_SIZE
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import format_current_date, resolve_relative_dates
@@ -28,9 +29,6 @@ from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 
 
 logger = structlog.get_logger(__name__)
-
-
-SMALLER_EPISODIC_WINDOW_SIZE = 10
 
 from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
@@ -62,7 +60,7 @@ class ContextStrategy:
 def build_smaller_episodic_context(
     recent_messages: list["EpisodicMessage"],
     current_message: str,
-    window_size: int = SMALLER_EPISODIC_WINDOW_SIZE,
+    window_size: int = CONTEXT_STRATEGY_WINDOW_SIZE,
 ) -> str:
     """Build smaller episodic context for CONTEXT_STRATEGY.
 
@@ -73,7 +71,7 @@ def build_smaller_episodic_context(
     Args:
         recent_messages: Recent conversation history
         current_message: The current user message
-        window_size: Total window size including current (default 10)
+        window_size: Total window size including current (default from CONTEXT_STRATEGY_WINDOW_SIZE)
 
     Returns:
         Formatted conversation window with all messages
@@ -146,7 +144,7 @@ async def context_strategy(
     smaller_context = build_smaller_episodic_context(
         recent_messages=recent_messages,
         current_message=message_content,
-        window_size=SMALLER_EPISODIC_WINDOW_SIZE,
+        window_size=CONTEXT_STRATEGY_WINDOW_SIZE,
     )
 
     rendered_prompt = prompt_template.safe_format(

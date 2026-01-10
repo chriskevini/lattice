@@ -8,8 +8,8 @@ import json
 from typing import Any
 import pytest
 
+from lattice.core.constants import CONSOLIDATION_BATCH_SIZE
 from lattice.memory.batch_consolidation import (
-    BATCH_SIZE,
     check_and_run_batch,
     run_batch_consolidation,
 )
@@ -34,11 +34,11 @@ def create_mock_pool_with_conn() -> tuple[MagicMock, AsyncMock]:
 
 
 class TestBatchSize:
-    """Tests for BATCH_SIZE constant."""
+    """Tests for CONSOLIDATION_BATCH_SIZE constant."""
 
     def test_batch_size_is_18(self) -> None:
-        """Test that BATCH_SIZE is 18 as specified in design."""
-        assert BATCH_SIZE == 18
+        """Test that CONSOLIDATION_BATCH_SIZE is 18 as specified in design."""
+        assert CONSOLIDATION_BATCH_SIZE == 18
 
 
 class TestCheckAndRunBatch:

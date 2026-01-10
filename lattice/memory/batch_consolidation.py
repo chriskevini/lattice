@@ -1,4 +1,4 @@
-"""Memory consolidation module - extracts memory every 18 messages.
+"""Memory consolidation module - extracts memory every CONSOLIDATION_BATCH_SIZE messages.
 
 Uses timestamp-based evolution: all memories are inserted with created_at,
 no updates or deletes. Query logic handles "current truth" via recency.
@@ -6,7 +6,7 @@ no updates or deletes. Query logic handles "current truth" via recency.
 Architecture:
     - check_and_run_batch(): Fast threshold check, called after each message
     - run_batch_consolidation(): Re-checks threshold, then processes messages
-    - BATCH_SIZE = 18: Number of messages required to trigger extraction
+    - CONSOLIDATION_BATCH_SIZE: Number of messages required to trigger extraction
 
 Concurrency:
     - check_and_run_batch() performs a fast threshold check outside of any lock
@@ -21,6 +21,7 @@ from typing import Any
 
 import structlog
 
+from lattice.core.constants import CONSOLIDATION_BATCH_SIZE
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 from lattice.memory.canonical import (
     extract_canonical_forms,
@@ -39,8 +40,6 @@ from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 
 
 logger = structlog.get_logger(__name__)
-
-BATCH_SIZE = 18
 
 
 async def _get_last_batch_id(conn: Any) -> str:
@@ -87,18 +86,18 @@ async def check_and_run_batch() -> None:
         )
         message_count = count_row["cnt"] if count_row else 0
 
-    if message_count < BATCH_SIZE:
+    if message_count < CONSOLIDATION_BATCH_SIZE:
         logger.debug(
             "Consolidation not ready",
             message_count=message_count,
-            threshold=BATCH_SIZE,
+            threshold=CONSOLIDATION_BATCH_SIZE,
         )
         return
 
     logger.info(
         "Consolidation threshold reached",
         message_count=message_count,
-        threshold=BATCH_SIZE,
+        threshold=CONSOLIDATION_BATCH_SIZE,
     )
 
     await run_batch_consolidation()
@@ -126,11 +125,11 @@ async def run_batch_consolidation() -> None:
         )
         message_count = count_row["cnt"] if count_row else 0
 
-        if message_count < BATCH_SIZE:
+        if message_count < CONSOLIDATION_BATCH_SIZE:
             logger.debug(
                 "Consolidation cancelled - threshold no longer met",
                 message_count=message_count,
-                threshold=BATCH_SIZE,
+                threshold=CONSOLIDATION_BATCH_SIZE,
             )
             return
 
