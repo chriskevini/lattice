@@ -119,7 +119,14 @@ class PromptDetailView(discord.ui.DesignerView):
             rendered_prompt: Full rendered prompt text
         """
         super().__init__(timeout=60)
-        text_display: Any = discord.ui.TextDisplay(content=rendered_prompt)
+        # TextDisplay requires 1-4000 characters
+        if not rendered_prompt:
+            display_content = "Content not available"
+        elif len(rendered_prompt) > 4000:
+            display_content = rendered_prompt[:3997] + "..."
+        else:
+            display_content = rendered_prompt
+        text_display: Any = discord.ui.TextDisplay(content=display_content)
         self.add_item(text_display)
 
 
@@ -270,35 +277,41 @@ class AuditView(discord.ui.DesignerView):
         view_prompt_button: Any = discord.ui.Button(
             emoji="📥",
             style=discord.ButtonStyle.secondary,
-            custom_id="audit:view_prompt",
+            custom_id=f"audit:view_prompt:{audit_id}"
+            if audit_id
+            else "audit:view_prompt",
         )
         view_prompt_button.callback = self._make_view_prompt_callback()
 
         view_raw_button: Any = discord.ui.Button(
             emoji="📤",
             style=discord.ButtonStyle.secondary,
-            custom_id="audit:view_raw",
+            custom_id=f"audit:view_raw:{audit_id}" if audit_id else "audit:view_raw",
         )
         view_raw_button.callback = self._make_view_raw_callback()
 
         feedback_button: Any = discord.ui.Button(
             emoji="💬",
             style=discord.ButtonStyle.primary,
-            custom_id="audit:feedback",
+            custom_id=f"audit:feedback:{audit_id}" if audit_id else "audit:feedback",
         )
         feedback_button.callback = self._make_feedback_callback()
 
         quick_positive_button: Any = discord.ui.Button(
             emoji="👍",
             style=discord.ButtonStyle.success,
-            custom_id="audit:quick_positive",
+            custom_id=f"audit:quick_positive:{audit_id}"
+            if audit_id
+            else "audit:quick_positive",
         )
         quick_positive_button.callback = self._make_quick_positive_callback()
 
         quick_negative_button: Any = discord.ui.Button(
             emoji="👎",
             style=discord.ButtonStyle.danger,
-            custom_id="audit:quick_negative",
+            custom_id=f"audit:quick_negative:{audit_id}"
+            if audit_id
+            else "audit:quick_negative",
         )
         quick_negative_button.callback = self._make_quick_negative_callback()
 
@@ -323,12 +336,9 @@ class AuditView(discord.ui.DesignerView):
                 )
                 return
 
+            await interaction.response.defer(ephemeral=True)
             view = PromptDetailView(self.rendered_prompt)
-            await interaction.response.send_message(
-                content="**Full Rendered Prompt**",
-                view=view,
-                ephemeral=True,
-            )
+            await interaction.followup.send(view=view, ephemeral=True)
 
         return view_prompt_callback
 
@@ -344,12 +354,9 @@ class AuditView(discord.ui.DesignerView):
                 )
                 return
 
+            await interaction.response.defer(ephemeral=True)
             view = PromptDetailView(self.raw_output)
-            await interaction.response.send_message(
-                content="**Raw LLM Output**",
-                view=view,
-                ephemeral=True,
-            )
+            await interaction.followup.send(view=view, ephemeral=True)
 
         return view_raw_callback
 

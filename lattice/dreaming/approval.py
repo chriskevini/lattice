@@ -81,24 +81,24 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
             code_block=True,
         )
 
-        # Action buttons in ActionRow
+        # Action buttons in ActionRow (unique custom_ids per proposal)
         view_prompt_button: Any = discord.ui.Button(
             label="VIEW PROMPT",
             emoji="📋",
             style=discord.ButtonStyle.secondary,
-            custom_id="dream_proposal:view_prompt",
+            custom_id=f"dream_proposal:view_prompt:{proposal.proposal_id}",
         )
         approve_button: Any = discord.ui.Button(
             label="APPROVE",
             emoji="✅",
             style=discord.ButtonStyle.success,
-            custom_id="dream_proposal:approve",
+            custom_id=f"dream_proposal:approve:{proposal.proposal_id}",
         )
         reject_button: Any = discord.ui.Button(
             label="REJECT",
             emoji="❌",
             style=discord.ButtonStyle.danger,
-            custom_id="dream_proposal:reject",
+            custom_id=f"dream_proposal:reject:{proposal.proposal_id}",
         )
 
         view_prompt_button.callback = self._make_view_prompt_callback()

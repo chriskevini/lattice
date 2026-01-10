@@ -335,6 +335,7 @@ class DreamingScheduler:
             await channel.send(summary_text)
 
             view = TemplateComparisonView(proposal)
+            self.bot.add_view(view)
             await channel.send(view=view)
 
             logger.info(

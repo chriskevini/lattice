@@ -63,6 +63,7 @@ class AuditMirror:
         )
 
         try:
+            self.bot.add_view(view)
             dream_msg = await dream_channel.send(embed=embed, view=view)
             if audit_id:
                 from lattice.memory import prompt_audits

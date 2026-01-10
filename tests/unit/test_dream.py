@@ -4,7 +4,7 @@ import pytest
 import discord
 from uuid import uuid4
 
-from lattice.discord_client.dream import AuditViewBuilder
+from lattice.discord_client.dream import AuditViewBuilder, PromptDetailView, AuditView
 
 
 class TestAuditViewBuilder:
@@ -328,3 +328,135 @@ class TestTruncateHelpers:
         result = _truncate_for_message(text, max_length=2000)
         assert len(result) == 2000
         assert result.endswith("...")
+
+
+class TestPromptDetailView:
+    """Tests for PromptDetailView content validation (fix #4)."""
+
+    @pytest.mark.asyncio
+    async def test_prompt_detail_view_normal_content(self) -> None:
+        """Test PromptDetailView with normal length content."""
+        normal_prompt = "This is a normal length prompt."
+        view = PromptDetailView(normal_prompt)
+
+        assert len(view.children) == 1  # type: ignore[attr-defined]
+        text_display = view.children[0]  # type: ignore[attr-defined]
+        assert text_display.content == normal_prompt  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_prompt_detail_view_empty_content(self) -> None:
+        """Test PromptDetailView with empty content shows fallback."""
+        view = PromptDetailView("")
+
+        assert len(view.children) == 1  # type: ignore[attr-defined]
+        text_display = view.children[0]  # type: ignore[attr-defined]
+        assert text_display.content == "Content not available"  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_prompt_detail_view_long_content_truncated(self) -> None:
+        """Test PromptDetailView truncates content exceeding 4000 chars."""
+        # Create content that exceeds 4000 char limit
+        long_prompt = "x" * 5000
+        view = PromptDetailView(long_prompt)
+
+        assert len(view.children) == 1  # type: ignore[attr-defined]
+        text_display = view.children[0]  # type: ignore[attr-defined]
+        # Should be truncated to 3997 + "..." = 4000 chars
+        assert len(text_display.content) == 4000  # type: ignore[attr-defined]
+        assert text_display.content.endswith("...")  # type: ignore[attr-defined]
+        assert text_display.content[:3997] == "x" * 3997  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_prompt_detail_view_exactly_4000_chars(self) -> None:
+        """Test PromptDetailView handles exactly 4000 chars without truncation."""
+        exact_prompt = "x" * 4000
+        view = PromptDetailView(exact_prompt)
+
+        assert len(view.children) == 1  # type: ignore[attr-defined]
+        text_display = view.children[0]  # type: ignore[attr-defined]
+        assert len(text_display.content) == 4000  # type: ignore[attr-defined]
+        assert not text_display.content.endswith("...")  # type: ignore[attr-defined]
+
+
+class TestAuditViewCustomIds:
+    """Tests for AuditView custom ID uniqueness (fix #2)."""
+
+    @pytest.mark.asyncio
+    async def test_audit_view_custom_ids_include_audit_id(self) -> None:
+        """Test that AuditView includes audit_id in button custom_ids."""
+        audit_id = uuid4()
+        view = AuditView(
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="test output",
+        )
+
+        assert len(view.children) == 1  # type: ignore[attr-defined]
+        action_row = view.children[0]  # type: ignore[attr-defined]
+        assert hasattr(action_row, "children")
+
+        buttons = action_row.children  # type: ignore[attr-defined]
+        custom_ids = [button.custom_id for button in buttons]
+
+        # All custom IDs should include audit_id
+        assert all(f"{audit_id}" in custom_id for custom_id in custom_ids)
+
+    @pytest.mark.asyncio
+    async def test_audit_view_custom_ids_are_unique_per_instance(self) -> None:
+        """Test that different AuditViews have different custom_ids."""
+        audit_id_1 = uuid4()
+        audit_id_2 = uuid4()
+
+        view1 = AuditView(
+            audit_id=audit_id_1,
+            message_id=11111,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt 1",
+            raw_output="test output 1",
+        )
+
+        view2 = AuditView(
+            audit_id=audit_id_2,
+            message_id=22222,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt 2",
+            raw_output="test output 2",
+        )
+
+        # Get all custom IDs from both views
+        action_row_1 = view1.children[0]  # type: ignore[attr-defined]
+        action_row_2 = view2.children[0]  # type: ignore[attr-defined]
+
+        custom_ids_1 = [button.custom_id for button in action_row_1.children]  # type: ignore[attr-defined]
+        custom_ids_2 = [button.custom_id for button in action_row_2.children]  # type: ignore[attr-defined]
+
+        # No custom ID should be shared between views
+        assert not any(cid in custom_ids_2 for cid in custom_ids_1)
+
+    @pytest.mark.asyncio
+    async def test_audit_view_fallback_custom_ids_when_no_audit_id(self) -> None:
+        """Test AuditView uses fallback custom_ids when audit_id is None."""
+        view = AuditView(
+            audit_id=None,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="test output",
+        )
+
+        action_row = view.children[0]  # type: ignore[attr-defined]
+        buttons = action_row.children  # type: ignore[attr-defined]
+        custom_ids = [button.custom_id for button in buttons]
+
+        # Should use fallback custom_ids without audit_id suffix
+        assert "audit:view_prompt" in custom_ids
+        assert "audit:view_raw" in custom_ids
+        assert "audit:feedback" in custom_ids
+        assert "audit:quick_positive" in custom_ids
+        assert "audit:quick_negative" in custom_ids

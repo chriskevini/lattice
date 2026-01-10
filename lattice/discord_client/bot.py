@@ -19,7 +19,6 @@ from lattice.discord_client.audit_mirror import AuditMirror
 from lattice.discord_client.command_handler import CommandHandler
 from lattice.discord_client.error_manager import ErrorManager
 from lattice.discord_client.message_handler import MessageHandler
-from lattice.discord_client.dream import AuditView
 from lattice.scheduler import ProactiveScheduler
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.database import db_pool, get_user_timezone
@@ -161,12 +160,9 @@ class LatticeBot(commands.Bot):
             set_discord_bot(self)
             logger.info("Bot registered for LLM error mirroring")
 
-            # Register persistent views for bot restart resilience
-            # Note: TemplateComparisonView (DesignerView) doesn't support persistent views
-            # Proposals are ephemeral - buttons work only while bot is running
-            self.add_view(AuditView())  # Dream channel audits
-
-            logger.info("Schedulers started (proactive + dreaming)")
+            # Views are registered dynamically when sent for unique custom_ids
+            # This prevents conflicts between multiple instances
+            logger.info("Bot ready - views registered dynamically")
         else:
             logger.warning("Bot connected but user is None")
 
