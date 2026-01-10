@@ -1,7 +1,6 @@
-"""Proactive trigger detection using AI decisions.
+"""Contextual nudge detection using AI decisions.
 
 Uses LLM to decide whether to initiate contact based on conversation context.
-Respects adaptive active hours to avoid disturbing users outside their active times.
 """
 
 import json
@@ -12,22 +11,18 @@ import structlog
 
 from lattice.memory.episodic import get_recent_messages
 from lattice.memory.procedural import get_prompt
-from lattice.scheduler.adaptive import is_within_active_hours
-from lattice.utils.config import get_config
 from lattice.utils.database import (
-    get_system_health,
     get_user_timezone,
-    set_system_health,
 )
 from lattice.utils.llm import get_auditing_llm_client
-
+from lattice.utils.config import get_config
 
 logger = structlog.get_logger(__name__)
 
 
 @dataclass
-class ProactiveDecision:
-    """Result of AI decision on proactive contact."""
+class NudgePlan:
+    """Result of AI decision on contextual nudge."""
 
     action: str
     content: str | None
@@ -44,19 +39,9 @@ class ProactiveDecision:
     latency_ms: int | None = None
 
 
-async def get_current_interval() -> int:
-    """Get the current wait interval in minutes from system_health."""
-    base = int(await get_system_health("scheduler_base_interval") or 15)
-    current = await get_system_health("scheduler_current_interval")
-    return int(current) if current else base
-
-
-async def set_current_interval(minutes: int) -> None:
-    """Set the current wait interval in system_health."""
-    await set_system_health("scheduler_current_interval", str(minutes))
-
-
-async def get_conversation_context(user_timezone: str = "UTC", limit: int = 20) -> str:
+async def format_episodic_nudge_context(
+    user_timezone: str = "UTC", limit: int = 20
+) -> str:
     """Build conversation context in USER/ASSISTANT format.
 
     Args:
@@ -87,82 +72,69 @@ async def get_conversation_context(user_timezone: str = "UTC", limit: int = 20) 
 
 
 async def get_default_channel_id() -> int | None:
-    """Get the main channel for proactive messages from configuration.
-
-    Proactive messages should always go to the main channel, never the dream channel.
-    Dream channel is reserved for meta discussion (feedback, prompt refinement).
+    """Get the main channel for contextual nudges from configuration.
 
     Returns:
         Main channel ID from get_config().discord_main_channel_id, or None if not configured
     """
     main_channel_id = get_config().discord_main_channel_id
     if not main_channel_id:
-        logger.warning(
-            "DISCORD_MAIN_CHANNEL_ID not set, cannot send proactive messages"
-        )
+        logger.warning("DISCORD_MAIN_CHANNEL_ID not set, cannot send contextual nudges")
         return None
     return main_channel_id
 
 
-async def decide_proactive() -> ProactiveDecision:
-    """Ask AI whether to send a proactive message.
-
-    First checks if current time is within user's active hours.
-    If outside active hours, immediately returns "wait" decision.
+async def prepare_contextual_nudge() -> NudgePlan:
+    """Prepare a contextual nudge using AI.
 
     Returns:
-        ProactiveDecision with action, content, and reason
+        NudgePlan with content and reason
     """
-    # Check active hours first to avoid disturbing user
-    if not await is_within_active_hours():
-        logger.info("Outside active hours, skipping proactive check")
-        return ProactiveDecision(
-            action="wait",
-            content=None,
-            reason="Outside user's active hours",
-        )
-
     user_tz = await get_user_timezone()
-
-    conversation = await get_conversation_context(user_timezone=user_tz)
+    conversation = await format_episodic_nudge_context(user_timezone=user_tz)
 
     from lattice.core import response_generator
     from lattice.utils.placeholder_injector import PlaceholderInjector
 
+    # Retrieve goal and activity context
     goals = await response_generator.get_goal_context()
+    # Fetch activity context from retrieve_context logic
+    from lattice.core.context_strategy import retrieve_context
+
+    context_result = await retrieve_context(
+        entities=[], context_flags=["activity_context"]
+    )
+    activity = context_result.get("activity_context", "No recent activity recorded.")
 
     channel_id = await get_default_channel_id()
-    current_interval = await get_current_interval()
     from lattice.utils.date_resolution import get_now
 
     now = get_now(user_tz)
     local_date = now.strftime("%Y/%m/%d, %A")
     local_time = now.strftime("%H:%M")
 
-    logger.debug(
-        "Proactive check time debug",
-        user_tz=user_tz,
-        local_date=local_date,
-        local_time=local_time,
-    )
+    # Get date resolution hints
+    from lattice.utils.date_resolution import resolve_relative_dates
 
-    prompt_template = await get_prompt("PROACTIVE_CHECKIN")
+    date_hints = resolve_relative_dates("", timezone_str=user_tz)
+
+    prompt_template = await get_prompt("CONTEXTUAL_NUDGE")
     if not prompt_template:
-        logger.error("PROACTIVE_CHECKIN prompt not found in database")
-        return ProactiveDecision(
+        logger.error("CONTEXTUAL_NUDGE prompt not found in database")
+        return NudgePlan(
             action="wait",
             content=None,
-            reason="PROACTIVE_CHECKIN prompt not found, defaulting to wait",
+            reason="CONTEXTUAL_NUDGE prompt not found",
         )
 
     injector = PlaceholderInjector()
     context = {
-        "user_timezone": user_tz,
         "local_date": local_date,
         "local_time": local_time,
+        "date_resolution_hints": date_hints,
         "episodic_context": conversation,
         "goal_context": goals,
-        "scheduler_current_interval": current_interval,
+        "activity_context": activity,
     }
 
     prompt, injected = await injector.inject(prompt_template, context)
@@ -171,18 +143,18 @@ async def decide_proactive() -> ProactiveDecision:
     try:
         result = await llm_client.complete(
             prompt=prompt,
-            prompt_key="PROACTIVE_CHECKIN",
+            prompt_key="CONTEXTUAL_NUDGE",
             template_version=prompt_template.version,
-            main_discord_message_id=0,  # Placeholder since no message exists yet
+            main_discord_message_id=0,
             temperature=prompt_template.temperature,
             audit_view=True,
             audit_view_params={
-                "input_text": "Proactive check-in check",
+                "input_text": "Deterministic contextual nudge",
             },
         )
     except (ValueError, ImportError) as e:
         logger.exception("LLM call failed")
-        return ProactiveDecision(
+        return NudgePlan(
             action="wait",
             content=None,
             reason=f"LLM call failed: {e}",
@@ -191,26 +163,30 @@ async def decide_proactive() -> ProactiveDecision:
 
     try:
         decision = json.loads(result.content)
-        action = decision.get("action", "wait")
-        if action not in ("message", "wait"):
-            logger.warning("Invalid action from LLM: %s, defaulting to wait", action)
-            action = "wait"
-
         content = decision.get("content")
-        if action == "message":
-            if content is None or content == "":
-                logger.warning("Missing or empty content from LLM, skipping message")
-                action = "wait"
-                content = None
-            else:
-                content = str(content).strip()
-                if len(content) == 0:
-                    logger.warning("Empty content from LLM, skipping message")
-                    action = "wait"
-                    content = None
 
-        return ProactiveDecision(
-            action=action,
+        if content:
+            content = str(content).strip()
+
+        if not content:
+            return NudgePlan(
+                action="wait",
+                content=None,
+                reason="AI decided not to send a message (empty content)",
+                channel_id=channel_id,
+                audit_id=result.audit_id,
+                rendered_prompt=prompt,
+                template_version=prompt_template.version,
+                model=result.model,
+                provider=result.provider,
+                prompt_tokens=result.prompt_tokens,
+                completion_tokens=result.completion_tokens,
+                cost_usd=result.cost_usd,
+                latency_ms=result.latency_ms,
+            )
+
+        return NudgePlan(
+            action="message",
             content=content,
             reason=decision.get("reason", "No reason provided"),
             channel_id=channel_id,
@@ -227,7 +203,7 @@ async def decide_proactive() -> ProactiveDecision:
 
     except json.JSONDecodeError:
         logger.exception("Failed to parse AI response as JSON")
-        return ProactiveDecision(
+        return NudgePlan(
             action="wait",
             content=None,
             reason="Failed to parse AI response",

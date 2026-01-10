@@ -1,7 +1,9 @@
 """Message handling for LatticeBot."""
 
+import asyncio
+import random
 from datetime import timedelta
-from typing import cast
+from typing import cast, Optional
 from uuid import UUID
 
 import discord
@@ -19,7 +21,6 @@ from lattice.core.context_strategy import (
     retrieve_context,
 )
 from lattice.memory import episodic
-from lattice.scheduler import set_current_interval
 from lattice.utils.database import get_system_health, set_next_check_at
 from lattice.utils.date_resolution import get_now
 from lattice.utils.source_links import build_source_map, inject_source_links
@@ -55,6 +56,74 @@ class MessageHandler:
         self._memory_healthy = False
         self._consecutive_failures = 0
         self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
+        self._nudge_task: Optional[asyncio.Task] = None
+
+    async def _await_silence_then_nudge(self) -> None:
+        """Wait for silence then send a contextual nudge."""
+        try:
+            # Random delay between 10 and 20 minutes
+            delay_minutes = random.randint(10, 20)
+            logger.info("Scheduling contextual nudge", delay_minutes=delay_minutes)
+            await asyncio.sleep(delay_minutes * 60)
+
+            from lattice.scheduler.nudges import prepare_contextual_nudge
+
+            decision = await prepare_contextual_nudge()
+
+            if (
+                decision.action == "message"
+                and decision.content
+                and decision.channel_id
+            ):
+                from lattice.core.pipeline import UnifiedPipeline
+                from lattice.utils.database import db_pool
+
+                pipeline = UnifiedPipeline(db_pool=db_pool, bot=self.bot)
+                result = await pipeline.dispatch_autonomous_nudge(
+                    content=decision.content,
+                    channel_id=decision.channel_id,
+                )
+
+                if result:
+                    logger.info(
+                        "Sent contextual nudge", content_preview=decision.content[:50]
+                    )
+                    # Store in episodic memory
+                    message_id = await episodic.store_message(
+                        episodic.EpisodicMessage(
+                            content=result.content,
+                            discord_message_id=result.id,
+                            channel_id=result.channel.id,
+                            is_bot=True,
+                            is_proactive=True,
+                            user_timezone=self.user_timezone,
+                        )
+                    )
+
+                    # Audit trail
+                    if decision.rendered_prompt:
+                        from lattice.memory import prompt_audits
+
+                        await prompt_audits.store_prompt_audit(
+                            prompt_key="CONTEXTUAL_NUDGE",
+                            rendered_prompt=decision.rendered_prompt,
+                            response_content=result.content,
+                            main_discord_message_id=result.id,
+                            template_version=decision.template_version,
+                            message_id=message_id,
+                            model=decision.model,
+                            provider=decision.provider,
+                            prompt_tokens=decision.prompt_tokens,
+                            completion_tokens=decision.completion_tokens,
+                            cost_usd=decision.cost_usd,
+                            latency_ms=decision.latency_ms,
+                        )
+            else:
+                logger.info("Silence strategy: wait", reason=decision.reason)
+        except asyncio.CancelledError:
+            logger.debug("Contextual nudge cancelled by new user message")
+        except Exception:
+            logger.exception("Error in contextual nudge task")
 
     @property
     def memory_healthy(self) -> bool:
@@ -193,9 +262,13 @@ class MessageHandler:
                 await get_system_health("scheduler_base_interval")
                 or SCHEDULER_BASE_INTERVAL_DEFAULT
             )
-            await set_current_interval(base_interval)
             next_check = get_now("UTC") + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
+
+            # Schedule/Reset contextual nudge
+            if self._nudge_task:
+                self._nudge_task.cancel()
+            self._nudge_task = asyncio.create_task(self._await_silence_then_nudge())
 
             # CONTEXT_RETRIEVAL: Fetch targeted context based on entities and flags
             entities: list[str] = strategy.entities if strategy else []

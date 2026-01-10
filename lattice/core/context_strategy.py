@@ -405,6 +405,7 @@ async def retrieve_context(
     context: dict[str, Any] = {
         "semantic_context": "",
         "goal_context": "",
+        "activity_context": "",
         "memory_origins": set(),
     }
 
@@ -422,6 +423,16 @@ async def retrieve_context(
                     predicate="did activity",
                     limit=20,
                 )
+                if activity_memories:
+                    activities = [
+                        f"- {m.get('object')}"
+                        for m in activity_memories
+                        if m.get("object")
+                    ]
+                    context["activity_context"] = (
+                        "Recent user activities:\n" + "\n".join(activities)
+                    )
+
                 additional_entities.extend(
                     [
                         memory.get("object", "")
@@ -435,6 +446,14 @@ async def retrieve_context(
                     predicate="has goal",
                     limit=10,
                 )
+                if goal_memories:
+                    goals = [
+                        f"- {m.get('subject')} has goal: {m.get('object')}"
+                        for m in goal_memories
+                        if m.get("object")
+                    ]
+                    context["goal_context"] = "Current goals:\n" + "\n".join(goals)
+
                 additional_entities.extend(
                     [
                         memory.get("object", "")

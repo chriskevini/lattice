@@ -34,15 +34,15 @@ class UnifiedPipeline:
 
         return await channel.send(content)
 
-    async def send_proactive_message(
+    async def dispatch_autonomous_nudge(
         self,
         content: str,
         channel_id: int,
     ) -> Any:
-        """Send a proactive message to a channel.
+        """Dispatch an autonomous contextual nudge.
 
         Args:
-            content: Message content to send
+            content: Nudge content to send
             channel_id: Discord channel ID
 
         Returns:

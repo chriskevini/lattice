@@ -17,7 +17,6 @@ from lattice.discord_client.audit_mirror import AuditMirror
 from lattice.discord_client.command_handler import CommandHandler
 from lattice.discord_client.error_manager import ErrorManager
 from lattice.discord_client.message_handler import MessageHandler
-from lattice.scheduler import ProactiveScheduler
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
 from lattice.utils.database import db_pool, get_user_timezone
@@ -78,7 +77,6 @@ class LatticeBot(commands.Bot):
         # Command handler initialized after dreaming scheduler
         self._command_handler: CommandHandler | None = None
 
-        self._scheduler: ProactiveScheduler | None = None
         self._dreaming_scheduler: DreamingScheduler | None = None
 
     def set_user_timezone(self, timezone: str) -> None:
@@ -131,12 +129,6 @@ class LatticeBot(commands.Bot):
             self._user_timezone = await get_user_timezone()
             logger.info("User timezone loaded", timezone=self._user_timezone)
             self._message_handler.user_timezone = self._user_timezone
-
-            # Start proactive scheduler
-            self._scheduler = ProactiveScheduler(
-                bot=self, dream_channel_id=self.dream_channel_id
-            )
-            await self._scheduler.start()
 
             # Start dreaming cycle scheduler
             self._dreaming_scheduler = DreamingScheduler(
@@ -197,8 +189,6 @@ class LatticeBot(commands.Bot):
     async def close(self) -> None:
         """Clean up resources when shutting down."""
         logger.info("Bot shutting down")
-        if self._scheduler:
-            await self._scheduler.stop()
         if self._dreaming_scheduler:
             await self._dreaming_scheduler.stop()
         await db_pool.close()
