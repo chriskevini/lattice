@@ -151,16 +151,15 @@ bump-version: ## Bump version using commitizen
 # ============================================================================
 
 init-db: ## Initialize database schema and seed data
-	uv run python scripts/init_db.py
+	docker compose exec bot python scripts/init_db.py
 
 nuke-db: ## Nuke and reinitialize the database (removes all data)
-	docker compose down
-	docker volume rm postgres_data || true
+	docker compose down -v
 	docker compose up -d
 	$(MAKE) init-db
 
 migrate: ## Run database migrations
-	uv run python scripts/migrate.py
+	docker compose exec bot python scripts/migrate.py
 
 # ============================================================================
 # Local Extraction Model (Optional)
