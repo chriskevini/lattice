@@ -7,10 +7,6 @@
 -- UNIFIED_RESPONSE (v2, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('UNIFIED_RESPONSE', 2, $TPL$You are a warm, curious AI companion engaging in natural conversation.
-ON CONFLICT (prompt_key) DO UPDATE SET
-    version = EXCLUDED.version,
-    template = EXCLUDED.template,
-    temperature = EXCLUDED.temperature;
 
 ## Context
 **Current date:** {local_date}

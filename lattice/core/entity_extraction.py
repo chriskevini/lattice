@@ -644,7 +644,7 @@ async def get_message_retrieval_planning(
             SELECT
                 id, message_id, extraction, rendered_prompt, raw_response, created_at
             FROM message_extractions
-            WHERE message_id = $1 AND prompt_key = 'CONTEXT_STRATEGY'
+            WHERE message_id = $1 AND prompt_key = 'RETRIEVAL_PLANNING'
             ORDER BY created_at DESC
             LIMIT 1
             """,
@@ -658,7 +658,7 @@ async def get_message_retrieval_planning(
                 SELECT
                     id, message_id, extraction, rendered_prompt, raw_response, created_at
                 FROM message_extractions
-                WHERE message_id = $1 AND prompt_key = 'RETRIEVAL_PLANNING'
+            WHERE message_id = $1 AND prompt_key = 'CONTEXT_STRATEGY'
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
