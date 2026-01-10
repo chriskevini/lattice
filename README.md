@@ -13,6 +13,7 @@
 - **ENGRAM Memory Framework**: Three-tier neuro-symbolic system (Episodic, Semantic, Procedural).
 - **Query Extraction**: API-based structured message analysis (Google Gemini Flash 1.5).
 - **Dreaming Cycle**: Self-optimization loop where AI proposes logic updates for human approval.
+- **Audit View**: In-Discord UI for inspecting the system's "thought process", including source attribution for memories.
 - **Resource-First Design**: Native support for low-memory environments via streaming and pooling.
 - **Graph-First Retrieval**: Unified search across temporal logs and relationship graphs.
 - **Invisible Alignment**: Non-intrusive feedback loops using Discord's native UI elements.
@@ -25,7 +26,7 @@ Lattice operates on the principle that **logic is data**. By moving prompts and 
 
 ### Memory Tiers
 1.  **Episodic ([`raw_messages`](#1-episodic-memory-raw_messages))**: Immutable, time-ordered interaction log.
-2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_memories`](#3-semantic-relationships-semantic_memories))**: Graph-based knowledge using entity resolution.
+2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_memories`](#3-semantic-relationships-semantic_memories))**: Text-based knowledge graph. Relationships are stored as `(subject, predicate, object)` strings without rigid IDs, facilitating natural language evolution and iterative BFS traversal.
 3.  **Procedural ([`prompt_registry`](#4-procedural-memory-prompt_registry))**: Versioned templates and behavioral strategies.
 
 ### Unified Pipeline
