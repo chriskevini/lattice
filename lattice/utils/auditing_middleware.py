@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+import os
 import structlog
 
 from lattice.utils.llm_client import GenerationResult
@@ -109,35 +110,66 @@ class AuditingLLMClient:
                     model=result.model,
                 )
 
-            if audit_view:
-                effective_bot = bot if bot is not None else _get_discord_bot()
-                effective_dream_channel_id = (
-                    dream_channel_id
-                    if dream_channel_id
-                    else (effective_bot.dream_channel_id if effective_bot else None)
-                )
+            # Post to dream channel if requested or if it's a tracked message.
+            # This is the unified entry point for all LLM auditing UI.
+            bot = bot or get_discord_bot()
+            dream_channel_id_str = os.getenv("DISCORD_DREAM_CHANNEL_ID")
 
-                if effective_bot and effective_dream_channel_id:
+            should_post = audit_view or (
+                bot is not None
+                and dream_channel_id_str is not None
+                and main_discord_message_id is not None
+            )
+
+            if should_post and bot:
+                effective_dream_channel_id: int | None = None
+                try:
+                    if dream_channel_id:
+                        effective_dream_channel_id = dream_channel_id
+                    elif dream_channel_id_str:
+                        effective_dream_channel_id = int(dream_channel_id_str)
+                    elif hasattr(bot, "dream_channel_id"):
+                        effective_dream_channel_id = bot.dream_channel_id
+                except (ValueError, TypeError):
+                    logger.warning("Invalid dream channel ID configuration")
+
+                if effective_dream_channel_id:
                     params = audit_view_params or {}
-                    if hasattr(effective_bot, "mirror_audit"):
-                        await effective_bot.mirror_audit(
-                            audit_id=audit_id,
+                    from lattice.discord_client.dream import AuditViewBuilder
+
+                    # Standardize metadata
+                    metadata = params.get(
+                        "metadata",
+                        [
+                            f"Model: {result.model}",
+                            f"Tokens: {result.total_tokens}",
+                            f"Latency: {result.latency_ms}ms",
+                        ],
+                    )
+                    if audit_id:
+                        metadata.append(f"Audit ID: {audit_id}")
+
+                    try:
+                        embed, view = AuditViewBuilder.build_standard_audit(
                             prompt_key=prompt_key or "UNKNOWN",
-                            template_version=template_version or 1,
+                            version=template_version or 1,
+                            input_text=params.get("input_text", prompt[:200] + "..."),
+                            output_text=params.get("output_text", result.content),
+                            metadata_parts=metadata,
+                            audit_id=audit_id,
                             rendered_prompt=prompt,
                             result=result,
-                            params=params,
+                            message_id=main_discord_message_id,
                         )
-                    else:
-                        await self._fallback_audit_view(
-                            audit_id=audit_id,
-                            prompt_key=prompt_key or "UNKNOWN",
-                            template_version=template_version or 1,
-                            rendered_prompt=prompt,
-                            result=result,
-                            params=params,
-                            bot=effective_bot,
-                            dream_channel_id=effective_dream_channel_id,
+
+                        channel = bot.get_channel(effective_dream_channel_id)
+                        if channel:
+                            await channel.send(embed=embed, view=view)
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to post rich audit to dream channel",
+                            error=str(e),
+                            prompt_key=prompt_key,
                         )
 
             return AuditResult(

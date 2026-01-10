@@ -203,6 +203,7 @@ async def run_batch_consolidation() -> None:
         prompt_key="MEMORY_CONSOLIDATION",
         main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
+        audit_view=True,
     )
 
     # Parse JSON response
