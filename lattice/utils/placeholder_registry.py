@@ -31,7 +31,6 @@ class PlaceholderDef:
         resolver: Async or sync function that returns the placeholder value
         category: Organization category (time, context, user, system)
         required: Whether this placeholder must be provided
-        lazy: If True, only resolve if placeholder is actually in template
     """
 
     name: str
@@ -39,7 +38,6 @@ class PlaceholderDef:
     resolver: Callable[..., Any]
     category: str = "default"
     required: bool = False
-    lazy: bool = True
 
 
 class PlaceholderRegistry:

@@ -36,7 +36,8 @@ class PlaceholderInjector:
         This method:
         1. Finds all {placeholder} patterns in the template
         2. For each placeholder, calls its resolver with the context
-        3. Uses PromptTemplate.safe_format() to render with resolved values
+        3. Validates required placeholders are present
+        4. Uses PromptTemplate.safe_format() to render with resolved values
 
         Args:
             template: PromptTemplate with placeholders
@@ -46,6 +47,9 @@ class PlaceholderInjector:
             Tuple of (rendered_prompt, injected_values)
             - rendered_prompt: Template with all placeholders resolved
             - injected_values: Dictionary of resolved placeholder values
+
+        Raises:
+            ValueError: If required placeholder is missing or empty in context
         """
         template_placeholders = set(re.findall(r"\{(\w+)\}", template.template))
 
@@ -54,6 +58,11 @@ class PlaceholderInjector:
         for name in template_placeholders:
             defn = self.registry.get(name)
             if defn:
+                if defn.required and not context.get(name):
+                    msg = (
+                        f"Required placeholder '{name}' is missing or empty in context"
+                    )
+                    raise ValueError(msg)
                 value = await self._resolve_placeholder(defn, context)
                 injected[name] = value
                 logger.debug("Resolved placeholder", placeholder=name)
@@ -83,18 +92,25 @@ class PlaceholderInjector:
 
         Returns:
             Resolved value from the placeholder resolver
+
+        Raises:
+            RuntimeError: If resolver fails and placeholder is required
         """
         try:
             result = defn.resolver(context)
             return result
         except Exception as e:
+            error_value = f"{{ERROR:{defn.name}}}"
             logger.error(
                 "Failed to resolve placeholder",
                 placeholder=defn.name,
                 error=str(e),
                 context_keys=list(context.keys()),
             )
-            return f"{{ERROR:{defn.name}}}"
+            if defn.required:
+                msg = f"Required placeholder '{defn.name}' failed to resolve: {e}"
+                raise RuntimeError(msg) from e
+            return error_value
 
     def validate_template(self, template: str) -> tuple[bool, list[str]]:
         """Validate that all placeholders in template are known.
