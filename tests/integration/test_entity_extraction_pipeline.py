@@ -326,7 +326,7 @@ class TestContextStrategyPipeline:
             assert context_info["template"] == "UNIFIED_RESPONSE"
 
 
-class TestContextStrategyPipeline:
+class TestContextStrategyPipelineIntegration:
     """Integration tests for the CONTEXT_STRATEGY pipeline flow.
 
     Tests the full flow from context_strategy() call with:

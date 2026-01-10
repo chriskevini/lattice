@@ -70,33 +70,6 @@ def mock_generation_result(mock_llm_response: str) -> AuditResult:
         prompt_key=None,
     )
 
-
-class TestContextStrategy:
-    """Tests for the ContextStrategy dataclass."""
-
-    def test_entity_extraction_init(self) -> None:
-        """Test ContextStrategy initialization."""
-        extraction_id = uuid.uuid4()
-        message_id = uuid.uuid4()
-        now = datetime.now()
-
-        extraction = ContextStrategy(
-            id=extraction_id,
-            message_id=message_id,
-            entities=["lattice project", "Friday"],
-            rendered_prompt="test prompt",
-            raw_response="test response",
-            extraction_method="api",
-            created_at=now,
-        )
-
-        assert extraction.entities == ["lattice project", "Friday"]
-        assert extraction.rendered_prompt == "test prompt"
-        assert extraction.raw_response == "test response"
-        assert extraction.extraction_method == "api"
-        assert extraction.created_at == now
-
-
 class TestExtractEntities:
     """Tests for the extract_entities function."""
 
@@ -541,7 +514,6 @@ class TestContextStrategy:
 
     def test_context_strategy_init(self) -> None:
         """Test ContextStrategy initialization."""
-        from lattice.core.entity_extraction import ContextStrategy
 
         extraction_id = uuid.uuid4()
         message_id = uuid.uuid4()
