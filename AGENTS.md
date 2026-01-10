@@ -24,7 +24,10 @@ Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrato
 - `lattice/discord_client/`: Bot interface and UI handlers.
 - `lattice/prompts/`: Template management.
 - `lattice/utils/`: LLM client, auditing, and database utilities.
+- `scripts/`: Database schema (`schema.sql`), seeding (`seed.sql`), and migration tools.
+- `docs/`: Deep-dive guides for development and testing.
 - `tests/`: Unit and integration test suites.
+- `Makefile`: Central automation for installation, testing, and execution.
 
 ## 🛠️ Development Workflow
 Refer to the [Makefile](Makefile) for all available automation.
