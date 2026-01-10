@@ -8,7 +8,12 @@ import discord
 import structlog
 from discord.ext import commands
 
-from lattice.core import memory_orchestrator, entity_extraction, response_generator
+from lattice.core import memory_orchestrator, response_generator
+from lattice.core.context_strategy import (
+    ContextStrategy,
+    context_strategy,
+    retrieve_context,
+)
 from lattice.memory import episodic
 from lattice.scheduler import set_current_interval
 from lattice.utils.database import get_system_health, set_next_check_at
@@ -138,7 +143,7 @@ class MessageHandler:
             )
 
             # CONTEXT_STRATEGY: Analyze conversation window for entities, flags, and unresolved entities
-            strategy: entity_extraction.ContextStrategy | None = None
+            strategy: ContextStrategy | None = None
             try:
                 # Build conversation window for context strategy
                 recent_msgs_for_strategy = await episodic.get_recent_messages(
@@ -146,7 +151,7 @@ class MessageHandler:
                     limit=5,
                 )
 
-                strategy = await entity_extraction.context_strategy(
+                strategy = await context_strategy(
                     message_id=user_message_id,
                     message_content=message.content,
                     recent_messages=recent_msgs_for_strategy,
@@ -192,7 +197,7 @@ class MessageHandler:
             context_flags: list[str] = strategy.context_flags if strategy else []
 
             # Retrieve semantic context
-            context_result = await entity_extraction.retrieve_context(
+            context_result = await retrieve_context(
                 entities=entities,
                 context_flags=context_flags,
                 memory_depth=2 if entities else 0,

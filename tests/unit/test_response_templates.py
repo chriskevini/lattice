@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from lattice.core.entity_extraction import ContextStrategy
+from lattice.core.context_strategy import ContextStrategy
 from lattice.core.response_generator import (
     generate_response,
     get_available_placeholders,
@@ -27,7 +27,7 @@ def mock_extraction_declaration() -> ContextStrategy:
         unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -43,7 +43,7 @@ def mock_extraction_query() -> ContextStrategy:
         unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -59,7 +59,7 @@ def mock_extraction_activity() -> ContextStrategy:
         unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -75,7 +75,7 @@ def mock_extraction_conversation() -> ContextStrategy:
         unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -301,7 +301,7 @@ class TestGenerateResponseWithTemplates:
             assert result == mock_generation_result
 
     @pytest.mark.asyncio
-    async def test_generate_with_entity_extraction(
+    async def test_generate_with_context_strategy(
         self,
         mock_extraction_query: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
@@ -510,7 +510,7 @@ class TestGenerateResponseWithTemplates:
             unresolved_entities=[],
             rendered_prompt="test",
             raw_response="test",
-            extraction_method="api",
+            strategy_method="api",
             created_at=datetime.now(UTC),
         )
 
@@ -1141,7 +1141,7 @@ class TestNoTemplateFound:
             unresolved_entities=[],
             rendered_prompt="test",
             raw_response="test",
-            extraction_method="api",
+            strategy_method="api",
             created_at=datetime.now(UTC),
         )
 

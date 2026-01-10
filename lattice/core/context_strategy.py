@@ -54,7 +54,7 @@ class ContextStrategy:
     unresolved_entities: list[str]
     rendered_prompt: str
     raw_response: str
-    extraction_method: str
+    strategy_method: str
     created_at: datetime
 
 
@@ -111,8 +111,8 @@ async def context_strategy(
     3. Fetches canonical entities from database
     4. Renders the prompt with context
     5. Calls LLM API for analysis
-    6. Parses JSON response into extraction fields
-    7. Stores extraction in message_extractions table
+    6. Parses JSON response into strategy fields
+    7. Stores strategy in context_strategies table
 
     Args:
         message_id: UUID of the message being analyzed
@@ -175,7 +175,7 @@ async def context_strategy(
         audit_view_params=audit_view_params,
     )
     raw_response = result.content
-    extraction_method = "api"
+    strategy_method = "api"
 
     logger.info(
         "Context strategy completed",
@@ -186,7 +186,7 @@ async def context_strategy(
     )
 
     try:
-        extraction_data = parse_llm_json_response(
+        strategy_data = parse_llm_json_response(
             content=result.content,
             audit_result=result,
             prompt_key="CONTEXT_STRATEGY",
@@ -206,12 +206,12 @@ async def context_strategy(
 
     required_fields = ["entities", "context_flags", "unresolved_entities"]
     for field in required_fields:
-        if field not in extraction_data:
-            msg = f"Missing required field in extraction: {field}"
+        if field not in strategy_data:
+            msg = f"Missing required field in strategy: {field}"
             raise ValueError(msg)
 
     for field in required_fields:
-        value = extraction_data.get(field)
+        value = strategy_data.get(field)
         if not isinstance(value, list):
             msg = f"Invalid {field} field: expected list, got {type(value).__name__}"
             raise ValueError(msg)
@@ -221,22 +221,22 @@ async def context_strategy(
                 raise ValueError(msg)
 
     now = datetime.now(UTC)
-    extraction_id = uuid.uuid4()
-    extraction_data["_extraction_method"] = extraction_method
-    extraction_jsonb = json.dumps(extraction_data)
+    strategy_id = uuid.uuid4()
+    strategy_data["_strategy_method"] = strategy_method
+    strategy_jsonb = json.dumps(strategy_data)
 
     async with db_pool.pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO message_extractions (
-                id, message_id, extraction, rendered_prompt, raw_response,
+            INSERT INTO context_strategies (
+                id, message_id, strategy, rendered_prompt, raw_response,
                 prompt_key, prompt_version, created_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             """,
-            extraction_id,
+            strategy_id,
             message_id,
-            extraction_jsonb,
+            strategy_jsonb,
             rendered_prompt,
             raw_response,
             prompt_template.prompt_key,
@@ -246,34 +246,34 @@ async def context_strategy(
 
     logger.info(
         "Context strategy stored",
-        extraction_id=str(extraction_id),
+        strategy_id=str(strategy_id),
         message_id=str(message_id),
-        entity_count=len(extraction_data["entities"]),
-        context_flag_count=len(extraction_data["context_flags"]),
-        unresolved_entity_count=len(extraction_data["unresolved_entities"]),
-        extraction_method=extraction_method,
+        entity_count=len(strategy_data["entities"]),
+        context_flag_count=len(strategy_data["context_flags"]),
+        unresolved_entity_count=len(strategy_data["unresolved_entities"]),
+        strategy_method=strategy_method,
     )
 
     return ContextStrategy(
-        id=extraction_id,
+        id=strategy_id,
         message_id=message_id,
-        entities=extraction_data["entities"],
-        context_flags=extraction_data["context_flags"],
-        unresolved_entities=extraction_data["unresolved_entities"],
+        entities=strategy_data["entities"],
+        context_flags=strategy_data["context_flags"],
+        unresolved_entities=strategy_data["unresolved_entities"],
         rendered_prompt=rendered_prompt,
         raw_response=raw_response,
-        extraction_method=extraction_method,
+        strategy_method=strategy_method,
         created_at=now,
     )
 
 
 async def get_context_strategy(
-    extraction_id: uuid.UUID,
+    strategy_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve a stored context strategy by ID.
 
     Args:
-        extraction_id: UUID of the strategy to retrieve
+        strategy_id: UUID of the strategy to retrieve
 
     Returns:
         ContextStrategy object or None if not found
@@ -282,31 +282,31 @@ async def get_context_strategy(
         row = await conn.fetchrow(
             """
             SELECT
-                id, message_id, extraction, rendered_prompt, raw_response, created_at
-            FROM message_extractions
+                id, message_id, strategy, rendered_prompt, raw_response, created_at
+            FROM context_strategies
             WHERE id = $1
             """,
-            extraction_id,
+            strategy_id,
         )
 
         if not row:
             return None
 
-        extraction_data = row["extraction"]
+        strategy_data = row["strategy"]
         return ContextStrategy(
             id=row["id"],
             message_id=row["message_id"],
-            entities=extraction_data["entities"],
-            context_flags=extraction_data.get("context_flags", []),
-            unresolved_entities=extraction_data.get("unresolved_entities", []),
+            entities=strategy_data["entities"],
+            context_flags=strategy_data.get("context_flags", []),
+            unresolved_entities=strategy_data.get("unresolved_entities", []),
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
-            extraction_method=extraction_data.get("_extraction_method", "api"),
+            strategy_method=strategy_data.get("_strategy_method", "api"),
             created_at=row["created_at"],
         )
 
 
-async def get_message_retrieval_planning(
+async def get_message_strategy(
     message_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve context strategy for a specific message.
@@ -317,39 +317,13 @@ async def get_message_retrieval_planning(
     Returns:
         ContextStrategy object or None if not found
     """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT
-                id, message_id, extraction, rendered_prompt, raw_response, created_at
-            FROM message_extractions
-            WHERE message_id = $1 AND prompt_key = 'CONTEXT_STRATEGY'
-            ORDER BY created_at DESC
-            LIMIT 1
-            """,
-            message_id,
-        )
-
-        if not row:
-            return None
-
-        extraction_data = row["extraction"]
-        return ContextStrategy(
-            id=row["id"],
-            message_id=row["message_id"],
-            entities=extraction_data["entities"],
-            context_flags=extraction_data.get("context_flags", []),
-            unresolved_entities=extraction_data.get("unresolved_entities")
-            or extraction_data.get("unknown_entities", []),
-            rendered_prompt=row["rendered_prompt"],
-            raw_response=row["raw_response"],
-            extraction_method=extraction_data.get("_extraction_method", "api"),
-            created_at=row["created_at"],
-        )
+    return await get_context_strategy_by_message_id(message_id)
 
 
-async def get_message_extraction(message_id: uuid.UUID) -> ContextStrategy | None:
-    """Retrieve extraction for a specific message.
+async def get_context_strategy_by_message_id(
+    message_id: uuid.UUID,
+) -> ContextStrategy | None:
+    """Retrieve context strategy for a specific message by its message ID.
 
     Args:
         message_id: UUID of the message
@@ -361,9 +335,9 @@ async def get_message_extraction(message_id: uuid.UUID) -> ContextStrategy | Non
         row = await conn.fetchrow(
             """
             SELECT
-                id, message_id, extraction, rendered_prompt, raw_response, created_at
-            FROM message_extractions
-            WHERE message_id = $1
+                id, message_id, strategy, rendered_prompt, raw_response, created_at
+            FROM context_strategies
+            WHERE message_id = $1 AND prompt_key = 'CONTEXT_STRATEGY'
             ORDER BY created_at DESC
             LIMIT 1
             """,
@@ -373,16 +347,17 @@ async def get_message_extraction(message_id: uuid.UUID) -> ContextStrategy | Non
         if not row:
             return None
 
-        extraction_data = row["extraction"]
+        strategy_data = row["strategy"]
         return ContextStrategy(
             id=row["id"],
             message_id=row["message_id"],
-            entities=extraction_data["entities"],
-            context_flags=extraction_data.get("context_flags", []),
-            unresolved_entities=extraction_data.get("unresolved_entities", []),
+            entities=strategy_data["entities"],
+            context_flags=strategy_data.get("context_flags", []),
+            unresolved_entities=strategy_data.get("unresolved_entities")
+            or strategy_data.get("unknown_entities", []),
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
-            extraction_method=extraction_data.get("_extraction_method", "api"),
+            strategy_method=strategy_data.get("_strategy_method", "api"),
             created_at=row["created_at"],
         )
 
@@ -391,7 +366,7 @@ async def retrieve_context(
     entities: list[str],
     context_flags: list[str],
     memory_depth: int = 2,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Retrieve context based on entities and context flags.
 
     This function implements context retrieval using flags from

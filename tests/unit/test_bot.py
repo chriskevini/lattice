@@ -336,7 +336,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -415,7 +415,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -450,15 +450,14 @@ class TestLatticeBot:
                     return_value=[mock_recent_message]
                 )
 
-                # Mock context_strategy instead of retrieval_planning
+                # Mock context_strategy
                 mock_planning_result = MagicMock()
                 mock_planning_result.id = planning_id
                 mock_planning_result.entities = []
                 mock_planning_result.context_flags = []
                 mock_planning_result.unresolved_entities = []
-                mock_extraction.context_strategy = AsyncMock(
-                    return_value=mock_planning_result
-                )
+
+                mock_extraction.return_value = mock_planning_result
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={
                         "semantic_context": "No relevant context found.",
@@ -495,7 +494,7 @@ class TestLatticeBot:
 
                     # Verify pipeline steps
                     mock_memory.store_user_message.assert_called_once()
-                    mock_extraction.context_strategy.assert_called_once()
+                    mock_extraction.assert_called_once()
                     mock_response.generate_response.assert_called_once()
                     mock_send.assert_called_once()
 
@@ -533,7 +532,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -661,7 +660,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -765,7 +764,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -864,7 +863,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -975,7 +974,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -1079,7 +1078,7 @@ class TestLatticeBot:
                     "lattice.discord_client.message_handler.memory_orchestrator"
                 ) as mock_memory,
                 patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
+                    "lattice.discord_client.message_handler.context_strategy"
                 ) as mock_extraction,
                 patch(
                     "lattice.discord_client.message_handler.episodic"
@@ -1111,6 +1110,7 @@ class TestLatticeBot:
                 mock_extraction.context_strategy = AsyncMock(
                     return_value=mock_planning_result
                 )
+
                 mock_extraction.retrieve_context = AsyncMock(
                     return_value={
                         "semantic_context": "User did activity coding\ncoding lasted for 180 minutes",

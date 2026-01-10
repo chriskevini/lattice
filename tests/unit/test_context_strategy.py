@@ -1,6 +1,6 @@
 """Unit tests for entity extraction module.
 
-Renamed from test_query_extraction.py to match entity_extraction.py module.
+Renamed from test_query_extraction.py to match context_strategy.py module.
 """
 
 import json
@@ -10,13 +10,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from lattice.core.entity_extraction import (
+from lattice.core.context_strategy import (
     ContextStrategy,
     build_smaller_episodic_context,
-    get_message_extraction,
+    get_message_strategy,
     context_strategy,
     get_context_strategy,
-    get_message_retrieval_planning,
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
@@ -85,7 +84,7 @@ class TestContextStrategyFunction:
 
         with (
             patch(
-                "lattice.core.entity_extraction.get_prompt",
+                "lattice.core.context_strategy.get_prompt",
                 return_value=mock_prompt_template,
             ),
             patch(
@@ -93,11 +92,11 @@ class TestContextStrategyFunction:
                 return_value=["Mother", "boyfriend"],
             ),
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client",
+                "lattice.core.context_strategy.get_auditing_llm_client",
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
             patch(
-                "lattice.core.entity_extraction.parse_llm_json_response",
+                "lattice.core.context_strategy.parse_llm_json_response",
                 return_value=extraction_data,
             ),
         ):
@@ -126,7 +125,7 @@ class TestContextStrategyFunction:
             assert strategy.message_id == message_id
             assert strategy.entities == ["lattice project", "Friday"]
             assert strategy.context_flags == ["goal_context"]
-            assert strategy.extraction_method == "api"
+            assert strategy.strategy_method == "api"
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_prompt_template(self) -> None:
@@ -134,7 +133,7 @@ class TestContextStrategyFunction:
         message_id = uuid.uuid4()
 
         with patch(
-            "lattice.core.entity_extraction.get_prompt",
+            "lattice.core.context_strategy.get_prompt",
             return_value=None,
         ):
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
@@ -157,7 +156,7 @@ class TestContextStrategyFunction:
 
         with (
             patch(
-                "lattice.core.entity_extraction.get_prompt",
+                "lattice.core.context_strategy.get_prompt",
                 return_value=mock_prompt_template,
             ),
             patch(
@@ -165,13 +164,13 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client",
+                "lattice.core.context_strategy.get_auditing_llm_client",
             ) as mock_llm_client,
             patch(
-                "lattice.core.entity_extraction.parse_llm_json_response",
+                "lattice.core.context_strategy.parse_llm_json_response",
             ) as mock_parse,
             patch(
-                "lattice.core.entity_extraction.notify_parse_error_to_dream",
+                "lattice.core.context_strategy.notify_parse_error_to_dream",
             ),
         ):
             mock_client = AsyncMock()
@@ -215,7 +214,7 @@ class TestContextStrategyFunction:
 
         with (
             patch(
-                "lattice.core.entity_extraction.get_prompt",
+                "lattice.core.context_strategy.get_prompt",
                 return_value=mock_prompt_template,
             ),
             patch(
@@ -223,10 +222,10 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client",
+                "lattice.core.context_strategy.get_auditing_llm_client",
             ) as mock_llm_client,
             patch(
-                "lattice.core.entity_extraction.parse_llm_json_response",
+                "lattice.core.context_strategy.parse_llm_json_response",
                 return_value={
                     "entities": []
                 },  # Missing context_flags and unresolved_entities
@@ -250,13 +249,13 @@ class TestGetContextStrategy:
     @pytest.mark.asyncio
     async def test_get_context_strategy_success(self) -> None:
         """Test retrieving a context strategy by ID."""
-        extraction_id = uuid.uuid4()
+        strategy_id = uuid.uuid4()
         message_id = uuid.uuid4()
 
         mock_row = {
-            "id": extraction_id,
+            "id": strategy_id,
             "message_id": message_id,
-            "extraction": {
+            "strategy": {
                 "entities": ["Alice", "yesterday"],
                 "context_flags": ["goal_context"],
                 "unresolved_entities": [],
@@ -266,28 +265,28 @@ class TestGetContextStrategy:
             "created_at": datetime.now(UTC),
         }
 
-        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
+        with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            strategy = await get_context_strategy(extraction_id)
+            strategy = await get_context_strategy(strategy_id)
 
             assert strategy is not None
-            assert strategy.id == extraction_id
+            assert strategy.id == strategy_id
             assert strategy.entities == ["Alice", "yesterday"]
             assert strategy.context_flags == ["goal_context"]
 
     @pytest.mark.asyncio
-    async def test_get_message_extraction_success(self) -> None:
-        """Test retrieving an extraction by message ID."""
-        extraction_id = uuid.uuid4()
+    async def test_get_message_strategy_success(self) -> None:
+        """Test retrieving a strategy by message ID."""
+        strategy_id = uuid.uuid4()
         message_id = uuid.uuid4()
 
         mock_row = {
-            "id": extraction_id,
+            "id": strategy_id,
             "message_id": message_id,
-            "extraction": {
+            "strategy": {
                 "entities": ["marathon"],
                 "context_flags": [],
                 "unresolved_entities": [],
@@ -297,12 +296,12 @@ class TestGetContextStrategy:
             "created_at": datetime.now(UTC),
         }
 
-        with patch("lattice.core.entity_extraction.db_pool") as mock_db_pool:
+        with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            strategy = await get_message_extraction(message_id)
+            strategy = await get_message_strategy(message_id)
 
             assert strategy is not None
             assert strategy.message_id == message_id
