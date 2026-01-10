@@ -7,10 +7,8 @@ Phase 2: Invisible alignment (feedback, North Star goals).
 """
 
 import asyncio
-import os
 from uuid import UUID
 
-import asyncpg
 import discord
 import structlog
 from discord.ext import commands
@@ -21,6 +19,7 @@ from lattice.discord_client.error_manager import ErrorManager
 from lattice.discord_client.message_handler import MessageHandler
 from lattice.scheduler import ProactiveScheduler
 from lattice.scheduler.dreaming import DreamingScheduler
+from lattice.utils.config import config
 from lattice.utils.database import db_pool, get_user_timezone
 
 
@@ -47,11 +46,11 @@ class LatticeBot(commands.Bot):
             help_command=None,
         )
 
-        self.main_channel_id = int(os.getenv("DISCORD_MAIN_CHANNEL_ID", "0"))
+        self.main_channel_id = config.discord_main_channel_id
         if not self.main_channel_id:
             logger.warning("DISCORD_MAIN_CHANNEL_ID not set")
 
-        self.dream_channel_id = int(os.getenv("DISCORD_DREAM_CHANNEL_ID", "0"))
+        self.dream_channel_id = config.discord_dream_channel_id
         if not self.dream_channel_id:
             logger.warning(
                 "DISCORD_DREAM_CHANNEL_ID not set - dream mirroring disabled"
@@ -98,7 +97,7 @@ class LatticeBot(commands.Bot):
         try:
             await db_pool.initialize()
             logger.info("Database pool initialized successfully")
-        except (asyncpg.PostgresError, ValueError):
+        except Exception:
             logger.exception("Failed to initialize database pool")
             raise
 

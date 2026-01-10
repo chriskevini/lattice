@@ -2,24 +2,20 @@
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 
 import structlog
-from dotenv import load_dotenv
 
 from lattice.discord_client.bot import LatticeBot
 from lattice.core.health import HealthServer
-
-
-load_dotenv()
+from lattice.utils.config import config
 
 
 def setup_logging() -> None:
     """Configure structured logging."""
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    log_file = os.getenv("LOG_FILE", "logs/lattice.log")
+    log_level = config.log_level
+    log_file = config.log_file
 
     Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
@@ -34,7 +30,7 @@ def setup_logging() -> None:
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
             structlog.processors.JSONRenderer()
-            if os.getenv("STRUCTURED_LOGS", "true").lower() == "true"
+            if config.structured_logs
             else structlog.dev.ConsoleRenderer(),
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
@@ -57,8 +53,8 @@ async def main() -> None:
     """Run the Lattice bot."""
     logger = structlog.get_logger()
 
-    discord_token = os.getenv("DISCORD_TOKEN")
-    database_url = os.getenv("DATABASE_URL")
+    discord_token = config.discord_token
+    database_url = config.database_url
 
     if not discord_token:
         logger.error("DISCORD_TOKEN environment variable not set")
@@ -83,7 +79,7 @@ async def main() -> None:
         )
 
     bot = LatticeBot()
-    health_server = HealthServer(port=int(os.getenv("HEALTH_PORT", "8080")))
+    health_server = HealthServer(port=config.health_port)
 
     try:
         # Start health server in background

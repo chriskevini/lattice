@@ -3,12 +3,17 @@
 Provides async PostgreSQL connection pooling.
 """
 
-import os
 from datetime import datetime
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfoNotFoundError
 
-import asyncpg
 import structlog
+
+from lattice.utils.config import config
+
+
+if TYPE_CHECKING:
+    import asyncpg
 
 
 logger = structlog.get_logger(__name__)
@@ -19,23 +24,25 @@ class DatabasePool:
 
     def __init__(self) -> None:
         """Initialize the database pool manager."""
-        self._pool: asyncpg.Pool | None = None
+        self._pool: "asyncpg.Pool | None" = None
 
     async def initialize(self) -> None:
         """Create the connection pool."""
-        database_url = os.getenv("DATABASE_URL")
+        database_url = config.database_url
         if not database_url:
             msg = "DATABASE_URL environment variable not set"
             raise ValueError(msg)
 
-        min_size = int(os.getenv("DB_POOL_MIN_SIZE", "2"))
-        max_size = int(os.getenv("DB_POOL_MAX_SIZE", "5"))
+        min_size = config.db_pool_min_size
+        max_size = config.db_pool_max_size
 
         logger.info(
             "Initializing database pool",
             min_size=min_size,
             max_size=max_size,
         )
+
+        import asyncpg
 
         self._pool = await asyncpg.create_pool(
             database_url,
@@ -62,7 +69,7 @@ class DatabasePool:
         return self._pool is not None
 
     @property
-    def pool(self) -> asyncpg.Pool:
+    def pool(self) -> "asyncpg.Pool":
         """Get the connection pool.
 
         Returns:

@@ -92,7 +92,7 @@ select = [
     "FLY",
     "PERF",
     "RUF",
-    "TID252",
+    "TID251",
 ]
 
 ignore = [
@@ -114,14 +114,10 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "S108",
     "PERF401",
     "I001",
-    "TID252", # Allow banned APIs in tests
 ]
 "scripts/**/*.py" = [
-    "TID252", # Allow banned APIs in scripts
     "T201",   # Allow print in scripts
 ]
-"lattice/utils/llm_client.py" = ["TID252"]
-"lattice/utils/database.py" = ["TID252", "ANN101"]
 "lattice/memory/*.py" = [
     "PLR0913",
     "ANN101",
@@ -163,14 +159,16 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 ]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-"datetime.datetime.now".msg = "Use lattice.utils.date_resolution.get_now() instead for consistent timezone handling."
-"datetime.datetime.utcnow".msg = "Use lattice.utils.date_resolution.get_now('UTC') instead."
-"lattice.utils.llm_client._LLMClient".msg = "Use AuditingLLMClient (via get_auditing_llm_client()) for all production LLM calls to ensure observability."
-"openai".msg = "Use lattice.utils.llm_client._LLMClient or AuditingLLMClient instead of importing openai directly."
-"asyncpg".msg = "Use lattice.utils.database.db_pool to acquire connections instead of importing asyncpg directly (except in utility/setup scripts)."
-"logging".msg = "Use structlog (from lattice.utils.llm_client or similar) for structured logging instead of the standard logging module."
-"print".msg = "Use structlog for all application logging. Use print only in CLI scripts."
-"os.getenv".msg = "Centralize environment variable access in config modules if possible."
+"os.getenv" = { msg = "Centralize environment variable access in config modules if possible." }
+"os.environ" = { msg = "Centralize environment variable access in config modules if possible." }
+"os.environ.get" = { msg = "Centralize environment variable access in config modules if possible." }
+"datetime.datetime.now" = { msg = "Use lattice.utils.date_resolution.get_now() instead for consistent timezone handling." }
+"datetime.datetime.utcnow" = { msg = "Use lattice.utils.date_resolution.get_now('UTC') instead." }
+"lattice.utils.llm_client._LLMClient" = { msg = "Use AuditingLLMClient (via get_auditing_llm_client()) for all production LLM calls to ensure observability." }
+"openai" = { msg = "Use lattice.utils.llm_client._LLMClient or AuditingLLMClient instead of importing openai directly." }
+"asyncpg" = { msg = "Use lattice.utils.database.db_pool to acquire connections instead of importing asyncpg directly (except in utility/setup scripts)." }
+"logging" = { msg = "Use structlog (from lattice.utils.llm_client or similar) for structured logging instead of the standard logging module." }
+"print" = { msg = "Use structlog for all application logging. Use print only in CLI scripts." }
 
 [tool.ruff.lint.isort]
 known-first-party = ["lattice"]

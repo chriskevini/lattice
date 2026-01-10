@@ -1,10 +1,10 @@
 """Source link injection utilities for transparent attribution."""
 
-import os
 import re
 from uuid import UUID
 
 from lattice.memory.episodic import EpisodicMessage
+from lattice.utils.config import config
 
 
 def build_source_map(
@@ -15,13 +15,13 @@ def build_source_map(
 
     Args:
         recent_messages: Recent conversation messages with Discord IDs
-        guild_id: Discord guild ID (defaults to DISCORD_GUILD_ID env var)
+        guild_id: Discord guild ID (defaults to config.discord_guild_id)
 
     Returns:
         Dictionary mapping message UUID to Discord jump URL
     """
     if guild_id is None:
-        guild_id_str = os.getenv("DISCORD_GUILD_ID")
+        guild_id_str = config.discord_guild_id
         if not guild_id_str:
             return {}
         guild_id = int(guild_id_str)

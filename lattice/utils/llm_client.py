@@ -3,12 +3,13 @@
 This module provides the core LLM client interface without auditing.
 """
 
-import os
 import time
 from dataclasses import dataclass
 from typing import Any
 
 import structlog
+
+from lattice.utils.config import config
 
 
 logger = structlog.get_logger(__name__)
@@ -32,13 +33,14 @@ class GenerationResult:
 class _LLMClient:
     """Unified LLM client interface via OpenRouter."""
 
-    def __init__(self, provider: str = "placeholder") -> None:
+    def __init__(self, provider: str | None = None) -> None:
         """Initialize LLM client.
 
         Args:
-            provider: LLM provider to use ('placeholder', 'openrouter')
+            provider: LLM provider to use ('placeholder', 'openrouter').
+                     Defaults to config.llm_provider.
         """
-        self.provider = provider
+        self.provider = provider or config.llm_provider
         self._client: Any = None
 
     async def complete(
@@ -133,12 +135,12 @@ class _LLMClient:
             msg = "openai package not installed. Run: pip install openai"
             raise ImportError(msg) from e
 
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        api_key = config.openrouter_api_key
         if not api_key:
             msg = "OPENROUTER_API_KEY not set in environment"
             raise ValueError(msg)
 
-        model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+        model = config.openrouter_model
 
         if self._client is None:
             self._client = openai.AsyncOpenAI(

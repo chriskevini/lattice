@@ -4,14 +4,13 @@ This module provides a unified interface for LLM operations via OpenRouter.
 Re-exports from the split llm_client and auditing_middleware modules.
 """
 
-import os
-
 from lattice.utils.auditing_middleware import (
     AuditResult,
     AuditingLLMClient,
     get_discord_bot,
     set_discord_bot,
 )
+from lattice.utils.config import config
 from lattice.utils.llm_client import GenerationResult, _LLMClient
 
 
@@ -39,8 +38,7 @@ def _get_llm_client() -> "_LLMClient":
     """
     global _llm_client
     if _llm_client is None:
-        provider = os.getenv("LLM_PROVIDER", "placeholder")
-        _llm_client = _LLMClient(provider=provider)
+        _llm_client = _LLMClient(provider=config.llm_provider)
     return _llm_client
 
 
@@ -54,6 +52,5 @@ def get_auditing_llm_client() -> "AuditingLLMClient":
     """
     global _auditing_client
     if _auditing_client is None:
-        provider = os.getenv("LLM_PROVIDER", "placeholder")
-        _auditing_client = AuditingLLMClient(provider=provider)
+        _auditing_client = AuditingLLMClient(provider=config.llm_provider)
     return _auditing_client
