@@ -13,7 +13,8 @@ CONTEXT_STRATEGY_WINDOW_SIZE = 10
 
 # Number of recent messages to include in response generation context
 # Used for UNIFIED_RESPONSE prompt template
-RESPONSE_EPISODIC_LIMIT = 15
+# Must be larger than CONSOLIDATION_BATCH_SIZE to ensure overlap
+RESPONSE_EPISODIC_LIMIT = 25
 
 # Number of messages to trigger memory consolidation batch
 # Used for MEMORY_CONSOLIDATION prompt template
