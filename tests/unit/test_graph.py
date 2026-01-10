@@ -360,49 +360,26 @@ class TestGraphTraversal:
         assert len(result) == 2
 
 
-class TestSanitizationFunctions:
-    """Tests for ILIKE pattern sanitization functions."""
-
-    def test_escape_wildcard_percent(self) -> None:
-        """Test that % wildcard is escaped."""
-        from lattice.memory.graph import _escape_like_pattern
-
-        result = _escape_like_pattern("test%entity")
-        assert "\\%test\\%entity" in result or "test\\%entity" in result
-
-    def test_escape_wildcard_underscore(self) -> None:
-        """Test that _ wildcard is escaped."""
-        from lattice.memory.graph import _escape_like_pattern
-
-        result = _escape_like_pattern("test_entity")
-        assert "\\_" in result or "_" in result
-
-    def test_escape_backslash(self) -> None:
-        """Test that backslash is escaped."""
-        from lattice.memory.graph import _escape_like_pattern
-
-        result = _escape_like_pattern("test\\entity")
-        assert "\\\\" in result or "\\" in result
-
-    def test_sanitize_long_entity_name(self) -> None:
-        """Test that long entity names are truncated."""
-        from lattice.memory.graph import _sanitize_entity_name, MAX_ENTITY_NAME_LENGTH
-
-        long_name = "x" * (MAX_ENTITY_NAME_LENGTH + 100)
-        result = _sanitize_entity_name(long_name)
-        assert len(result) == MAX_ENTITY_NAME_LENGTH
-
-    def test_sanitize_preserves_content(self) -> None:
-        """Test that sanitization preserves normal entity names."""
-        from lattice.memory.graph import _sanitize_entity_name
-
-        normal_name = "Alice works at Acme Corp"
-        result = _sanitize_entity_name(normal_name)
-        assert result == normal_name
-
-
 class TestBFSTraversal:
     """Tests for BFS multi-hop traversal functionality."""
+
+    @pytest.mark.asyncio
+    async def test_bfs_sanitization(self) -> None:
+        """Test that BFS traversal sanitizes special characters in entity names."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=1)
+        await traverser.traverse_from_entity("test%_entity")
+
+        # Verify ILIKE pattern was escaped
+        call_args = mock_conn.fetch.call_args
+        assert call_args is not None
+        params = call_args[0][1:]
+        assert "test\\%\\_entity" in params
 
     @pytest.mark.asyncio
     async def test_bfs_cycle_detection(self) -> None:

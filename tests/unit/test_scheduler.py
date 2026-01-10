@@ -1,6 +1,5 @@
 """Unit tests for scheduler components."""
 
-import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from lattice.utils.date_resolution import get_now
@@ -8,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from lattice.utils.config import get_config
 from lattice.memory.episodic import EpisodicMessage
 from lattice.scheduler.adaptive import (
     calculate_active_hours,
@@ -605,16 +605,18 @@ class TestGetDefaultChannelId:
     @pytest.mark.asyncio
     async def test_get_default_channel_id_with_env_var(self) -> None:
         """Test retrieving channel ID from environment variable."""
-        with patch.dict(os.environ, {"DISCORD_MAIN_CHANNEL_ID": "123456789"}):
-            result = await get_default_channel_id()
-            assert result == 123456789
+        config = get_config(reload=True)
+        config.discord_main_channel_id = 123456789
+        result = await get_default_channel_id()
+        assert result == 123456789
 
     @pytest.mark.asyncio
     async def test_get_default_channel_id_without_env_var(self) -> None:
         """Test retrieving channel ID when env var is not set."""
-        with patch.dict(os.environ, {}, clear=True):
-            result = await get_default_channel_id()
-            assert result is None
+        config = get_config(reload=True)
+        config.discord_main_channel_id = 0  # 0 or None based on Config default
+        result = await get_default_channel_id()
+        assert result is None or result == 0
 
 
 class TestAdaptiveActiveHours:

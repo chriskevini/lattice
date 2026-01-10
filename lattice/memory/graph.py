@@ -12,46 +12,19 @@ BFS Traversal Design:
 """
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import asyncpg
 import structlog
+
+
+if TYPE_CHECKING:
+    import asyncpg
 
 
 logger = structlog.get_logger(__name__)
 
+
 MAX_ENTITY_NAME_LENGTH = 255
-
-
-def _escape_like_pattern(entity: str) -> str:
-    """Escape special characters for ILIKE pattern matching.
-
-    Prevents injection of wildcards (%) and underscore (_) that could
-    cause unexpected matching behavior.
-
-    Args:
-        entity: The entity name to escape
-
-    Returns:
-        Entity name with ILIKE wildcards escaped
-    """
-    return entity.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-def _sanitize_entity_name(entity: str) -> str:
-    """Sanitize entity name for safe pattern matching.
-
-    Truncates long names and escapes special characters.
-
-    Args:
-        entity: The entity name to sanitize
-
-    Returns:
-        Sanitized entity name safe for ILIKE queries
-    """
-    if len(entity) > MAX_ENTITY_NAME_LENGTH:
-        entity = entity[:MAX_ENTITY_NAME_LENGTH]
-    return _escape_like_pattern(entity)
 
 
 class GraphTraversal:
@@ -62,7 +35,7 @@ class GraphTraversal:
     related entities across multiple hops.
     """
 
-    def __init__(self, db_pool: asyncpg.Pool, max_depth: int = 3) -> None:
+    def __init__(self, db_pool: "asyncpg.Pool", max_depth: int = 3) -> None:
         """Initialize graph traverser.
 
         Args:
@@ -116,7 +89,8 @@ class GraphTraversal:
                         continue
                     visited_entities.add(entity_lower)
 
-                    sanitized_entity = _sanitize_entity_name(entity)
+                    # Sanitize for ILIKE matching
+                    sanitized_entity = entity.replace("%", "\\%").replace("_", "\\_")
                     if predicates:
                         query = """
                         SELECT

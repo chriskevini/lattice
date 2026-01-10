@@ -1,10 +1,11 @@
 """Memory parsing utilities for semantic memory extraction."""
 
 import json
-import logging
+
+import structlog
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 MEMORY_PART_COUNT = 3

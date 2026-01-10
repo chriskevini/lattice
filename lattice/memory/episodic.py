@@ -6,14 +6,17 @@ Stores immutable conversation history with timestamp-based retrieval and timezon
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
-import asyncpg
 import structlog
 
 from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import get_now
+
+
+if TYPE_CHECKING:
+    pass
 
 
 logger = structlog.get_logger(__name__)
@@ -217,7 +220,7 @@ async def store_semantic_memories(
                     message_id=str(message_id),
                 )
 
-            except asyncpg.PostgresError:
+            except Exception:
                 logger.exception(
                     "Failed to store memory",
                     memory=memory,

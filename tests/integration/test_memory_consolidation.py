@@ -2,12 +2,12 @@
 
 import asyncio
 from collections.abc import Generator
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from lattice.memory.graph import GraphTraversal
+from lattice.utils.date_resolution import get_now
 from lattice.utils.memory_parsing import parse_semantic_memories
 
 
@@ -42,19 +42,19 @@ class TestMultiHopReasoningIntegration:
                     "subject": "Alice",
                     "predicate": "works_at",
                     "object": "Acme Corp",
-                    "created_at": datetime.now(UTC),
+                    "created_at": get_now("UTC"),
                 },
                 {
                     "subject": "Acme Corp",
                     "predicate": "acquired_by",
                     "object": "TechCorp",
-                    "created_at": datetime.now(UTC),
+                    "created_at": get_now("UTC"),
                 },
                 {
                     "subject": "TechCorp",
                     "predicate": "in",
                     "object": "Technology Industry",
-                    "created_at": datetime.now(UTC),
+                    "created_at": get_now("UTC"),
                 },
             ]
         )
@@ -85,7 +85,7 @@ class TestMultiHopReasoningIntegration:
                     "subject": "Alice",
                     "predicate": "works_at",
                     "object": "Acme Corp",
-                    "created_at": datetime.now(UTC),
+                    "created_at": get_now("UTC"),
                 }
             ]
         )

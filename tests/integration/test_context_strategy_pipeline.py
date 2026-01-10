@@ -12,6 +12,7 @@ import pytest
 from lattice.core import response_generator
 from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.memory import episodic
+from lattice.utils.date_resolution import get_now
 
 
 class TestContextStrategyPipeline:
@@ -80,7 +81,7 @@ class TestContextStrategyPipeline:
                 },
                 "prompt_key": "CONTEXT_STRATEGY",
                 "prompt_version": 1,
-                "created_at": datetime.now(UTC),
+                "created_at": get_now("UTC"),
             }
             mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
@@ -278,7 +279,7 @@ class TestContextStrategyPipeline:
                 },
                 "prompt_key": "CONTEXT_STRATEGY",
                 "prompt_version": 1,
-                "created_at": datetime.now(UTC),
+                "created_at": get_now("UTC"),
             }
             mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
@@ -404,7 +405,7 @@ class TestContextStrategyPipelineIntegration:
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": ["mobile app"], "context_flags": ["goal_context"], "unresolved_entities": []}',
-                "created_at": datetime.now(UTC),
+                "created_at": get_now("UTC"),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
@@ -500,7 +501,7 @@ class TestContextStrategyPipelineIntegration:
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": ["IKEA"], "context_flags": [], "unresolved_entities": ["bf"]}',
-                "created_at": datetime.now(UTC),
+                "created_at": get_now("UTC"),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
@@ -578,7 +579,7 @@ class TestContextStrategyPipelineIntegration:
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
-                "created_at": datetime.now(UTC),
+                "created_at": get_now("UTC"),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
@@ -654,7 +655,7 @@ class TestContextStrategyPipelineIntegration:
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": [], "context_flags": [], "unresolved_entities": []}',
-                "created_at": datetime.now(UTC),
+                "created_at": get_now("UTC"),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 

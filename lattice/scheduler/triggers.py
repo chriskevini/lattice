@@ -5,7 +5,6 @@ Respects adaptive active hours to avoid disturbing users outside their active ti
 """
 
 import json
-import os
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -14,6 +13,7 @@ import structlog
 from lattice.memory.episodic import get_recent_messages
 from lattice.memory.procedural import get_prompt
 from lattice.scheduler.adaptive import is_within_active_hours
+from lattice.utils.config import get_config
 from lattice.utils.database import (
     get_system_health,
     get_user_timezone,
@@ -87,21 +87,21 @@ async def get_conversation_context(user_timezone: str = "UTC", limit: int = 20) 
 
 
 async def get_default_channel_id() -> int | None:
-    """Get the main channel for proactive messages from environment variable.
+    """Get the main channel for proactive messages from configuration.
 
     Proactive messages should always go to the main channel, never the dream channel.
     Dream channel is reserved for meta discussion (feedback, prompt refinement).
 
     Returns:
-        Main channel ID from DISCORD_MAIN_CHANNEL_ID, or None if not configured
+        Main channel ID from get_config().discord_main_channel_id, or None if not configured
     """
-    main_channel_id = os.getenv("DISCORD_MAIN_CHANNEL_ID")
+    main_channel_id = get_config().discord_main_channel_id
     if not main_channel_id:
         logger.warning(
             "DISCORD_MAIN_CHANNEL_ID not set, cannot send proactive messages"
         )
         return None
-    return int(main_channel_id)
+    return main_channel_id
 
 
 async def decide_proactive() -> ProactiveDecision:

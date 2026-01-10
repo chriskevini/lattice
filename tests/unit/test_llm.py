@@ -13,8 +13,21 @@ from lattice.utils.llm import (
 )
 
 
+from lattice.utils.config import get_config
+
+
 @pytest.fixture(autouse=True)
-def reset_llm_client():
+def mock_config():
+    """Reset config before each test."""
+    config = get_config(reload=True)
+    config.llm_provider = "placeholder"
+    config.openrouter_api_key = None
+    config.openrouter_model = "nvidia/nemotron-3-nano-30b-a3b:free"
+    yield config
+
+
+@pytest.fixture(autouse=True)
+def reset_llm_client(mock_config):
     """Reset global LLM client before and after each test for isolation."""
     import lattice.utils.llm
 
@@ -71,8 +84,9 @@ class TestGenerationResult:
 class Test_LLMClientInit:
     """Tests for _LLMClient initialization."""
 
-    def test_init_with_default_provider(self) -> None:
+    def test_init_with_default_provider(self, mock_config) -> None:
         """Test _LLMClient initializes with default placeholder provider."""
+        mock_config.llm_provider = "placeholder"
         client = _LLMClient()
 
         assert client.provider == "placeholder"
@@ -155,19 +169,19 @@ class Test_LLMClientOpenRouter:
                 await client._openrouter_complete("test", 0.7, None)
 
     @pytest.mark.asyncio
-    async def test_openrouter_complete_missing_api_key(self) -> None:
+    async def test_openrouter_complete_missing_api_key(self, mock_config) -> None:
         """Test that OpenRouter mode raises ValueError if API key not set."""
         client = _LLMClient(provider="openrouter")
 
         mock_openai_module = MagicMock()
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                with pytest.raises(ValueError, match="OPENROUTER_API_KEY not set"):
-                    await client._openrouter_complete("test", 0.7, None)
+        mock_config.openrouter_api_key = None
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            with pytest.raises(ValueError, match="OPENROUTER_API_KEY not set"):
+                await client._openrouter_complete("test", 0.7, None)
 
     @pytest.mark.asyncio
-    async def test_openrouter_complete_success(self) -> None:
+    async def test_openrouter_complete_success(self, mock_config) -> None:
         """Test successful OpenRouter API call."""
         client = _LLMClient(provider="openrouter")
 
@@ -196,22 +210,22 @@ class Test_LLMClientOpenRouter:
         mock_openai_module = MagicMock()
         mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
 
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                result = await client._openrouter_complete("test prompt", 0.7, 100)
+        mock_config.openrouter_api_key = "test-key"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            result = await client._openrouter_complete("test prompt", 0.7, 100)
 
-                assert result.content == "OpenRouter response"
-                assert result.model == "anthropic/claude-3.5-sonnet"
-                assert result.provider == "anthropic"
-                assert result.prompt_tokens == 10
-                assert result.completion_tokens == 20
-                assert result.total_tokens == 30
-                assert result.cost_usd == 0.001
-                assert result.temperature == 0.7
-                assert result.latency_ms >= 0
+            assert result.content == "OpenRouter response"
+            assert result.model == "anthropic/claude-3.5-sonnet"
+            assert result.provider == "anthropic"
+            assert result.prompt_tokens == 10
+            assert result.completion_tokens == 20
+            assert result.total_tokens == 30
+            assert result.cost_usd == 0.001
+            assert result.temperature == 0.7
+            assert result.latency_ms >= 0
 
     @pytest.mark.asyncio
-    async def test_openrouter_complete_with_custom_model(self) -> None:
+    async def test_openrouter_complete_with_custom_model(self, mock_config) -> None:
         """Test OpenRouter uses custom model from environment."""
         client = _LLMClient(provider="openrouter")
 
@@ -236,21 +250,18 @@ class Test_LLMClientOpenRouter:
         mock_openai_module = MagicMock()
         mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
 
-        with patch.dict(
-            os.environ,
-            {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "custom/model"},
-            clear=True,
-        ):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                result = await client._openrouter_complete("test", 0.7, None)
+        mock_config.openrouter_api_key = "test-key"
+        mock_config.openrouter_model = "custom/model"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            result = await client._openrouter_complete("test", 0.7, None)
 
-                # Verify the create call was made with correct model
-                call_args = mock_openai_client.chat.completions.create.call_args
-                assert call_args[1]["model"] == "custom/model"
-                assert result.model == "custom/model"
+            # Verify the create call was made with correct model
+            call_args = mock_openai_client.chat.completions.create.call_args
+            assert call_args[1]["model"] == "custom/model"
+            assert result.model == "custom/model"
 
     @pytest.mark.asyncio
-    async def test_openrouter_complete_empty_content(self) -> None:
+    async def test_openrouter_complete_empty_content(self, mock_config) -> None:
         """Test OpenRouter handles empty content from LLM."""
         client = _LLMClient(provider="openrouter")
 
@@ -276,16 +287,16 @@ class Test_LLMClientOpenRouter:
         mock_openai_module = MagicMock()
         mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
 
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                result = await client._openrouter_complete("test", 0.7, None)
+        mock_config.openrouter_api_key = "test-key"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            result = await client._openrouter_complete("test", 0.7, None)
 
-                # Should return empty string instead of None
-                assert result.content == ""
-                assert result.completion_tokens == 0
+            # Should return empty string instead of None
+            assert result.content == ""
+            assert result.completion_tokens == 0
 
     @pytest.mark.asyncio
-    async def test_openrouter_complete_no_usage_data(self) -> None:
+    async def test_openrouter_complete_no_usage_data(self, mock_config) -> None:
         """Test OpenRouter handles missing usage data gracefully."""
         client = _LLMClient(provider="openrouter")
 
@@ -305,18 +316,18 @@ class Test_LLMClientOpenRouter:
         mock_openai_module = MagicMock()
         mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
 
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                result = await client._openrouter_complete("test", 0.7, None)
+        mock_config.openrouter_api_key = "test-key"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            result = await client._openrouter_complete("test", 0.7, None)
 
-                # Should default to 0 for missing usage
-                assert result.prompt_tokens == 0
-                assert result.completion_tokens == 0
-                assert result.total_tokens == 0
-                assert result.cost_usd is None
+            # Should default to 0 for missing usage
+            assert result.prompt_tokens == 0
+            assert result.completion_tokens == 0
+            assert result.total_tokens == 0
+            assert result.cost_usd is None
 
     @pytest.mark.asyncio
-    async def test_openrouter_reuses_client(self) -> None:
+    async def test_openrouter_reuses_client(self, mock_config) -> None:
         """Test that OpenRouter client is reused across calls."""
         client = _LLMClient(provider="openrouter")
 
@@ -342,20 +353,20 @@ class Test_LLMClientOpenRouter:
         mock_openai_module = MagicMock()
         mock_openai_module.AsyncOpenAI = mock_constructor
 
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                # First call
-                await client._openrouter_complete("test1", 0.7, None)
-                # Second call
-                await client._openrouter_complete("test2", 0.7, None)
+        mock_config.openrouter_api_key = "test-key"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            # First call
+            await client._openrouter_complete("test1", 0.7, None)
+            # Second call
+            await client._openrouter_complete("test2", 0.7, None)
 
-                # Constructor should only be called once
-                assert mock_constructor.call_count == 1
-                # But create should be called twice
-                assert mock_openai_client.chat.completions.create.call_count == 2
+            # Constructor should only be called once
+            assert mock_constructor.call_count == 1
+            # But create should be called twice
+            assert mock_openai_client.chat.completions.create.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_openrouter_complete_empty_choices_list(self) -> None:
+    async def test_openrouter_complete_empty_choices_list(self, mock_config) -> None:
         """Test OpenRouter handles empty choices list gracefully."""
         client = _LLMClient(provider="openrouter")
 
@@ -377,15 +388,15 @@ class Test_LLMClientOpenRouter:
         mock_openai_module = MagicMock()
         mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
 
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                # Should return empty GenerationResult instead of raising IndexError
-                result = await client._openrouter_complete("test", 0.7, None)
-                assert result.content == ""
-                assert result.model == "test-model"
+        mock_config.openrouter_api_key = "test-key"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            # Should return empty GenerationResult instead of raising IndexError
+            result = await client._openrouter_complete("test", 0.7, None)
+            assert result.content == ""
+            assert result.model == "test-model"
 
     @pytest.mark.asyncio
-    async def test_openrouter_complete_cost_as_string(self) -> None:
+    async def test_openrouter_complete_cost_as_string(self, mock_config) -> None:
         """Test OpenRouter handles cost as string value."""
         client = _LLMClient(provider="openrouter")
 
@@ -411,13 +422,13 @@ class Test_LLMClientOpenRouter:
         mock_openai_module = MagicMock()
         mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
 
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
-            with patch.dict("sys.modules", {"openai": mock_openai_module}):
-                result = await client._openrouter_complete("test", 0.7, None)
+        mock_config.openrouter_api_key = "test-key"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            result = await client._openrouter_complete("test", 0.7, None)
 
-                # Should convert string cost to float
-                assert result.cost_usd == 0.001
-                assert isinstance(result.cost_usd, float)
+            # Should convert string cost to float
+            assert result.cost_usd == 0.001
+            assert isinstance(result.cost_usd, float)
 
 
 class Test_LLMClientComplete:
@@ -462,13 +473,13 @@ class Test_LLMClientComplete:
 class TestGet_LLMClient:
     """Tests for the global LLM client getter."""
 
-    def test__get_llm_client_creates_instance(self) -> None:
+    def test__get_llm_client_creates_instance(self, mock_config) -> None:
         """Test that _get_llm_client creates a client instance."""
-        with patch.dict(os.environ, {"LLM_PROVIDER": "placeholder"}, clear=True):
-            client = _get_llm_client()
+        mock_config.llm_provider = "placeholder"
+        client = _get_llm_client()
 
-            assert isinstance(client, _LLMClient)
-            assert client.provider == "placeholder"
+        assert isinstance(client, _LLMClient)
+        assert client.provider == "placeholder"
 
     def test__get_llm_client_reuses_instance(self) -> None:
         """Test that _get_llm_client returns same instance on subsequent calls."""
@@ -478,19 +489,19 @@ class TestGet_LLMClient:
 
             assert client1 is client2
 
-    def test__get_llm_client_uses_env_var(self) -> None:
+    def test__get_llm_client_uses_env_var(self, mock_config) -> None:
         """Test that _get_llm_client uses LLM_PROVIDER environment variable."""
-        with patch.dict(os.environ, {"LLM_PROVIDER": "openrouter"}, clear=True):
-            client = _get_llm_client()
+        mock_config.llm_provider = "openrouter"
+        client = _get_llm_client()
 
-            assert client.provider == "openrouter"
+        assert client.provider == "openrouter"
 
-    def test__get_llm_client_defaults_to_placeholder(self) -> None:
+    def test__get_llm_client_defaults_to_placeholder(self, mock_config) -> None:
         """Test that _get_llm_client defaults to placeholder when env var not set."""
-        with patch.dict(os.environ, {}, clear=True):
-            client = _get_llm_client()
+        mock_config.llm_provider = "placeholder"
+        client = _get_llm_client()
 
-            assert client.provider == "placeholder"
+        assert client.provider == "placeholder"
 
 
 class TestAuditResult:

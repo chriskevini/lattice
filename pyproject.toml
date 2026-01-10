@@ -92,6 +92,7 @@ select = [
     "FLY",
     "PERF",
     "RUF",
+    "TID251",
 ]
 
 ignore = [
@@ -114,31 +115,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PERF401",
     "I001",
 ]
-"scripts/__init__.py" = [
-    "D104",
-]
-"scripts/init_db.py" = [
-    "T201",
-    "PLR0915",
-    "PLR0912",
-    "E501",
-    "DTZ003",
-]
-"scripts/migrate.py" = [
-    "T201",
-    "E501",
-]
-"lattice/core/*.py" = [
-    "ANN101",
-    "G004",
-    "DTZ003",
-    "ARG002",
-    "ANN401",
-    "RUF100",
-    "PLR0913",
-]
-"lattice/utils/database.py" = [
-    "ANN101",
+"scripts/**/*.py" = [
+    "T201",   # Allow print in scripts
 ]
 "lattice/memory/*.py" = [
     "PLR0913",
@@ -179,6 +157,18 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "RET504",
     "EM102",
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.getenv" = { msg = "Centralize environment variable access in config modules if possible." }
+"os.environ" = { msg = "Centralize environment variable access in config modules if possible." }
+"os.environ.get" = { msg = "Centralize environment variable access in config modules if possible." }
+"datetime.datetime.now" = { msg = "Use lattice.utils.date_resolution.get_now() instead for consistent timezone handling." }
+"datetime.datetime.utcnow" = { msg = "Use lattice.utils.date_resolution.get_now('UTC') instead." }
+"lattice.utils.llm_client._LLMClient" = { msg = "Use AuditingLLMClient (via get_auditing_llm_client()) for all production LLM calls to ensure observability." }
+"openai" = { msg = "Use lattice.utils.llm_client._LLMClient or AuditingLLMClient instead of importing openai directly." }
+"asyncpg" = { msg = "Use lattice.utils.database.db_pool to acquire connections instead of importing asyncpg directly (except in utility/setup scripts)." }
+"logging" = { msg = "Use structlog (from lattice.utils.llm_client or similar) for structured logging instead of the standard logging module." }
+"print" = { msg = "Use structlog for all application logging. Use print only in CLI scripts." }
 
 [tool.ruff.lint.isort]
 known-first-party = ["lattice"]

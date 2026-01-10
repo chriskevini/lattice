@@ -6,12 +6,10 @@ underperforming prompts and propose improvements via the dream channel.
 
 import asyncio
 import contextlib
-import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import asyncpg
 import discord
 import structlog
 
@@ -23,8 +21,13 @@ from lattice.dreaming.proposer import (
     reject_stale_proposals,
     store_proposal,
 )
+from lattice.utils.config import get_config
 from lattice.utils.database import get_system_health
 from lattice.utils.date_resolution import get_now
+
+
+if TYPE_CHECKING:
+    pass
 
 
 logger = structlog.get_logger(__name__)
@@ -114,14 +117,11 @@ class DreamingScheduler:
 
             except asyncio.CancelledError:
                 break
-            except (asyncpg.PostgresError, discord.DiscordException):
-                logger.exception("Transient error in dreaming scheduler")
-                await asyncio.sleep(TRANSIENT_ERROR_RETRY_SECONDS)
-            except Exception:  # noqa: BLE001
-                logger.exception("Fatal error in dreaming scheduler loop")
-                if os.getenv("ENVIRONMENT") == "development":
+            except Exception as e:
+                logger.exception("Error in dreaming scheduler loop", error=str(e))
+                if get_config().environment == "development":
                     raise
-                await asyncio.sleep(FATAL_ERROR_RETRY_SECONDS)
+                await asyncio.sleep(TRANSIENT_ERROR_RETRY_SECONDS)
 
     def _calculate_next_run(self) -> datetime:
         """Calculate the next run time based on configured dream_time.
@@ -179,14 +179,14 @@ class DreamingScheduler:
         logger.info("Starting dreaming cycle run", force=force)
 
         try:
-            config = await self._get_dreaming_config()
+            dream_config = await self._get_dreaming_config()
 
-            min_uses = 1 if force else config.min_uses
+            min_uses = 1 if force else dream_config.min_uses
             min_feedback = 1 if force else DREAMING_MIN_FEEDBACK_DEFAULT
 
             metrics = await analyze_prompt_effectiveness(
                 min_uses=min_uses,
-                lookback_days=config.lookback_days,
+                lookback_days=dream_config.lookback_days,
                 min_feedback=min_feedback,
             )
 
