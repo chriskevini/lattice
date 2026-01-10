@@ -1,6 +1,5 @@
 """Unit tests for batch consolidation module."""
 
-from datetime import datetime
 from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4

@@ -6,7 +6,7 @@ message patterns to respect user's natural schedule.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -28,8 +28,6 @@ from lattice.utils.database import (
     set_next_check_at,
 )
 from lattice.utils.date_resolution import get_now
-from lattice.utils.date_resolution import get_now
-import datetime as dt_module
 
 logger = structlog.get_logger(__name__)
 

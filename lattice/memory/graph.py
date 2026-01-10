@@ -11,13 +11,12 @@ BFS Traversal Design:
 - Cycle detection prevents infinite loops by tracking visited entities
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 import asyncpg
 import structlog
 
-from lattice.utils.date_resolution import get_now
 
 
 logger = structlog.get_logger(__name__)

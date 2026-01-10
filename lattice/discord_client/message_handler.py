@@ -1,6 +1,6 @@
 """Message handling for LatticeBot."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import cast
 from uuid import UUID
 
@@ -21,7 +21,7 @@ from lattice.core.context_strategy import (
 from lattice.memory import episodic
 from lattice.scheduler import set_current_interval
 from lattice.utils.database import get_system_health, set_next_check_at
-from lattice.utils.date_resolution import get_now, get_user_datetime
+from lattice.utils.date_resolution import get_now
 from lattice.utils.source_links import build_source_map, inject_source_links
 
 logger = structlog.get_logger(__name__)

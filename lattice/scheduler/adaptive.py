@@ -16,6 +16,7 @@ from lattice.utils.database import (
     get_user_timezone,
     set_system_health,
 )
+from lattice.utils.date_resolution import get_now
 
 
 logger = structlog.get_logger(__name__)
@@ -155,9 +156,6 @@ async def calculate_active_hours() -> ActiveHoursResult:
     )
 
 
-from lattice.utils.date_resolution import get_now
-
-
 async def is_within_active_hours(check_time: datetime | None = None) -> bool:
     """Check if the given time (or now) is within the user's active hours.
 
@@ -167,7 +165,7 @@ async def is_within_active_hours(check_time: datetime | None = None) -> bool:
     Returns:
         True if within active hours, False otherwise
     """
-    from lattice.utils.database import get_system_health, get_user_timezone
+    from lattice.utils.database import get_user_timezone
 
     user_tz = await get_user_timezone()
 

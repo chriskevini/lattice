@@ -477,7 +477,6 @@ class TestBFSTraversal:
         """Test finding memories with end date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {

@@ -5,8 +5,6 @@ Renamed from test_query_extraction.py to match context_strategy.py module.
 
 import json
 import uuid
-from datetime import datetime
-from zoneinfo import ZoneInfo
 from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, patch
 

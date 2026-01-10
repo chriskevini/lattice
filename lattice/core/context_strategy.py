@@ -12,7 +12,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -80,7 +80,7 @@ def build_smaller_episodic_context(
     """
     from zoneinfo import ZoneInfo
 
-    from lattice.utils.date_resolution import get_now, UserDatetime
+    from lattice.utils.date_resolution import UserDatetime
 
     user_tz = user_timezone or "UTC"
     tz = ZoneInfo(user_tz)

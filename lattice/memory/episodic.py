@@ -5,7 +5,7 @@ Stores immutable conversation history with timestamp-based retrieval and timezon
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 

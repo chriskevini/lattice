@@ -11,7 +11,7 @@ from uuid import UUID
 
 import structlog
 
-from lattice.memory.episodic import EpisodicMessage, get_recent_messages
+from lattice.memory.episodic import get_recent_messages
 from lattice.memory.procedural import get_prompt
 from lattice.scheduler.adaptive import is_within_active_hours
 from lattice.utils.database import (
@@ -122,7 +122,6 @@ async def decide_proactive() -> ProactiveDecision:
             reason="Outside user's active hours",
         )
 
-    from lattice.utils.database import get_user_timezone
 
     user_tz = await get_user_timezone()
 
@@ -137,7 +136,6 @@ async def decide_proactive() -> ProactiveDecision:
     current_interval = await get_current_interval()
     from lattice.utils.date_resolution import get_now
 
-    from zoneinfo import ZoneInfo
 
     now = get_now(user_tz)
     local_date = now.strftime("%Y/%m/%d, %A")
