@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from lattice.core.entity_extraction import EntityExtraction
+from lattice.core.context_strategy import ContextStrategy
 from lattice.core.response_generator import (
     generate_response,
     get_available_placeholders,
@@ -17,57 +17,65 @@ from lattice.utils.llm import AuditResult
 
 
 @pytest.fixture
-def mock_extraction_declaration() -> EntityExtraction:
-    """Create a mock EntityExtraction for goal message type."""
-    return EntityExtraction(
+def mock_extraction_declaration() -> ContextStrategy:
+    """Create a mock ContextStrategy for goal message type."""
+    return ContextStrategy(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
         entities=["lattice project", "Friday"],
+        context_flags=["goal_context"],
+        unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
 
 @pytest.fixture
-def mock_extraction_query() -> EntityExtraction:
-    """Create a mock EntityExtraction for question message type."""
-    return EntityExtraction(
+def mock_extraction_query() -> ContextStrategy:
+    """Create a mock ContextStrategy for question message type."""
+    return ContextStrategy(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
         entities=["lattice", "deadline"],
+        context_flags=[],
+        unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
 
 @pytest.fixture
-def mock_extraction_activity() -> EntityExtraction:
-    """Create a mock EntityExtraction for activity_update message type."""
-    return EntityExtraction(
+def mock_extraction_activity() -> ContextStrategy:
+    """Create a mock ContextStrategy for activity_update message type."""
+    return ContextStrategy(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
         entities=["coding"],
+        context_flags=["activity_context"],
+        unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
 
 @pytest.fixture
-def mock_extraction_conversation() -> EntityExtraction:
-    """Create a mock EntityExtraction for conversation message type."""
-    return EntityExtraction(
+def mock_extraction_conversation() -> ContextStrategy:
+    """Create a mock ContextStrategy for conversation message type."""
+    return ContextStrategy(
         id=uuid.uuid4(),
         message_id=uuid.uuid4(),
         entities=["tea"],
+        context_flags=[],
+        unresolved_entities=[],
         rendered_prompt="test prompt",
         raw_response="test response",
-        extraction_method="api",
+        strategy_method="api",
         created_at=datetime.now(UTC),
     )
 
@@ -206,7 +214,7 @@ class TestUnifiedResponseTemplate:
     @pytest.mark.asyncio
     async def test_generate_response_uses_unified_template_for_goal(
         self,
-        mock_extraction_declaration: EntityExtraction,
+        mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
     ) -> None:
@@ -255,7 +263,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_with_goal_extraction(
         self,
-        mock_extraction_declaration: EntityExtraction,
+        mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
@@ -293,9 +301,9 @@ class TestGenerateResponseWithTemplates:
             assert result == mock_generation_result
 
     @pytest.mark.asyncio
-    async def test_generate_with_entity_extraction(
+    async def test_generate_with_context_strategy(
         self,
-        mock_extraction_query: EntityExtraction,
+        mock_extraction_query: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
     ) -> None:
@@ -341,7 +349,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_with_activity_extraction(
         self,
-        mock_extraction_activity: EntityExtraction,
+        mock_extraction_activity: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
     ) -> None:
@@ -422,7 +430,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_template_fallback(
         self,
-        mock_extraction_declaration: EntityExtraction,
+        mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
@@ -454,7 +462,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_with_graph_memories(
         self,
-        mock_extraction_query: EntityExtraction,
+        mock_extraction_query: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
@@ -494,13 +502,15 @@ class TestGenerateResponseWithTemplates:
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test handling of extraction with empty/None fields."""
-        EntityExtraction(
+        ContextStrategy(
             id=uuid.uuid4(),
             message_id=uuid.uuid4(),
             entities=[],  # Empty list
+            context_flags=[],
+            unresolved_entities=[],
             rendered_prompt="test",
             raw_response="test",
-            extraction_method="api",
+            strategy_method="api",
             created_at=datetime.now(UTC),
         )
 
@@ -798,7 +808,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_goal_response_no_extraction_fields(
         self,
-        mock_extraction_declaration: EntityExtraction,
+        mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test UNIFIED_RESPONSE template does not include extraction fields in prompt."""
@@ -865,7 +875,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_query_response_no_extraction_fields(
         self,
-        mock_extraction_query: EntityExtraction,
+        mock_extraction_query: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test QUERY_RESPONSE template does not include extraction fields in prompt."""
@@ -929,7 +939,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_activity_response_no_extraction_fields(
         self,
-        mock_extraction_activity: EntityExtraction,
+        mock_extraction_activity: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test UNIFIED_RESPONSE template does not include extraction fields."""
@@ -993,7 +1003,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_conversation_response_no_extraction_fields(
         self,
-        mock_extraction_conversation: EntityExtraction,
+        mock_extraction_conversation: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test CONVERSATION_RESPONSE template does not include extraction fields."""
@@ -1057,7 +1067,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_extraction_data_still_populated_internally(
         self,
-        mock_extraction_declaration: EntityExtraction,
+        mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test that extraction data is still available for routing/analytics.
@@ -1123,13 +1133,15 @@ class TestNoTemplateFound:
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test fallback response when no templates are available in database."""
-        EntityExtraction(
+        ContextStrategy(
             id=uuid.uuid4(),
             message_id=uuid.uuid4(),
             entities=["test"],
+            context_flags=[],
+            unresolved_entities=[],
             rendered_prompt="test",
             raw_response="test",
-            extraction_method="api",
+            strategy_method="api",
             created_at=datetime.now(UTC),
         )
 

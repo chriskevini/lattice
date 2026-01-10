@@ -51,23 +51,23 @@ CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_m
 CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_message_id);
 
 -- ----------------------------------------------------------------------------
--- message_extractions: Query extraction output with audit trail
+-- context_strategies: Reactive planning for targeted retrieval
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS message_extractions (
+CREATE TABLE IF NOT EXISTS context_strategies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES raw_messages(id) ON DELETE CASCADE,
-    extraction JSONB NOT NULL,
+    strategy JSONB NOT NULL,
     prompt_key TEXT NOT NULL,
     prompt_version INT NOT NULL,
     rendered_prompt TEXT,
     raw_response TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_extractions_entities ON message_extractions USING gin((extraction->'entities'));
-CREATE INDEX IF NOT EXISTS idx_extractions_created_at ON message_extractions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_strategies_entities ON context_strategies USING gin((strategy->'entities'));
+CREATE INDEX IF NOT EXISTS idx_strategies_created_at ON context_strategies(created_at DESC);
 
 -- ----------------------------------------------------------------------------
--- semantic_memories: Text-based knowledge triples with timestamp evolution
+-- semantic_memories: Canonical knowledge graph triples (ENGRAM Semantic Memory)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS semantic_memories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_semantic_memories_created_at ON semantic_memories
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_source_batch ON semantic_memories(source_batch_id);
 
 -- ----------------------------------------------------------------------------
--- user_feedback: Feedback with sentiment and extraction linkage
+-- user_feedback: Evaluation of bot responses and planning quality
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS user_feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -92,11 +92,11 @@ CREATE TABLE IF NOT EXISTS user_feedback (
     sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
     referenced_discord_message_id BIGINT,
     user_discord_message_id BIGINT,
-    extraction_id UUID REFERENCES message_extractions(id) ON DELETE CASCADE,
+    strategy_id UUID REFERENCES context_strategies(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment ON user_feedback(sentiment) WHERE sentiment IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_user_feedback_extraction_id ON user_feedback(extraction_id) WHERE extraction_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_feedback_strategy_id ON user_feedback(strategy_id) WHERE strategy_id IS NOT NULL;
 
 -- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage
@@ -160,23 +160,6 @@ CREATE TABLE IF NOT EXISTS system_health (
     metric_value TEXT,
     recorded_at TIMESTAMPTZ DEFAULT now()
 );
-
--- ----------------------------------------------------------------------------
--- Initialize default configuration
--- ----------------------------------------------------------------------------
-INSERT INTO system_health (metric_key, metric_value) VALUES
-    ('scheduler_base_interval', '15'),
-    ('scheduler_current_interval', '15'),
-    ('scheduler_max_interval', '1440'),
-    ('dreaming_min_uses', '10'),
-    ('dreaming_enabled', 'true'),
-    ('user_timezone', 'UTC'),
-    ('active_hours_start', '9'),
-    ('active_hours_end', '21'),
-    ('active_hours_confidence', '0.0'),
-    ('active_hours_last_updated', NOW()::TEXT),
-    ('last_batch_message_id', '0')
-ON CONFLICT (metric_key) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
 -- entities: Canonical entity names for LLM-based entity normalization

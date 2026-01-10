@@ -104,7 +104,7 @@ class TestAuditViewBuilder:
         ]
 
         embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="I'm planning to ship v2 by end of month.",
             output_text=AuditViewBuilder.format_memories(memories),
@@ -114,7 +114,7 @@ class TestAuditViewBuilder:
         )
 
         assert isinstance(embed, discord.Embed)
-        assert embed.title == "🧠 BATCH_MEMORY_EXTRACTION v1"
+        assert embed.title == "🧠 MEMORY_CONSOLIDATION v1"
         assert embed.color == discord.Color.purple()
         assert len(embed.fields) == 3
 
@@ -133,7 +133,7 @@ class TestAuditViewBuilder:
         """Test extraction audit with no memories."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="Hello!",
             output_text="Nothing extracted",
@@ -192,6 +192,7 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert reactive_embed.title is not None
         assert reactive_embed.title.startswith("💬")
 
         proactive_embed, _ = AuditViewBuilder.build_standard_audit(
@@ -203,10 +204,11 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert proactive_embed.title is not None
         assert proactive_embed.title.startswith("🌟")
 
         extraction_embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="test",
             output_text="test",
@@ -214,6 +216,7 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert extraction_embed.title is not None
         assert extraction_embed.title.startswith("🧠")
 
         reasoning_embed, _ = AuditViewBuilder.build_standard_audit(
@@ -225,6 +228,7 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert reasoning_embed.title is not None
         assert reasoning_embed.title.startswith("🌟")
 
     @pytest.mark.asyncio
@@ -255,7 +259,7 @@ class TestAuditViewBuilder:
         assert proactive_embed.color == discord.Color.gold()
 
         extraction_embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="test",
             output_text="test",

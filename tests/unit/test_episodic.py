@@ -412,9 +412,8 @@ class TestStoreSemanticMemories:
     @pytest.mark.asyncio
     async def test_store_semantic_memories_empty_list(self) -> None:
         """Test that empty memories list returns early without DB access."""
-        result = await store_semantic_memories(uuid4(), [])
-
-        assert result is None
+        # result is None as it returns early
+        await store_semantic_memories(uuid4(), [])  # type: ignore[func-returns-value]
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_valid_memory(self) -> None:

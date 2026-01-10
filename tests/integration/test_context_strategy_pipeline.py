@@ -9,11 +9,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from lattice.core import entity_extraction, response_generator
+from lattice.core import response_generator
+from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.memory import episodic
 
 
-class TestEntityExtractionPipeline:
+class TestContextStrategyPipeline:
     """Integration tests for the entity extraction pipeline."""
 
     @pytest.mark.asyncio
@@ -24,11 +25,14 @@ class TestEntityExtractionPipeline:
 
         # Mock dependencies
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client"
+                "lattice.core.context_strategy.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
+            ),
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
@@ -41,7 +45,7 @@ class TestEntityExtractionPipeline:
             from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Extract: {message_content}\nContext: {context}",
                 temperature=0.2,
                 version=1,
@@ -51,7 +55,7 @@ class TestEntityExtractionPipeline:
 
             extraction_llm = AsyncMock()
             extraction_result = AuditResult(
-                content='{"entities":["lattice project","Friday"]}',
+                content='{"entities":["lattice project","Friday"], "context_flags":[], "unresolved_entities":[]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=100,
@@ -61,7 +65,7 @@ class TestEntityExtractionPipeline:
                 latency_ms=500,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
             )
             extraction_llm.complete.return_value = extraction_result
             mock_llm_client.return_value = extraction_llm
@@ -74,7 +78,7 @@ class TestEntityExtractionPipeline:
                 "extraction": {
                     "entities": ["lattice project", "Friday"],
                 },
-                "prompt_key": "ENTITY_EXTRACTION",
+                "prompt_key": "CONTEXT_STRATEGY",
                 "prompt_version": 1,
                 "created_at": datetime.now(UTC),
             }
@@ -107,10 +111,10 @@ class TestEntityExtractionPipeline:
             mock_resp_llm_client.return_value = response_llm
 
             # Execute pipeline: Extract query structure
-            extraction = await entity_extraction.extract_entities(
+            extraction = await context_strategy(
                 message_id=message_id,
                 message_content=message_content,
-                context="Previous message context",
+                recent_messages=[],
             )
 
             # Verify extraction
@@ -142,7 +146,7 @@ class TestEntityExtractionPipeline:
         message_content = "Hello there"
 
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
@@ -188,10 +192,10 @@ class TestEntityExtractionPipeline:
 
             # Attempt extraction (should fail gracefully)
             try:
-                await entity_extraction.extract_entities(
+                await context_strategy(
                     message_id=uuid.uuid4(),
                     message_content=message_content,
-                    context="",
+                    recent_messages=[],
                 )
             except Exception:
                 # Extraction failed, continue without it
@@ -220,11 +224,14 @@ class TestEntityExtractionPipeline:
         message_content = "When is the project deadline?"
 
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client"
+                "lattice.core.context_strategy.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
+            ),
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
@@ -237,7 +244,7 @@ class TestEntityExtractionPipeline:
             from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Extract: {message_content}",
                 temperature=0.2,
                 version=1,
@@ -247,7 +254,7 @@ class TestEntityExtractionPipeline:
 
             extraction_llm = AsyncMock()
             extraction_result = AuditResult(
-                content='{"entities":["project","deadline"]}',
+                content='{"entities":["project","deadline"], "context_flags":[], "unresolved_entities":[]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=80,
@@ -257,7 +264,7 @@ class TestEntityExtractionPipeline:
                 latency_ms=400,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
             )
             extraction_llm.complete.return_value = extraction_result
             mock_llm_client.return_value = extraction_llm
@@ -269,7 +276,7 @@ class TestEntityExtractionPipeline:
                 "extraction": {
                     "entities": ["project", "deadline"],
                 },
-                "prompt_key": "ENTITY_EXTRACTION",
+                "prompt_key": "CONTEXT_STRATEGY",
                 "prompt_version": 1,
                 "created_at": datetime.now(UTC),
             }
@@ -302,10 +309,10 @@ class TestEntityExtractionPipeline:
             mock_resp_llm_client.return_value = response_llm
 
             # Extract query
-            extraction = await entity_extraction.extract_entities(
+            extraction = await context_strategy(
                 message_id=message_id,
                 message_content=message_content,
-                context="",
+                recent_messages=[],
             )
 
             # Verify entity extraction
@@ -326,7 +333,7 @@ class TestEntityExtractionPipeline:
             assert context_info["template"] == "UNIFIED_RESPONSE"
 
 
-class TestContextStrategyPipeline:
+class TestContextStrategyPipelineIntegration:
     """Integration tests for the CONTEXT_STRATEGY pipeline flow.
 
     Tests the full flow from context_strategy() call with:
@@ -343,11 +350,14 @@ class TestContextStrategyPipeline:
         message_content = "How's it going?"
 
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client"
+                "lattice.core.context_strategy.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
+            ),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
@@ -390,7 +400,7 @@ class TestContextStrategyPipeline:
                     "entities": ["mobile app"],
                     "context_flags": ["goal_context"],
                     "unresolved_entities": [],
-                    "_extraction_method": "api",
+                    "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": ["mobile app"], "context_flags": ["goal_context"], "unresolved_entities": []}',
@@ -417,7 +427,7 @@ class TestContextStrategyPipeline:
                 ),
             ]
 
-            planning = await entity_extraction.context_strategy(
+            planning = await context_strategy(
                 message_id=message_id,
                 message_content=message_content,
                 recent_messages=recent_messages,
@@ -436,11 +446,14 @@ class TestContextStrategyPipeline:
         message_content = "bf and I hung out at ikea"
 
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client"
+                "lattice.core.context_strategy.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
+            ),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
@@ -483,7 +496,7 @@ class TestContextStrategyPipeline:
                     "entities": ["IKEA"],
                     "context_flags": [],
                     "unresolved_entities": ["bf"],
-                    "_extraction_method": "api",
+                    "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": ["IKEA"], "context_flags": [], "unresolved_entities": ["bf"]}',
@@ -493,7 +506,7 @@ class TestContextStrategyPipeline:
 
             recent_messages: list[episodic.EpisodicMessage] = []
 
-            planning = await entity_extraction.context_strategy(
+            planning = await context_strategy(
                 message_id=message_id,
                 message_content=message_content,
                 recent_messages=recent_messages,
@@ -511,11 +524,14 @@ class TestContextStrategyPipeline:
         message_content = "What did I do last week?"
 
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client"
+                "lattice.core.context_strategy.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
+            ),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
@@ -558,7 +574,7 @@ class TestContextStrategyPipeline:
                     "entities": [],
                     "context_flags": ["activity_context"],
                     "unresolved_entities": [],
-                    "_extraction_method": "api",
+                    "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
@@ -566,10 +582,11 @@ class TestContextStrategyPipeline:
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            planning = await entity_extraction.context_strategy(
+            recent_messages: list[episodic.EpisodicMessage] = []
+            planning = await context_strategy(
                 message_id=message_id,
                 message_content=message_content,
-                recent_messages=[],
+                recent_messages=recent_messages,
             )
 
             assert planning is not None
@@ -583,11 +600,14 @@ class TestContextStrategyPipeline:
         message_content = "Actually, what's the weather like?"
 
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client"
+                "lattice.core.context_strategy.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
+            ),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
@@ -630,7 +650,7 @@ class TestContextStrategyPipeline:
                     "entities": [],
                     "context_flags": [],
                     "unresolved_entities": [],
-                    "_extraction_method": "api",
+                    "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
                 "raw_response": '{"entities": [], "context_flags": [], "unresolved_entities": []}',
@@ -657,7 +677,7 @@ class TestContextStrategyPipeline:
                 ),
             ]
 
-            planning = await entity_extraction.context_strategy(
+            planning = await context_strategy(
                 message_id=message_id,
                 message_content=message_content,
                 recent_messages=recent_messages,
@@ -672,12 +692,12 @@ class TestContextStrategyPipeline:
     async def test_context_strategy_missing_template(self) -> None:
         """Test context strategy fails gracefully when template missing."""
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
         ):
             mock_get_prompt.return_value = None
 
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
-                await entity_extraction.context_strategy(
+                await context_strategy(
                     message_id=uuid.uuid4(),
                     message_content="Test message",
                     recent_messages=[],
@@ -689,9 +709,9 @@ class TestContextStrategyPipeline:
         message_id = uuid.uuid4()
 
         with (
-            patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
+            patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.entity_extraction.get_auditing_llm_client"
+                "lattice.core.context_strategy.get_auditing_llm_client"
             ) as mock_llm_client,
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
@@ -728,7 +748,7 @@ class TestContextStrategyPipeline:
             mock_llm_client.return_value = planning_llm
 
             with pytest.raises(ValueError, match="Missing required field"):
-                await entity_extraction.context_strategy(
+                await context_strategy(
                     message_id=message_id,
                     message_content="Test message",
                     recent_messages=[],
@@ -744,7 +764,7 @@ class TestRetrieveContext:
     @pytest.mark.asyncio
     async def test_retrieve_context_returns_structure(self) -> None:
         """Test retrieve_context returns expected dict structure."""
-        context = await entity_extraction.retrieve_context(
+        context = await retrieve_context(
             entities=[],
             context_flags=[],
             memory_depth=2,
@@ -757,7 +777,7 @@ class TestRetrieveContext:
     @pytest.mark.asyncio
     async def test_retrieve_context_empty_inputs(self) -> None:
         """Test retrieve_context with no entities and no flags."""
-        context = await entity_extraction.retrieve_context(
+        context = await retrieve_context(
             entities=[],
             context_flags=[],
             memory_depth=2,
@@ -769,7 +789,7 @@ class TestRetrieveContext:
     @pytest.mark.asyncio
     async def test_retrieve_context_activity_flag(self) -> None:
         """Test retrieve_context with activity_context flag."""
-        context = await entity_extraction.retrieve_context(
+        context = await retrieve_context(
             entities=[],
             context_flags=["activity_context"],
             memory_depth=2,  # Need depth to traverse from added entities
@@ -783,7 +803,7 @@ class TestRetrieveContext:
     @pytest.mark.asyncio
     async def test_retrieve_context_goal_flag(self) -> None:
         """Test retrieve_context with goal_context flag."""
-        context = await entity_extraction.retrieve_context(
+        context = await retrieve_context(
             entities=[],
             context_flags=["goal_context"],
             memory_depth=0,
@@ -794,7 +814,7 @@ class TestRetrieveContext:
     @pytest.mark.asyncio
     async def test_retrieve_context_multiple_flags(self) -> None:
         """Test retrieve_context with multiple context flags."""
-        context = await entity_extraction.retrieve_context(
+        context = await retrieve_context(
             entities=["test"],
             context_flags=["goal_context", "activity_context"],
             memory_depth=2,

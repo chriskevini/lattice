@@ -58,7 +58,7 @@ async def init_database() -> None:
 
         print("\nDatabase schema initialization complete!")
         print(
-            "Tables: prompt_registry, raw_messages, message_extractions, semantic_triples,"
+            "Tables: prompt_registry, raw_messages, context_strategies, semantic_triples,"
         )
         print("        prompt_audits, dreaming_proposals, user_feedback,")
         print("        system_health, schema_migrations, entities, predicates")

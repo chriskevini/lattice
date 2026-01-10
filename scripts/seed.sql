@@ -68,71 +68,6 @@ If clarification is needed and has not already been discussed, ask the user brie
 
 Respond naturally and helpfully.$TPL$, 0.7);
 
--- ENTITY_EXTRACTION (v1, temp=0.2)
-INSERT INTO prompt_registry (prompt_key, version, template, temperature)
-VALUES ('ENTITY_EXTRACTION', 1, $TPL$You are a message analysis system. Extract entity mentions for graph traversal.
-
-## Context
-**Current date:** {local_date}
-
-**Date resolution hints:**
-{date_resolution_hints}
-
-**Recent conversation history:**
-{episodic_context}
-
-**Current user message:**
-{user_message}
-
-## Task
-Extract an array of entity mentions from the user message.
-
-## Guidelines
-- Extract ALL proper nouns and important concepts
-- For time references (Friday, tomorrow, next week), use the ISO date format from the hints
-- Empty array if no entities mentioned
-
-## Output Format
-Return ONLY valid JSON (no markdown, no explanation):
-{"entities": ["entity1", "entity2", ...]}
-
-## Examples
-
-**Date Resolution Hints:** Friday → 2026-01-10
-**Current User Message:** I need to finish the mobile app by Friday
-**Output:**
-{"entities": ["mobile app", "2026-01-10"]}
-
-**Date Resolution Hints:** tomorrow → 2026-01-09
-**Current User Message:** Meet me tomorrow for lunch
-**Output:**
-{"entities": ["2026-01-09"]}
-
-**Date Resolution Hints:** (empty)
-**Current User Message:** Spent 180 minutes coding today
-**Output:**
-{"entities": ["coding"]}
-
-**Date Resolution Hints:** (empty)
-**Current User Message:** Watching a movie tonight
-**Output:**
-{"entities": ["movie"]}
-
-**Date Resolution Hints:** tomorrow → 2026-01-09
-**Current User Message:** Meeting me tomorrow for lunch
-**Output:**
-{"entities": ["2026-01-09"]}
-
-**Date Resolution Hints:** next week → 2026-01-15
-**Current User Message:** What did I work on with Sarah next week?
-**Output:**
-{"entities": ["Sarah", "2026-01-15"]}
-
-**Date Resolution Hints:** (empty)
-**Current User Message:** Starting work on the database migration
-**Output:**
-{"entities": ["database migration"]}$TPL$, 0.2);
-
 -- CONTEXT_STRATEGY (v1, temp=0.2)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('CONTEXT_STRATEGY', 1, $TPL$You are a conversational context tracker. Extract entities and determine what context is needed from recent conversation.
@@ -396,3 +331,20 @@ Return ONLY valid JSON:
   "content": "Message text" | null,
    "reason": "Justify the decision briefly, including which style you chose and why it fits now."
 }$TPL$, 0.7);
+
+-- ============================================================================
+-- Default Configuration
+-- ============================================================================
+INSERT INTO system_health (metric_key, metric_value) VALUES
+    ('scheduler_base_interval', '15'),
+    ('scheduler_current_interval', '15'),
+    ('scheduler_max_interval', '1440'),
+    ('dreaming_min_uses', '10'),
+    ('dreaming_enabled', 'true'),
+    ('user_timezone', 'UTC'),
+    ('active_hours_start', '9'),
+    ('active_hours_end', '21'),
+    ('active_hours_confidence', '0.0'),
+    ('active_hours_last_updated', NOW()::TEXT),
+    ('last_batch_message_id', '0')
+ON CONFLICT (metric_key) DO NOTHING;

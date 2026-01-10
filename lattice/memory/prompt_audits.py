@@ -238,7 +238,7 @@ async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> boo
 
     Unlike link_feedback_to_audit(), this function looks up audits by their internal UUID
     rather than dream_discord_message_id. This is necessary because batch extraction audits
-    (BATCH_MEMORY_EXTRACTION) may not always get mirrored to the dream channel,
+    (MEMORY_CONSOLIDATION) may not always get mirrored to the dream channel,
     so they may have NULL for dream_discord_message_id.
 
     Args:
