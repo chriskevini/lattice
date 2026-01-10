@@ -18,7 +18,6 @@ import asyncpg
 import structlog
 
 
-
 logger = structlog.get_logger(__name__)
 
 MAX_ENTITY_NAME_LENGTH = 255

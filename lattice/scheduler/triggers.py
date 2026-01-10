@@ -122,7 +122,6 @@ async def decide_proactive() -> ProactiveDecision:
             reason="Outside user's active hours",
         )
 
-
     user_tz = await get_user_timezone()
 
     conversation = await get_conversation_context(user_timezone=user_tz)
@@ -135,7 +134,6 @@ async def decide_proactive() -> ProactiveDecision:
     channel_id = await get_default_channel_id()
     current_interval = await get_current_interval()
     from lattice.utils.date_resolution import get_now
-
 
     now = get_now(user_tz)
     local_date = now.strftime("%Y/%m/%d, %A")
