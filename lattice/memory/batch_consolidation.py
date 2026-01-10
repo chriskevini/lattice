@@ -35,7 +35,6 @@ from lattice.memory.canonical import (
 from lattice.memory.episodic import store_semantic_memories
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.date_resolution import resolve_relative_dates
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 from lattice.utils.placeholder_injector import PlaceholderInjector

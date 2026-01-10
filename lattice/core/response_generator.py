@@ -3,7 +3,6 @@
 Handles prompt formatting, LLM generation, and message splitting for Discord.
 """
 
-import re
 from typing import TYPE_CHECKING, Any
 
 import structlog

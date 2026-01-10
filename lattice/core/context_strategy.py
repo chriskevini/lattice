@@ -23,7 +23,6 @@ from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 from lattice.core.constants import CONTEXT_STRATEGY_WINDOW_SIZE
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.date_resolution import format_current_date, resolve_relative_dates
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 from lattice.utils.placeholder_injector import PlaceholderInjector
