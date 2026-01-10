@@ -1,5 +1,6 @@
 """Tests for dream channel audit view components."""
 
+from unittest.mock import AsyncMock
 import pytest
 import discord
 from uuid import uuid4
@@ -493,3 +494,120 @@ class TestAuditViewCustomIds:
         assert "audit:feedback" in custom_ids
         assert "audit:quick_positive" in custom_ids
         assert "audit:quick_negative" in custom_ids
+
+
+class TestAuditViewCallbacks:
+    """Integration tests for AuditView button callbacks."""
+
+    @pytest.mark.asyncio
+    async def test_view_prompt_callback_executes(self) -> None:
+        """Test that view prompt callback executes correctly."""
+        audit_id = uuid4()
+        view = AuditView(
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="This is a test prompt content",
+            raw_output="test output",
+        )
+
+        # Create mock interaction
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.defer = AsyncMock()
+        mock_interaction.followup = AsyncMock()
+        mock_interaction.followup.send = AsyncMock()
+
+        # Get and execute callback
+        callback = view._make_view_prompt_callback()
+        await callback(mock_interaction)
+
+        # Verify interaction was handled
+        mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
+        mock_interaction.followup.send.assert_called_once()
+        assert mock_interaction.followup.send.call_args[1]["ephemeral"] is True
+        assert "view" in mock_interaction.followup.send.call_args[1]
+
+    @pytest.mark.asyncio
+    async def test_view_raw_callback_executes(self) -> None:
+        """Test that view raw callback executes correctly."""
+        audit_id = uuid4()
+        view = AuditView(
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="This is raw output content",
+        )
+
+        # Create mock interaction
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.defer = AsyncMock()
+        mock_interaction.followup = AsyncMock()
+        mock_interaction.followup.send = AsyncMock()
+
+        # Get and execute callback
+        callback = view._make_view_raw_callback()
+        await callback(mock_interaction)
+
+        # Verify interaction was handled
+        mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
+        mock_interaction.followup.send.assert_called_once()
+        assert mock_interaction.followup.send.call_args[1]["ephemeral"] is True
+
+    @pytest.mark.asyncio
+    async def test_view_prompt_callback_handles_empty_content(self) -> None:
+        """Test that view prompt callback handles empty content gracefully."""
+        audit_id = uuid4()
+        view = AuditView(
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt=None,
+            raw_output="test output",
+        )
+
+        # Create mock interaction
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
+
+        # Get and execute callback
+        callback = view._make_view_prompt_callback()
+        await callback(mock_interaction)
+
+        # Verify error message was sent
+        mock_interaction.response.send_message.assert_called_once()
+        assert "not available" in mock_interaction.response.send_message.call_args[0][0]
+        assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
+
+    @pytest.mark.asyncio
+    async def test_view_raw_callback_handles_empty_content(self) -> None:
+        """Test that view raw callback handles empty content gracefully."""
+        audit_id = uuid4()
+        view = AuditView(
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output=None,
+        )
+
+        # Create mock interaction
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
+
+        # Get and execute callback
+        callback = view._make_view_raw_callback()
+        await callback(mock_interaction)
+
+        # Verify error message was sent
+        mock_interaction.response.send_message.assert_called_once()
+        assert "not available" in mock_interaction.response.send_message.call_args[0][0]
+        assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
