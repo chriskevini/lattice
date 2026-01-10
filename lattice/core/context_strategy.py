@@ -23,9 +23,9 @@ from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 from lattice.core.constants import CONTEXT_STRATEGY_WINDOW_SIZE
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.date_resolution import format_current_date, resolve_relative_dates
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
+from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
 logger = structlog.get_logger(__name__)
@@ -95,7 +95,7 @@ def build_smaller_episodic_context(
 
 async def context_strategy(
     message_id: UUID,
-    message_content: str,
+    user_message: str,
     recent_messages: list[EpisodicMessage],
     user_timezone: str | None = None,
     discord_message_id: int | None = None,
@@ -115,7 +115,7 @@ async def context_strategy(
 
     Args:
         message_id: UUID of the message being analyzed
-        message_content: The user's message text
+        user_message: The user's message text
         recent_messages: Recent conversation history
         user_timezone: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
         audit_view: Whether to send an AuditView to the dream channel
@@ -143,21 +143,23 @@ async def context_strategy(
 
     smaller_context = build_smaller_episodic_context(
         recent_messages=recent_messages,
-        current_message=message_content,
+        current_message=user_message,
         window_size=CONTEXT_STRATEGY_WINDOW_SIZE,
     )
 
-    rendered_prompt = prompt_template.safe_format(
-        local_date=format_current_date(user_tz),
-        date_resolution_hints=resolve_relative_dates(message_content, user_tz),
-        canonical_entities=canonical_entities_str,
-        smaller_episodic_context=smaller_context,
-    )
+    injector = PlaceholderInjector()
+    context = {
+        "user_timezone": user_tz,
+        "user_message": user_message,
+        "canonical_entities": canonical_entities_str,
+        "smaller_episodic_context": smaller_context,
+    }
+    rendered_prompt, injected = await injector.inject(prompt_template, context)
 
     logger.info(
         "Running context strategy",
         message_id=str(message_id),
-        message_length=len(message_content),
+        message_length=len(user_message),
         entity_count=len(canonical_entities),
     )
 

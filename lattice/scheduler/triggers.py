@@ -7,7 +7,6 @@ Respects adaptive active hours to avoid disturbing users outside their active ti
 import json
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
@@ -117,12 +116,12 @@ async def decide_proactive() -> ProactiveDecision:
     conversation = await get_conversation_context()
 
     from lattice.core import response_generator
+    from lattice.utils.placeholder_injector import PlaceholderInjector
 
     goals = await response_generator.get_goal_context()
 
     channel_id = await get_default_channel_id()
     current_interval = await get_current_interval()
-    current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     prompt_template = await get_prompt("PROACTIVE_CHECKIN")
     if not prompt_template:
@@ -133,12 +132,14 @@ async def decide_proactive() -> ProactiveDecision:
             reason="PROACTIVE_CHECKIN prompt not found, defaulting to wait",
         )
 
-    prompt = prompt_template.template.format(
-        current_time=current_time,
-        scheduler_current_interval=current_interval,
-        episodic_context=conversation,
-        goal_context=goals,
-    )
+    injector = PlaceholderInjector()
+    context = {
+        "user_timezone": "UTC",
+        "episodic_context": conversation,
+        "goal_context": goals,
+        "scheduler_current_interval": current_interval,
+    }
+    prompt, injected = await injector.inject(prompt_template, context)
 
     llm_client = get_auditing_llm_client()
     try:

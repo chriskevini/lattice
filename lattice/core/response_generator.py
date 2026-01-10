@@ -3,17 +3,11 @@
 Handles prompt formatting, LLM generation, and message splitting for Discord.
 """
 
-import re
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from lattice.memory import procedural
-from lattice.utils.date_resolution import (
-    format_current_date,
-    format_current_time,
-    resolve_relative_dates,
-)
 from lattice.utils.llm import AuditResult, get_auditing_llm_client
 from lattice.utils.database import db_pool
 
@@ -27,16 +21,6 @@ MAX_GRAPH_TRIPLES = 10
 
 MAX_GOALS_CONTEXT = 50
 
-AVAILABLE_PLACEHOLDERS = {
-    "episodic_context": "Recent conversation history with timestamps",
-    "semantic_context": "Relevant facts and graph relationships",
-    "user_message": "The user's current message",
-    "local_date": "Current date with day of week (e.g., 2026/01/08, Thursday)",
-    "local_time": "Current time for proactive decisions (e.g., 14:30)",
-    "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
-    "unresolved_entities": "Entities requiring clarification (e.g., 'bf', 'lkea')",
-}
-
 
 def get_available_placeholders() -> dict[str, str]:
     """Return canonical list of placeholders available for templates.
@@ -46,14 +30,13 @@ def get_available_placeholders() -> dict[str, str]:
     use in prompt templates.
 
     Returns:
-        Dictionary mapping placeholder names to their descriptions.
-
-    Note:
-        Future enhancement: Load this from a database table to allow runtime
-        extensibility. For now, this is a hardcoded registry to prevent the
-        optimizer from proposing unusable placeholders.
+        Dictionary mapping placeholder names to their descriptions from
+        the central PlaceholderRegistry.
     """
-    return AVAILABLE_PLACEHOLDERS.copy()
+    from lattice.utils.placeholder_injector import PlaceholderInjector
+
+    injector = PlaceholderInjector()
+    return injector.get_available_placeholders()
 
 
 def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
@@ -68,7 +51,7 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     Returns:
         Tuple of (is_valid, unknown_placeholders)
         - is_valid: True if all placeholders are known
-        - unknown_placeholders: List of placeholder names not in AVAILABLE_PLACEHOLDERS
+        - unknown_placeholders: List of placeholder names not in registry
 
     Example:
         >>> validate_template_placeholders("Hello {user_message}!")
@@ -76,10 +59,10 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
         >>> validate_template_placeholders("Hello {unknown_var}!")
         (False, ["unknown_var"])
     """
-    template_placeholders = set(re.findall(r"\{(\w+)\}", template))
-    known_placeholders = set(AVAILABLE_PLACEHOLDERS.keys())
-    unknown = list(template_placeholders - known_placeholders)
-    return (len(unknown) == 0, unknown)
+    from lattice.utils.placeholder_injector import PlaceholderInjector
+
+    injector = PlaceholderInjector()
+    return injector.validate_template(template)
 
 
 async def fetch_goal_names() -> list[str]:
@@ -203,6 +186,8 @@ async def generate_response(
             {},
         )
 
+    from lattice.utils.placeholder_injector import PlaceholderInjector
+
     template_params = {
         "episodic_context": episodic_context or "No recent conversation.",
         "semantic_context": semantic_context or "No relevant context found.",
@@ -210,28 +195,11 @@ async def generate_response(
         "unresolved_entities": ", ".join(unresolved_entities)
         if unresolved_entities
         else "(none)",
+        "user_timezone": user_tz,
     }
 
-    template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
-
-    filtered_params = {
-        key: value
-        for key, value in template_params.items()
-        if key in template_placeholders
-    }
-
-    if "local_date" in template_placeholders:
-        filtered_params["local_date"] = format_current_date(user_tz)
-
-    if "local_time" in template_placeholders:
-        filtered_params["local_time"] = format_current_time(user_tz)
-
-    if "date_resolution_hints" in template_placeholders:
-        filtered_params["date_resolution_hints"] = resolve_relative_dates(
-            user_message, user_tz
-        )
-
-    filled_prompt = prompt_template.safe_format(**filtered_params)
+    injector = PlaceholderInjector()
+    filled_prompt, injected = await injector.inject(prompt_template, template_params)
 
     logger.debug(
         "Filled prompt for generation",

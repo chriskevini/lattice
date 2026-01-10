@@ -20,6 +20,7 @@ from lattice.dreaming.analyzer import (
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.llm import get_auditing_llm_client
+from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
 logger = structlog.get_logger(__name__)
@@ -223,11 +224,14 @@ async def propose_optimization(
         f"Feedback rate: {metrics.feedback_rate:.1%}."
     )
 
-    # Format the optimization prompt using database template
-    optimization_prompt = optimization_prompt_template.safe_format(
-        feedback_samples=feedback_samples,
-        metrics=metrics_context,
-        current_template=prompt_template.template,
+    injector = PlaceholderInjector()
+    context = {
+        "feedback_samples": feedback_samples,
+        "metrics": metrics_context,
+        "current_template": prompt_template.template,
+    }
+    optimization_prompt, injected = await injector.inject(
+        optimization_prompt_template, context
     )
 
     # Call LLM to generate proposal with timeout

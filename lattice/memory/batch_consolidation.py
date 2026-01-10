@@ -23,6 +23,7 @@ import structlog
 
 from lattice.core.constants import CONSOLIDATION_BATCH_SIZE
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
+
 from lattice.memory.canonical import (
     extract_canonical_forms,
     get_canonical_entities_list,
@@ -34,9 +35,9 @@ from lattice.memory.canonical import (
 from lattice.memory.episodic import store_semantic_memories
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
-from lattice.utils.date_resolution import resolve_relative_dates
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
+from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
 logger = structlog.get_logger(__name__)
@@ -173,7 +174,7 @@ async def run_batch_consolidation() -> None:
         logger.warning("MEMORY_CONSOLIDATION prompt not found")
         return
 
-    combined_message = "\n".join(m["content"] for m in messages)
+    user_message = "\n".join(m["content"] for m in messages)
     user_tz: str | None = None
     if messages:
         user_tz = messages[0].get("user_timezone") or "UTC"
@@ -181,17 +182,20 @@ async def run_batch_consolidation() -> None:
     canonical_entities_list = await get_canonical_entities_list()
     canonical_predicates_list = await get_canonical_predicates_list()
 
-    rendered_prompt = prompt_template.safe_format(
-        semantic_context=memory_context,
-        bigger_episodic_context=message_history,
-        date_resolution_hints=resolve_relative_dates(combined_message, user_tz),
-        canonical_entities=", ".join(canonical_entities_list)
+    injector = PlaceholderInjector()
+    context = {
+        "semantic_context": memory_context,
+        "bigger_episodic_context": message_history,
+        "user_message": user_message,
+        "user_timezone": user_tz,
+        "canonical_entities": ", ".join(canonical_entities_list)
         if canonical_entities_list
         else "(empty)",
-        canonical_predicates=", ".join(canonical_predicates_list)
+        "canonical_predicates": ", ".join(canonical_predicates_list)
         if canonical_predicates_list
         else "(empty)",
-    )
+    }
+    rendered_prompt, injected = await injector.inject(prompt_template, context)
 
     llm_client = get_auditing_llm_client()
     bot = get_discord_bot()
