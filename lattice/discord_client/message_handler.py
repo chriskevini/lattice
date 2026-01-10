@@ -12,6 +12,7 @@ from lattice.core import memory_orchestrator, entity_extraction, response_genera
 from lattice.memory import episodic
 from lattice.scheduler import set_current_interval
 from lattice.utils.database import get_system_health, set_next_check_at
+from lattice.utils.source_links import build_source_map, inject_source_links
 
 logger = structlog.get_logger(__name__)
 
@@ -241,8 +242,6 @@ class MessageHandler:
             response_content = response_result.content
 
             # Inject source links for transparent attribution
-            from lattice.utils.source_links import build_source_map, inject_source_links
-
             source_map = build_source_map(recent_messages)
             response_content = inject_source_links(
                 response=response_content,

@@ -39,6 +39,22 @@ class CommandHandler:
         self._setup_timezone_command()
         self._setup_active_hours_command()
 
+    def _format_hour_12h(self, hour: int) -> tuple[int, str]:
+        """Convert 24-hour time to 12-hour format.
+
+        Args:
+            hour: Hour in 24-hour format (0-23)
+
+        Returns:
+            Tuple of (hour_12h, period) where period is "AM" or "PM"
+        """
+        if hour == 0 or hour == 12:
+            display_hour = 12
+        else:
+            display_hour = hour if hour < 12 else hour - 12
+        period = "AM" if hour < 12 else "PM"
+        return display_hour, period
+
     def _setup_dream_command(self) -> None:
         """Setup the !dream command."""
 
@@ -104,11 +120,8 @@ class CommandHandler:
             """
             try:
                 await set_user_timezone(timezone)
-                # Update cached timezone immediately
-                # This is a bit hacky - we're accessing the bot's private attribute
-                # In Phase 3 (DI), we'll have a cleaner way to handle this
-                if hasattr(self.bot, "_user_timezone"):
-                    self.bot._user_timezone = timezone  # type: ignore
+                if hasattr(self.bot, "set_user_timezone"):
+                    self.bot.set_user_timezone(timezone)
                 await ctx.send(f"✅ Timezone set to: {timezone}")
                 logger.info(
                     "Timezone changed via command",
@@ -140,15 +153,8 @@ class CommandHandler:
                 end_h = result["end_hour"]
 
                 # Convert to 12-hour format
-                start_period = "AM" if start_h < 12 else "PM"
-                start_display = start_h if start_h <= 12 else start_h - 12
-                if start_display == 0:
-                    start_display = 12
-
-                end_period = "AM" if end_h < 12 else "PM"
-                end_display = end_h if end_h <= 12 else end_h - 12
-                if end_display == 0:
-                    end_display = 12
+                start_display, start_period = self._format_hour_12h(start_h)
+                end_display, end_period = self._format_hour_12h(end_h)
 
                 confidence_pct = int(result["confidence"] * 100)
 

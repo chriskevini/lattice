@@ -45,7 +45,7 @@ class AuditMirror:
             return
 
         # Prepare metadata
-        metadata = params.get("metadata", [])
+        metadata = params.get("metadata", []).copy()
         metadata.append(f"{result.latency_ms}ms")
         if result.cost_usd:
             metadata.append(f"${result.cost_usd:.4f}")

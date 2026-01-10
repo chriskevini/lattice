@@ -83,6 +83,15 @@ class LatticeBot(commands.Bot):
         self._scheduler: ProactiveScheduler | None = None
         self._dreaming_scheduler: DreamingScheduler | None = None
 
+    def set_user_timezone(self, timezone: str) -> None:
+        """Set the user's timezone for conversation timestamps.
+
+        Args:
+            timezone: IANA timezone identifier (e.g., America/New_York)
+        """
+        self._user_timezone = timezone
+        self._message_handler.user_timezone = timezone
+
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
         logger.info("Bot setup starting")
