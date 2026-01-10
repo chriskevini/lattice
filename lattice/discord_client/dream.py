@@ -494,8 +494,6 @@ class AuditViewBuilder:
 
     _STYLE_MAP = {
         "UNIFIED_RESPONSE": ("💬", discord.Color.blurple()),
-        "GOAL_RESPONSE": ("💬", discord.Color.blurple()),
-        "CONVERSATION_RESPONSE": ("💬", discord.Color.blurple()),
         "PROACTIVE_CHECKIN": ("🌟", discord.Color.gold()),
         "CONTEXT_STRATEGY": ("🔍", discord.Color.blue()),
         "MEMORY_CONSOLIDATION": ("🧠", discord.Color.purple()),

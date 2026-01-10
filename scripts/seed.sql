@@ -5,6 +5,7 @@
 -- ============================================================================
 
 -- UNIFIED_RESPONSE (v1, temp=0.7)
+-- This is the primary template used for all reactive responses.
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('UNIFIED_RESPONSE', 1, $TPL$You are a warm, curious AI companion engaging in natural conversation.
 

@@ -15,7 +15,7 @@ class TestAuditViewBuilder:
         """Test building a reactive audit embed."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="GOAL_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             version=3,
             input_text="I'm planning to ship v2 by end of month.",
             output_text="Got it! I'll track this milestone.",
@@ -25,7 +25,7 @@ class TestAuditViewBuilder:
         )
 
         assert isinstance(embed, discord.Embed)
-        assert embed.title == "💬 GOAL_RESPONSE v3"
+        assert embed.title == "💬 UNIFIED_RESPONSE v3"
         assert embed.color == discord.Color.blurple()
         assert len(embed.fields) == 3
 
@@ -45,7 +45,7 @@ class TestAuditViewBuilder:
         """Test standard audit without cost info."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="CONVERSATION_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             version=1,
             input_text="Hello!",
             output_text="Hi there!",
@@ -272,7 +272,7 @@ class TestAuditViewBuilder:
         long_message = "x" * 2000
 
         embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="CONVERSATION_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             version=1,
             input_text=long_message,
             output_text=long_message,

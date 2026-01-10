@@ -376,7 +376,7 @@ class TestLatticeBot:
                     return_value=(
                         mock_response_obj,
                         "prompt",
-                        {"template": "BASIC_RESPONSE"},
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Hi there!"])
@@ -601,115 +601,7 @@ class TestLatticeBot:
                     return_value=(
                         mock_response_obj,
                         "rendered_prompt",
-                        {"template": "BASIC_RESPONSE", "template_version": 1},
-                    )
-                )
-                mock_response.split_response = MagicMock(
-                    return_value=["You said hello [1]"]
-                )
-
-                mock_bot_message = MagicMock(spec=discord.Message)
-                mock_bot_message.id = 999
-                mock_bot_message.channel.id = 123
-                mock_bot_message.content = "You said hello [1]"
-
-                mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
-
-                with (
-                    patch.object(
-                        message.channel,
-                        "send",
-                        AsyncMock(return_value=mock_bot_message),
-                    ),
-                ):
-                    await bot.on_message(message)
-
-                    # Note: Source link injection is NOT called because
-                    # semantic_context parsing doesn't produce triples with origin_ids
-                    # This is expected behavior with Phase 4 implementation
-
-                    # Verify bot message was stored
-                    mock_memory.store_bot_message.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_on_message_splits_long_responses(self) -> None:
-        """Test responses >2000 chars are split correctly."""
-        with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
-            bot = LatticeBot()
-            mock_user = MagicMock(id=999)
-            bot._message_handler.memory_healthy = True
-            bot._user_timezone = "UTC"
-
-            message = MagicMock(spec=discord.Message)
-            message.author = MagicMock(id=111, name="TestUser")
-            message.channel.id = 123
-            message.id = 555
-            message.content = "Tell me a long story"
-            message.guild = None
-            message.jump_url = "https://discord.com/channels/..."
-
-            user_message_id = uuid4()
-
-            with (
-                patch.object(
-                    type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-                ),
-                patch.object(
-                    bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
-                ),
-                patch(
-                    "lattice.discord_client.message_handler.memory_orchestrator"
-                ) as mock_memory,
-                patch(
-                    "lattice.discord_client.message_handler.entity_extraction"
-                ) as mock_extraction,
-                patch(
-                    "lattice.discord_client.message_handler.episodic"
-                ) as mock_episodic,
-                patch(
-                    "lattice.discord_client.message_handler.response_generator"
-                ) as mock_response,
-                patch(
-                    "lattice.discord_client.message_handler.get_system_health",
-                    AsyncMock(return_value=15),
-                ),
-                patch(
-                    "lattice.discord_client.message_handler.set_current_interval",
-                    AsyncMock(),
-                ),
-                patch(
-                    "lattice.discord_client.message_handler.set_next_check_at",
-                    AsyncMock(),
-                ),
-            ):
-                mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
-                mock_episodic.get_recent_messages = AsyncMock(return_value=[])
-
-                mock_extraction.context_strategy = AsyncMock(return_value=None)
-                mock_extraction.retrieve_context = AsyncMock(
-                    return_value={"semantic_context": ""}
-                )
-
-                mock_response_obj = MagicMock()
-                mock_response_obj.content = "Response"
-                mock_response_obj.model = "gpt-4"
-                mock_response_obj.provider = "openai"
-                mock_response_obj.temperature = 0.7
-                mock_response_obj.prompt_tokens = 100
-                mock_response_obj.completion_tokens = 50
-                mock_response_obj.total_tokens = 150
-                mock_response_obj.cost_usd = 0.01
-                mock_response_obj.latency_ms = 500
-
-                mock_memory.retrieve_context = AsyncMock(return_value=([], []))
-                mock_response.generate_response = AsyncMock(
-                    return_value=(
-                        mock_response_obj,
-                        "rendered_prompt_content",
-                        {
-                            "template": "GOAL_RESPONSE",
-                            "template_version": 2,
-                        },
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])

@@ -512,7 +512,7 @@ class TestAuditResult:
             latency_ms=100,
             temperature=0.7,
             audit_id=audit_id,
-            prompt_key="GOAL_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
         )
 
         assert result.content == "test content"
@@ -525,7 +525,7 @@ class TestAuditResult:
         assert result.latency_ms == 100
         assert result.temperature == 0.7
         assert result.audit_id == audit_id
-        assert result.prompt_key == "GOAL_RESPONSE"
+        assert result.prompt_key == "UNIFIED_RESPONSE"
 
     def test_audit_result_inherits_from_generation_result(self) -> None:
         """Test that AuditResult is a subclass of GenerationResult."""
