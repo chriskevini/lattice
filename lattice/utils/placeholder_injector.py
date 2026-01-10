@@ -5,6 +5,7 @@ It uses the PlaceholderRegistry to discover available placeholders and
 resolves them based on execution context.
 """
 
+import inspect
 import re
 import structlog
 from typing import Any
@@ -58,22 +59,28 @@ class PlaceholderInjector:
         for name in template_placeholders:
             defn = self.registry.get(name)
             if defn:
-                if defn.required and not context.get(name):
-                    msg = (
-                        f"Required placeholder '{name}' is missing or empty in context"
-                    )
+                if defn.required and name not in context:
+                    msg = f"Required placeholder '{name}' is missing from context"
                     raise ValueError(msg)
                 value = await self._resolve_placeholder(defn, context)
                 injected[name] = value
                 logger.debug("Resolved placeholder", placeholder=name)
             else:
-                unknown_value = f"{{UNKNOWN:{name}}}"
-                injected[name] = unknown_value
-                logger.warning(
-                    "Unknown placeholder in template",
-                    placeholder=name,
-                    template=template.prompt_key,
-                )
+                if name in context:
+                    value = context[name]
+                    injected[name] = value
+                    logger.debug(
+                        "Unknown placeholder resolved from context",
+                        placeholder=name,
+                    )
+                else:
+                    unknown_value = f"{{UNKNOWN:{name}}}"
+                    injected[name] = unknown_value
+                    logger.warning(
+                        "Unknown placeholder in template and not in context",
+                        placeholder=name,
+                        template=template.prompt_key,
+                    )
 
         rendered = template.safe_format(**injected)
         return rendered, injected
@@ -97,7 +104,10 @@ class PlaceholderInjector:
             RuntimeError: If resolver fails and placeholder is required
         """
         try:
-            result = defn.resolver(context)
+            if inspect.iscoroutinefunction(defn.resolver):
+                result = await defn.resolver(context)
+            else:
+                result = defn.resolver(context)
             return result
         except Exception as e:
             error_value = f"{{ERROR:{defn.name}}}"
