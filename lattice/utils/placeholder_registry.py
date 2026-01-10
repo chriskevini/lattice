@@ -19,7 +19,6 @@ from lattice.utils.date_resolution import (
     format_current_time,
     resolve_relative_dates,
 )
-from lattice.utils.database import db_pool
 
 
 @dataclass
@@ -158,7 +157,9 @@ class PlaceholderRegistry:
             PlaceholderDef(
                 name="episodic_context",
                 description="Recent conversation history with timestamps",
-                resolver=lambda ctx: ctx.get("episodic_context", "No recent conversation."),
+                resolver=lambda ctx: ctx.get(
+                    "episodic_context", "No recent conversation."
+                ),
                 category="context",
             )
         )
@@ -167,7 +168,9 @@ class PlaceholderRegistry:
             PlaceholderDef(
                 name="semantic_context",
                 description="Relevant facts and graph relationships",
-                resolver=lambda ctx: ctx.get("semantic_context", "No relevant context found."),
+                resolver=lambda ctx: ctx.get(
+                    "semantic_context", "No relevant context found."
+                ),
                 category="context",
             )
         )
