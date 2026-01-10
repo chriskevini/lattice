@@ -6,7 +6,7 @@ message patterns to respect user's natural schedule.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -27,7 +27,7 @@ from lattice.utils.database import (
     get_user_timezone,
     set_next_check_at,
 )
-
+from lattice.utils.date_resolution import get_now
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +43,7 @@ class ProactiveScheduler:
         bot: Any,
         check_interval: int = DEFAULT_CHECK_INTERVAL_MINUTES,
         dream_channel_id: int | None = None,
+        now_func: Any = None,
     ) -> None:
         """Initialize the proactive scheduler.
 
@@ -50,13 +51,19 @@ class ProactiveScheduler:
             bot: Discord bot instance for sending messages
             check_interval: How often to check if it's time for proactive contact (minutes)
             dream_channel_id: Optional dream channel ID for mirroring proactive messages
+            now_func: Optional function to get current time (for testing)
         """
         self.bot = bot
         self.check_interval = check_interval
         self.dream_channel_id = dream_channel_id
+        self._now_func = now_func or (lambda: get_now("UTC"))
         self._running: bool = False
         self._scheduler_task: asyncio.Task[None] | None = None
         self._active_hours_task: asyncio.Task[None] | None = None
+
+    def _get_now(self) -> datetime:
+        """Get current time."""
+        return self._now_func()
 
     async def start(self) -> None:
         """Start the scheduler loop."""
@@ -65,7 +72,7 @@ class ProactiveScheduler:
 
         initial_check = await get_next_check_at()
         if not initial_check:
-            initial_check = datetime.now(UTC) + timedelta(minutes=self.check_interval)
+            initial_check = self._get_now() + timedelta(minutes=self.check_interval)
             await set_next_check_at(initial_check)
 
         self._scheduler_task = asyncio.create_task(self._scheduler_loop())
@@ -85,9 +92,10 @@ class ProactiveScheduler:
         while self._running:
             try:
                 next_check = await get_next_check_at()
+                now = self._get_now()
 
-                if next_check and datetime.now(UTC) < next_check:
-                    sleep_seconds = (next_check - datetime.now(UTC)).total_seconds()
+                if next_check and now < next_check:
+                    sleep_seconds = (next_check - now).total_seconds()
                     await asyncio.sleep(sleep_seconds)
                     continue
 
@@ -150,7 +158,7 @@ class ProactiveScheduler:
                 )
                 new_interval = min(current_interval * 2, max_interval)
                 await set_current_interval(new_interval)
-                next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
+                next_check = self._get_now() + timedelta(minutes=new_interval)
             else:
                 pipeline = UnifiedPipeline(db_pool=db_pool, bot=self.bot)
 
@@ -208,7 +216,7 @@ class ProactiveScheduler:
                         await get_system_health("scheduler_base_interval") or 15
                     )
                     await set_current_interval(base_interval)
-                    next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
+                    next_check = self._get_now() + timedelta(minutes=base_interval)
                 else:
                     # Message send failed - treat as "wait" with exponential backoff
                     current_interval = await get_current_interval()
@@ -217,7 +225,7 @@ class ProactiveScheduler:
                     )
                     new_interval = min(current_interval * 2, max_interval)
                     await set_current_interval(new_interval)
-                    next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
+                    next_check = self._get_now() + timedelta(minutes=new_interval)
         else:
             # AI decided to wait - exponential backoff
             current_interval = await get_current_interval()
@@ -226,7 +234,7 @@ class ProactiveScheduler:
             )
             new_interval = min(current_interval * 2, max_interval)
             await set_current_interval(new_interval)
-            next_check = datetime.now(UTC) + timedelta(minutes=new_interval)
+            next_check = self._get_now() + timedelta(minutes=new_interval)
 
         await set_next_check_at(next_check)
 

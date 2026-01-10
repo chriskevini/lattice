@@ -1,6 +1,6 @@
 """Unit tests for batch consolidation module."""
 
-from datetime import UTC, datetime
+from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -211,7 +211,7 @@ class TestRunBatchConsolidation:
                 "discord_message_id": 101,
                 "content": "Test message",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
 
@@ -255,7 +255,7 @@ class TestRunBatchConsolidation:
                 "discord_message_id": 101,
                 "content": "I live in Vancouver",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
         memories = [
@@ -263,7 +263,7 @@ class TestRunBatchConsolidation:
                 "subject": "user",
                 "predicate": "lives_in",
                 "object": "Richmond",
-                "created_at": datetime.now(UTC),
+                "created_at": get_now(),
             }
         ]
 
@@ -395,7 +395,7 @@ class TestRunBatchConsolidation:
                 "discord_message_id": 118,
                 "content": "Test",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
 
@@ -501,7 +501,7 @@ class TestRunBatchConsolidation:
     async def test_message_history_format(self) -> None:
         """Test that message history is formatted correctly with User/Bot prefix."""
         message_id = uuid4()
-        now = datetime.now(UTC)
+        now = get_now()
         messages = [
             {
                 "id": message_id,
@@ -623,7 +623,7 @@ class TestRunBatchConsolidation:
                 "discord_message_id": 101,
                 "content": "Test message",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
         memories = [
@@ -631,7 +631,7 @@ class TestRunBatchConsolidation:
                 "subject": "user",
                 "predicate": "lives_in",
                 "object": "Richmond",
-                "created_at": datetime.now(UTC),
+                "created_at": get_now(),
             }
         ]
 
@@ -734,7 +734,7 @@ class TestRunBatchConsolidation:
                 "discord_message_id": 101,
                 "content": "Test",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
 
@@ -912,7 +912,7 @@ class TestCanonicalFormIntegration:
                 "discord_message_id": 101,
                 "content": "I went to IKEA with my boyfriend",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
         memories: list[dict[str, Any]] = []
@@ -1054,7 +1054,7 @@ class TestCanonicalFormIntegration:
                 "discord_message_id": 101,
                 "content": "Test message",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
         memories: list[dict[str, Any]] = []
@@ -1161,7 +1161,7 @@ class TestCanonicalFormIntegration:
                 "discord_message_id": 101,
                 "content": "I am training for a marathon",
                 "is_bot": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
             }
         ]
         memories: list[dict[str, Any]] = []

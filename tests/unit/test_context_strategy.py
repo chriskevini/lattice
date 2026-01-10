@@ -5,7 +5,7 @@ Renamed from test_query_extraction.py to match context_strategy.py module.
 
 import json
 import uuid
-from datetime import datetime, UTC
+from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -261,7 +261,7 @@ class TestGetContextStrategy:
             },
             "rendered_prompt": "test prompt",
             "raw_response": "test response",
-            "created_at": datetime.now(UTC),
+            "created_at": get_now(timezone_str="UTC"),
         }
 
         with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:
@@ -292,7 +292,7 @@ class TestGetContextStrategy:
             },
             "rendered_prompt": "test prompt",
             "raw_response": "test response",
-            "created_at": datetime.now(UTC),
+            "created_at": get_now(timezone_str="UTC"),
         }
 
         with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:

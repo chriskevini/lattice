@@ -5,7 +5,7 @@ Stores immutable conversation history with timestamp-based retrieval and timezon
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
@@ -13,6 +13,7 @@ import asyncpg
 import structlog
 
 from lattice.utils.database import db_pool
+from lattice.utils.date_resolution import get_now
 
 
 logger = structlog.get_logger(__name__)
@@ -52,7 +53,7 @@ class EpisodicMessage:
         self.is_bot = is_bot
         self.is_proactive = is_proactive
         self.message_id = message_id
-        self.timestamp = timestamp or datetime.now(UTC)
+        self.timestamp = timestamp or get_now("UTC")
         self.generation_metadata = generation_metadata
         self.user_timezone = user_timezone or "UTC"
 

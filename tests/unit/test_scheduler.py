@@ -1,7 +1,9 @@
 """Unit tests for scheduler components."""
 
 import os
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,7 +17,6 @@ from lattice.scheduler.adaptive import (
 from lattice.scheduler.triggers import (
     ProactiveDecision,
     decide_proactive,
-    format_message,
     get_conversation_context,
     get_current_interval,
     get_default_channel_id,
@@ -24,42 +25,75 @@ from lattice.scheduler.triggers import (
 from lattice.core.response_generator import get_goal_context
 
 
-class TestFormatMessage:
-    """Tests for format_message helper."""
+class TestGetConversationContext:
+    """Tests for get_conversation_context helper."""
 
-    def test_user_message(self) -> None:
-        msg = EpisodicMessage(
-            content="Hello, world!",
-            discord_message_id=12345,
-            channel_id=67890,
-            is_bot=False,
-            timestamp=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        result = format_message(msg)
-        assert result == "[2024-01-01 00:00] USER: Hello, world!"
+    @pytest.mark.asyncio
+    @patch("lattice.scheduler.triggers.get_recent_messages")
+    async def test_get_conversation_context(self, mock_get_recent: MagicMock) -> None:
+        mock_get_recent.return_value = [
+            EpisodicMessage(
+                content="Hello",
+                discord_message_id=1,
+                channel_id=1,
+                is_bot=False,
+                timestamp=datetime(2024, 1, 1, 10, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+            EpisodicMessage(
+                content="Hi there",
+                discord_message_id=2,
+                channel_id=1,
+                is_bot=True,
+                timestamp=datetime(2024, 1, 1, 10, 1, tzinfo=ZoneInfo("UTC")),
+            ),
+        ]
 
-    def test_assistant_message(self) -> None:
-        msg = EpisodicMessage(
-            content="Hello there!",
-            discord_message_id=12346,
-            channel_id=67890,
-            is_bot=True,
-            timestamp=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        result = format_message(msg)
-        assert result == "[2024-01-01 00:00] ASSISTANT: Hello there!"
+        # UTC
+        result = await get_conversation_context(user_timezone="UTC")
+        assert "[2024-01-01 10:00] USER: Hello" in result
+        assert "[2024-01-01 10:01] ASSISTANT: Hi there" in result
 
-    def test_long_content_truncated(self) -> None:
-        msg = EpisodicMessage(
-            content="x" * 1000,
-            discord_message_id=12347,
-            channel_id=67890,
-            is_bot=False,
-            timestamp=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        result = format_message(msg)
-        assert len(result) < 600
-        assert result.startswith("[2024-01-01 00:00] USER: ")
+        # America/Vancouver (UTC-8)
+        result = await get_conversation_context(user_timezone="America/Vancouver")
+        assert "[2024-01-01 02:00] USER: Hello" in result
+        assert "[2024-01-01 02:01] ASSISTANT: Hi there" in result
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_context_with_no_messages(self) -> None:
+        """Test conversation context when no messages exist."""
+        with patch(
+            "lattice.scheduler.triggers.get_recent_messages",
+            return_value=[],
+        ):
+            result = await get_conversation_context()
+            assert result == "No recent conversation history."
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_context_with_messages(self) -> None:
+        """Test conversation context with messages."""
+        messages = [
+            EpisodicMessage(
+                content="Hello!",
+                discord_message_id=1,
+                channel_id=12345,
+                is_bot=False,
+                timestamp=datetime(2024, 1, 1, 10, 0, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+            EpisodicMessage(
+                content="Hi there!",
+                discord_message_id=2,
+                channel_id=12345,
+                is_bot=True,
+                timestamp=datetime(2024, 1, 1, 10, 1, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+        ]
+        with patch(
+            "lattice.scheduler.triggers.get_recent_messages",
+            return_value=messages,
+        ):
+            result = await get_conversation_context()
+            assert "[2024-01-01 10:00] USER: Hello!" in result
+            assert "[2024-01-01 10:01] ASSISTANT: Hi there!" in result
 
 
 class TestProactiveDecision:
@@ -92,6 +126,9 @@ class TestDecideProactive:
     @pytest.mark.asyncio
     async def test_decide_proactive_with_missing_prompt(self) -> None:
         """Test that missing PROACTIVE_CHECKIN prompt returns wait."""
+        mock_llm = MagicMock()
+        mock_llm.complete = AsyncMock()
+
         with (
             patch(
                 "lattice.scheduler.triggers.is_within_active_hours", return_value=True
@@ -106,10 +143,23 @@ class TestDecideProactive:
                 return_value="No active objectives.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=None
+                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch("lattice.scheduler.triggers.get_system_health", return_value="15"),
+            patch(
+                "lattice.scheduler.triggers.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.utils.database.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.scheduler.triggers.get_auditing_llm_client",
+                return_value=mock_llm,
+            ),
         ):
             result = await decide_proactive()
             assert result.action == "wait"
@@ -121,6 +171,7 @@ class TestDecideProactive:
         mock_prompt = MagicMock()
         mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
         mock_prompt.temperature = 0.7
+        mock_prompt.version = 1
 
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(side_effect=ValueError("LLM service unavailable"))
@@ -143,6 +194,16 @@ class TestDecideProactive:
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
+                "lattice.scheduler.triggers.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.utils.database.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
                 "lattice.scheduler.triggers.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
@@ -158,6 +219,7 @@ class TestDecideProactive:
         mock_prompt = MagicMock()
         mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
         mock_prompt.temperature = 0.7
+        mock_prompt.version = 1
 
         mock_result = MagicMock()
         mock_result.content = "This is not valid JSON"
@@ -188,6 +250,16 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch(
+                "lattice.scheduler.triggers.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.utils.database.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
             patch(
                 "lattice.scheduler.triggers.get_auditing_llm_client",
                 return_value=mock_llm,
@@ -238,6 +310,16 @@ class TestDecideProactive:
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
+                "lattice.scheduler.triggers.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.utils.database.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
                 "lattice.scheduler.triggers.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
@@ -286,6 +368,16 @@ class TestDecideProactive:
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
+                "lattice.scheduler.triggers.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.utils.database.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
                 "lattice.scheduler.triggers.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
@@ -331,6 +423,16 @@ class TestDecideProactive:
                 "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
+            patch(
+                "lattice.scheduler.triggers.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.utils.database.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
             patch(
                 "lattice.scheduler.triggers.get_auditing_llm_client",
                 return_value=mock_llm,
@@ -380,6 +482,16 @@ class TestDecideProactive:
             ),
             patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
+                "lattice.scheduler.triggers.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "lattice.utils.database.get_user_timezone",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
                 "lattice.scheduler.triggers.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
@@ -425,47 +537,6 @@ class TestSetCurrentInterval:
         with patch("lattice.scheduler.triggers.set_system_health") as mock_set_health:
             await set_current_interval(45)
             mock_set_health.assert_called_once_with("scheduler_current_interval", "45")
-
-
-class TestGetConversationContext:
-    """Tests for get_conversation_context function."""
-
-    @pytest.mark.asyncio
-    async def test_get_conversation_context_with_no_messages(self) -> None:
-        """Test conversation context when no messages exist."""
-        with patch(
-            "lattice.scheduler.triggers.get_recent_messages",
-            return_value=[],
-        ):
-            result = await get_conversation_context()
-            assert result == "No recent conversation history."
-
-    @pytest.mark.asyncio
-    async def test_get_conversation_context_with_messages(self) -> None:
-        """Test conversation context with messages."""
-        messages = [
-            EpisodicMessage(
-                content="Hello!",
-                discord_message_id=1,
-                channel_id=12345,
-                is_bot=False,
-                timestamp=datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
-            ),
-            EpisodicMessage(
-                content="Hi there!",
-                discord_message_id=2,
-                channel_id=12345,
-                is_bot=True,
-                timestamp=datetime(2024, 1, 1, 10, 1, 0, tzinfo=UTC),
-            ),
-        ]
-        with patch(
-            "lattice.scheduler.triggers.get_recent_messages",
-            return_value=messages,
-        ):
-            result = await get_conversation_context()
-            assert "[2024-01-01 10:00] USER: Hello!" in result
-            assert "[2024-01-01 10:01] ASSISTANT: Hi there!" in result
 
 
 class TestGetGoalContext:
@@ -575,7 +646,7 @@ class TestAdaptiveActiveHours:
     async def test_calculate_active_hours_with_messages(self) -> None:
         """Test active hours calculation with sufficient messages."""
         # Create 100 messages concentrated in evening hours (18-22)
-        now = datetime.now(UTC)
+        now = get_now(timezone_str="UTC")
         messages = []
         for i in range(100):
             # Most messages in evening
@@ -615,13 +686,21 @@ class TestAdaptiveActiveHours:
                 }.get(key),
             ),
             patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
+            patch(
+                "lattice.utils.database.get_system_health",
+                side_effect=lambda key: {
+                    "active_hours_start": "9",
+                    "active_hours_end": "21",
+                }.get(key),
+            ),
         ):
             # Test time within active hours (noon)
-            within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+            within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(within_time) is True
 
             # Test time outside active hours (2 AM)
-            outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)
+            outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(outside_time) is False
 
     @pytest.mark.asyncio
@@ -636,17 +715,25 @@ class TestAdaptiveActiveHours:
                 }.get(key),
             ),
             patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
+            patch(
+                "lattice.utils.database.get_system_health",
+                side_effect=lambda key: {
+                    "active_hours_start": "21",
+                    "active_hours_end": "9",
+                }.get(key),
+            ),
         ):
             # Test time within active hours (midnight)
-            within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+            within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(within_time) is True
 
             # Test time within active hours (6 AM)
-            within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=UTC)
+            within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(within_time2) is True
 
             # Test time outside active hours (noon)
-            outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+            outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(outside_time) is False
 
     @pytest.mark.asyncio
@@ -661,16 +748,21 @@ class TestAdaptiveActiveHours:
                 }.get(key),
             ),
             patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
-            patch("lattice.scheduler.adaptive.datetime") as mock_datetime,
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
+            patch(
+                "lattice.utils.database.get_system_health",
+                side_effect=lambda key: {
+                    "active_hours_start": "9",
+                    "active_hours_end": "21",
+                }.get(key),
+            ),
+            patch("lattice.scheduler.adaptive.get_now") as mock_get_now,
         ):
-            # Mock datetime.now() to return a time within active hours (3 PM)
-            mock_now = datetime(2024, 1, 1, 15, 0, 0, tzinfo=UTC)
-            mock_datetime.now.return_value = mock_now
-            mock_datetime.side_effect = lambda *args, **kwargs: datetime(
-                *args, **kwargs
-            )
+            # Mock get_now() to return a time within active hours (3 PM)
+            mock_now = datetime(2024, 1, 1, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
+            mock_get_now.return_value = mock_now
 
-            # Call without specifying check_time (should use mocked datetime.now())
+            # Call without specifying check_time (should use mocked get_now())
             result = await is_within_active_hours()
             assert result is True  # 3 PM is within 9 AM - 9 PM window
 

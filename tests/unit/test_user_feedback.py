@@ -1,6 +1,8 @@
 """Unit tests for user feedback module."""
 
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -21,7 +23,7 @@ class TestUserFeedbackInit:
     def test_init_with_all_fields(self) -> None:
         """Test UserFeedback initialization with all fields provided."""
         feedback_id = uuid4()
-        created_at = datetime(2026, 1, 6, 10, 30, 0, tzinfo=UTC)
+        created_at = datetime(2026, 1, 6, 10, 30, 0, tzinfo=ZoneInfo("UTC"))
 
         feedback = UserFeedback(
             content="Great job!",
@@ -50,7 +52,7 @@ class TestUserFeedbackInit:
         assert feedback.user_discord_message_id is None
         assert isinstance(feedback.created_at, datetime)
         # Verify created_at is recent (within 1 second)
-        assert (datetime.now(UTC) - feedback.created_at).total_seconds() < 1
+        assert (get_now(timezone_str="UTC") - feedback.created_at).total_seconds() < 1
 
     def test_init_auto_generates_feedback_id(self) -> None:
         """Test that feedback_id is auto-generated when not provided."""
@@ -63,9 +65,9 @@ class TestUserFeedbackInit:
 
     def test_init_auto_sets_created_at(self) -> None:
         """Test that created_at defaults to now when not provided."""
-        before = datetime.now(UTC)
+        before = get_now(timezone_str="UTC")
         feedback = UserFeedback(content="Test")
-        after = datetime.now(UTC)
+        after = get_now(timezone_str="UTC")
 
         assert before <= feedback.created_at <= after
 
@@ -132,7 +134,7 @@ class TestGetFeedbackByUserMessage:
     async def test_get_feedback_found(self) -> None:
         """Test retrieving existing feedback by user message ID."""
         feedback_id = uuid4()
-        created_at = datetime(2026, 1, 6, 10, 0, 0, tzinfo=UTC)
+        created_at = datetime(2026, 1, 6, 10, 0, 0, tzinfo=ZoneInfo("UTC"))
 
         mock_row = {
             "id": feedback_id,
@@ -186,7 +188,7 @@ class TestGetFeedbackByUserMessage:
     async def test_get_feedback_with_null_sentiment(self) -> None:
         """Test retrieving feedback with None sentiment."""
         feedback_id = uuid4()
-        created_at = datetime(2026, 1, 6, 10, 0, 0, tzinfo=UTC)
+        created_at = datetime(2026, 1, 6, 10, 0, 0, tzinfo=ZoneInfo("UTC"))
 
         mock_row = {
             "id": feedback_id,
@@ -263,8 +265,8 @@ class TestGetAllFeedback:
         """Test retrieving all feedback entries."""
         id1 = uuid4()
         id2 = uuid4()
-        time1 = datetime(2026, 1, 6, 10, 0, 0, tzinfo=UTC)
-        time2 = datetime(2026, 1, 6, 11, 0, 0, tzinfo=UTC)
+        time1 = datetime(2026, 1, 6, 10, 0, 0, tzinfo=ZoneInfo("UTC"))
+        time2 = datetime(2026, 1, 6, 11, 0, 0, tzinfo=ZoneInfo("UTC"))
 
         mock_rows = [
             {

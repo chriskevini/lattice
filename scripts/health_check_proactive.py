@@ -12,7 +12,7 @@ Diagnoses why proactive messages aren't being sent by checking:
 import asyncio
 import os
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -21,6 +21,8 @@ from dotenv import load_dotenv
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from lattice.utils.date_resolution import get_now, get_user_datetime
 
 
 async def check_database_connection() -> asyncpg.Connection:
@@ -68,8 +70,10 @@ async def check_scheduler_config(conn: asyncpg.Connection) -> dict:
     next_check = config.get("next_check_at")
     if next_check:
         try:
+            from datetime import datetime
+
             next_check_dt = datetime.fromisoformat(next_check)
-            now = datetime.now(UTC)
+            now = get_now("UTC")
             if next_check_dt < now:
                 print("\n⚠️  Next check is in the PAST (should have run already)")
                 print(f"   Next: {next_check_dt}")
@@ -110,8 +114,8 @@ async def check_active_hours(conn: asyncpg.Connection) -> dict:
     start_hour = int(config.get("active_hours_start", 9))
     end_hour = int(config.get("active_hours_end", 21))
 
-    now = datetime.now(UTC)
-    local_now = now.astimezone(ZoneInfo(user_tz))
+    user_dt = get_user_datetime(user_tz)
+    local_now = user_dt.now
     current_hour = local_now.hour
 
     # Check if within active hours
@@ -139,7 +143,7 @@ async def check_message_activity(conn: asyncpg.Connection) -> dict:
     print("=" * 80)
 
     # Count messages in last 30 days
-    cutoff = datetime.now(UTC) - timedelta(days=30)
+    cutoff = get_now("UTC") - timedelta(days=30)
 
     total_count = await conn.fetchval(
         "SELECT COUNT(*) FROM raw_messages WHERE timestamp >= $1", cutoff
@@ -343,7 +347,7 @@ async def main() -> None:
     load_dotenv()
 
     print("\n🔍 PROACTIVE MESSAGING HEALTH CHECK")
-    print(f"Time: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
+    print(f"Time: {get_now('UTC').strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
 
     try:
         conn = await check_database_connection()

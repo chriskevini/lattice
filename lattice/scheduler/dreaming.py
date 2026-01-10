@@ -24,6 +24,7 @@ from lattice.dreaming.proposer import (
     store_proposal,
 )
 from lattice.utils.database import get_system_health
+from lattice.utils.date_resolution import get_now
 
 
 logger = structlog.get_logger(__name__)
@@ -94,7 +95,7 @@ class DreamingScheduler:
         while self._running:
             try:
                 next_run = self._calculate_next_run()
-                sleep_seconds = (next_run - datetime.now(UTC)).total_seconds()
+                sleep_seconds = (next_run - get_now("UTC")).total_seconds()
 
                 if sleep_seconds > 0:
                     logger.info(
@@ -128,7 +129,7 @@ class DreamingScheduler:
         Returns:
             datetime of the next run
         """
-        now = datetime.now(UTC)
+        now = get_now("UTC")
         today_run = datetime.combine(now.date(), self.dream_time, tzinfo=UTC)
 
         if now < today_run:

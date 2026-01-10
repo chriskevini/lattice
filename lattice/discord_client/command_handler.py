@@ -1,14 +1,12 @@
 """Command handlers for LatticeBot."""
 
-from datetime import UTC, datetime
-
 import discord
 import structlog
 from discord.ext import commands
 
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
-from lattice.utils.database import set_user_timezone
+from lattice.utils.date_resolution import get_now
 
 logger = structlog.get_logger(__name__)
 
@@ -87,7 +85,7 @@ class CommandHandler:
                             f"**Proposals Created:** {result['proposals_created']}",
                             inline=False,
                         )
-                        footer_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+                        footer_time = get_now().strftime("%Y-%m-%d %H:%M UTC")
                         embed.set_footer(
                             text=f"Triggered by {ctx.author.name} • {footer_time}"
                         )
@@ -119,10 +117,15 @@ class CommandHandler:
                 timezone: IANA timezone identifier (e.g., America/New_York, Europe/London)
             """
             try:
+                from lattice.utils.database import set_user_timezone
+
                 await set_user_timezone(timezone)
                 if hasattr(self.bot, "set_user_timezone"):
-                    self.bot.set_user_timezone(timezone)
+                    # Use getattr to avoid type checking issues with dynamic attributes
+                    set_tz = getattr(self.bot, "set_user_timezone")
+                    set_tz(timezone)
                 await ctx.send(f"✅ Timezone set to: {timezone}")
+
                 logger.info(
                     "Timezone changed via command",
                     timezone=timezone,

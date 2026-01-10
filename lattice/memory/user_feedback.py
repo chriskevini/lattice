@@ -3,13 +3,14 @@
 Stores feedback submitted via Discord buttons and modals in the dream channel.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import cast
 from uuid import UUID, uuid4
 
 import structlog
 
 from lattice.utils.database import db_pool
+from lattice.utils.date_resolution import get_now
 
 
 logger = structlog.get_logger(__name__)
@@ -42,7 +43,7 @@ class UserFeedback:
         self.sentiment = sentiment
         self.referenced_discord_message_id = referenced_discord_message_id
         self.user_discord_message_id = user_discord_message_id
-        self.created_at = created_at or datetime.now(UTC)
+        self.created_at = created_at or get_now("UTC")
 
 
 async def store_feedback(feedback: UserFeedback) -> UUID:

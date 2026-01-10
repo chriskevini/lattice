@@ -205,7 +205,7 @@ class GraphTraversal:
             await find_semantic_memories(
                 subject="User",
                 predicate="did activity",
-                start_date=datetime.now(UTC) - timedelta(days=7)
+                start_date=get_now("UTC") - timedelta(days=7)
             )
 
             # Find all memories about a specific object
