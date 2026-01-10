@@ -149,22 +149,6 @@ async def run_batch_consolidation() -> None:
 
         batch_id = str(messages[-1]["discord_message_id"])
 
-        memories = await conn.fetch(
-            """
-            SELECT subject, predicate, object, created_at
-            FROM semantic_memories
-            ORDER BY created_at DESC
-            LIMIT 50
-            """
-        )
-        memory_context = (
-            "\n".join(
-                f"- {m['subject']} --{m['predicate']}--> {m['object']}"
-                for m in memories
-            )
-            or "(No previous memories)"
-        )
-
         message_history = "\n".join(
             f"{'Bot' if m['is_bot'] else 'User'}: {m['content']}" for m in messages
         )
@@ -184,7 +168,6 @@ async def run_batch_consolidation() -> None:
 
     injector = PlaceholderInjector()
     context = {
-        "semantic_context": memory_context,
         "bigger_episodic_context": message_history,
         "user_message": user_message,
         "user_timezone": user_tz,
