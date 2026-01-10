@@ -96,7 +96,7 @@ class _LLMClient:
         content = (
             '[{"subject": "example", "predicate": "likes", "object": "testing"}]'
             if is_extraction
-            else f"Placeholder response to: {prompt[:50]}..."
+            else "Please set OPENROUTER_API_KEY to activate LLM functionality."
         )
 
         return GenerationResult(
