@@ -10,13 +10,16 @@
 ## 🏗️ Core Architecture (ENGRAM)
 1. **Episodic** (`raw_messages`): Immutable conversation log.
 2. **Semantic** (`entities`, `semantic_memories`): Graph-first knowledge with entity resolution.
+    - **Peculiarity**: Uses a **text-based graph** (no IDs). Relationships are stored as `(subject, predicate, object)` strings to allow for natural language evolution.
 3. **Procedural** (`prompt_registry`): Versioned LLM logic.
 
 Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrator.py).
 
 ## 📂 Project Structure
 - `lattice/core/`: Pipeline, ingestion, and extraction logic.
-- `lattice/memory/`: ENGRAM implementations (episodic, graph, etc.).
+- `lattice/memory/`: ENGRAM implementations.
+    - `graph.py`: Iterative BFS traversal for text-based relationships.
+    - `canonical.py`: Deterministic normalization logic.
 - `lattice/discord_client/`: Bot interface and UI handlers.
 - `lattice/prompts/`: Template management.
 - `tests/`: Unit and integration test suites.
@@ -44,7 +47,7 @@ make run        # Run bot locally
 - **Canonicalization**: Deterministic normalization of entities and predicates.
 - **Context Strategy**: Dynamic retrieval planning based on detected entities.
 - **Audit View**: In-Discord UI for inspecting the system's "thought process" for any response.
-- **Source Links**: Transparent attribution back to episodic memory for all generated facts.
+- **Source Links**: Transparent attribution back to episodic memory for all generated memories.
 
 ## 📚 Resources
 - **[README.md](README.md)**: Technical specs, placeholders, and setup.
