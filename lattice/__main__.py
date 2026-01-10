@@ -78,7 +78,8 @@ async def main() -> None:
         logger.info("Database initialization check complete")
     except Exception as e:
         logger.warning(
-            "Database initialization failed (may already exist)", error=str(e)
+            "Database initialization failed (may already exist). If this is the first run, ensure PostgreSQL is running and DATABASE_URL is correct in .env",
+            error=str(e),
         )
 
     bot = LatticeBot()
@@ -95,7 +96,12 @@ async def main() -> None:
     except KeyboardInterrupt:
         logger.info("Received shutdown signal")
     except Exception as e:
-        logger.exception("Bot crashed", error=str(e))
+        if "LoginFailure" in str(type(e)) or "Improper token" in str(e):
+            logger.error(
+                "Invalid Discord token. Please check DISCORD_TOKEN in .env and ensure it's a valid bot token from Discord Developer Portal"
+            )
+        else:
+            logger.exception("Bot crashed", error=str(e))
         raise
     finally:
         await health_server.stop()
