@@ -123,7 +123,34 @@ class AuditingLLMClient:
                             channel_id = int(dream_channel_id_str)
                             channel = bot.get_channel(channel_id)
                             if channel:
-                                await channel.send(message)
+                                # Use AuditViewBuilder for rich display if possible
+                                try:
+                                    from lattice.discord_client.dream import (
+                                        AuditViewBuilder,
+                                    )
+
+                                    embed, view = AuditViewBuilder.build_standard_audit(
+                                        prompt_key=prompt_key or "UNKNOWN",
+                                        version=template_version or 1,
+                                        input_text=prompt[:200] + "...",
+                                        output_text=result.content,
+                                        metadata_parts=[
+                                            f"Model: {result.model}",
+                                            f"Tokens: {result.total_tokens}",
+                                            f"Latency: {result.latency_ms}ms",
+                                            audit_link,
+                                        ],
+                                        audit_id=audit_id,
+                                        rendered_prompt=prompt,
+                                        result=result,
+                                    )
+                                    await channel.send(embed=embed, view=view)
+                                except Exception as e:
+                                    logger.warning(
+                                        "Failed to use AuditViewBuilder, falling back to text",
+                                        error=str(e),
+                                    )
+                                    await channel.send(message)
                         except (ValueError, TypeError):
                             logger.warning(
                                 "Invalid DISCORD_DREAM_CHANNEL_ID",

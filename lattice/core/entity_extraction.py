@@ -176,6 +176,7 @@ async def extract_entities(
         prompt_key="ENTITY_EXTRACTION",
         main_discord_message_id=int(message_id),
         temperature=prompt_template.temperature,
+        audit_view=True,
     )
     raw_response = result.content
     extraction_method = "api"

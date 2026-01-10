@@ -4,6 +4,7 @@ Unified audit display system replacing "mirror" terminology with "audit".
 Every LLM call generates an audit entry displayed in the dream channel.
 """
 
+from abc import ABC, abstractmethod
 from typing import Any, cast
 from uuid import UUID
 
@@ -11,11 +12,116 @@ import discord
 import structlog
 
 from lattice.memory import prompt_audits, user_feedback
+from lattice.utils.llm_client import GenerationResult
 
 
 logger = structlog.get_logger(__name__)
 
+
+class AuditRenderer(ABC):
+    """Base class for task-specific audit result rendering."""
+
+    @abstractmethod
+    def render_result(self, result: GenerationResult) -> str:
+        """Render the result content for the audit embed.
+
+        Args:
+            result: The LLM generation result
+
+        Returns:
+            String content for the OUTPUT field
+        """
+        pass
+
+
+class DefaultRenderer(AuditRenderer):
+    """Default renderer that shows raw content."""
+
+    def render_result(self, result: GenerationResult) -> str:
+        return _truncate_for_field(result.content)
+
+
+class ConsolidationRenderer(AuditRenderer):
+    """Renderer for memory consolidation results."""
+
+    def render_result(self, result: GenerationResult) -> str:
+        # Try to parse as JSON to show pretty list
+        from lattice.utils.json_parser import parse_llm_json_response
+
+        try:
+            memories = parse_llm_json_response(result.content)
+            if isinstance(memories, dict):
+                memories = memories.get("memories") or memories.get("triples") or []
+
+            if not memories:
+                return "Nothing extracted"
+
+            lines = [f"🔗 {len(memories)} memories"]
+            for m in memories:
+                subject = m.get("subject") or m.get("s", "")
+                predicate = m.get("predicate") or m.get("p", "")
+                obj = m.get("object") or m.get("o", "")
+                if subject and predicate and obj:
+                    lines.append(f"• {subject} → {predicate} → {obj}")
+            return "\n".join(lines)
+        except Exception:
+            return _truncate_for_field(result.content)
+
+
+class EntityRenderer(AuditRenderer):
+    """Renderer for entity extraction results."""
+
+    def render_result(self, result: GenerationResult) -> str:
+        from lattice.utils.json_parser import parse_llm_json_response
+
+        try:
+            data = parse_llm_json_response(result.content)
+            entities = data.get("entities", []) if isinstance(data, dict) else []
+            if not entities:
+                return "No entities found"
+            return f"🏷️ **Entities:** {', '.join(entities)}"
+        except Exception:
+            return _truncate_for_field(result.content)
+
+
+class ContextStrategyRenderer(AuditRenderer):
+    """Renderer for context strategy results."""
+
+    def render_result(self, result: GenerationResult) -> str:
+        from lattice.utils.json_parser import parse_llm_json_response
+
+        try:
+            data = parse_llm_json_response(result.content)
+            if not isinstance(data, dict):
+                return _truncate_for_field(result.content)
+
+            lines = []
+            entities = data.get("entities", [])
+            flags = data.get("context_flags", [])
+            unresolved = data.get("unresolved_entities", [])
+
+            if entities:
+                lines.append(f"**Entities:** {', '.join(entities)}")
+            if flags:
+                lines.append(f"**Flags:** {', '.join([f'`{f}`' for f in flags])}")
+            if unresolved:
+                lines.append(f"**Unresolved:** {', '.join(unresolved)}")
+
+            return "\n".join(lines) if lines else "No context needed"
+        except Exception:
+            return _truncate_for_field(result.content)
+
+
+AUDIT_RENDERER_REGISTRY: dict[str, AuditRenderer] = {
+    "MEMORY_CONSOLIDATION": ConsolidationRenderer(),
+    "ENTITY_EXTRACTION": EntityRenderer(),
+    "BATCH_MEMORY_EXTRACTION": ConsolidationRenderer(),
+    "CONTEXT_STRATEGY": ContextStrategyRenderer(),
+}
+
+
 MODAL_TEXT_LIMIT = 4000
+
 MODAL_TEXT_SAFE_LIMIT = 3900
 DISCORD_MESSAGE_LIMIT = 2000
 DISCORD_FIELD_LIMIT = 1024
@@ -150,7 +256,7 @@ class FeedbackModal(discord.ui.Modal):
 
 
 class AuditView(discord.ui.DesignerView):
-    """Interactive view for audit entries with buttons (Components V2)."""
+    """Interactive view for audit entries with emoji-only buttons (Components V2)."""
 
     def __init__(
         self,
@@ -159,6 +265,7 @@ class AuditView(discord.ui.DesignerView):
         prompt_key: str | None = None,
         version: int | None = None,
         rendered_prompt: str | None = None,
+        raw_output: str | None = None,
     ) -> None:
         """Initialize audit view.
 
@@ -168,6 +275,7 @@ class AuditView(discord.ui.DesignerView):
             prompt_key: Prompt template key
             version: Template version
             rendered_prompt: Full rendered prompt
+            raw_output: Raw LLM output
         """
         super().__init__(timeout=None)
         self.audit_id = audit_id
@@ -175,17 +283,23 @@ class AuditView(discord.ui.DesignerView):
         self.prompt_key = prompt_key
         self.version = version
         self.rendered_prompt = rendered_prompt
+        self.raw_output = raw_output
 
         view_prompt_button: Any = discord.ui.Button(
-            label="PROMPT",
             emoji="📋",
             style=discord.ButtonStyle.secondary,
             custom_id="audit:view_prompt",
         )
         view_prompt_button.callback = self._make_view_prompt_callback()
 
+        view_raw_button: Any = discord.ui.Button(
+            emoji="📄",
+            style=discord.ButtonStyle.secondary,
+            custom_id="audit:view_raw",
+        )
+        view_raw_button.callback = self._make_view_raw_callback()
+
         feedback_button: Any = discord.ui.Button(
-            label="FEEDBACK",
             emoji="💬",
             style=discord.ButtonStyle.primary,
             custom_id="audit:feedback",
@@ -193,7 +307,6 @@ class AuditView(discord.ui.DesignerView):
         feedback_button.callback = self._make_feedback_callback()
 
         quick_positive_button: Any = discord.ui.Button(
-            label="GOOD",
             emoji="👍",
             style=discord.ButtonStyle.success,
             custom_id="audit:quick_positive",
@@ -201,7 +314,6 @@ class AuditView(discord.ui.DesignerView):
         quick_positive_button.callback = self._make_quick_positive_callback()
 
         quick_negative_button: Any = discord.ui.Button(
-            label="BAD",
             emoji="👎",
             style=discord.ButtonStyle.danger,
             custom_id="audit:quick_negative",
@@ -210,6 +322,7 @@ class AuditView(discord.ui.DesignerView):
 
         action_row: Any = discord.ui.ActionRow(
             view_prompt_button,
+            view_raw_button,
             feedback_button,
             quick_positive_button,
             quick_negative_button,
@@ -230,16 +343,33 @@ class AuditView(discord.ui.DesignerView):
 
             view = PromptDetailView(self.rendered_prompt)
             await interaction.response.send_message(
+                content="**Full Rendered Prompt**",
                 view=view,
                 ephemeral=True,
             )
-            logger.debug(
-                "Prompt view shown",
-                user=interaction.user.name if interaction.user else "unknown",
-                audit_id=str(self.audit_id),
-            )
 
         return view_prompt_callback
+
+    def _make_view_raw_callback(self) -> Any:
+        """Create view raw output button callback."""
+
+        async def view_raw_callback(interaction: discord.Interaction) -> None:
+            """Handle RAW button click - shows ephemeral message."""
+            if not self.raw_output:
+                await interaction.response.send_message(
+                    "Raw output not available.",
+                    ephemeral=True,
+                )
+                return
+
+            view = PromptDetailView(self.raw_output)
+            await interaction.response.send_message(
+                content="**Raw LLM Output**",
+                view=view,
+                ephemeral=True,
+            )
+
+        return view_raw_callback
 
     def _make_feedback_callback(self) -> Any:
         """Create feedback button callback."""
@@ -400,6 +530,7 @@ class AuditViewBuilder:
         metadata_parts: list[str],
         audit_id: UUID | None,
         rendered_prompt: str,
+        result: GenerationResult | None = None,
     ) -> tuple[discord.Embed, AuditView]:
         """Build a unified audit message for any LLM call.
 
@@ -411,6 +542,7 @@ class AuditViewBuilder:
             metadata_parts: List of metadata strings to be joined by " | "
             audit_id: Prompt audit UUID
             rendered_prompt: Full rendered prompt
+            result: Optional full result for rich rendering
 
         Returns:
             Tuple of (embed, view) for the audit message
@@ -430,9 +562,15 @@ class AuditViewBuilder:
             inline=False,
         )
 
+        # Rich Rendering
+        final_output = output_text
+        if result:
+            renderer = AUDIT_RENDERER_REGISTRY.get(prompt_key, DefaultRenderer())
+            final_output = renderer.render_result(result)
+
         embed.add_field(
             name="OUTPUT",
-            value=_truncate_for_field(output_text),
+            value=_truncate_for_field(final_output),
             inline=False,
         )
 
@@ -461,6 +599,7 @@ class AuditViewBuilder:
             prompt_key=prompt_key,
             version=version,
             rendered_prompt=rendered_prompt,
+            raw_output=result.content if result else output_text,
         )
 
         return embed, view
