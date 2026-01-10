@@ -163,41 +163,41 @@ async def get_recent_messages(
     ]
 
 
-async def store_semantic_triples(
+async def store_semantic_memories(
     message_id: UUID,
-    triples: list[dict[str, str]],
+    memories: list[dict[str, str]],
     source_batch_id: str | None = None,
 ) -> None:
-    """Store extracted triples in semantic_triple table.
+    """Store extracted memories in semantic_memories table.
 
     Args:
         message_id: UUID of origin message
-        triples: List of {"subject": str, "predicate": str, "object": str}
+        memories: List of {"subject": str, "predicate": str, "object": str}
         source_batch_id: Optional batch identifier for traceability
 
     Raises:
         Exception: If database operation fails
     """
-    if not triples:
+    if not memories:
         return
 
     async with db_pool.pool.acquire() as conn, conn.transaction():
-        for triple in triples:
-            subject = triple.get("subject", "").strip()
-            predicate = triple.get("predicate", "").strip()
-            obj = triple.get("object", "").strip()
+        for memory in memories:
+            subject = memory.get("subject", "").strip()
+            predicate = memory.get("predicate", "").strip()
+            obj = memory.get("object", "").strip()
 
             if not (subject and predicate and obj):
                 logger.warning(
-                    "Skipping invalid triple",
-                    triple=triple,
+                    "Skipping invalid memory",
+                    memory=memory,
                 )
                 continue
 
             try:
                 await conn.execute(
                     """
-                    INSERT INTO semantic_triple (
+                    INSERT INTO semantic_memories (
                         subject, predicate, object, source_batch_id
                     )
                     VALUES ($1, $2, $3, $4)
@@ -209,7 +209,7 @@ async def store_semantic_triples(
                 )
 
                 logger.debug(
-                    "Stored semantic triple",
+                    "Stored semantic memory",
                     subject=subject,
                     predicate=predicate,
                     object=obj,
@@ -218,7 +218,7 @@ async def store_semantic_triples(
 
             except asyncpg.PostgresError:
                 logger.exception(
-                    "Failed to store triple",
-                    triple=triple,
+                    "Failed to store memory",
+                    memory=memory,
                     message_id=str(message_id),
                 )

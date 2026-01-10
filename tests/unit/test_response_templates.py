@@ -16,10 +16,6 @@ from lattice.memory.procedural import PromptTemplate
 from lattice.utils.llm import AuditResult
 
 
-# Type alias for backward compatibility in tests
-QueryExtraction = EntityExtraction
-
-
 @pytest.fixture
 def mock_extraction_declaration() -> EntityExtraction:
     """Create a mock EntityExtraction for goal message type."""
@@ -259,7 +255,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_with_goal_extraction(
         self,
-        mock_extraction_declaration: QueryExtraction,
+        mock_extraction_declaration: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
@@ -299,7 +295,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_with_entity_extraction(
         self,
-        mock_extraction_query: QueryExtraction,
+        mock_extraction_query: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
     ) -> None:
@@ -345,7 +341,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_with_activity_extraction(
         self,
-        mock_extraction_activity: QueryExtraction,
+        mock_extraction_activity: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
     ) -> None:
@@ -426,7 +422,7 @@ class TestGenerateResponseWithTemplates:
     @pytest.mark.asyncio
     async def test_generate_template_fallback(
         self,
-        mock_extraction_declaration: QueryExtraction,
+        mock_extraction_declaration: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
@@ -456,15 +452,15 @@ class TestGenerateResponseWithTemplates:
             mock_get_prompt.assert_called_once_with("UNIFIED_RESPONSE")
 
     @pytest.mark.asyncio
-    async def test_generate_with_graph_triples(
+    async def test_generate_with_graph_memories(
         self,
-        mock_extraction_query: QueryExtraction,
+        mock_extraction_query: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
     ) -> None:
-        """Test response generation includes graph triples in context."""
-        # Text-based triples use 'subject' and 'object' keys (not subject_content/object_content)
+        """Test response generation includes graph memories in context."""
+        # Text-based memories use 'subject' and 'object' keys
 
         with (
             patch(
@@ -485,7 +481,7 @@ class TestGenerateResponseWithTemplates:
                 semantic_context="lattice project has deadline Friday\nuser working on lattice project",
             )
 
-            # Verify graph triples are formatted in semantic context
+            # Verify graph memories are formatted in semantic context
             assert "lattice project has deadline Friday" in rendered_prompt
             assert "user working on lattice project" in rendered_prompt
 
@@ -802,7 +798,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_goal_response_no_extraction_fields(
         self,
-        mock_extraction_declaration: QueryExtraction,
+        mock_extraction_declaration: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test UNIFIED_RESPONSE template does not include extraction fields in prompt."""
@@ -869,7 +865,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_query_response_no_extraction_fields(
         self,
-        mock_extraction_query: QueryExtraction,
+        mock_extraction_query: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test QUERY_RESPONSE template does not include extraction fields in prompt."""
@@ -933,7 +929,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_activity_response_no_extraction_fields(
         self,
-        mock_extraction_activity: QueryExtraction,
+        mock_extraction_activity: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test UNIFIED_RESPONSE template does not include extraction fields."""
@@ -997,7 +993,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_conversation_response_no_extraction_fields(
         self,
-        mock_extraction_conversation: QueryExtraction,
+        mock_extraction_conversation: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test CONVERSATION_RESPONSE template does not include extraction fields."""
@@ -1061,7 +1057,7 @@ class TestExtractionFieldsNotInPrompts:
     @pytest.mark.asyncio
     async def test_extraction_data_still_populated_internally(
         self,
-        mock_extraction_declaration: QueryExtraction,
+        mock_extraction_declaration: EntityExtraction,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
         """Test that extraction data is still available for routing/analytics.

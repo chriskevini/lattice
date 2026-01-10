@@ -43,7 +43,7 @@ def build_source_map(
 def inject_source_links(
     response: str,
     source_map: dict[UUID, str],
-    triple_origins: set[UUID],
+    memory_origins: set[UUID],
     max_links: int = 3,
 ) -> str:
     """Inject Discord jump URL links at end of sentences.
@@ -51,19 +51,19 @@ def inject_source_links(
     Args:
         response: Bot's response text
         source_map: Map of message UUID to Discord jump URL
-        triple_origins: Set of origin_id UUIDs from graph triples used in response
+        memory_origins: Set of origin_id UUIDs from semantic memories used in response
         max_links: Maximum number of unique links to inject
 
     Returns:
         Response with inline [🔗](url) markdown links at sentence ends
     """
-    if not source_map or not triple_origins:
+    if not source_map or not memory_origins:
         return response
 
-    # Get unique source URLs from triple origins (most relevant first)
+    # Get unique source URLs from memory origins (most relevant first)
     source_urls: list[str] = []
-    # triple_origins might be a set (not JSON serializable) or a list
-    origins = triple_origins if isinstance(triple_origins, (set, list)) else []
+    # memory_origins might be a set (not JSON serializable) or a list
+    origins = memory_origins if isinstance(memory_origins, (set, list)) else []
     for origin_id in origins:
         if origin_id in source_map:
             url = source_map[origin_id]

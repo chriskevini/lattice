@@ -238,7 +238,7 @@ class TestRunBatchConsolidation:
                     "lattice.memory.batch_consolidation.get_auditing_llm_client"
                 ) as mock_llm:
                     with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_triples"
+                        "lattice.memory.batch_consolidation.store_semantic_memories"
                     ) as mock_store:
                         await run_batch_consolidation()
                         mock_llm.assert_not_called()
@@ -334,7 +334,7 @@ class TestRunBatchConsolidation:
                         ],
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.store_semantic_triples"
+                            "lattice.memory.batch_consolidation.store_semantic_memories"
                         ) as mock_store:
                             with patch(
                                 "lattice.memory.batch_consolidation.get_canonical_entities_list",
@@ -466,7 +466,7 @@ class TestRunBatchConsolidation:
                             "lattice.memory.batch_consolidation.notify_parse_error_to_dream"
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.store_semantic_triples"
+                                "lattice.memory.batch_consolidation.store_semantic_memories"
                             ) as mock_store:
                                 with patch(
                                     "lattice.memory.batch_consolidation.get_canonical_entities_list",
@@ -1001,7 +1001,7 @@ class TestCanonicalFormIntegration:
                         },
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.store_semantic_triples"
+                            "lattice.memory.batch_consolidation.store_semantic_memories"
                         ) as mock_store:
                             with patch(
                                 "lattice.memory.batch_consolidation.get_canonical_entities_list",
@@ -1245,7 +1245,7 @@ class TestCanonicalFormIntegration:
                         },
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.store_semantic_triples"
+                            "lattice.memory.batch_consolidation.store_semantic_memories"
                         ) as mock_store:
                             with patch(
                                 "lattice.memory.batch_consolidation.get_canonical_entities_list",

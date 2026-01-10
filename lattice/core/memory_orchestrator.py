@@ -1,6 +1,6 @@
 """Memory orchestration module for coordinating memory operations.
 
-Handles storing and retrieving from episodic memory and graph triples.
+Handles storing and retrieving from episodic memory and semantic memories.
 """
 
 import asyncio
@@ -35,9 +35,9 @@ async def store_user_message(
         UUID of the stored episodic message
 
     Note:
-        Semantic facts are extracted asynchronously via batch consolidation,
+        Semantic facts are extracted asynchronously via memory consolidation,
         not stored directly from raw messages to avoid redundancy.
-        Batch extraction runs every 18 messages.
+        Consolidation runs every 18 messages.
     """
     user_message_id = await episodic.store_message(
         episodic.EpisodicMessage(
@@ -90,7 +90,7 @@ async def retrieve_context(
     query: str,
     channel_id: int,
     episodic_limit: int = 10,
-    triple_depth: int = 1,
+    memory_depth: int = 1,
     entity_names: list[str] | None = None,
 ) -> tuple[
     list[episodic.EpisodicMessage],
@@ -104,11 +104,11 @@ async def retrieve_context(
         query: Query text (used for logging)
         channel_id: Discord channel ID for episodic search
         episodic_limit: Maximum recent messages to retrieve
-        triple_depth: Maximum depth for graph traversal (0 = disabled)
+        memory_depth: Maximum depth for graph traversal (0 = disabled)
         entity_names: Entity names to traverse graph from (from entity extraction)
 
     Returns:
-        Tuple of (recent_messages, graph_triples)
+        Tuple of (recent_messages, semantic_context)
     """
     recent_messages = await episodic.get_recent_messages(
         channel_id=channel_id,
@@ -120,37 +120,37 @@ async def retrieve_context(
         recent_messages=len(recent_messages),
     )
 
-    graph_triples: list[dict[str, Any]] = []
-    if triple_depth > 0 and entity_names:
+    semantic_context: list[dict[str, Any]] = []
+    if memory_depth > 0 and entity_names:
         if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=triple_depth)
+            traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
 
             traverse_tasks = [
-                traverser.traverse_from_entity(entity_name, max_hops=triple_depth)
+                traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
                 for entity_name in entity_names
             ]
 
             if traverse_tasks:
                 traverse_results = await asyncio.gather(*traverse_tasks)
-                seen_triple_ids = set()
+                seen_memory_ids = set()
                 for result in traverse_results:
-                    for triple in result:
-                        triple_key = (
-                            triple.get("subject"),
-                            triple.get("predicate"),
-                            triple.get("object"),
+                    for memory in result:
+                        memory_key = (
+                            memory.get("subject"),
+                            memory.get("predicate"),
+                            memory.get("object"),
                         )
-                        if triple_key not in seen_triple_ids:
-                            graph_triples.append(triple)
-                            seen_triple_ids.add(triple_key)
+                        if memory_key not in seen_memory_ids:
+                            semantic_context.append(memory)
+                            seen_memory_ids.add(memory_key)
 
                 logger.debug(
                     "Graph traversal completed",
-                    depth=triple_depth,
+                    depth=memory_depth,
                     entities_explored=len(entity_names),
-                    triples_found=len(graph_triples),
+                    memories_found=len(semantic_context),
                 )
         else:
             logger.warning("Database pool not initialized, skipping graph traversal")
 
-    return recent_messages, graph_triples
+    return recent_messages, semantic_context

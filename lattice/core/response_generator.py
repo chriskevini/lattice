@@ -34,7 +34,7 @@ AVAILABLE_PLACEHOLDERS = {
     "local_date": "Current date with day of week (e.g., 2026/01/08, Thursday)",
     "local_time": "Current time for proactive decisions (e.g., 14:30)",
     "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
-    "unknown_entities": "Entities requiring clarification (e.g., 'bf', 'lkea') - BATCH_MEMORY_EXTRACTION will handle these naturally",
+    "unresolved_entities": "Entities requiring clarification (e.g., 'bf', 'lkea') - BATCH_MEMORY_EXTRACTION will handle these naturally",
 }
 
 
@@ -96,7 +96,7 @@ async def fetch_goal_names() -> list[str]:
         async with db_pool.pool.acquire() as conn:
             goals = await conn.fetch(
                 f"""
-                SELECT DISTINCT object FROM semantic_triple
+                SELECT DISTINCT object FROM semantic_memories
                 WHERE predicate = 'has goal'
                 ORDER BY object
                 LIMIT {MAX_GOALS_CONTEXT}
@@ -128,7 +128,7 @@ async def get_goal_context(goal_names: list[str] | None = None) -> str:
     try:
         async with db_pool.pool.acquire() as conn:
             placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
-            query = f"SELECT subject, predicate, object FROM semantic_triple WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
+            query = f"SELECT subject, predicate, object FROM semantic_memories WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
             predicates = await conn.fetch(query, *goal_names)
     except Exception as e:
         logger.error("Failed to fetch goal predicates from database", error=str(e))
@@ -162,7 +162,7 @@ async def generate_response(
     user_message: str,
     episodic_context: str,
     semantic_context: str,
-    unknown_entities: list[str] | None = None,
+    unresolved_entities: list[str] | None = None,
     user_tz: str = "UTC",
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
@@ -173,7 +173,7 @@ async def generate_response(
         user_message: The user's message
         episodic_context: Recent conversation history pre-formatted
         semantic_context: Relevant facts from graph pre-formatted
-        unknown_entities: Entities requiring clarification
+        unresolved_entities: Entities requiring clarification
         user_tz: IANA timezone string for date resolution
         audit_view: Whether to send an AuditView to the dream channel
         audit_view_params: Parameters for the AuditView
@@ -207,8 +207,8 @@ async def generate_response(
         "episodic_context": episodic_context or "No recent conversation.",
         "semantic_context": semantic_context or "No relevant context found.",
         "user_message": user_message,
-        "unknown_entities": ", ".join(unknown_entities)
-        if unknown_entities
+        "unresolved_entities": ", ".join(unresolved_entities)
+        if unresolved_entities
         else "(none)",
     }
 

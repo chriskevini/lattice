@@ -4,9 +4,9 @@
 -- Run after schema.sql to populate prompt_registry
 -- ============================================================================
 
--- UNIFIED_RESPONSE (v2, temp=0.7)
+-- UNIFIED_RESPONSE (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
-VALUES ('UNIFIED_RESPONSE', 2, $TPL$You are a warm, curious AI companion engaging in natural conversation.
+VALUES ('UNIFIED_RESPONSE', 1, $TPL$You are a warm, curious AI companion engaging in natural conversation.
 
 ## Context
 **Current date:** {local_date}
@@ -21,7 +21,7 @@ VALUES ('UNIFIED_RESPONSE', 2, $TPL$You are a warm, curious AI companion engagin
 {semantic_context}
 
 **Clarification needed:**
-{unknown_entities}
+{unresolved_entities}
 
 **User message:**
 {user_message}
@@ -133,9 +133,9 @@ Return ONLY valid JSON (no markdown, no explanation):
 **Output:**
 {"entities": ["database migration"]}$TPL$, 0.2);
 
--- RETRIEVAL_PLANNING (v1, temp=0.2)
+-- CONTEXT_STRATEGY (v1, temp=0.2)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
-VALUES ('RETRIEVAL_PLANNING', 1, $TPL$You are a conversational context tracker. Extract entities and determine what context is needed from recent conversation.
+VALUES ('CONTEXT_STRATEGY', 1, $TPL$You are a conversational context tracker. Extract entities and determine what context is needed from recent conversation.
 
 ## Context
 **Current date:** {local_date}
@@ -152,7 +152,7 @@ Extract entities and determine context needs from the recent conversation.
 ## Guidelines
 - Analyze the entire conversation window—most recent messages naturally carry more weight
 - Match entities to canonical forms when confident (e.g., "mom" → "Mother", "ikea" → "IKEA")
-- Add entities to unknown_entities if uncertain about match (e.g., "bf" could be "boyfriend" or "best friend")
+- Add entities to unresolved_entities if uncertain about match (e.g., "bf" could be "boyfriend" or "best friend")
 - If most recent message explicitly mentions entities, prioritize those
 - Include entities from earlier messages if they're part of ongoing discussion
 - Return empty arrays if conversation is simple chatter/greeting without ongoing topics
@@ -167,7 +167,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 {
   "entities": ["entity1", "entity2"],
   "context_flags": ["goal_context"],
-  "unknown_entities": []
+  "unresolved_entities": []
 }
 ## Examples
 **Canonical Entities:** Mother, boyfriend, marathon
@@ -176,7 +176,7 @@ User: How's my marathon training going?
 Bot: Making good progress!
 User: Any updates?
 **Output:**
-{"entities": ["marathon"], "context_flags": ["goal_context", "activity_context"], "unknown_entities": []}
+{"entities": ["marathon"], "context_flags": ["goal_context", "activity_context"], "unresolved_entities": []}
 
 **Canonical Entities:** (empty)
 **Recent Conversation:**
@@ -184,14 +184,14 @@ User: I'm working on the mobile app
 Bot: How's it coming?
 User: Pretty good
 **Output:**
-{"entities": ["mobile app"], "context_flags": [], "unknown_entities": []}
+{"entities": ["mobile app"], "context_flags": [], "unresolved_entities": []}
 
 **Canonical Entities:** Mother, boyfriend
 **Recent Conversation:**
 User: Going out today
 User: Mom loves cooking
 **Output:**
-{"entities": ["Mother", "cooking"], "context_flags": [], "unknown_entities": []}
+{"entities": ["Mother", "cooking"], "context_flags": [], "unresolved_entities": []}
 
 **Canonical Entities:** (empty)
 **Recent Conversation:**
@@ -199,25 +199,25 @@ User: Spent 4 hours coding today
 Bot: Nice work!
 User: It went well
 **Output:**
-{"entities": ["coding"], "context_flags": [], "unknown_entities": []}
+{"entities": ["coding"], "context_flags": [], "unresolved_entities": []}
 
 **Canonical Entities:** (empty)
 **Recent Conversation:**
 User: Hey, what's up?
 **Output:**
-{"entities": [], "context_flags": [], "unknown_entities": []}
+{"entities": [], "context_flags": [], "unresolved_entities": []}
 **Canonical Entities:** Mother, Boyfriend, Best Friend, IKEA
 **Recent Conversation:**
 User: Going out today
 User: bf and I hung out at ikea
 **Output:**
-{"entities": ["IKEA"], "context_flags": [], "unknown_entities": ["bf"]}
+{"entities": ["IKEA"], "context_flags": [], "unresolved_entities": ["bf"]}
 **Canonical Entities:** Mother, boyfriend
 **Recent Conversation:**
 User: Dinner plans tonight
 User: mom is coming over
 **Output:**
-{"entities": ["Mother"], "context_flags": [], "unknown_entities": []}
+{"entities": ["Mother"], "context_flags": [], "unresolved_entities": []}
 **Canonical Entities:** mobile app, marathon
 **Recent Conversation:**
 User: Working on mobile app, due Friday
@@ -225,7 +225,7 @@ User: Working on mobile app, due Friday
 User: Went for a run
 User: How's it going?
 **Output:**
-{"entities": ["mobile app", "marathon"], "context_flags": ["goal_context"], "unknown_entities": []}
+{"entities": ["mobile app", "marathon"], "context_flags": ["goal_context"], "unresolved_entities": []}
 
 **Canonical Entities:** mobile app
 **Recent Conversation:**
@@ -233,14 +233,14 @@ User: Working on mobile app
 [3 messages about work]
 User: Actually, what's the weather like?
 **Output:**
-{"entities": [], "context_flags": [], "unknown_entities": []}$TPL$, 0.2);
+{"entities": [], "context_flags": [], "unresolved_entities": []}$TPL$, 0.2);
 
--- BATCH_MEMORY_EXTRACTION (v1, temp=0.2)
+-- MEMORY_CONSOLIDATION (v1, temp=0.2)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
-VALUES ('BATCH_MEMORY_EXTRACTION', 1, $TPL$# Batch Memory Extraction for User Knowledge Graph
+VALUES ('MEMORY_CONSOLIDATION', 1, $TPL$# Memory Consolidation for User Knowledge Graph
 
 ## Task
-Extract durable facts as semantic triples. Use canonical forms where possible. Create new entities/predicates when needed.
+Extract durable facts as semantic memories. Use canonical forms where possible. Create new entities/predicates when needed.
 
 ## Guidelines
 - Ignore transient chatter, questions, hypotheticals, greetings, opinions
@@ -354,7 +354,7 @@ Return ONLY valid JSON:
 {
   "pain_point": "1 sentence describing the recurring issue",
   "proposed_change": "1 line change OR 1 example demonstrating the fix",
-  "justification": "brief explanation of why this change addresses the pain point"
+   "justification": "brief explanation of why this change addresses the pain point"
 }$TPL$, 0.7);
 
 -- PROACTIVE_CHECKIN (v1, temp=0.7)
@@ -394,5 +394,5 @@ Return ONLY valid JSON:
 {
   "action": "message" | "wait",
   "content": "Message text" | null,
-  "reason": "Justify the decision briefly, including which style you chose and why it fits now."
+   "reason": "Justify the decision briefly, including which style you chose and why it fits now."
 }$TPL$, 0.7);

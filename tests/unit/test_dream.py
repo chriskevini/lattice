@@ -90,7 +90,7 @@ class TestAuditViewBuilder:
     async def test_build_extraction_audit(self) -> None:
         """Test building an extraction audit embed."""
         audit_id = uuid4()
-        triples = [
+        memories = [
             {
                 "subject": "lattice",
                 "predicate": "has_deadline",
@@ -107,8 +107,8 @@ class TestAuditViewBuilder:
             prompt_key="BATCH_MEMORY_EXTRACTION",
             version=1,
             input_text="I'm planning to ship v2 by end of month.",
-            output_text=AuditViewBuilder.format_triples(triples),
-            metadata_parts=["2 triples", "[LINK]"],
+            output_text=AuditViewBuilder.format_memories(memories),
+            metadata_parts=["2 memories", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="Extract memory from: I'm planning to ship v2...",
         )
@@ -122,22 +122,22 @@ class TestAuditViewBuilder:
         assert "I'm planning to ship v2" in embed.fields[0].value
 
         assert embed.fields[1].name == "OUTPUT"
-        assert "🔗 2 triples" in embed.fields[1].value
+        assert "🔗 2 memories" in embed.fields[1].value
         assert "lattice → has_deadline → end_of_month" in embed.fields[1].value
 
         assert embed.fields[2].name == "METADATA"
-        assert "2 triples" in embed.fields[2].value
+        assert "2 memories" in embed.fields[2].value
 
     @pytest.mark.asyncio
     async def test_build_extraction_audit_empty(self) -> None:
-        """Test extraction audit with no triples."""
+        """Test extraction audit with no memories."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
             prompt_key="BATCH_MEMORY_EXTRACTION",
             version=1,
             input_text="Hello!",
             output_text="Nothing extracted",
-            metadata_parts=["0 triples", "[LINK]"],
+            metadata_parts=["0 memories", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="Extract memory from: Hello!",
         )
@@ -210,7 +210,7 @@ class TestAuditViewBuilder:
             version=1,
             input_text="test",
             output_text="test",
-            metadata_parts=["0 triples", "[LINK]"],
+            metadata_parts=["0 memories", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
         )

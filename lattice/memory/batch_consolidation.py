@@ -1,6 +1,6 @@
-"""Batch consolidation module - extracts memory every 18 messages.
+"""Memory consolidation module - extracts memory every 18 messages.
 
-Uses timestamp-based evolution: all triples are inserted with created_at,
+Uses timestamp-based evolution: all memories are inserted with created_at,
 no updates or deletes. Query logic handles "current truth" via recency.
 
 Architecture:
@@ -13,7 +13,7 @@ Concurrency:
     - run_batch_consolidation() re-checks threshold before processing
     - Race condition is theoretically possible but extremely unlikely in practice
       (Discord handlers run sequentially; asyncio.create_task only schedules work)
-    - Even if duplicate processing occurs, it's harmless: triples are append-only
+    - Even if duplicate processing occurs, it's harmless: memories are append-only
       with created_at timestamps, and query logic uses recency for "current truth"
 """
 
@@ -30,7 +30,7 @@ from lattice.memory.canonical import (
     get_canonical_predicates_set,
     store_canonical_forms,
 )
-from lattice.memory.episodic import store_semantic_triples
+from lattice.memory.episodic import store_semantic_memories
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import resolve_relative_dates
@@ -72,7 +72,7 @@ async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
 
 
 async def check_and_run_batch() -> None:
-    """Check if batch consolidation is needed and run it.
+    """Check if memory consolidation is needed and run it.
 
     Called after each message is stored. Performs a fast threshold check
     outside of any lock. If threshold is met, delegates to run_batch_consolidation()
@@ -89,14 +89,14 @@ async def check_and_run_batch() -> None:
 
     if message_count < BATCH_SIZE:
         logger.debug(
-            "Batch not ready",
+            "Consolidation not ready",
             message_count=message_count,
             threshold=BATCH_SIZE,
         )
         return
 
     logger.info(
-        "Batch threshold reached",
+        "Consolidation threshold reached",
         message_count=message_count,
         threshold=BATCH_SIZE,
     )
@@ -105,9 +105,9 @@ async def check_and_run_batch() -> None:
 
 
 async def run_batch_consolidation() -> None:
-    """Run batch consolidation: fetch messages, extract triples, store them.
+    """Run memory consolidation: fetch messages, extract memories, store them.
 
-    Uses BATCH_MEMORY_EXTRACTION prompt with:
+    Uses MEMORY_CONSOLIDATION prompt with:
     - Previous memories (for context/reinforcement)
     - New messages (18 since last batch)
 
@@ -128,7 +128,7 @@ async def run_batch_consolidation() -> None:
 
         if message_count < BATCH_SIZE:
             logger.debug(
-                "Batch cancelled - threshold no longer met",
+                "Consolidation cancelled - threshold no longer met",
                 message_count=message_count,
                 threshold=BATCH_SIZE,
             )
@@ -152,7 +152,7 @@ async def run_batch_consolidation() -> None:
         memories = await conn.fetch(
             """
             SELECT subject, predicate, object, created_at
-            FROM semantic_triple
+            FROM semantic_memories
             ORDER BY created_at DESC
             LIMIT 50
             """
@@ -169,9 +169,9 @@ async def run_batch_consolidation() -> None:
             f"{'Bot' if m['is_bot'] else 'User'}: {m['content']}" for m in messages
         )
 
-    prompt_template = await get_prompt("BATCH_MEMORY_EXTRACTION")
+    prompt_template = await get_prompt("MEMORY_CONSOLIDATION")
     if not prompt_template:
-        logger.warning("BATCH_MEMORY_EXTRACTION prompt not found")
+        logger.warning("MEMORY_CONSOLIDATION prompt not found")
         return
 
     combined_message = "\n".join(m["content"] for m in messages)
@@ -200,27 +200,25 @@ async def run_batch_consolidation() -> None:
     # Call LLM
     result = await llm_client.complete(
         prompt=rendered_prompt,
-        prompt_key="BATCH_MEMORY_EXTRACTION",
+        prompt_key="MEMORY_CONSOLIDATION",
         main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
     )
 
     # Parse JSON response
-    triples: list[dict[str, str]] = []
+    extracted_memories: list[dict[str, str]] = []
     try:
         parsed_data = parse_llm_json_response(
             content=result.content,
             audit_result=result,
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
         )
-        if isinstance(parsed_data, dict) and "triples" in parsed_data:
-            triples = (
-                parsed_data["triples"]
-                if isinstance(parsed_data["triples"], list)
-                else []
+        if isinstance(parsed_data, dict):
+            extracted_memories = (
+                parsed_data.get("memories") or parsed_data.get("triples") or []
             )
         elif isinstance(parsed_data, list):
-            triples = parsed_data
+            extracted_memories = parsed_data
     except JSONParseError as e:
         # Notify to dream channel if bot is available
         if bot:
@@ -229,25 +227,25 @@ async def run_batch_consolidation() -> None:
                 error=e,
                 context={
                     "batch_id": batch_id,
-                    "parser_type": "json_triples",
+                    "parser_type": "json_memories",
                     "rendered_prompt": rendered_prompt,
                 },
             )
         logger.warning(
-            "Parse error in batch extraction, continuing with empty triples",
+            "Parse error in memory consolidation, continuing with empty memories",
             batch_id=batch_id,
         )
 
     logger.info(
-        "Batch extraction completed",
+        "Memory consolidation LLM call completed",
         batch_id=batch_id,
         audit_id=str(result.audit_id) if result.audit_id else None,
         model=result.model,
         tokens=result.total_tokens,
     )
 
-    if triples:
-        triples.sort(
+    if extracted_memories:
+        extracted_memories.sort(
             key=lambda t: (
                 t.get("subject", ""),
                 t.get("predicate", ""),
@@ -258,24 +256,26 @@ async def run_batch_consolidation() -> None:
         known_predicates = await get_canonical_predicates_set()
 
         new_entities, new_predicates = extract_canonical_forms(
-            triples, known_entities, known_predicates
+            extracted_memories, known_entities, known_predicates
         )
 
         if new_entities or new_predicates:
             store_result = await store_canonical_forms(new_entities, new_predicates)
             logger.info(
-                "Stored canonical forms from batch extraction",
+                "Stored canonical forms from memory consolidation",
                 batch_id=batch_id,
                 new_entities=store_result["entities"],
                 new_predicates=store_result["predicates"],
             )
 
         message_id = messages[-1]["id"]
-        await store_semantic_triples(message_id, triples, source_batch_id=batch_id)
+        await store_semantic_memories(
+            message_id, extracted_memories, source_batch_id=batch_id
+        )
         logger.info(
-            "Stored batch triples",
+            "Stored consolidated memories",
             batch_id=batch_id,
-            count=len(triples),
+            count=len(extracted_memories),
         )
 
     async with db_pool.pool.acquire() as conn:
@@ -284,5 +284,5 @@ async def run_batch_consolidation() -> None:
     logger.info(
         "Batch consolidation completed",
         batch_id=batch_id,
-        triple_count=len(triples),
+        memory_count=len(extracted_memories),
     )
