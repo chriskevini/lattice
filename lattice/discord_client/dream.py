@@ -108,6 +108,13 @@ MODAL_TEXT_SAFE_LIMIT = 3900
 DISCORD_MESSAGE_LIMIT = 2000
 DISCORD_FIELD_LIMIT = 1024
 
+# View Registration Pattern:
+# - Views with timeout=None (persistent) must be registered with bot.add_view()
+#   Examples: AuditView, TemplateComparisonView
+# - Views with timeout != None (ephemeral) don't need add_view()
+#   Examples: PromptDetailView (timeout=60)
+# - Always register views AFTER successful message.send() to avoid race conditions
+
 
 class PromptDetailView(discord.ui.DesignerView):
     """View for displaying full rendered prompts with TextDisplay (Components V2)."""
