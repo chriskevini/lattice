@@ -22,9 +22,7 @@ class TestLatticeBot:
 
             assert bot.main_channel_id == 123
             assert bot.dream_channel_id == 456
-            assert bot._memory_healthy is False
-            assert bot._consecutive_failures == 0
-            assert bot._max_consecutive_failures == 5
+            assert bot._message_handler.memory_healthy is False
             assert bot._user_timezone == "UTC"
             assert bot._scheduler is None
             assert bot._dreaming_scheduler is None
@@ -49,7 +47,7 @@ class TestLatticeBot:
                 await bot.setup_hook()
 
                 mock_db_pool.initialize.assert_called_once()
-                assert bot._memory_healthy is True
+                assert bot._message_handler.memory_healthy is True
 
     @pytest.mark.asyncio
     async def test_setup_hook_database_failure(self) -> None:
@@ -63,7 +61,7 @@ class TestLatticeBot:
                 with pytest.raises(Exception, match="DB error"):
                     await bot.setup_hook()
 
-                assert bot._memory_healthy is False
+                assert bot._message_handler.memory_healthy is False
 
     @pytest.mark.asyncio
     async def test_on_ready_starts_schedulers(self) -> None:
@@ -82,7 +80,6 @@ class TestLatticeBot:
                     type(bot), "user", new_callable=PropertyMock, return_value=mock_user
                 ),
                 patch("lattice.discord_client.bot.db_pool") as mock_db_pool,
-                patch("lattice.discord_client.bot.setup_commands", AsyncMock()),
                 patch(
                     "lattice.discord_client.bot.get_user_timezone",
                     AsyncMock(return_value="America/New_York"),
@@ -103,6 +100,7 @@ class TestLatticeBot:
                 mock_proactive_instance.start.assert_called_once()
                 mock_dreaming_instance.start.assert_called_once()
                 assert bot._user_timezone == "America/New_York"
+                assert bot._command_handler is not None
 
     @pytest.mark.asyncio
     async def test_on_ready_handles_uninitialized_pool(self) -> None:
@@ -131,7 +129,6 @@ class TestLatticeBot:
                 mock_db_pool.is_initialized.side_effect = is_initialized_side_effect
 
                 with (
-                    patch("lattice.discord_client.bot.setup_commands", AsyncMock()),
                     patch(
                         "lattice.discord_client.bot.get_user_timezone",
                         AsyncMock(return_value="UTC"),
@@ -258,7 +255,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
 
             message = MagicMock(spec=discord.Message)
             message.author = MagicMock(id=111)
@@ -287,8 +284,8 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = False
-            bot._consecutive_failures = 5  # At max
+            bot._message_handler.memory_healthy = False
+            bot._message_handler.consecutive_failures = 5  # At max
 
             message = MagicMock(spec=discord.Message)
             message.author = MagicMock(id=111)
@@ -308,7 +305,7 @@ class TestLatticeBot:
                 await bot.on_message(message)
 
                 # Should increment failures and return early
-                assert bot._consecutive_failures == 6
+                assert bot._message_handler.consecutive_failures == 6
 
     @pytest.mark.asyncio
     async def test_on_message_handles_extraction_failure(self) -> None:
@@ -316,7 +313,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
 
             message = MagicMock(spec=discord.Message)
@@ -335,19 +332,30 @@ class TestLatticeBot:
                 patch.object(
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -386,7 +394,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
 
             message = MagicMock(spec=discord.Message)
@@ -403,19 +411,30 @@ class TestLatticeBot:
                     type(bot), "user", new_callable=PropertyMock, return_value=mock_user
                 ),
                 patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 # Setup mocks
                 mock_context = MagicMock()
@@ -490,7 +509,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
 
             message = MagicMock(spec=discord.Message)
@@ -510,19 +529,30 @@ class TestLatticeBot:
                 patch.object(
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -607,7 +637,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
 
             message = MagicMock(spec=discord.Message)
@@ -627,19 +657,30 @@ class TestLatticeBot:
                 patch.object(
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -699,9 +740,9 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
-            bot._consecutive_failures = 3  # Start with failures
+            bot._message_handler.consecutive_failures = 3  # Start with failures
 
             message = MagicMock(spec=discord.Message)
             message.author = MagicMock(id=111, name="TestUser")
@@ -720,19 +761,30 @@ class TestLatticeBot:
                 patch.object(
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -780,7 +832,7 @@ class TestLatticeBot:
                     await bot.on_message(message)
 
                     # Verify failure counter was reset
-                    assert bot._consecutive_failures == 0
+                    assert bot._message_handler.consecutive_failures == 0
 
     @pytest.mark.asyncio
     async def test_on_message_without_guild(self) -> None:
@@ -788,7 +840,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
 
             message = MagicMock(spec=discord.Message)
@@ -808,19 +860,30 @@ class TestLatticeBot:
                 patch.object(
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -888,7 +951,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
 
             message = MagicMock(spec=discord.Message)
@@ -908,19 +971,30 @@ class TestLatticeBot:
                 patch.object(
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -981,7 +1055,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
             bot._user_timezone = "UTC"
 
             message = MagicMock(spec=discord.Message)
@@ -1001,19 +1075,30 @@ class TestLatticeBot:
                 patch.object(
                     bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
                 ),
-                patch("lattice.discord_client.bot.memory_orchestrator") as mock_memory,
                 patch(
-                    "lattice.discord_client.bot.entity_extraction"
+                    "lattice.discord_client.message_handler.memory_orchestrator"
+                ) as mock_memory,
+                patch(
+                    "lattice.discord_client.message_handler.entity_extraction"
                 ) as mock_extraction,
-                patch("lattice.discord_client.bot.episodic") as mock_episodic,
-                patch("lattice.discord_client.bot.response_generator") as mock_response,
                 patch(
-                    "lattice.discord_client.bot.get_system_health",
+                    "lattice.discord_client.message_handler.episodic"
+                ) as mock_episodic,
+                patch(
+                    "lattice.discord_client.message_handler.response_generator"
+                ) as mock_response,
+                patch(
+                    "lattice.discord_client.message_handler.get_system_health",
                     AsyncMock(return_value=15),
                 ),
-                patch("lattice.discord_client.bot.set_current_interval", AsyncMock()),
-                patch("lattice.discord_client.bot.set_next_check_at", AsyncMock()),
-                patch("lattice.discord_client.bot.update_active_hours", AsyncMock()),
+                patch(
+                    "lattice.discord_client.message_handler.set_current_interval",
+                    AsyncMock(),
+                ),
+                patch(
+                    "lattice.discord_client.message_handler.set_next_check_at",
+                    AsyncMock(),
+                ),
             ):
                 mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
                 mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -1168,7 +1253,7 @@ class TestLatticeBot:
         with patch.dict("os.environ", {"DISCORD_MAIN_CHANNEL_ID": "123"}):
             bot = LatticeBot()
             mock_user = MagicMock(id=999)
-            bot._memory_healthy = True
+            bot._message_handler.memory_healthy = True
 
             message = MagicMock(spec=discord.Message)
             message.author = MagicMock(id=111)
