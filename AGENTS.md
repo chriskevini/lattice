@@ -28,7 +28,7 @@ Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrato
 - `lattice/scheduler/`: Task orchestration (triggers and adaptive runners).
 - `lattice/discord_client/`: Bot interface and UI handlers.
 - `lattice/prompts/`: Template management.
-- `lattice/utils/`: LLM client, auditing, and database utilities.
+ - `lattice/utils/`: LLM client, auditing, database utilities, and placeholder registry/injector.
 - `scripts/`: Database schema, seeding, and migration tools.
 - `docs/`: Deep-dive guides for development and testing.
 - `tests/`: Unit and integration test suites.
