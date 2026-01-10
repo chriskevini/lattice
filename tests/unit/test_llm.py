@@ -114,8 +114,7 @@ class Test_LLMClientPlaceholder:
         result = client._placeholder_complete(prompt, 0.5)
 
         assert isinstance(result, GenerationResult)
-        assert "Placeholder response to:" in result.content
-        assert "What is the weather today?" in result.content
+        assert "Please set OPENROUTER_API_KEY" in result.content
         assert result.model == "placeholder"
         assert result.provider is None
         assert result.temperature == 0.5

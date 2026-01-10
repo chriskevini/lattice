@@ -88,7 +88,7 @@ async def get_prompt(prompt_key: str) -> PromptTemplate | None:
             """
             SELECT prompt_key, template, temperature, version, active
             FROM prompt_registry
-            WHERE prompt_key = $1 AND active = true
+            WHERE prompt_key = $1
             ORDER BY version DESC
             LIMIT 1
             """,

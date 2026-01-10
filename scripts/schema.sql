@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS prompt_registry (
     version INT NOT NULL,
     template TEXT NOT NULL,
     temperature FLOAT DEFAULT 0.2,
+    active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (prompt_key, version)
 );
@@ -83,6 +84,21 @@ CREATE INDEX IF NOT EXISTS idx_semantic_memories_created_at ON semantic_memories
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_source_batch ON semantic_memories(source_batch_id);
 
 -- ----------------------------------------------------------------------------
+-- user_feedback: Feedback with sentiment and extraction linkage
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    content TEXT,
+    sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
+    referenced_discord_message_id BIGINT,
+    user_discord_message_id BIGINT,
+    extraction_id UUID REFERENCES message_extractions(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment ON user_feedback(sentiment) WHERE sentiment IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_feedback_extraction_id ON user_feedback(extraction_id) WHERE extraction_id IS NOT NULL;
+
+-- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prompt_audits (
@@ -118,7 +134,7 @@ CREATE INDEX IF NOT EXISTS idx_audits_dream_message ON prompt_audits(dream_disco
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS dreaming_proposals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    prompt_key TEXT NOT NULL REFERENCES prompt_registry(prompt_key) ON DELETE CASCADE,
+    prompt_key TEXT NOT NULL,
     current_version INTEGER NOT NULL,
     proposed_version INTEGER NOT NULL,
     current_template TEXT NOT NULL,
@@ -135,21 +151,6 @@ CREATE TABLE IF NOT EXISTS dreaming_proposals (
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_status ON dreaming_proposals(status) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_created_at ON dreaming_proposals(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_prompt_key ON dreaming_proposals(prompt_key);
-
--- ----------------------------------------------------------------------------
--- user_feedback: Feedback with sentiment and extraction linkage
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS user_feedback (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    content TEXT,
-    sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
-    referenced_discord_message_id BIGINT,
-    user_discord_message_id BIGINT,
-    extraction_id UUID REFERENCES message_extractions(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment ON user_feedback(sentiment) WHERE sentiment IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_user_feedback_extraction_id ON user_feedback(extraction_id) WHERE extraction_id IS NOT NULL;
 
 -- ----------------------------------------------------------------------------
 -- system_health: Configuration and metrics

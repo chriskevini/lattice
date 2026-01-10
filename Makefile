@@ -1,4 +1,4 @@
-.PHONY: help install test lint format type-check security clean run docker-up docker-down docker-logs docker-rebuild
+.PHONY: help install test lint format type-check security clean run docker-up docker-down docker-logs docker-rebuild nuke-db
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -33,6 +33,10 @@ docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuil
 docker-restart: ## Restart all services
 	docker compose restart
 	@echo "All services restarted. View logs with: make docker-logs"
+
+docker-reload-env: ## Recreate containers to reload .env changes
+	docker compose up --force-recreate -d
+	@echo "Containers recreated with updated .env. View logs with: make docker-logs"
 
 docker-shell: ## Open shell in bot container
 	docker compose exec bot /bin/bash
@@ -147,10 +151,15 @@ bump-version: ## Bump version using commitizen
 # ============================================================================
 
 init-db: ## Initialize database schema and seed data
-	uv run python scripts/init_db.py
+	docker compose exec bot python scripts/init_db.py
+
+nuke-db: ## Nuke and reinitialize the database (removes all data)
+	docker compose down -v
+	docker compose up -d
+	$(MAKE) init-db
 
 migrate: ## Run database migrations
-	uv run python scripts/migrate.py
+	docker compose exec bot python scripts/migrate.py
 
 # ============================================================================
 # Local Extraction Model (Optional)

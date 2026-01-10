@@ -248,6 +248,12 @@ async def generate_response(
         prompt_template.temperature if prompt_template.temperature is not None else 0.7
     )
 
+    logger.info(
+        "Generating response",
+        prompt_key=template_name,
+        prompt_length=len(filled_prompt),
+    )
+
     client = get_auditing_llm_client()
     result = await client.complete(
         prompt=filled_prompt,
@@ -257,6 +263,20 @@ async def generate_response(
         audit_view=audit_view,
         audit_view_params=audit_view_params,
     )
+
+    logger.info(
+        "LLM response received",
+        model=result.model,
+        content_length=len(result.content),
+        content_preview=result.content[:100] if result.content else "",
+    )
+
+    # Fallback to helpful message if LLM call failed
+    if not result.content or result.model == "FAILED":
+        logger.info("Using fallback response due to failed LLM call")
+        result.content = "Please set OPENROUTER_API_KEY to activate LLM functionality."
+        result.model = "fallback"
+
     return result, filled_prompt, context_info
 
 

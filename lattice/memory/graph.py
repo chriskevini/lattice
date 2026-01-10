@@ -101,6 +101,7 @@ class GraphTraversal:
         visited_entities: set[str] = set()
         frontier: set[str] = {entity_name.lower()}
         seen_memories: set[tuple[str, str, str]] = set()
+        predicates = list(predicate_filter) if predicate_filter else []
 
         async with self.db_pool.acquire() as conn:
             for depth in range(1, max_hops + 1):
@@ -116,8 +117,8 @@ class GraphTraversal:
                     visited_entities.add(entity_lower)
 
                     sanitized_entity = _sanitize_entity_name(entity)
-                    memories = await conn.fetch(
-                        """
+                    if predicates:
+                        query = """
                         SELECT
                             subject,
                             predicate,
@@ -125,13 +126,25 @@ class GraphTraversal:
                             created_at
                         FROM semantic_memories
                         WHERE (subject ILIKE $1 OR object ILIKE $1)
-                          AND ($2 IS NULL OR predicate = ANY($2))
+                          AND predicate = ANY($2)
                         ORDER BY created_at DESC
                         LIMIT 50
-                        """,
-                        f"%{sanitized_entity}%",
-                        list(predicate_filter) if predicate_filter else None,
-                    )
+                        """
+                        params = [sanitized_entity, predicates]
+                    else:
+                        query = """
+                        SELECT
+                            subject,
+                            predicate,
+                            object,
+                            created_at
+                        FROM semantic_memories
+                        WHERE (subject ILIKE $1 OR object ILIKE $1)
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                        """
+                        params = [sanitized_entity]
+                    memories = await conn.fetch(query, *params)
 
                     for row in memories:
                         memory = dict(row)
