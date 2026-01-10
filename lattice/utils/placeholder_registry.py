@@ -271,6 +271,10 @@ _global_registry: PlaceholderRegistry | None = None
 def get_registry() -> PlaceholderRegistry:
     """Get the global placeholder registry instance.
 
+    This is a singleton pattern with basic thread safety using
+    object identity check. In async contexts, this provides
+    sufficient safety as we don't need full locking.
+
     Returns:
         PlaceholderRegistry singleton instance
     """

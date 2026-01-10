@@ -9,11 +9,6 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from lattice.memory import procedural
-from lattice.utils.date_resolution import (
-    format_current_date,
-    format_current_time,
-    resolve_relative_dates,
-)
 from lattice.utils.llm import AuditResult, get_auditing_llm_client
 from lattice.utils.database import db_pool
 
@@ -205,6 +200,8 @@ async def generate_response(
             {},
         )
 
+    from lattice.utils.placeholder_injector import PlaceholderInjector
+
     template_params = {
         "episodic_context": episodic_context or "No recent conversation.",
         "semantic_context": semantic_context or "No relevant context found.",
@@ -212,28 +209,12 @@ async def generate_response(
         "unresolved_entities": ", ".join(unresolved_entities)
         if unresolved_entities
         else "(none)",
+        "message_content": user_message,
+        "user_timezone": user_tz,
     }
 
-    template_placeholders = set(re.findall(r"\{(\w+)\}", prompt_template.template))
-
-    filtered_params = {
-        key: value
-        for key, value in template_params.items()
-        if key in template_placeholders
-    }
-
-    if "local_date" in template_placeholders:
-        filtered_params["local_date"] = format_current_date(user_tz)
-
-    if "local_time" in template_placeholders:
-        filtered_params["local_time"] = format_current_time(user_tz)
-
-    if "date_resolution_hints" in template_placeholders:
-        filtered_params["date_resolution_hints"] = resolve_relative_dates(
-            user_message, user_tz
-        )
-
-    filled_prompt = prompt_template.safe_format(**filtered_params)
+    injector = PlaceholderInjector()
+    filled_prompt, injected = await injector.inject(prompt_template, template_params)
 
     logger.debug(
         "Filled prompt for generation",
