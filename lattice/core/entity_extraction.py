@@ -12,7 +12,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
@@ -56,10 +56,6 @@ class ContextStrategy:
     raw_response: str
     extraction_method: str
     created_at: datetime
-
-
-# Type alias for backward compatibility
-RetrievalPlanning: TypeAlias = ContextStrategy
 
 
 def build_smaller_episodic_context(
@@ -107,7 +103,7 @@ async def extract_entities(
     """Extract entity mentions from a user message.
 
     This function:
-    1. Fetches the CONTEXT_STRATEGY prompt template (formerly ENTITY_EXTRACTION)
+    1. Fetches the CONTEXT_STRATEGY prompt template
     2. Renders the prompt with message content and context
     3. Calls LLM API for extraction
     4. Parses JSON response into extraction fields
@@ -607,16 +603,6 @@ async def retrieve_context(
     return context
 
 
-async def retrieval_planning(*args, **kwargs):
-    """Backwards compatibility wrapper for context_strategy."""
-    return await context_strategy(*args, **kwargs)
-
-
-async def get_retrieval_planning(*args, **kwargs):
-    """Backwards compatibility wrapper for get_context_strategy."""
-    return await get_context_strategy(*args, **kwargs)
-
-
 async def get_message_retrieval_planning(
     message_id: uuid.UUID,
 ) -> ContextStrategy | None:
@@ -634,26 +620,12 @@ async def get_message_retrieval_planning(
             SELECT
                 id, message_id, extraction, rendered_prompt, raw_response, created_at
             FROM message_extractions
-            WHERE message_id = $1 AND prompt_key = 'RETRIEVAL_PLANNING'
+            WHERE message_id = $1 AND prompt_key = 'CONTEXT_STRATEGY'
             ORDER BY created_at DESC
             LIMIT 1
             """,
             message_id,
         )
-
-        if not row:
-            # Fallback to RETRIEVAL_PLANNING for old records
-            row = await conn.fetchrow(
-                """
-                SELECT
-                    id, message_id, extraction, rendered_prompt, raw_response, created_at
-                FROM message_extractions
-            WHERE message_id = $1 AND prompt_key = 'CONTEXT_STRATEGY'
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                message_id,
-            )
 
         if not row:
             return None
