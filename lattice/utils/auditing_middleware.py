@@ -38,11 +38,11 @@ class AuditingLLMClient:
     - Unified mirror/display generation
     """
 
-    def __init__(self) -> None:
+    def __init__(self, provider: str = "placeholder") -> None:
         """Initialize the auditing client with underlying LLM client."""
         from lattice.utils.llm_client import _LLMClient
 
-        self._client = _LLMClient()
+        self._client = _LLMClient(provider=provider)
 
     async def complete(
         self,

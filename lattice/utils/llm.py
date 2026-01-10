@@ -48,12 +48,12 @@ def get_auditing_llm_client() -> "AuditingLLMClient":
     """Get or create the global auditing LLM client instance.
 
     This wrapper automatically audits every LLM call and returns AuditResult
-    with audit_id for traceability.
 
     Returns:
-        Configured auditing LLM client
+        AuditingLLMClient instance
     """
     global _auditing_client
     if _auditing_client is None:
-        _auditing_client = AuditingLLMClient()
+        provider = os.getenv("LLM_PROVIDER", "placeholder")
+        _auditing_client = AuditingLLMClient(provider=provider)
     return _auditing_client
