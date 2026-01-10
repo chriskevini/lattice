@@ -28,7 +28,7 @@ class TestContextStrategyPipeline:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool, patch("lattice.memory.canonical.get_canonical_entities_list", return_value=[]),
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
@@ -51,7 +51,7 @@ class TestContextStrategyPipeline:
 
             extraction_llm = AsyncMock()
             extraction_result = AuditResult(
-                content='{"entities":["lattice project","Friday"]}',
+                content='{"entities":["lattice project","Friday"], "context_flags":[], "unresolved_entities":[]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=100,
@@ -107,10 +107,10 @@ class TestContextStrategyPipeline:
             mock_resp_llm_client.return_value = response_llm
 
             # Execute pipeline: Extract query structure
-            extraction = await entity_extraction.extract_entities(
+            extraction = await entity_extraction.context_strategy(
                 message_id=message_id,
                 message_content=message_content,
-                context="Previous message context",
+                recent_messages=[],
             )
 
             # Verify extraction
@@ -188,10 +188,9 @@ class TestContextStrategyPipeline:
 
             # Attempt extraction (should fail gracefully)
             try:
-                await entity_extraction.extract_entities(
+                await entity_extraction.context_strategy(
                     message_id=uuid.uuid4(),
-                    message_content=message_content,
-                    context="",
+                    message_content=message_content, recent_messages=[],
                 )
             except Exception:
                 # Extraction failed, continue without it
@@ -224,7 +223,7 @@ class TestContextStrategyPipeline:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool, patch("lattice.memory.canonical.get_canonical_entities_list", return_value=[]),
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
@@ -247,7 +246,7 @@ class TestContextStrategyPipeline:
 
             extraction_llm = AsyncMock()
             extraction_result = AuditResult(
-                content='{"entities":["project","deadline"]}',
+                content='{"entities":["project","deadline"], "context_flags":[], "unresolved_entities":[]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=80,
@@ -302,10 +301,9 @@ class TestContextStrategyPipeline:
             mock_resp_llm_client.return_value = response_llm
 
             # Extract query
-            extraction = await entity_extraction.extract_entities(
+            extraction = await entity_extraction.context_strategy(
                 message_id=message_id,
-                message_content=message_content,
-                context="",
+                message_content=message_content, recent_messages=[],
             )
 
             # Verify entity extraction
@@ -347,7 +345,7 @@ class TestContextStrategyPipelineIntegration:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool, patch("lattice.memory.canonical.get_canonical_entities_list", return_value=[]),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
@@ -440,7 +438,7 @@ class TestContextStrategyPipelineIntegration:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool, patch("lattice.memory.canonical.get_canonical_entities_list", return_value=[]),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
@@ -515,7 +513,7 @@ class TestContextStrategyPipelineIntegration:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool, patch("lattice.memory.canonical.get_canonical_entities_list", return_value=[]),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
@@ -587,7 +585,7 @@ class TestContextStrategyPipelineIntegration:
             patch(
                 "lattice.core.entity_extraction.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool,
+            patch("lattice.core.entity_extraction.db_pool") as mock_db_pool, patch("lattice.memory.canonical.get_canonical_entities_list", return_value=[]),
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
