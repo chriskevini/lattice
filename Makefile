@@ -34,6 +34,10 @@ docker-restart: ## Restart all services
 	docker compose restart
 	@echo "All services restarted. View logs with: make docker-logs"
 
+docker-reload-env: ## Recreate containers to reload .env changes
+	docker compose up --force-recreate -d
+	@echo "Containers recreated with updated .env. View logs with: make docker-logs"
+
 docker-shell: ## Open shell in bot container
 	docker compose exec bot /bin/bash
 
