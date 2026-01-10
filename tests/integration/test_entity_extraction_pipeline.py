@@ -13,7 +13,7 @@ from lattice.core import entity_extraction, response_generator
 from lattice.memory import episodic
 
 
-class TestEntityExtractionPipeline:
+class TestContextStrategyPipeline:
     """Integration tests for the entity extraction pipeline."""
 
     @pytest.mark.asyncio
@@ -41,7 +41,7 @@ class TestEntityExtractionPipeline:
             from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Extract: {message_content}\nContext: {context}",
                 temperature=0.2,
                 version=1,
@@ -61,7 +61,7 @@ class TestEntityExtractionPipeline:
                 latency_ms=500,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
             )
             extraction_llm.complete.return_value = extraction_result
             mock_llm_client.return_value = extraction_llm
@@ -74,7 +74,7 @@ class TestEntityExtractionPipeline:
                 "extraction": {
                     "entities": ["lattice project", "Friday"],
                 },
-                "prompt_key": "ENTITY_EXTRACTION",
+                "prompt_key": "CONTEXT_STRATEGY",
                 "prompt_version": 1,
                 "created_at": datetime.now(UTC),
             }
@@ -237,7 +237,7 @@ class TestEntityExtractionPipeline:
             from lattice.utils.llm import AuditResult
 
             extraction_template = PromptTemplate(
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Extract: {message_content}",
                 temperature=0.2,
                 version=1,
@@ -257,7 +257,7 @@ class TestEntityExtractionPipeline:
                 latency_ms=400,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="ENTITY_EXTRACTION",
+                prompt_key="CONTEXT_STRATEGY",
             )
             extraction_llm.complete.return_value = extraction_result
             mock_llm_client.return_value = extraction_llm
@@ -269,7 +269,7 @@ class TestEntityExtractionPipeline:
                 "extraction": {
                     "entities": ["project", "deadline"],
                 },
-                "prompt_key": "ENTITY_EXTRACTION",
+                "prompt_key": "CONTEXT_STRATEGY",
                 "prompt_version": 1,
                 "created_at": datetime.now(UTC),
             }

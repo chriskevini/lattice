@@ -68,22 +68,6 @@ class ConsolidationRenderer(AuditRenderer):
             return _truncate_for_field(result.content)
 
 
-class EntityRenderer(AuditRenderer):
-    """Renderer for entity extraction results."""
-
-    def render_result(self, result: GenerationResult) -> str:
-        from lattice.utils.json_parser import parse_llm_json_response
-
-        try:
-            data = parse_llm_json_response(result.content)
-            entities = data.get("entities", []) if isinstance(data, dict) else []
-            if not entities:
-                return "No entities found"
-            return f"🏷️ **Entities:** {', '.join(entities)}"
-        except Exception:
-            return _truncate_for_field(result.content)
-
-
 class ContextStrategyRenderer(AuditRenderer):
     """Renderer for context strategy results."""
 
@@ -114,9 +98,6 @@ class ContextStrategyRenderer(AuditRenderer):
 
 AUDIT_RENDERER_REGISTRY: dict[str, AuditRenderer] = {
     "MEMORY_CONSOLIDATION": ConsolidationRenderer(),
-    "ENTITY_EXTRACTION": EntityRenderer(),
-    "BATCH_MEMORY_EXTRACTION": ConsolidationRenderer(),
-    "MEMORY_EXTRACTION": ConsolidationRenderer(),
     "CONTEXT_STRATEGY": ContextStrategyRenderer(),
 }
 
@@ -516,10 +497,8 @@ class AuditViewBuilder:
         "GOAL_RESPONSE": ("💬", discord.Color.blurple()),
         "CONVERSATION_RESPONSE": ("💬", discord.Color.blurple()),
         "PROACTIVE_CHECKIN": ("🌟", discord.Color.gold()),
-        "BATCH_MEMORY_EXTRACTION": ("🧠", discord.Color.purple()),
         "CONTEXT_STRATEGY": ("🔍", discord.Color.blue()),
-        "ENTITY_EXTRACTION": ("🏷️", discord.Color.teal()),
-        "MEMORY_EXTRACTION": ("🔗", discord.Color.dark_purple()),
+        "MEMORY_CONSOLIDATION": ("🧠", discord.Color.purple()),
     }
 
     @staticmethod

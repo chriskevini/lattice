@@ -4,7 +4,6 @@ This module provides analysis for memory retrieval.
 Extracted entities are used as starting points for multi-hop memory retrieval.
 
 Templates:
-- ENTITY_EXTRACTION: Extracts entity mentions for graph traversal (reactive flow)
 - CONTEXT_STRATEGY: Analyzes conversation window for entities, context flags, and unresolved entities
 - CONTEXT_RETRIEVAL: Fetches context based on entities and context flags
 """
@@ -59,27 +58,8 @@ class ContextStrategy:
     created_at: datetime
 
 
-@dataclass
-class EntityExtraction:
-    """Represents entity extraction from a user message.
-
-    Extracts entity mentions for graph traversal starting points.
-    """
-
-    id: uuid.UUID
-    message_id: uuid.UUID
-    entities: list[str]
-    rendered_prompt: str
-    raw_response: str
-    extraction_method: str
-    created_at: datetime
-    context_flags: list[str] | None = None
-    unresolved_entities: list[str] | None = None
-
-
 # Type alias for backward compatibility
 RetrievalPlanning: TypeAlias = ContextStrategy
-QueryExtraction: TypeAlias = EntityExtraction
 
 
 def build_smaller_episodic_context(
@@ -123,11 +103,11 @@ async def extract_entities(
     message_content: str,
     context: str = "",
     user_timezone: str | None = None,
-) -> QueryExtraction:
+) -> ContextStrategy:
     """Extract entity mentions from a user message.
 
     This function:
-    1. Fetches the ENTITY_EXTRACTION prompt template
+    1. Fetches the CONTEXT_STRATEGY prompt template (formerly ENTITY_EXTRACTION)
     2. Renders the prompt with message content and context
     3. Calls LLM API for extraction
     4. Parses JSON response into extraction fields
@@ -140,16 +120,16 @@ async def extract_entities(
         user_timezone: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
 
     Returns:
-        EntityExtraction object with structured fields
+        ContextStrategy object with structured fields
 
     Raises:
         ValueError: If prompt template not found
         json.JSONDecodeError: If LLM response is not valid JSON
     """
     # 1. Fetch prompt template
-    prompt_template = await get_prompt("ENTITY_EXTRACTION")
+    prompt_template = await get_prompt("CONTEXT_STRATEGY")
     if not prompt_template:
-        msg = "ENTITY_EXTRACTION prompt template not found in prompt_registry"
+        msg = "CONTEXT_STRATEGY prompt template not found in prompt_registry"
         raise ValueError(msg)
 
     # 2. Render prompt with message content and context
@@ -159,10 +139,13 @@ async def extract_entities(
         user_message=message_content,
         local_date=format_current_date(user_tz),
         date_resolution_hints=resolve_relative_dates(message_content, user_tz),
+        # Context Strategy requires these but we provide placeholders for back-compat
+        canonical_entities="",
+        smaller_episodic_context=f"USER: {message_content}",
     )
 
     logger.info(
-        "Extracting entities",
+        "Extracting entities using context strategy",
         message_id=str(message_id),
         message_length=len(message_content),
     )
@@ -173,7 +156,7 @@ async def extract_entities(
     # Call LLM
     result = await llm_client.complete(
         prompt=rendered_prompt,
-        prompt_key="ENTITY_EXTRACTION",
+        prompt_key="CONTEXT_STRATEGY",
         main_discord_message_id=int(message_id),
         temperature=prompt_template.temperature,
         audit_view=True,
@@ -194,7 +177,7 @@ async def extract_entities(
         extraction_data = parse_llm_json_response(
             content=result.content,
             audit_result=result,
-            prompt_key="ENTITY_EXTRACTION",
+            prompt_key="CONTEXT_STRATEGY",
         )
     except JSONParseError as e:
         # Notify to dream channel if bot is available
@@ -264,10 +247,12 @@ async def extract_entities(
         extraction_method=extraction_method,
     )
 
-    return EntityExtraction(
+    return ContextStrategy(
         id=extraction_id,
         message_id=message_id,
         entities=extraction_data["entities"],
+        context_flags=extraction_data.get("context_flags", []),
+        unresolved_entities=extraction_data.get("unresolved_entities", []),
         rendered_prompt=rendered_prompt,
         raw_response=raw_response,
         extraction_method=extraction_method,
@@ -688,14 +673,14 @@ async def get_message_retrieval_planning(
         )
 
 
-async def get_message_extraction(message_id: uuid.UUID) -> EntityExtraction | None:
+async def get_message_extraction(message_id: uuid.UUID) -> ContextStrategy | None:
     """Retrieve extraction for a specific message.
 
     Args:
         message_id: UUID of the message
 
     Returns:
-        EntityExtraction object or None if not found
+        ContextStrategy object or None if not found
     """
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -714,10 +699,12 @@ async def get_message_extraction(message_id: uuid.UUID) -> EntityExtraction | No
             return None
 
         extraction_data = row["extraction"]
-        return EntityExtraction(
+        return ContextStrategy(
             id=row["id"],
             message_id=row["message_id"],
             entities=extraction_data["entities"],
+            context_flags=extraction_data.get("context_flags", []),
+            unresolved_entities=extraction_data.get("unresolved_entities", []),
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
             extraction_method=extraction_data.get("_extraction_method", "api"),

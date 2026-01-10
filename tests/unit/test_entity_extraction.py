@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from lattice.core.entity_extraction import (
-    EntityExtraction,
+    ContextStrategy,
     build_smaller_episodic_context,
     extract_entities,
     get_message_extraction,
@@ -33,9 +33,9 @@ async def get_extraction(*args, **kwargs):
 
 @pytest.fixture
 def mock_prompt_template() -> PromptTemplate:
-    """Create a mock ENTITY_EXTRACTION prompt template."""
+    """Create a mock CONTEXT_STRATEGY prompt template."""
     return PromptTemplate(
-        prompt_key="ENTITY_EXTRACTION",
+        prompt_key="CONTEXT_STRATEGY",
         template="Extract entities from: {message_content}\nContext: {context}",
         temperature=0.2,
         version=3,
@@ -71,16 +71,16 @@ def mock_generation_result(mock_llm_response: str) -> AuditResult:
     )
 
 
-class TestEntityExtraction:
-    """Tests for the EntityExtraction dataclass."""
+class TestContextStrategy:
+    """Tests for the ContextStrategy dataclass."""
 
     def test_entity_extraction_init(self) -> None:
-        """Test EntityExtraction initialization."""
+        """Test ContextStrategy initialization."""
         extraction_id = uuid.uuid4()
         message_id = uuid.uuid4()
         now = datetime.now()
 
-        extraction = EntityExtraction(
+        extraction = ContextStrategy(
             id=extraction_id,
             message_id=message_id,
             entities=["lattice project", "Friday"],
@@ -151,7 +151,7 @@ class TestExtractEntities:
             "lattice.core.entity_extraction.get_prompt",
             return_value=None,
         ):
-            with pytest.raises(ValueError, match="ENTITY_EXTRACTION prompt template"):
+            with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
                 await extract_entities(
                     message_id=message_id,
                     message_content="Test message",
@@ -220,7 +220,7 @@ class TestExtractEntities:
             latency_ms=0,
             temperature=0.0,
             audit_id=None,
-            prompt_key="ENTITY_EXTRACTION",
+            prompt_key="CONTEXT_STRATEGY",
         )
 
         with (
@@ -266,7 +266,7 @@ class TestExtractEntities:
             latency_ms=0,
             temperature=0.0,
             audit_id=None,
-            prompt_key="ENTITY_EXTRACTION",
+            prompt_key="CONTEXT_STRATEGY",
         )
 
         with (

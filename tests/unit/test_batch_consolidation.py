@@ -202,7 +202,7 @@ class TestRunBatchConsolidation:
 
     @pytest.mark.asyncio
     async def test_no_prompt_template_aborts(self) -> None:
-        """Test that batch aborts if BATCH_MEMORY_EXTRACTION template missing."""
+        """Test that batch aborts if MEMORY_CONSOLIDATION template missing."""
         message_id = uuid4()
         messages = [
             {

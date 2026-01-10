@@ -104,7 +104,7 @@ class TestAuditViewBuilder:
         ]
 
         embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="I'm planning to ship v2 by end of month.",
             output_text=AuditViewBuilder.format_memories(memories),
@@ -114,7 +114,7 @@ class TestAuditViewBuilder:
         )
 
         assert isinstance(embed, discord.Embed)
-        assert embed.title == "🧠 BATCH_MEMORY_EXTRACTION v1"
+        assert embed.title == "🧠 MEMORY_CONSOLIDATION v1"
         assert embed.color == discord.Color.purple()
         assert len(embed.fields) == 3
 
@@ -133,7 +133,7 @@ class TestAuditViewBuilder:
         """Test extraction audit with no memories."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="Hello!",
             output_text="Nothing extracted",
@@ -206,7 +206,7 @@ class TestAuditViewBuilder:
         assert proactive_embed.title.startswith("🌟")
 
         extraction_embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="test",
             output_text="test",
@@ -255,7 +255,7 @@ class TestAuditViewBuilder:
         assert proactive_embed.color == discord.Color.gold()
 
         extraction_embed, _ = AuditViewBuilder.build_standard_audit(
-            prompt_key="BATCH_MEMORY_EXTRACTION",
+            prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="test",
             output_text="test",

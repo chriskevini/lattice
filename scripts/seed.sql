@@ -69,6 +69,7 @@ If clarification is needed and has not already been discussed, ask the user brie
 Respond naturally and helpfully.$TPL$, 0.7);
 
 -- ENTITY_EXTRACTION (v1, temp=0.2)
+-- Deprecated: Use CONTEXT_STRATEGY instead. This is kept for backward compatibility with older migrations.
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('ENTITY_EXTRACTION', 1, $TPL$You are a message analysis system. Extract entity mentions for graph traversal.
 
