@@ -70,6 +70,7 @@ def mock_generation_result(mock_llm_response: str) -> AuditResult:
         prompt_key=None,
     )
 
+
 class TestExtractEntities:
     """Tests for the extract_entities function."""
 
