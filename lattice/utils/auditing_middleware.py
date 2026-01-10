@@ -109,6 +109,22 @@ class AuditingLLMClient:
                     model=result.model,
                 )
 
+                # Post summary to dream channel for audit
+                bot = get_discord_bot()
+                if bot:
+                    dream_channel_id = os.getenv("DISCORD_DREAM_CHANNEL_ID")
+                    if dream_channel_id:
+                        audit_link = (
+                            f"Audit ID: {audit_id}" if audit_id else "No audit ID"
+                        )
+                        message = f"🤖 **LLM Call Completed**\n• Prompt: {prompt_key or 'UNKNOWN'}\n• Model: {result.model}\n• Tokens: {result.total_tokens}\n• {audit_link}"
+                        try:
+                            await bot.get_channel(int(dream_channel_id)).send(message)
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to post LLM call to dream channel", error=str(e)
+                            )
+
             if audit_view:
                 effective_bot = bot if bot is not None else _get_discord_bot()
                 effective_dream_channel_id = (
