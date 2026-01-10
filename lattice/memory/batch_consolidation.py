@@ -36,6 +36,7 @@ from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import resolve_relative_dates
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
+import os
 
 
 logger = structlog.get_logger(__name__)
@@ -287,3 +288,19 @@ async def run_batch_consolidation() -> None:
         batch_id=batch_id,
         memory_count=len(extracted_memories),
     )
+
+    # Post to dream channel for audit
+    bot = get_discord_bot()
+    if bot:
+        dream_channel_id = os.getenv("DISCORD_DREAM_CHANNEL_ID")
+        if dream_channel_id:
+            audit_link = (
+                f"Audit ID: {result.audit_id}" if result.audit_id else "No audit ID"
+            )
+            message = f"🧠 **Memory Consolidation Completed**\n• Batch: {batch_id}\n• Memories extracted: {len(extracted_memories)}\n• {audit_link}"
+            try:
+                await bot.get_channel(int(dream_channel_id)).send(message)
+            except Exception as e:
+                logger.warning(
+                    "Failed to post consolidation to dream channel", error=str(e)
+                )
