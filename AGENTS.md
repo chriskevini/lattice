@@ -19,8 +19,11 @@ Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrato
 - `lattice/memory/`: ENGRAM implementations.
     - `graph.py`: Iterative BFS traversal for text-based relationships.
     - `canonical.py`: Deterministic normalization logic.
+- `lattice/dreaming/`: Autonomous self-optimization loop (proposers/approvers).
+- `lattice/scheduler/`: Task orchestration (triggers and adaptive runners).
 - `lattice/discord_client/`: Bot interface and UI handlers.
 - `lattice/prompts/`: Template management.
+- `lattice/utils/`: LLM client, auditing, and database utilities.
 - `tests/`: Unit and integration test suites.
 
 ## 🛠️ Development Workflow
