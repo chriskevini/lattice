@@ -264,6 +264,16 @@ class PlaceholderRegistry:
             )
         )
 
+        # Scheduler placeholders
+        self.register(
+            PlaceholderDef(
+                name="scheduler_current_interval",
+                description="Current proactive check-in interval in minutes",
+                resolver=lambda ctx: ctx.get("scheduler_current_interval", ""),
+                category="scheduler",
+            )
+        )
+
 
 _global_registry: PlaceholderRegistry | None = None
 
