@@ -26,6 +26,7 @@ from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import format_current_date, resolve_relative_dates
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
+from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
 logger = structlog.get_logger(__name__)
@@ -147,12 +148,14 @@ async def context_strategy(
         window_size=CONTEXT_STRATEGY_WINDOW_SIZE,
     )
 
-    rendered_prompt = prompt_template.safe_format(
-        local_date=format_current_date(user_tz),
-        date_resolution_hints=resolve_relative_dates(message_content, user_tz),
-        canonical_entities=canonical_entities_str,
-        smaller_episodic_context=smaller_context,
-    )
+    injector = PlaceholderInjector()
+    context = {
+        "user_timezone": user_tz,
+        "message_content": message_content,
+        "canonical_entities": canonical_entities_str,
+        "smaller_episodic_context": smaller_context,
+    }
+    rendered_prompt, injected = await injector.inject(prompt_template, context)
 
     logger.info(
         "Running context strategy",
