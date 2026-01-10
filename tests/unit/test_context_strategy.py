@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from lattice.core.context_strategy import (
-    ContextStrategy,
     build_smaller_episodic_context,
     get_message_strategy,
     context_strategy,
