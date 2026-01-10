@@ -195,7 +195,6 @@ async def generate_response(
         "unresolved_entities": ", ".join(unresolved_entities)
         if unresolved_entities
         else "(none)",
-        "message_content": user_message,
         "user_timezone": user_tz,
     }
 

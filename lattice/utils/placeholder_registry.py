@@ -150,7 +150,7 @@ class PlaceholderRegistry:
                 name="date_resolution_hints",
                 description="Resolved relative dates (e.g., Friday → 2026-01-10)",
                 resolver=lambda ctx: resolve_relative_dates(
-                    ctx.get("message_content", ""), ctx.get("user_timezone", "UTC")
+                    ctx.get("user_message", ""), ctx.get("user_timezone", "UTC")
                 ),
                 category="time",
             )

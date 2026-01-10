@@ -157,7 +157,7 @@ class MessageHandler:
 
                 strategy = await context_strategy(
                     message_id=user_message_id,
-                    message_content=message.content,
+                    user_message=message.content,
                     recent_messages=recent_msgs_for_strategy,
                     user_timezone=self.user_timezone,
                     discord_message_id=message.id,

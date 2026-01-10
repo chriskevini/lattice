@@ -46,7 +46,7 @@ class TestContextStrategyPipeline:
 
             extraction_template = PromptTemplate(
                 prompt_key="CONTEXT_STRATEGY",
-                template="Extract: {message_content}\nContext: {context}",
+                template="Extract: {user_message}\nContext: {context}",
                 temperature=0.2,
                 version=1,
                 active=True,
@@ -113,7 +113,7 @@ class TestContextStrategyPipeline:
             # Execute pipeline: Extract query structure
             extraction = await context_strategy(
                 message_id=message_id,
-                message_content=message_content,
+                user_message=message_content,
                 recent_messages=[],
             )
 
@@ -194,7 +194,7 @@ class TestContextStrategyPipeline:
             try:
                 await context_strategy(
                     message_id=uuid.uuid4(),
-                    message_content=message_content,
+                    user_message=message_content,
                     recent_messages=[],
                 )
             except Exception:
@@ -245,7 +245,7 @@ class TestContextStrategyPipeline:
 
             extraction_template = PromptTemplate(
                 prompt_key="CONTEXT_STRATEGY",
-                template="Extract: {message_content}",
+                template="Extract: {user_message}",
                 temperature=0.2,
                 version=1,
                 active=True,
@@ -311,7 +311,7 @@ class TestContextStrategyPipeline:
             # Extract query
             extraction = await context_strategy(
                 message_id=message_id,
-                message_content=message_content,
+                user_message=message_content,
                 recent_messages=[],
             )
 
@@ -429,7 +429,7 @@ class TestContextStrategyPipelineIntegration:
 
             planning = await context_strategy(
                 message_id=message_id,
-                message_content=message_content,
+                user_message=message_content,
                 recent_messages=recent_messages,
             )
 
@@ -508,7 +508,7 @@ class TestContextStrategyPipelineIntegration:
 
             planning = await context_strategy(
                 message_id=message_id,
-                message_content=message_content,
+                user_message=message_content,
                 recent_messages=recent_messages,
             )
 
@@ -585,7 +585,7 @@ class TestContextStrategyPipelineIntegration:
             recent_messages: list[episodic.EpisodicMessage] = []
             planning = await context_strategy(
                 message_id=message_id,
-                message_content=message_content,
+                user_message=message_content,
                 recent_messages=recent_messages,
             )
 
@@ -679,7 +679,7 @@ class TestContextStrategyPipelineIntegration:
 
             planning = await context_strategy(
                 message_id=message_id,
-                message_content=message_content,
+                user_message=message_content,
                 recent_messages=recent_messages,
             )
 
@@ -699,7 +699,7 @@ class TestContextStrategyPipelineIntegration:
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
                 await context_strategy(
                     message_id=uuid.uuid4(),
-                    message_content="Test message",
+                    user_message="Test message",
                     recent_messages=[],
                 )
 
@@ -750,7 +750,7 @@ class TestContextStrategyPipelineIntegration:
             with pytest.raises(ValueError, match="Missing required field"):
                 await context_strategy(
                     message_id=message_id,
-                    message_content="Test message",
+                    user_message="Test message",
                     recent_messages=[],
                 )
 

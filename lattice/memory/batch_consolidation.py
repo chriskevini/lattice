@@ -174,7 +174,7 @@ async def run_batch_consolidation() -> None:
         logger.warning("MEMORY_CONSOLIDATION prompt not found")
         return
 
-    combined_message = "\n".join(m["content"] for m in messages)
+    user_message = "\n".join(m["content"] for m in messages)
     user_tz: str | None = None
     if messages:
         user_tz = messages[0].get("user_timezone") or "UTC"
@@ -186,7 +186,7 @@ async def run_batch_consolidation() -> None:
     context = {
         "semantic_context": memory_context,
         "bigger_episodic_context": message_history,
-        "message_content": combined_message,
+        "user_message": user_message,
         "user_timezone": user_tz,
         "canonical_entities": ", ".join(canonical_entities_list)
         if canonical_entities_list

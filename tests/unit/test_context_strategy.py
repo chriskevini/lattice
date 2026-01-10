@@ -26,7 +26,7 @@ def mock_prompt_template() -> PromptTemplate:
     """Create a mock CONTEXT_STRATEGY prompt template."""
     return PromptTemplate(
         prompt_key="CONTEXT_STRATEGY",
-        template="Extract entities from: {message_content}\nContext: {context}",
+        template="Extract entities from: {user_message}\nContext: {context}",
         temperature=0.2,
         version=3,
         active=True,
@@ -117,7 +117,7 @@ class TestContextStrategyFunction:
 
             strategy = await context_strategy(
                 message_id=message_id,
-                message_content="I need to finish the lattice project by Friday",
+                user_message="I need to finish the lattice project by Friday",
                 recent_messages=recent_messages,
             )
 
@@ -138,7 +138,7 @@ class TestContextStrategyFunction:
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
                 await context_strategy(
                     message_id=message_id,
-                    message_content="Test message",
+                    user_message="Test message",
                     recent_messages=[],
                 )
 
@@ -186,7 +186,7 @@ class TestContextStrategyFunction:
             with pytest.raises(JSONParseError):
                 await context_strategy(
                     message_id=message_id,
-                    message_content="Test message",
+                    user_message="Test message",
                     recent_messages=[],
                 )
 
@@ -237,7 +237,7 @@ class TestContextStrategyFunction:
             with pytest.raises(ValueError, match="Missing required field"):
                 await context_strategy(
                     message_id=message_id,
-                    message_content="Test message",
+                    user_message="Test message",
                     recent_messages=[],
                 )
 
