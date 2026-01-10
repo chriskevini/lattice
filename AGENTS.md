@@ -1,10 +1,9 @@
-# Agent Onboarding Guide
+# Lattice: Agent Onboarding
 
 ## 📌 Project Overview
 **Lattice** is a single-user Adaptive Memory Orchestrator using the **ENGRAM** neuro-symbolic memory framework.
 - **Target**: Personal use, high-fidelity context tracking for a single human operator.
 - **Hardware**: Optimized for 2GB RAM / 1vCPU (e.g., small VPS or Raspberry Pi).
-- **Stack**: Python 3.12+, PostgreSQL 15+, py-cord 2.7+.
 - **Goal**: Total evolvability via metadata-driven logic.
 
 ## 🏗️ Core Architecture (ENGRAM)
@@ -24,7 +23,7 @@ Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrato
 - `lattice/discord_client/`: Bot interface and UI handlers.
 - `lattice/prompts/`: Template management.
 - `lattice/utils/`: LLM client, auditing, and database utilities.
-- `scripts/`: Database schema (`schema.sql`), seeding (`seed.sql`), and migration tools.
+- `scripts/`: Database schema, seeding, and migration tools.
 - `docs/`: Deep-dive guides for development and testing.
 - `tests/`: Unit and integration test suites.
 - `Makefile`: Central automation for installation, testing, and execution.
@@ -43,7 +42,6 @@ make run        # Run bot locally
 - **Strict Typing**: Mandatory for all functions.
 - **Docs**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff and Mypy.
-- **Commits**: Conventional Commits required.
 - **LLM**: All calls must use `AuditingLLMClient` for observability.
 
 ## ⚙️ Key Concepts
@@ -51,10 +49,10 @@ make run        # Run bot locally
 - **Dreaming Cycle**: Autonomous self-optimization loop ([lattice/dreaming/](lattice/dreaming/)).
 - **Canonicalization**: Deterministic normalization of entities and predicates.
 - **Context Strategy**: Dynamic retrieval planning based on detected entities.
-- **Audit View**: In-Discord UI for inspecting the system's "thought process" for any response.
+- **Audit View**: In-Discord UI for inspecting the system's "thought process".
 - **Source Links**: Transparent attribution back to episodic memory for all generated memories.
 
 ## 📚 Resources
-- **[README.md](README.md)**: Technical specs, placeholders, and setup.
+- **[README.md](README.md)**: Technical specs and setup.
 - **[DEVELOPMENT.md](docs/DEVELOPMENT.md)**: Environment setup.
 - **[TESTING.md](docs/TESTING.md)**: Testing guidelines.
