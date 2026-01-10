@@ -61,6 +61,7 @@ def build_smaller_episodic_context(
     recent_messages: list["EpisodicMessage"],
     current_message: str,
     window_size: int = CONTEXT_STRATEGY_WINDOW_SIZE,
+    user_timezone: str | None = None,
 ) -> str:
     """Build smaller episodic context for CONTEXT_STRATEGY.
 
@@ -72,22 +73,31 @@ def build_smaller_episodic_context(
         recent_messages: Recent conversation history
         current_message: The current user message
         window_size: Total window size including current (default from CONTEXT_STRATEGY_WINDOW_SIZE)
+        user_timezone: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
 
     Returns:
         Formatted conversation window with all messages
     """
-    from datetime import datetime, UTC
+    from zoneinfo import ZoneInfo
+
+    from lattice.utils.date_resolution import get_now, UserDatetime
+
+    user_tz = user_timezone or "UTC"
+    tz = ZoneInfo(user_tz)
+    user_dt = UserDatetime(user_tz)
 
     window = recent_messages[-(window_size - 1) :] if window_size > 1 else []
 
     formatted_lines = []
     for msg in window:
         role = "ASSISTANT" if msg.is_bot else "USER"
-        ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M")
+        # Convert UTC timestamp from DB to user timezone
+        local_ts = msg.timestamp.astimezone(tz)
+        ts_str = local_ts.strftime("%Y-%m-%d %H:%M")
         formatted_lines.append(f"[{ts_str}] {role}: {msg.content}")
 
-    # Use current time for the user message to maintain timestamp consistency
-    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
+    # Use current time in user timezone for the user message
+    now = user_dt.format("%Y-%m-%d %H:%M")
     formatted_lines.append(f"[{now}] USER: {current_message}")
 
     return "\n".join(formatted_lines)
@@ -129,6 +139,7 @@ async def context_strategy(
         json.JSONDecodeError: If LLM response is not valid JSON
     """
     from lattice.memory.canonical import get_canonical_entities_list
+    from lattice.utils.date_resolution import get_now
 
     prompt_template = await get_prompt("CONTEXT_STRATEGY")
     if not prompt_template:
@@ -145,6 +156,7 @@ async def context_strategy(
         recent_messages=recent_messages,
         current_message=user_message,
         window_size=CONTEXT_STRATEGY_WINDOW_SIZE,
+        user_timezone=user_tz,
     )
 
     injector = PlaceholderInjector()
@@ -221,7 +233,7 @@ async def context_strategy(
                 msg = f"Invalid {field} field: item at index {i} is not a string"
                 raise ValueError(msg)
 
-    now = datetime.now(UTC)
+    now = get_now("UTC")
     strategy_id = uuid.uuid4()
     strategy_data["_strategy_method"] = strategy_method
     strategy_jsonb = json.dumps(strategy_data)

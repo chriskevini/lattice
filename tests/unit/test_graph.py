@@ -1,7 +1,9 @@
 """Unit tests for graph traversal and semantic memory parsing utilities."""
 
 from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime, UTC
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from lattice.utils.date_resolution import get_now
 
 import pytest
 
@@ -111,7 +113,7 @@ class TestGraphTraversal:
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime.now(UTC),
+                    "created_at": get_now(),
                 }
             ]
         )
@@ -136,7 +138,7 @@ class TestGraphTraversal:
                     "subject": "User",
                     "predicate": "did activity",
                     "object": "running",
-                    "created_at": datetime.now(UTC),
+                    "created_at": get_now(),
                 }
             ]
         )
@@ -163,7 +165,7 @@ class TestGraphTraversal:
                     "subject": "user",
                     "predicate": "lives_in",
                     "object": "Vancouver",
-                    "created_at": datetime.now(UTC),
+                    "created_at": get_now(),
                 }
             ]
         )
@@ -190,19 +192,19 @@ class TestGraphTraversal:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_find_semantic_memories_with_date_range(self) -> None:
-        """Test finding memories by criteria within date range."""
+    async def test_find_semantic_memories_with_date_range_v2(self) -> None:
+        """Test finding memories by predicate within date range."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        start_date = datetime(2026, 1, 1, tzinfo=UTC)
-        end_date = datetime(2026, 1, 8, tzinfo=UTC)
+        start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
+        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime(2026, 1, 5, tzinfo=UTC),
+                    "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )
@@ -221,18 +223,75 @@ class TestGraphTraversal:
         assert result[0]["object"] == "coding"
 
     @pytest.mark.asyncio
-    async def test_find_semantic_memories_with_start_date_only(self) -> None:
+    async def test_find_semantic_memories_with_start_date_only_v2(self) -> None:
         """Test finding memories with start date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        start_date = datetime(2026, 1, 1, tzinfo=UTC)
+        start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime(2026, 1, 10, tzinfo=UTC),
+                    "created_at": datetime(2026, 1, 10, tzinfo=ZoneInfo("UTC")),
+                },
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_semantic_memories(
+            predicate="did activity",
+            start_date=start_date,
+            limit=50,
+        )
+
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_find_semantic_memories_with_end_date_only_v2(self) -> None:
+        """Test finding memories with end date only."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "user",
+                    "predicate": "did activity",
+                    "object": "coding",
+                    "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
+                },
+            ]
+        )
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        traverser = GraphTraversal(mock_pool, max_depth=3)
+        result = await traverser.find_semantic_memories(
+            predicate="did activity",
+            end_date=end_date,
+            limit=50,
+        )
+
+        assert len(result) == 1
+        assert result[0]["object"] == "coding"
+
+    @pytest.mark.asyncio
+    async def test_find_semantic_memories_with_start_date_only(self) -> None:
+        """Test finding memories with start date only."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+        start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "subject": "user",
+                    "predicate": "did activity",
+                    "object": "coding",
+                    "created_at": datetime(2026, 1, 10, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )
@@ -253,14 +312,14 @@ class TestGraphTraversal:
         """Test finding memories with end date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        end_date = datetime(2026, 1, 8, tzinfo=UTC)
+        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime(2026, 1, 5, tzinfo=UTC),
+                    "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )
@@ -287,7 +346,7 @@ class TestGraphTraversal:
                 "subject": "user",
                 "predicate": f"predicate_{i}",
                 "object": f"object_{i}",
-                "created_at": datetime.now(UTC),
+                "created_at": get_now(),
             }
             for i in range(5)
         ]
@@ -361,19 +420,19 @@ class TestBFSTraversal:
                 "subject": "A",
                 "predicate": "connects_to",
                 "object": "B",
-                "created_at": datetime.now(UTC),
+                "created_at": get_now(),
             },
             {
                 "subject": "B",
                 "predicate": "connects_to",
                 "object": "C",
-                "created_at": datetime.now(UTC),
+                "created_at": get_now(),
             },
             {
                 "subject": "C",
                 "predicate": "connects_to",
                 "object": "A",
-                "created_at": datetime.now(UTC),
+                "created_at": get_now(),
             },
         ]
 
@@ -414,21 +473,22 @@ class TestBFSTraversal:
         assert len(result) == 0
 
     @pytest.mark.asyncio
-    async def test_bfs_returns_depth_info(self) -> None:
-        """Test that BFS returns memories with depth metadata."""
+    async def test_find_semantic_memories_with_end_date_only(self) -> None:
+        """Test finding memories with end date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-
+        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
-                    "subject": "Alice",
-                    "predicate": "works_at",
-                    "object": "Acme Corp",
-                    "created_at": datetime.now(UTC),
+                    "subject": "user",
+                    "predicate": "did activity",
+                    "object": "coding",
+                    "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )
+
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
@@ -440,19 +500,19 @@ class TestBFSTraversal:
         assert result[0]["depth"] == 1
 
     @pytest.mark.asyncio
-    async def test_find_semantic_memories_with_date_range(self) -> None:
+    async def test_find_semantic_memories_with_date_range_v3(self) -> None:
         """Test finding memories by predicate within date range."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        start_date = datetime(2026, 1, 1, tzinfo=UTC)
-        end_date = datetime(2026, 1, 8, tzinfo=UTC)
+        start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
+        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime(2026, 1, 5, tzinfo=UTC),
+                    "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )
@@ -471,18 +531,18 @@ class TestBFSTraversal:
         assert result[0]["object"] == "coding"
 
     @pytest.mark.asyncio
-    async def test_find_semantic_memories_with_start_date_only(self) -> None:
+    async def test_find_semantic_memories_with_start_date_only_v3(self) -> None:
         """Test finding memories with start date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        start_date = datetime(2026, 1, 1, tzinfo=UTC)
+        start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime(2026, 1, 10, tzinfo=UTC),
+                    "created_at": datetime(2026, 1, 10, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )
@@ -499,18 +559,18 @@ class TestBFSTraversal:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_find_semantic_memories_with_end_date_only(self) -> None:
+    async def test_find_semantic_memories_with_end_date_only_v3(self) -> None:
         """Test finding memories with end date only."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        end_date = datetime(2026, 1, 8, tzinfo=UTC)
+        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
         mock_conn.fetch = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime(2026, 1, 5, tzinfo=UTC),
+                    "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )
@@ -532,8 +592,8 @@ class TestBFSTraversal:
         """Test finding memories with date filtering."""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        start_date = datetime(2026, 1, 1, tzinfo=UTC)
-        end_date = datetime(2026, 1, 8, tzinfo=UTC)
+        start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
+        end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
 
         mock_conn.fetch = AsyncMock(
             return_value=[
@@ -541,7 +601,7 @@ class TestBFSTraversal:
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
-                    "created_at": datetime(2026, 1, 5, tzinfo=UTC),
+                    "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
                 },
             ]
         )

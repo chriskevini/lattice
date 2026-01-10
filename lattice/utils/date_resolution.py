@@ -184,6 +184,33 @@ class UserDatetime:
         return instance
 
 
+def get_now(timezone_str: str | None = None) -> datetime:
+    """Get current time in the specified timezone (defaulting to UTC).
+
+    This is the recommended way to get current time across the project
+    to ensure consistent timezone handling.
+
+    Args:
+        timezone_str: IANA timezone string. Defaults to 'UTC'.
+
+    Returns:
+        Timezone-aware datetime object.
+    """
+    return _get_user_datetime(timezone_str).now
+
+
+def get_user_datetime(timezone_str: str | None = None) -> UserDatetime:
+    """Get a UserDatetime instance for the given timezone.
+
+    Args:
+        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+
+    Returns:
+        UserDatetime instance.
+    """
+    return _get_user_datetime(timezone_str)
+
+
 def _get_user_datetime(timezone_str: str | None = None) -> UserDatetime:
     """Get a UserDatetime instance for the given timezone.
 

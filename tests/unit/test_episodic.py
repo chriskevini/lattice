@@ -1,6 +1,7 @@
 """Unit tests for episodic memory module."""
 
 import json
+from zoneinfo import ZoneInfo
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -104,7 +105,11 @@ class TestEpisodicMessage:
         after = datetime.now(UTC)
 
         assert before <= msg.timestamp <= after
-        assert msg.timestamp.tzinfo == UTC
+        # Compare ZoneInfo objects if available, otherwise fallback to name comparison
+        if isinstance(msg.timestamp.tzinfo, ZoneInfo):
+            assert msg.timestamp.tzinfo == ZoneInfo("UTC")
+        else:
+            assert msg.timestamp.tzinfo == UTC
 
     def test_user_timezone_defaults_to_utc_when_none(self) -> None:
         """Test that user_timezone defaults to 'UTC' when None."""

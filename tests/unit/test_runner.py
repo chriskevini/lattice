@@ -1,7 +1,8 @@
 """Unit tests for scheduler runner (ProactiveScheduler)."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+from lattice.utils.date_resolution import get_now
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -37,7 +38,7 @@ class TestProactiveScheduler:
         mock_bot = MagicMock()
         scheduler = ProactiveScheduler(bot=mock_bot)
 
-        next_check = datetime.now(UTC) + timedelta(minutes=30)
+        next_check = get_now() + timedelta(minutes=30)
 
         with (
             patch(
@@ -111,7 +112,7 @@ class TestProactiveScheduler:
         scheduler = ProactiveScheduler(bot=mock_bot)
         scheduler._running = True
 
-        next_check = datetime.now(UTC) + timedelta(seconds=0.2)
+        next_check = get_now() + timedelta(seconds=0.2)
 
         call_count = 0
         sleep_call_count = 0
@@ -123,7 +124,7 @@ class TestProactiveScheduler:
                 return next_check
             # Stop after first iteration
             scheduler._running = False
-            return datetime.now(UTC) + timedelta(hours=1)
+            return get_now() + timedelta(hours=1)
 
         async def sleep_side_effect(seconds: float) -> None:
             nonlocal sleep_call_count
@@ -154,7 +155,7 @@ class TestProactiveScheduler:
         scheduler._running = True
 
         # Set next_check to past time
-        past_check = datetime.now(UTC) - timedelta(seconds=1)
+        past_check = get_now() - timedelta(seconds=1)
 
         call_count = 0
 
@@ -165,7 +166,7 @@ class TestProactiveScheduler:
                 return past_check
             # Stop after first iteration
             scheduler._running = False
-            return datetime.now(UTC) + timedelta(hours=1)
+            return get_now() + timedelta(hours=1)
 
         with (
             patch(
@@ -195,7 +196,7 @@ class TestProactiveScheduler:
                 raise OSError("Test exception")
             # Stop after handling exception
             scheduler._running = False
-            return datetime.now(UTC) + timedelta(hours=1)
+            return get_now() + timedelta(hours=1)
 
         with (
             patch(
@@ -224,7 +225,7 @@ class TestProactiveScheduler:
             if call_count == 1:
                 return None  # First call returns None
             scheduler._running = False
-            return datetime.now(UTC) + timedelta(hours=1)
+            return get_now() + timedelta(hours=1)
 
         with (
             patch(

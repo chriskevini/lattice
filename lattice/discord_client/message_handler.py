@@ -21,6 +21,7 @@ from lattice.core.context_strategy import (
 from lattice.memory import episodic
 from lattice.scheduler import set_current_interval
 from lattice.utils.database import get_system_health, set_next_check_at
+from lattice.utils.date_resolution import get_now, get_user_datetime
 from lattice.utils.source_links import build_source_map, inject_source_links
 
 logger = structlog.get_logger(__name__)
@@ -193,7 +194,7 @@ class MessageHandler:
                 or SCHEDULER_BASE_INTERVAL_DEFAULT
             )
             await set_current_interval(base_interval)
-            next_check = datetime.now(UTC) + timedelta(minutes=base_interval)
+            next_check = get_now("UTC") + timedelta(minutes=base_interval)
             await set_next_check_at(next_check)
 
             # CONTEXT_RETRIEVAL: Fetch targeted context based on entities and flags
@@ -223,10 +224,15 @@ class MessageHandler:
                 entity_names=[],
             )
             # Format episodic context (excluding current message)
+            from zoneinfo import ZoneInfo
+
+            tz = ZoneInfo(self.user_timezone)
             formatted_lines = []
             for msg in recent_messages:
                 role = "ASSISTANT" if msg.is_bot else "USER"
-                ts_str = msg.timestamp.strftime("%Y-%m-%d %H:%M")
+                # Convert UTC timestamp from DB to user timezone
+                local_ts = msg.timestamp.astimezone(tz)
+                ts_str = local_ts.strftime("%Y-%m-%d %H:%M")
                 formatted_lines.append(f"[{ts_str}] {role}: {msg.content}")
 
             episodic_context = "\n".join(formatted_lines)

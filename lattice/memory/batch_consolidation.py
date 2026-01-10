@@ -149,8 +149,19 @@ async def run_batch_consolidation() -> None:
 
         batch_id = str(messages[-1]["discord_message_id"])
 
+        user_tz: str = "UTC"
+        if messages:
+            val = messages[0].get("user_timezone")
+            if isinstance(val, str):
+                user_tz = val
+
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(user_tz)
+
         message_history = "\n".join(
-            f"{'Bot' if m['is_bot'] else 'User'}: {m['content']}" for m in messages
+            f"[{m['timestamp'].astimezone(tz).strftime('%Y-%m-%d %H:%M')}] {'Bot' if m['is_bot'] else 'User'}: {m['content']}"
+            for m in messages
         )
 
     prompt_template = await get_prompt("MEMORY_CONSOLIDATION")
@@ -159,9 +170,6 @@ async def run_batch_consolidation() -> None:
         return
 
     user_message = "\n".join(m["content"] for m in messages)
-    user_tz: str | None = None
-    if messages:
-        user_tz = messages[0].get("user_timezone") or "UTC"
 
     canonical_entities_list = await get_canonical_entities_list()
     canonical_predicates_list = await get_canonical_predicates_list()

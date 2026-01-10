@@ -62,7 +62,7 @@ async def calculate_active_hours() -> ActiveHoursResult:
     tz = ZoneInfo(user_tz)
 
     # Get messages from last 30 days
-    cutoff = datetime.now(UTC) - timedelta(days=ANALYSIS_WINDOW_DAYS)
+    cutoff = get_now(user_tz) - timedelta(days=ANALYSIS_WINDOW_DAYS)
 
     async with db_pool.pool.acquire() as conn:
         # Get all user messages (not bot messages) from the analysis window
@@ -155,31 +155,36 @@ async def calculate_active_hours() -> ActiveHoursResult:
     )
 
 
+from lattice.utils.date_resolution import get_now
+
+
 async def is_within_active_hours(check_time: datetime | None = None) -> bool:
-    """Check if the given time is within user's active hours.
+    """Check if the given time (or now) is within the user's active hours.
 
     Args:
-        check_time: Time to check (defaults to now)
+        check_time: Time to check. Defaults to current time in user's timezone.
 
     Returns:
         True if within active hours, False otherwise
     """
-    if check_time is None:
-        check_time = datetime.now(UTC)
+    from lattice.utils.database import get_system_health, get_user_timezone
+
+    user_tz = await get_user_timezone()
 
     # Get stored active hours
-    start_hour_str = await get_system_health("active_hours_start")
-    end_hour_str = await get_system_health("active_hours_end")
+    start_hour = int(await get_system_health("active_hours_start") or 9)
+    end_hour = int(await get_system_health("active_hours_end") or 21)
 
-    # Use defaults if not set
-    start_hour = int(start_hour_str) if start_hour_str else DEFAULT_ACTIVE_START
-    end_hour = int(end_hour_str) if end_hour_str else DEFAULT_ACTIVE_END
+    if check_time is None:
+        check_time = get_now(user_tz)
+    elif check_time.tzinfo is None or check_time.tzinfo == UTC:
+        # Convert UTC or naive to user timezone
+        from zoneinfo import ZoneInfo
 
-    # Convert check_time to user's local timezone
-    user_tz = await get_user_timezone()
-    tz = ZoneInfo(user_tz)
-    local_time = check_time.astimezone(tz)
-    current_hour = local_time.hour
+        tz = ZoneInfo(user_tz)
+        check_time = check_time.astimezone(tz)
+
+    current_hour = check_time.hour
 
     # Handle window that wraps around midnight
     if start_hour <= end_hour:
@@ -215,7 +220,8 @@ async def update_active_hours() -> ActiveHoursResult:
     await set_system_health("active_hours_start", str(result["start_hour"]))
     await set_system_health("active_hours_end", str(result["end_hour"]))
     await set_system_health("active_hours_confidence", str(result["confidence"]))
-    await set_system_health("active_hours_last_updated", datetime.now(UTC).isoformat())
+    # Use UTC for internal last_updated tracking
+    await set_system_health("active_hours_last_updated", get_now("UTC").isoformat())
 
     logger.info(
         "Updated active hours",

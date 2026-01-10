@@ -14,7 +14,11 @@ import structlog
 from lattice.memory.episodic import EpisodicMessage, get_recent_messages
 from lattice.memory.procedural import get_prompt
 from lattice.scheduler.adaptive import is_within_active_hours
-from lattice.utils.database import get_system_health, set_system_health
+from lattice.utils.database import (
+    get_system_health,
+    get_user_timezone,
+    set_system_health,
+)
 from lattice.utils.llm import get_auditing_llm_client
 
 
@@ -52,28 +56,33 @@ async def set_current_interval(minutes: int) -> None:
     await set_system_health("scheduler_current_interval", str(minutes))
 
 
-def format_message(msg: EpisodicMessage) -> str:
-    """Format a message for the conversation context."""
-    content = msg.content[:500]
-    timestamp = msg.timestamp.strftime("%Y-%m-%d %H:%M")
-    return f"[{timestamp}] {msg.role}: {content}"
-
-
-async def get_conversation_context(limit: int = 20) -> str:
+async def get_conversation_context(user_timezone: str = "UTC", limit: int = 20) -> str:
     """Build conversation context in USER/ASSISTANT format.
 
     Args:
+        user_timezone: User's timezone for timestamp formatting
         limit: Maximum number of recent messages to include
 
     Returns:
         Formatted conversation string
     """
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(user_timezone)
+
     messages = await get_recent_messages(limit=limit)
 
     if not messages:
         return "No recent conversation history."
 
-    lines: list[str] = [format_message(msg) for msg in messages]
+    lines: list[str] = []
+    for msg in messages:
+        content = msg.content[:500]
+        # Convert UTC timestamp from DB to user timezone
+        local_ts = msg.timestamp.astimezone(tz)
+        timestamp = local_ts.strftime("%Y-%m-%d %H:%M")
+        lines.append(f"[{timestamp}] {msg.role}: {content}")
+
     return "\n".join(lines)
 
 
@@ -113,7 +122,11 @@ async def decide_proactive() -> ProactiveDecision:
             reason="Outside user's active hours",
         )
 
-    conversation = await get_conversation_context()
+    from lattice.utils.database import get_user_timezone
+
+    user_tz = await get_user_timezone()
+
+    conversation = await get_conversation_context(user_timezone=user_tz)
 
     from lattice.core import response_generator
     from lattice.utils.placeholder_injector import PlaceholderInjector
@@ -122,6 +135,18 @@ async def decide_proactive() -> ProactiveDecision:
 
     channel_id = await get_default_channel_id()
     current_interval = await get_current_interval()
+    from lattice.utils.date_resolution import get_now
+
+    now = get_now(user_tz)
+    local_date = now.strftime("%Y/%m/%d, %A")
+    local_time = now.strftime("%H:%M")
+
+    logger.debug(
+        "Proactive check time debug",
+        user_tz=user_tz,
+        local_date=local_date,
+        local_time=local_time,
+    )
 
     prompt_template = await get_prompt("PROACTIVE_CHECKIN")
     if not prompt_template:
@@ -134,11 +159,14 @@ async def decide_proactive() -> ProactiveDecision:
 
     injector = PlaceholderInjector()
     context = {
-        "user_timezone": "UTC",
+        "user_timezone": user_tz,
+        "local_date": local_date,
+        "local_time": local_time,
         "episodic_context": conversation,
         "goal_context": goals,
         "scheduler_current_interval": current_interval,
     }
+
     prompt, injected = await injector.inject(prompt_template, context)
 
     llm_client = get_auditing_llm_client()
