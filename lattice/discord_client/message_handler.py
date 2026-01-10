@@ -2,7 +2,6 @@
 
 import asyncio
 import random
-from datetime import timedelta
 from typing import cast, Optional
 from uuid import UUID
 
@@ -21,8 +20,6 @@ from lattice.core.context_strategy import (
     retrieve_context,
 )
 from lattice.memory import episodic
-from lattice.utils.database import get_system_health, set_next_check_at
-from lattice.utils.date_resolution import get_now
 from lattice.utils.source_links import build_source_map, inject_source_links
 
 logger = structlog.get_logger(__name__)
@@ -256,14 +253,6 @@ class MessageHandler:
                     error=str(e),
                     message_preview=message.content[:50],
                 )
-
-            # Update scheduler interval
-            base_interval = int(
-                await get_system_health("scheduler_base_interval")
-                or SCHEDULER_BASE_INTERVAL_DEFAULT
-            )
-            next_check = get_now("UTC") + timedelta(minutes=base_interval)
-            await set_next_check_at(next_check)
 
             # Schedule/Reset contextual nudge
             if self._nudge_task:

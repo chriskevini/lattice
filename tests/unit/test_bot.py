@@ -29,7 +29,6 @@ class TestLatticeBot:
         assert bot.dream_channel_id == 456
         assert bot._message_handler.memory_healthy is False
         assert bot._user_timezone == "UTC"
-        assert bot._scheduler is None
         assert bot._dreaming_scheduler is None
 
     def test_bot_initialization_missing_channels(self) -> None:
@@ -74,7 +73,7 @@ class TestLatticeBot:
 
     @pytest.mark.asyncio
     async def test_on_ready_starts_schedulers(self) -> None:
-        """Test on_ready starts proactive and dreaming schedulers."""
+        """Test on_ready starts dreaming scheduler."""
         config = get_config()
         config.discord_main_channel_id = 123
         config.discord_dream_channel_id = 456
@@ -92,18 +91,14 @@ class TestLatticeBot:
                 "lattice.discord_client.bot.get_user_timezone",
                 AsyncMock(return_value="America/New_York"),
             ),
-            patch("lattice.discord_client.bot.ProactiveScheduler") as mock_proactive,
             patch("lattice.discord_client.bot.DreamingScheduler") as mock_dreaming,
         ):
             mock_db_pool.is_initialized.return_value = True
-            mock_proactive_instance = AsyncMock()
             mock_dreaming_instance = AsyncMock()
-            mock_proactive.return_value = mock_proactive_instance
             mock_dreaming.return_value = mock_dreaming_instance
 
             await bot.on_ready()
 
-            mock_proactive_instance.start.assert_called_once()
             mock_dreaming_instance.start.assert_called_once()
             assert bot._user_timezone == "America/New_York"
             assert bot._command_handler is not None
@@ -139,10 +134,6 @@ class TestLatticeBot:
                 patch(
                     "lattice.discord_client.bot.get_user_timezone",
                     AsyncMock(return_value="UTC"),
-                ),
-                patch(
-                    "lattice.discord_client.bot.ProactiveScheduler",
-                    MagicMock(return_value=AsyncMock()),
                 ),
                 patch(
                     "lattice.discord_client.bot.DreamingScheduler",
@@ -357,18 +348,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -436,18 +415,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             # Setup mocks
             mock_context = MagicMock()
@@ -549,18 +516,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -673,18 +628,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -779,18 +722,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -880,18 +811,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -991,18 +910,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -1097,18 +1004,6 @@ class TestLatticeBot:
             patch(
                 "lattice.discord_client.message_handler.response_generator"
             ) as mock_response,
-            patch(
-                "lattice.discord_client.message_handler.get_system_health",
-                AsyncMock(return_value=15),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_current_interval",
-                AsyncMock(),
-            ),
-            patch(
-                "lattice.discord_client.message_handler.set_next_check_at",
-                AsyncMock(),
-            ),
         ):
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_episodic.get_recent_messages = AsyncMock(return_value=[])
@@ -1181,14 +1076,10 @@ class TestLatticeBot:
 
     @pytest.mark.asyncio
     async def test_close(self) -> None:
-        """Test bot cleanup stops schedulers and closes pool."""
+        """Test bot cleanup stops dreaming scheduler and closes pool."""
         config = get_config()
         config.discord_main_channel_id = 123
         bot = LatticeBot()
-
-        mock_scheduler = AsyncMock()
-        mock_scheduler.stop = AsyncMock()
-        bot._scheduler = mock_scheduler
 
         mock_dreaming_scheduler = AsyncMock()
         mock_dreaming_scheduler.stop = AsyncMock()
@@ -1202,8 +1093,7 @@ class TestLatticeBot:
 
             await bot.close()
 
-            # Verify schedulers were stopped
-            mock_scheduler.stop.assert_called_once()
+            # Verify dreaming scheduler was stopped
             mock_dreaming_scheduler.stop.assert_called_once()
 
             # Verify pool was closed
