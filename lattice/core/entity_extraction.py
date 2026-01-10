@@ -32,8 +32,10 @@ logger = structlog.get_logger(__name__)
 
 SMALLER_EPISODIC_WINDOW_SIZE = 10
 
+from lattice.memory.episodic import EpisodicMessage  # noqa: E402
+
 if TYPE_CHECKING:
-    from lattice.memory.episodic import EpisodicMessage
+    pass
 
 
 @dataclass
