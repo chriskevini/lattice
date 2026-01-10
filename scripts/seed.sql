@@ -4,9 +4,9 @@
 -- Run after schema.sql to populate prompt_registry
 -- ============================================================================
 
--- UNIFIED_RESPONSE (v2, temp=0.7)
+-- UNIFIED_RESPONSE (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
-VALUES ('UNIFIED_RESPONSE', 2, $TPL$You are a warm, curious AI companion engaging in natural conversation.
+VALUES ('UNIFIED_RESPONSE', 1, $TPL$You are a warm, curious AI companion engaging in natural conversation.
 
 ## Context
 **Current date:** {local_date}
