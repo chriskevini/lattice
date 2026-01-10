@@ -59,7 +59,7 @@ Adaptive retrieval based on entities and flags:
     - `activity_context`: Fetch memories with `did activity` predicate.
 
 ### Canonical Placeholders
-Used across all prompts for consistency:
+Managed by `PlaceholderRegistry` for automatic resolution and validation:
 | Placeholder | Contains |
 |-------------|----------|
 | `{episodic_context}` | 14 recent messages (excluding current) |
@@ -67,12 +67,13 @@ Used across all prompts for consistency:
 | `{bigger_episodic_context}` | 20 messages for extraction (includes current) |
 | `{smaller_episodic_context}` | 10 messages for Retrieval Planning (includes current) |
 | `{user_message}` | The user's current message |
+| `{unresolved_entities}` | Unresolved entities for clarification |
 | `{goal_context}` | Active goals from knowledge graph |
 | `{local_date}` / `{local_time}` | Current date/time with day/week info |
 | `{date_resolution_hints}` | Resolved relative dates (e.g., "Friday → 2026-01-10") |
 | `{canonical_entities}` | List from `entities` table |
 | `{canonical_predicates}` | List from `predicates` table |
-| `{unknown_entities}` | Unresolved entities for clarification |
+| `{scheduler_current_interval}` | Current proactive check-in interval (minutes) |
 
 ### 🧠 Dreaming Cycle
 Autonomous prompt optimization using feedback and metrics.
