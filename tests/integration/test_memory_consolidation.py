@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from lattice.memory.graph import GraphTraversal
-from lattice.utils.memory_parsing import parse_semantic_memories as parse_triples
+from lattice.utils.memory_parsing import parse_semantic_memories
 
 
 @pytest.fixture(scope="session")
@@ -107,7 +107,9 @@ class TestTextFormatParsingIntegration:
 
     def test_parse_memories_arrow_format(self) -> None:
         """Test parsing memories with -> separator."""
-        result = parse_triples("alice -> works_at -> Acme Corp\nbob -> likes -> pizza")
+        result = parse_semantic_memories(
+            "alice -> works_at -> Acme Corp\nbob -> likes -> pizza"
+        )
         assert len(result) == 2
         assert result[0]["subject"] == "alice"
         assert result[0]["predicate"] == "works_at"
@@ -117,14 +119,14 @@ class TestTextFormatParsingIntegration:
 
     def test_parse_memories_unicode_arrow(self) -> None:
         """Test parsing memories with unicode arrow separator."""
-        result = parse_triples("alice → works_at → Acme Corp")
+        result = parse_semantic_memories("alice → works_at → Acme Corp")
         assert len(result) == 1
         assert result[0]["subject"] == "alice"
         assert result[0]["predicate"] == "works_at"
 
     def test_parse_memories_dash_arrow(self) -> None:
         """Test parsing memories with dash-arrow separator."""
-        result = parse_triples("alice --> works_at --> Acme Corp")
+        result = parse_semantic_memories("alice --> works_at --> Acme Corp")
         assert len(result) == 1
         assert result[0]["subject"] == "alice"
         assert result[0]["predicate"] == "works_at"
@@ -132,15 +134,15 @@ class TestTextFormatParsingIntegration:
 
     def test_parse_memories_with_header(self) -> None:
         """Test parsing memories with Memories: header."""
-        result = parse_triples("Memories:\nalice -> works_at -> Acme Corp")
+        result = parse_semantic_memories("Memories:\nalice -> works_at -> Acme Corp")
         assert len(result) == 1
 
     def test_parse_memories_mixed_format(self) -> None:
         """Test parsing mixed JSON and text format."""
-        json_result = parse_triples(
+        json_result = parse_semantic_memories(
             '[{"subject": "Alice", "predicate": "works_at", "object": "Acme"}]'
         )
-        text_result = parse_triples("Alice -> works_at -> Acme")
+        text_result = parse_semantic_memories("Alice -> works_at -> Acme")
 
         assert len(json_result) == 1
         assert len(text_result) == 1

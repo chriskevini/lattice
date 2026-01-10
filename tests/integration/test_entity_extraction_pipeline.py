@@ -118,25 +118,6 @@ class TestEntityExtractionPipeline:
             assert "lattice project" in extraction.entities
 
             # Execute pipeline: Generate response with extraction
-            [
-                episodic.EpisodicMessage(
-                    content="What are you working on?",
-                    discord_message_id=123,
-                    channel_id=456,
-                    is_bot=False,
-                    message_id=uuid.uuid4(),
-                    timestamp=datetime(2026, 1, 4, 10, 0, tzinfo=UTC),
-                ),
-                episodic.EpisodicMessage(
-                    content=message_content,
-                    discord_message_id=124,
-                    channel_id=456,
-                    is_bot=False,
-                    message_id=message_id,
-                    timestamp=datetime(2026, 1, 4, 10, 1, tzinfo=UTC),
-                ),
-            ]
-
             (
                 result,
                 rendered_prompt,
@@ -217,17 +198,6 @@ class TestEntityExtractionPipeline:
                 pass
 
             # Generate response without extraction (should use BASIC_RESPONSE)
-            [
-                episodic.EpisodicMessage(
-                    content=message_content,
-                    discord_message_id=123,
-                    channel_id=456,
-                    is_bot=False,
-                    message_id=uuid.uuid4(),
-                    timestamp=datetime.now(UTC),
-                ),
-            ]
-
             (
                 result,
                 rendered_prompt,
@@ -342,17 +312,6 @@ class TestEntityExtractionPipeline:
             assert "project" in extraction.entities
 
             # Generate response
-            [
-                episodic.EpisodicMessage(
-                    content=message_content,
-                    discord_message_id=123,
-                    channel_id=456,
-                    is_bot=False,
-                    message_id=message_id,
-                    timestamp=datetime.now(UTC),
-                ),
-            ]
-
             (
                 result,
                 rendered_prompt,
@@ -367,19 +326,19 @@ class TestEntityExtractionPipeline:
             assert context_info["template"] == "UNIFIED_RESPONSE"
 
 
-class TestRetrievalPlanningPipeline:
-    """Integration tests for the RETRIEVAL_PLANNING pipeline flow.
+class TestContextStrategyPipeline:
+    """Integration tests for the CONTEXT_STRATEGY pipeline flow.
 
-    Tests the full flow from retrieval_planning() call with:
+    Tests the full flow from context_strategy() call with:
     - Conversation window analysis
     - Canonical entity matching
     - Context flag detection
-    - Unknown entity identification
+    - Unresolved entity identification
     """
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_with_conversation_window(self) -> None:
-        """Test retrieval planning analyzes conversation window."""
+    async def test_context_strategy_with_conversation_window(self) -> None:
+        """Test context strategy analyzes conversation window."""
         message_id = uuid.uuid4()
         message_content = "How's it going?"
 
@@ -397,7 +356,7 @@ class TestRetrievalPlanningPipeline:
             from lattice.utils.llm import AuditResult
 
             planning_template = PromptTemplate(
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Test template {local_date}\n{canonical_entities}\n{smaller_episodic_context}",
                 temperature=0.2,
                 version=1,
@@ -408,7 +367,7 @@ class TestRetrievalPlanningPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": ["mobile app"], "context_flags": ["goal_context"], "unknown_entities": []}',
+                content='{"entities": ["mobile app"], "context_flags": ["goal_context"], "unresolved_entities": []}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=100,
@@ -418,7 +377,7 @@ class TestRetrievalPlanningPipeline:
                 latency_ms=500,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
             mock_llm_client.return_value = planning_llm
@@ -430,11 +389,11 @@ class TestRetrievalPlanningPipeline:
                 "extraction": {
                     "entities": ["mobile app"],
                     "context_flags": ["goal_context"],
-                    "unknown_entities": [],
+                    "unresolved_entities": [],
                     "_extraction_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": ["mobile app"], "context_flags": ["goal_context"], "unknown_entities": []}',
+                "raw_response": '{"entities": ["mobile app"], "context_flags": ["goal_context"], "unresolved_entities": []}',
                 "created_at": datetime.now(UTC),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
@@ -458,7 +417,7 @@ class TestRetrievalPlanningPipeline:
                 ),
             ]
 
-            planning = await entity_extraction.retrieval_planning(
+            planning = await entity_extraction.context_strategy(
                 message_id=message_id,
                 message_content=message_content,
                 recent_messages=recent_messages,
@@ -467,12 +426,12 @@ class TestRetrievalPlanningPipeline:
             assert planning is not None
             assert "mobile app" in planning.entities
             assert "goal_context" in planning.context_flags
-            assert len(planning.unknown_entities) == 0
+            assert len(planning.unresolved_entities) == 0
             assert planning.message_id == message_id
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_detects_unknown_entities(self) -> None:
-        """Test retrieval planning identifies entities needing clarification."""
+    async def test_context_strategy_detects_unresolved_entities(self) -> None:
+        """Test context strategy identifies entities needing clarification."""
         message_id = uuid.uuid4()
         message_content = "bf and I hung out at ikea"
 
@@ -490,7 +449,7 @@ class TestRetrievalPlanningPipeline:
             from lattice.utils.llm import AuditResult
 
             planning_template = PromptTemplate(
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Test template",
                 temperature=0.2,
                 version=1,
@@ -501,7 +460,7 @@ class TestRetrievalPlanningPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": ["IKEA"], "context_flags": [], "unknown_entities": ["bf"]}',
+                content='{"entities": ["IKEA"], "context_flags": [], "unresolved_entities": ["bf"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=80,
@@ -511,7 +470,7 @@ class TestRetrievalPlanningPipeline:
                 latency_ms=400,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
             mock_llm_client.return_value = planning_llm
@@ -523,18 +482,18 @@ class TestRetrievalPlanningPipeline:
                 "extraction": {
                     "entities": ["IKEA"],
                     "context_flags": [],
-                    "unknown_entities": ["bf"],
+                    "unresolved_entities": ["bf"],
                     "_extraction_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": ["IKEA"], "context_flags": [], "unknown_entities": ["bf"]}',
+                "raw_response": '{"entities": ["IKEA"], "context_flags": [], "unresolved_entities": ["bf"]}',
                 "created_at": datetime.now(UTC),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
             recent_messages: list[episodic.EpisodicMessage] = []
 
-            planning = await entity_extraction.retrieval_planning(
+            planning = await entity_extraction.context_strategy(
                 message_id=message_id,
                 message_content=message_content,
                 recent_messages=recent_messages,
@@ -542,12 +501,12 @@ class TestRetrievalPlanningPipeline:
 
             assert planning is not None
             assert "IKEA" in planning.entities
-            assert "bf" in planning.unknown_entities
+            assert "bf" in planning.unresolved_entities
             assert len(planning.context_flags) == 0
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_activity_context(self) -> None:
-        """Test retrieval planning detects activity queries."""
+    async def test_context_strategy_activity_context(self) -> None:
+        """Test context strategy detects activity queries."""
         message_id = uuid.uuid4()
         message_content = "What did I do last week?"
 
@@ -565,7 +524,7 @@ class TestRetrievalPlanningPipeline:
             from lattice.utils.llm import AuditResult
 
             planning_template = PromptTemplate(
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Test template",
                 temperature=0.2,
                 version=1,
@@ -576,7 +535,7 @@ class TestRetrievalPlanningPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": [], "context_flags": ["activity_context"], "unknown_entities": []}',
+                content='{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=60,
@@ -586,7 +545,7 @@ class TestRetrievalPlanningPipeline:
                 latency_ms=300,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
             mock_llm_client.return_value = planning_llm
@@ -598,16 +557,16 @@ class TestRetrievalPlanningPipeline:
                 "extraction": {
                     "entities": [],
                     "context_flags": ["activity_context"],
-                    "unknown_entities": [],
+                    "unresolved_entities": [],
                     "_extraction_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unknown_entities": []}',
+                "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
                 "created_at": datetime.now(UTC),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            planning = await entity_extraction.retrieval_planning(
+            planning = await entity_extraction.context_strategy(
                 message_id=message_id,
                 message_content=message_content,
                 recent_messages=[],
@@ -618,8 +577,8 @@ class TestRetrievalPlanningPipeline:
             assert "activity_context" in planning.context_flags
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_topic_switch(self) -> None:
-        """Test retrieval planning returns empty when topic switches."""
+    async def test_context_strategy_topic_switch(self) -> None:
+        """Test context strategy returns empty when topic switches."""
         message_id = uuid.uuid4()
         message_content = "Actually, what's the weather like?"
 
@@ -637,7 +596,7 @@ class TestRetrievalPlanningPipeline:
             from lattice.utils.llm import AuditResult
 
             planning_template = PromptTemplate(
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Test template",
                 temperature=0.2,
                 version=1,
@@ -648,7 +607,7 @@ class TestRetrievalPlanningPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": [], "context_flags": [], "unknown_entities": []}',
+                content='{"entities": [], "context_flags": [], "unresolved_entities": []}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=50,
@@ -658,7 +617,7 @@ class TestRetrievalPlanningPipeline:
                 latency_ms=250,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
             mock_llm_client.return_value = planning_llm
@@ -670,11 +629,11 @@ class TestRetrievalPlanningPipeline:
                 "extraction": {
                     "entities": [],
                     "context_flags": [],
-                    "unknown_entities": [],
+                    "unresolved_entities": [],
                     "_extraction_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": [], "context_flags": [], "unknown_entities": []}',
+                "raw_response": '{"entities": [], "context_flags": [], "unresolved_entities": []}',
                 "created_at": datetime.now(UTC),
             }
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
@@ -698,7 +657,7 @@ class TestRetrievalPlanningPipeline:
                 ),
             ]
 
-            planning = await entity_extraction.retrieval_planning(
+            planning = await entity_extraction.context_strategy(
                 message_id=message_id,
                 message_content=message_content,
                 recent_messages=recent_messages,
@@ -707,26 +666,26 @@ class TestRetrievalPlanningPipeline:
             assert planning is not None
             assert len(planning.entities) == 0
             assert len(planning.context_flags) == 0
-            assert len(planning.unknown_entities) == 0
+            assert len(planning.unresolved_entities) == 0
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_missing_template(self) -> None:
-        """Test retrieval planning fails gracefully when template missing."""
+    async def test_context_strategy_missing_template(self) -> None:
+        """Test context strategy fails gracefully when template missing."""
         with (
             patch("lattice.core.entity_extraction.get_prompt") as mock_get_prompt,
         ):
             mock_get_prompt.return_value = None
 
-            with pytest.raises(ValueError, match="RETRIEVAL_PLANNING prompt template"):
-                await entity_extraction.retrieval_planning(
+            with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
+                await entity_extraction.context_strategy(
                     message_id=uuid.uuid4(),
                     message_content="Test message",
                     recent_messages=[],
                 )
 
     @pytest.mark.asyncio
-    async def test_retrieval_planning_missing_fields(self) -> None:
-        """Test retrieval planning validates required fields."""
+    async def test_context_strategy_missing_fields(self) -> None:
+        """Test context strategy validates required fields."""
         message_id = uuid.uuid4()
 
         with (
@@ -742,7 +701,7 @@ class TestRetrievalPlanningPipeline:
             from lattice.utils.llm import AuditResult
 
             planning_template = PromptTemplate(
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
                 template="Test template",
                 temperature=0.2,
                 version=1,
@@ -763,13 +722,13 @@ class TestRetrievalPlanningPipeline:
                 latency_ms=250,
                 temperature=0.2,
                 audit_id=None,
-                prompt_key="RETRIEVAL_PLANNING",
+                prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
             mock_llm_client.return_value = planning_llm
 
             with pytest.raises(ValueError, match="Missing required field"):
-                await entity_extraction.retrieval_planning(
+                await entity_extraction.context_strategy(
                     message_id=message_id,
                     message_content="Test message",
                     recent_messages=[],
@@ -779,7 +738,7 @@ class TestRetrievalPlanningPipeline:
 class TestRetrieveContext:
     """Integration tests for the retrieve_context() function.
 
-    Tests the Phase 4 context retrieval using flags from RETRIEVAL_PLANNING.
+    Tests Phase 4 context retrieval using flags from CONTEXT_STRATEGY.
     """
 
     @pytest.mark.asyncio
@@ -788,7 +747,7 @@ class TestRetrieveContext:
         context = await entity_extraction.retrieve_context(
             entities=[],
             context_flags=[],
-            triple_depth=2,
+            memory_depth=2,
         )
 
         assert isinstance(context, dict)
@@ -801,7 +760,7 @@ class TestRetrieveContext:
         context = await entity_extraction.retrieve_context(
             entities=[],
             context_flags=[],
-            triple_depth=2,
+            memory_depth=2,
         )
 
         assert context["semantic_context"] == "No relevant context found."
@@ -813,7 +772,7 @@ class TestRetrieveContext:
         context = await entity_extraction.retrieve_context(
             entities=[],
             context_flags=["activity_context"],
-            triple_depth=2,  # Need depth to traverse from added entities
+            memory_depth=2,  # Need depth to traverse from added entities
         )
 
         # With activity_context flag, activities are added to entities and
@@ -827,7 +786,7 @@ class TestRetrieveContext:
         context = await entity_extraction.retrieve_context(
             entities=[],
             context_flags=["goal_context"],
-            triple_depth=0,
+            memory_depth=0,
         )
 
         assert "goal_context" in context
@@ -838,7 +797,7 @@ class TestRetrieveContext:
         context = await entity_extraction.retrieve_context(
             entities=["test"],
             context_flags=["goal_context", "activity_context"],
-            triple_depth=2,
+            memory_depth=2,
         )
 
         assert "semantic_context" in context

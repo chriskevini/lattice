@@ -1,11 +1,11 @@
-"""Integration tests for semantic triple storage.
+"""Integration tests for semantic memory storage.
 
 These tests require a real database connection and are skipped in CI.
 To run locally, set DATABASE_URL environment variable.
 
-Note: After issue #131, semantic triples use text-based storage
+Note: After issue #131, semantic memories use text-based storage
 (subject/predicate/object as TEXT) rather than entity IDs.
-The entities table is no longer used for triple storage.
+The entities table is no longer used for semantic memory storage.
 """
 
 import os
@@ -24,12 +24,12 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.integration
-class TestTripleStorage:
-    """Test semantic triple storage functionality."""
+class TestSemanticMemoryStorage:
+    """Test semantic memory storage functionality."""
 
     @pytest.mark.asyncio
-    async def test_store_simple_triple(self) -> None:
-        """Test storing a simple semantic triple."""
+    async def test_store_simple_memory(self) -> None:
+        """Test storing a simple semantic memory."""
         if not db_pool.is_initialized():
             await db_pool.initialize()
 
@@ -42,16 +42,16 @@ class TestTripleStorage:
         )
         message_id = await episodic.store_message(message)
 
-        # Store triple
-        triples = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
-        await episodic.store_semantic_triples(message_id, triples)
+        # Store semantic memory
+        memories = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
+        await episodic.store_semantic_memories(message_id, memories)
 
-        # Verify triple was stored
+        # Verify memory was stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT subject, predicate, object
-                FROM semantic_triple
+                FROM semantic_memories
                 WHERE source_batch_id IS NULL
                 ORDER BY created_at DESC
                 LIMIT 1
@@ -68,11 +68,11 @@ class TestTripleStorage:
                 ):
                     found = True
                     break
-            assert found, "Triple not found in database"
+            assert found, "Memory not found in database"
 
     @pytest.mark.asyncio
-    async def test_store_multiple_triples(self) -> None:
-        """Test storing multiple triples from same message."""
+    async def test_store_multiple_memories(self) -> None:
+        """Test storing multiple memories from same message."""
         if not db_pool.is_initialized():
             await db_pool.initialize()
 
@@ -85,22 +85,22 @@ class TestTripleStorage:
         )
         message_id = await episodic.store_message(message)
 
-        # Store multiple triples with a batch ID for tracking
+        # Store multiple memories with a batch ID for tracking
         batch_id = "test_batch_12346"
-        triples = [
+        memories = [
             {"subject": "user", "predicate": "works_at", "object": "OpenAI"},
             {"subject": "user", "predicate": "likes", "object": "Python"},
         ]
-        await episodic.store_semantic_triples(
-            message_id, triples, source_batch_id=batch_id
+        await episodic.store_semantic_memories(
+            message_id, memories, source_batch_id=batch_id
         )
 
-        # Verify both triples stored
+        # Verify both memories stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT COUNT(*) as count
-                FROM semantic_triple
+                FROM semantic_memories
                 WHERE source_batch_id = $1
                 """,
                 batch_id,
@@ -109,8 +109,8 @@ class TestTripleStorage:
             assert rows[0]["count"] == 2
 
     @pytest.mark.asyncio
-    async def test_skip_invalid_triples(self) -> None:
-        """Test that invalid triples are skipped gracefully."""
+    async def test_skip_invalid_memories(self) -> None:
+        """Test that invalid memories are skipped gracefully."""
         if not db_pool.is_initialized():
             await db_pool.initialize()
 
@@ -122,9 +122,9 @@ class TestTripleStorage:
         )
         message_id = await episodic.store_message(message)
 
-        # Mix of valid and invalid triples
+        # Mix of valid and invalid memories
         batch_id = "test_batch_12348"
-        triples = [
+        memories = [
             {"subject": "user", "predicate": "works_at", "object": "OpenAI"},  # Valid
             {
                 "subject": "",
@@ -144,35 +144,35 @@ class TestTripleStorage:
         ]
 
         # Should not raise exception
-        await episodic.store_semantic_triples(
-            message_id, triples, source_batch_id=batch_id
+        await episodic.store_semantic_memories(
+            message_id, memories, source_batch_id=batch_id
         )
 
-        # Verify only valid triple was stored
+        # Verify only valid memory was stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT subject, predicate, object
-                FROM semantic_triple
+                FROM semantic_memories
                 WHERE source_batch_id = $1
                 """,
                 batch_id,
             )
 
-            # Should have stored only the valid triple
+            # Should have stored only the valid memory
             assert len(rows) == 1
             assert rows[0]["subject"] == "user"
             assert rows[0]["predicate"] == "works_at"
             assert rows[0]["object"] == "OpenAI"
 
     @pytest.mark.asyncio
-    async def test_empty_triples_list(self) -> None:
-        """Test that empty triples list is handled gracefully."""
+    async def test_empty_memories_list(self) -> None:
+        """Test that empty memories list is handled gracefully."""
         if not db_pool.is_initialized():
             await db_pool.initialize()
 
         message = episodic.EpisodicMessage(
-            content="No triples here",
+            content="No memories here",
             discord_message_id=12349,
             channel_id=67890,
             is_bot=False,
@@ -181,14 +181,14 @@ class TestTripleStorage:
 
         # Should not raise exception
         batch_id = "test_batch_12349"
-        await episodic.store_semantic_triples(message_id, [], source_batch_id=batch_id)
+        await episodic.store_semantic_memories(message_id, [], source_batch_id=batch_id)
 
-        # Verify no triples stored
+        # Verify no memories stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT COUNT(*) as count
-                FROM semantic_triple
+                FROM semantic_memories
                 WHERE source_batch_id = $1
                 """,
                 batch_id,
@@ -196,26 +196,26 @@ class TestTripleStorage:
             assert rows[0]["count"] == 0
 
     @pytest.mark.asyncio
-    async def test_text_based_triple_search(self) -> None:
-        """Test searching for triples by text matching."""
+    async def test_text_based_memory_search(self) -> None:
+        """Test searching for memories by text matching."""
         if not db_pool.is_initialized():
             await db_pool.initialize()
 
         message = episodic.EpisodicMessage(
-            content="Test triple search",
+            content="Test memory search",
             discord_message_id=12350,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message)
 
-        # Store a triple with unique identifiers
+        # Store a memory with unique identifiers
         batch_id = "test_batch_12350"
-        triples = [
+        memories = [
             {"subject": "user", "predicate": "lives_in", "object": "Richmond, BC"}
         ]
-        await episodic.store_semantic_triples(
-            message_id, triples, source_batch_id=batch_id
+        await episodic.store_semantic_memories(
+            message_id, memories, source_batch_id=batch_id
         )
 
         # Search by subject
@@ -223,7 +223,7 @@ class TestTripleStorage:
             rows = await conn.fetch(
                 """
                 SELECT subject, predicate, object
-                FROM semantic_triple
+                FROM semantic_memories
                 WHERE subject ILIKE $1 AND source_batch_id = $2
                 """,
                 "%user%",
@@ -237,7 +237,7 @@ class TestTripleStorage:
             rows = await conn.fetch(
                 """
                 SELECT subject, predicate, object
-                FROM semantic_triple
+                FROM semantic_memories
                 WHERE object ILIKE $1 AND source_batch_id = $2
                 """,
                 "%Richmond%",
