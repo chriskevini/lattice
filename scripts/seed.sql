@@ -7,6 +7,10 @@
 -- UNIFIED_RESPONSE (v2, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
 VALUES ('UNIFIED_RESPONSE', 2, $TPL$You are a warm, curious AI companion engaging in natural conversation.
+ON CONFLICT (prompt_key) DO UPDATE SET
+    version = EXCLUDED.version,
+    template = EXCLUDED.template,
+    temperature = EXCLUDED.temperature;
 
 ## Context
 **Current date:** {local_date}
@@ -66,7 +70,11 @@ If clarification is needed and has not already been discussed, ask the user brie
 **Clarification needed:** lkea
 **Response:** "Do you mean IKEA?"
 
-Respond naturally and helpfully.$TPL$, 0.7);
+Respond naturally and helpfully.$TPL$, 0.7)
+ON CONFLICT (prompt_key) DO UPDATE SET
+    version = EXCLUDED.version,
+    template = EXCLUDED.template,
+    temperature = EXCLUDED.temperature;
 
 -- ENTITY_EXTRACTION (v1, temp=0.2)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
@@ -131,7 +139,11 @@ Return ONLY valid JSON (no markdown, no explanation):
 **Date Resolution Hints:** (empty)
 **Current User Message:** Starting work on the database migration
 **Output:**
-{"entities": ["database migration"]}$TPL$, 0.2);
+{"entities": ["database migration"]}$TPL$, 0.2)
+ON CONFLICT (prompt_key) DO UPDATE SET
+    version = EXCLUDED.version,
+    template = EXCLUDED.template,
+    temperature = EXCLUDED.temperature;
 
 -- CONTEXT_STRATEGY (v1, temp=0.2)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
@@ -233,7 +245,11 @@ User: Working on mobile app
 [3 messages about work]
 User: Actually, what's the weather like?
 **Output:**
-{"entities": [], "context_flags": [], "unresolved_entities": []}$TPL$, 0.2);
+{"entities": [], "context_flags": [], "unresolved_entities": []}$TPL$, 0.2)
+ON CONFLICT (prompt_key) DO UPDATE SET
+    version = EXCLUDED.version,
+    template = EXCLUDED.template,
+    temperature = EXCLUDED.temperature;
 
 -- MEMORY_CONSOLIDATION (v1, temp=0.2)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
@@ -331,7 +347,11 @@ User: Yes!
 {"triples": [
   {"subject": "User", "predicate": "did activity", "object": "hanging out with boyfriend"},
   {"subject": "hanging out with boyfriend", "predicate": "at location", "object": "IKEA"}
-]}$TPL$, 0.2);
+]}$TPL$, 0.2)
+ON CONFLICT (prompt_key) DO UPDATE SET
+    version = EXCLUDED.version,
+    template = EXCLUDED.template,
+    temperature = EXCLUDED.temperature;
 
 -- PROMPT_OPTIMIZATION (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
@@ -355,7 +375,11 @@ Return ONLY valid JSON:
   "pain_point": "1 sentence describing the recurring issue",
   "proposed_change": "1 line change OR 1 example demonstrating the fix",
   "justification": "brief explanation of why this change addresses the pain point"
-}$TPL$, 0.7);
+}$TPL$, 0.7)
+ON CONFLICT (prompt_key) DO UPDATE SET
+    version = EXCLUDED.version,
+    template = EXCLUDED.template,
+    temperature = EXCLUDED.temperature;
 
 -- PROACTIVE_CHECKIN (v1, temp=0.7)
 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
@@ -395,4 +419,8 @@ Return ONLY valid JSON:
   "action": "message" | "wait",
   "content": "Message text" | null,
   "reason": "Justify the decision briefly, including which style you chose and why it fits now."
-}$TPL$, 0.7);
+}$TPL$, 0.7)
+ON CONFLICT (prompt_key) DO UPDATE SET
+    version = EXCLUDED.version,
+    template = EXCLUDED.template,
+    temperature = EXCLUDED.temperature;
