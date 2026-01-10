@@ -122,8 +122,8 @@ class PromptDetailView(discord.ui.DesignerView):
         # TextDisplay requires 1-4000 characters
         if not rendered_prompt:
             display_content = "Content not available"
-        elif len(rendered_prompt) > 4000:
-            display_content = rendered_prompt[:3997] + "..."
+        elif len(rendered_prompt) > MODAL_TEXT_LIMIT:
+            display_content = rendered_prompt[: MODAL_TEXT_LIMIT - 3] + "..."
         else:
             display_content = rendered_prompt
         text_display: Any = discord.ui.TextDisplay(content=display_content)
@@ -323,6 +323,19 @@ class AuditView(discord.ui.DesignerView):
             quick_negative_button,
         )
         self.add_item(action_row)
+
+    def _make_custom_id(self, action: str) -> str:
+        """Create a unique custom ID for a button action.
+
+        Args:
+            action: The action type (e.g., "view_prompt", "view_raw")
+
+        Returns:
+            Unique custom ID string including audit_id if available
+        """
+        if self.audit_id:
+            return f"audit:{action}:{self.audit_id}"
+        return f"audit:{action}"
 
     def _make_view_prompt_callback(self) -> Any:
         """Create view prompt button callback."""

@@ -405,6 +405,39 @@ class TestAuditViewCustomIds:
         assert all(f"{audit_id}" in custom_id for custom_id in custom_ids)
 
     @pytest.mark.asyncio
+    async def test_audit_view_make_custom_id_with_audit_id(self) -> None:
+        """Test _make_custom_id helper method with audit_id."""
+        audit_id = uuid4()
+        view = AuditView(
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="test output",
+        )
+
+        assert view._make_custom_id("view_prompt") == f"audit:view_prompt:{audit_id}"
+        assert view._make_custom_id("view_raw") == f"audit:view_raw:{audit_id}"
+        assert view._make_custom_id("feedback") == f"audit:feedback:{audit_id}"
+
+    @pytest.mark.asyncio
+    async def test_audit_view_make_custom_id_without_audit_id(self) -> None:
+        """Test _make_custom_id helper method without audit_id."""
+        view = AuditView(
+            audit_id=None,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="test output",
+        )
+
+        assert view._make_custom_id("view_prompt") == "audit:view_prompt"
+        assert view._make_custom_id("view_raw") == "audit:view_raw"
+        assert view._make_custom_id("feedback") == "audit:feedback"
+
+    @pytest.mark.asyncio
     async def test_audit_view_custom_ids_are_unique_per_instance(self) -> None:
         """Test that different AuditViews have different custom_ids."""
         audit_id_1 = uuid4()
