@@ -7,13 +7,14 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfoNotFoundError
 
+import asyncpg
 import structlog
 
 from lattice.utils.config import config
 
 
 if TYPE_CHECKING:
-    import asyncpg
+    pass
 
 
 logger = structlog.get_logger(__name__)
@@ -41,8 +42,6 @@ class DatabasePool:
             min_size=min_size,
             max_size=max_size,
         )
-
-        import asyncpg
 
         self._pool = await asyncpg.create_pool(
             database_url,

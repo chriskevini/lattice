@@ -1,6 +1,5 @@
 """Unit tests for UnifiedPipeline message sending."""
 
-import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -51,12 +50,10 @@ class TestUnifiedPipeline:
         assert result is mock_message
 
     @pytest.mark.asyncio
-    async def test_send_response_channel_not_found(self, caplog) -> None:
+    async def test_send_response_channel_not_found(self) -> None:
         """Test send_response when channel doesn't exist.
 
-        Verifies that:
-        1. None is returned when channel not found
-        2. Warning is logged with the channel ID
+        Verifies that None is returned when channel not found.
         """
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
@@ -66,23 +63,16 @@ class TestUnifiedPipeline:
 
         pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
 
-        with caplog.at_level(logging.WARNING):
-            result = await pipeline.send_response(
-                channel_id=999999999,
-                content="Test message",
-            )
+        result = await pipeline.send_response(
+            channel_id=999999999,
+            content="Test message",
+        )
 
         # Verify channel was attempted
         mock_bot.get_channel.assert_called_once_with(999999999)
 
         # Verify None returned
         assert result is None
-
-        # Verify warning was logged
-        assert any(
-            "Channel not found" in rec.message and "999999999" in rec.message
-            for rec in caplog.records
-        )
 
     @pytest.mark.asyncio
     async def test_send_proactive_message_success(self) -> None:

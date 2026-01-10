@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 
+from lattice.utils.config import get_config
 from lattice.memory.episodic import EpisodicMessage
 from lattice.utils.source_links import build_source_map, inject_source_links
 
@@ -59,7 +60,8 @@ class TestBuildSourceMap:
 
     def test_uses_env_var_when_guild_id_none(self, monkeypatch) -> None:
         """Test that DISCORD_GUILD_ID env var is used when guild_id is None."""
-        monkeypatch.setenv("DISCORD_GUILD_ID", "777")
+        config = get_config(reload=True)
+        config.discord_guild_id = 777
         msg_uuid = uuid4()
         messages = [
             EpisodicMessage(
@@ -78,7 +80,8 @@ class TestBuildSourceMap:
 
     def test_returns_empty_when_no_guild_id_or_env(self, monkeypatch) -> None:
         """Test returns empty dict when guild_id is None and env var not set."""
-        monkeypatch.delenv("DISCORD_GUILD_ID", raising=False)
+        config = get_config(reload=True)
+        config.discord_guild_id = 0
         msg_uuid = uuid4()
         messages = [
             EpisodicMessage(

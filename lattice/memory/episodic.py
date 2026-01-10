@@ -16,7 +16,7 @@ from lattice.utils.date_resolution import get_now
 
 
 if TYPE_CHECKING:
-    import asyncpg
+    pass
 
 
 logger = structlog.get_logger(__name__)
