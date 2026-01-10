@@ -116,6 +116,7 @@ AUDIT_RENDERER_REGISTRY: dict[str, AuditRenderer] = {
     "MEMORY_CONSOLIDATION": ConsolidationRenderer(),
     "ENTITY_EXTRACTION": EntityRenderer(),
     "BATCH_MEMORY_EXTRACTION": ConsolidationRenderer(),
+    "MEMORY_EXTRACTION": ConsolidationRenderer(),
     "CONTEXT_STRATEGY": ContextStrategyRenderer(),
 }
 
