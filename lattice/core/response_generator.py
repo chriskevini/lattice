@@ -49,11 +49,13 @@ def get_available_placeholders() -> dict[str, str]:
         Dictionary mapping placeholder names to their descriptions.
 
     Note:
-        Future enhancement: Load this from a database table to allow runtime
-        extensibility. For now, this is a hardcoded registry to prevent the
-        optimizer from proposing unusable placeholders.
+        Now uses the central PlaceholderRegistry for runtime extensibility.
+        Backward compatibility maintained by also exporting AVAILABLE_PLACEHOLDERS.
     """
-    return AVAILABLE_PLACEHOLDERS.copy()
+    from lattice.utils.placeholder_injector import PlaceholderInjector
+
+    injector = PlaceholderInjector()
+    return injector.get_available_placeholders()
 
 
 def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
@@ -76,10 +78,10 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
         >>> validate_template_placeholders("Hello {unknown_var}!")
         (False, ["unknown_var"])
     """
-    template_placeholders = set(re.findall(r"\{(\w+)\}", template))
-    known_placeholders = set(AVAILABLE_PLACEHOLDERS.keys())
-    unknown = list(template_placeholders - known_placeholders)
-    return (len(unknown) == 0, unknown)
+    from lattice.utils.placeholder_injector import PlaceholderInjector
+
+    injector = PlaceholderInjector()
+    return injector.validate_template(template)
 
 
 async def fetch_goal_names() -> list[str]:
