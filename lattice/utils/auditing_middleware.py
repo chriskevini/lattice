@@ -120,8 +120,14 @@ class AuditingLLMClient:
                         )
                         message = f"🤖 **LLM Call Completed**\n• Prompt: {prompt_key or 'UNKNOWN'}\n• Model: {result.model}\n• Tokens: {result.total_tokens}\n• {audit_link}"
                         try:
-                            await bot.get_channel(int(dream_channel_id_str)).send(
-                                message
+                            channel_id = int(dream_channel_id_str)
+                            channel = bot.get_channel(channel_id)
+                            if channel:
+                                await channel.send(message)
+                        except (ValueError, TypeError):
+                            logger.warning(
+                                "Invalid DISCORD_DREAM_CHANNEL_ID",
+                                channel_id=dream_channel_id_str,
                             )
                         except Exception as e:
                             logger.warning(
