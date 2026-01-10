@@ -1,9 +1,8 @@
-# Lattice: Agent Onboarding
-
 ## 📌 Project Overview
 **Lattice** is a single-user Adaptive Memory Orchestrator using the **ENGRAM** neuro-symbolic memory framework.
 - **Target**: Personal use, high-fidelity context tracking for a single human operator.
 - **Hardware**: Optimized for 2GB RAM / 1vCPU (e.g., small VPS or Raspberry Pi).
+- **Interface**: Discord (via `py-cord`).
 - **Goal**: Total evolvability via metadata-driven logic.
 
 ## 🏗️ Core Architecture (ENGRAM)
