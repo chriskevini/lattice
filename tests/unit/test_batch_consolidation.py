@@ -291,9 +291,7 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = (
-            "Template with {semantic_context} and {bigger_episodic_context}"
-        )
+        mock_prompt.template = "Template with {bigger_episodic_context}"
         mock_prompt.temperature = 0.2
         mock_prompt.safe_format = MagicMock(return_value="Formatted prompt")
         mock_prompt.version = 1
@@ -617,7 +615,7 @@ class TestRunBatchConsolidation:
 
     @pytest.mark.asyncio
     async def test_memory_context_format(self) -> None:
-        """Test that memory context is formatted as bullet points."""
+        """Test that memory context is handled as a context variable even if not in template."""
         message_id = uuid4()
         messages = [
             {
@@ -634,13 +632,7 @@ class TestRunBatchConsolidation:
                 "predicate": "lives_in",
                 "object": "Richmond",
                 "created_at": datetime.now(UTC),
-            },
-            {
-                "subject": "user",
-                "predicate": "has goal",
-                "object": "run a marathon",
-                "created_at": datetime.now(UTC),
-            },
+            }
         ]
 
         mock_conn1 = AsyncMock()
@@ -667,9 +659,9 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "{semantic_context}"
+        mock_prompt.template = "No placeholders"
         mock_prompt.temperature = 0.2
-        mock_prompt.safe_format = MagicMock(return_value="Memories")
+        mock_prompt.safe_format = MagicMock(return_value="No placeholders")
         mock_prompt.version = 1
 
         mock_result = MagicMock()
@@ -724,22 +716,17 @@ class TestRunBatchConsolidation:
                                             },
                                         ):
                                             await run_batch_consolidation()
+                                            # semantic_context should NOT be in call_args anymore
                                             call_args = (
                                                 mock_prompt.safe_format.call_args
                                             )
-                                            assert "semantic_context" in call_args[1]
-                                            context = call_args[1]["semantic_context"]
                                             assert (
-                                                "user --lives_in--> Richmond" in context
-                                            )
-                                            assert (
-                                                "user --has goal--> run a marathon"
-                                                in context
+                                                "semantic_context" not in call_args[1]
                                             )
 
     @pytest.mark.asyncio
     async def test_empty_previous_memories_shows_placeholder(self) -> None:
-        """Test that empty previous memories shows placeholder text."""
+        """Test that memory context is not passed even if empty."""
         message_id = uuid4()
         messages = [
             {
@@ -775,9 +762,9 @@ class TestRunBatchConsolidation:
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
-        mock_prompt.template = "{semantic_context}"
+        mock_prompt.template = "No placeholders"
         mock_prompt.temperature = 0.2
-        mock_prompt.safe_format = MagicMock(return_value="(No previous memories)")
+        mock_prompt.safe_format = MagicMock(return_value="No placeholders")
         mock_prompt.version = 1
 
         mock_result = MagicMock()
@@ -836,8 +823,7 @@ class TestRunBatchConsolidation:
                                                 mock_prompt.safe_format.call_args
                                             )
                                             assert (
-                                                call_args[1]["semantic_context"]
-                                                == "(No previous memories)"
+                                                "semantic_context" not in call_args[1]
                                             )
 
 
