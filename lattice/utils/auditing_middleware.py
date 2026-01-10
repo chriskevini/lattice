@@ -2,6 +2,11 @@
 
 This module provides AuditingLLMClient which wraps the basic LLM client
 to add audit tracking, feedback linkage, and error mirroring.
+
+Technical Debt (Phase 2 of #169): This module contains late-bound imports
+from discord_client (error_notifier, dream) as a workaround. These cross-package
+dependencies will be eliminated in Phase 3-4 (DI Infrastructure) via
+proper dependency injection. See: https://github.com/chriskevini/lattice/issues/169
 """
 
 from dataclasses import dataclass
