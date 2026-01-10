@@ -34,7 +34,7 @@ AVAILABLE_PLACEHOLDERS = {
     "local_date": "Current date with day of week (e.g., 2026/01/08, Thursday)",
     "local_time": "Current time for proactive decisions (e.g., 14:30)",
     "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
-    "unresolved_entities": "Entities requiring clarification (e.g., 'bf', 'lkea') - CONTEXT_STRATEGY will handle these naturally",
+    "unresolved_entities": "Entities requiring clarification (e.g., 'bf', 'lkea')",
 }
 
 

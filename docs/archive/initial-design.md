@@ -262,7 +262,7 @@ Daily at 3:00 AM, the system performs a self-analysis:
 To leverage improved LLM capabilities without losing history:
 
 1. Clear `stable_facts` and `semantic_triples`.
-2. Re-process the immutable `raw_messages` log through an updated `MEMORY_EXTRACTION` template.
+2. Re-process the immutable `raw_messages` log through an updated `MEMORY_CONSOLIDATION` template.
 3. Re-generate embeddings with newer models.
 
 ---

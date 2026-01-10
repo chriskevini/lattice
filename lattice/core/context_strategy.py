@@ -8,6 +8,7 @@ Templates:
 - CONTEXT_RETRIEVAL: Fetches context based on entities and context flags
 """
 
+import asyncio
 import json
 import uuid
 from dataclasses import dataclass
@@ -442,8 +443,6 @@ async def retrieve_context(
     if entities and memory_depth > 0:
         if db_pool.is_initialized():
             traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
-
-            import asyncio
 
             traverse_tasks = [
                 traverser.traverse_from_entity(entity_name, max_hops=memory_depth)

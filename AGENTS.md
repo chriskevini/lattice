@@ -14,10 +14,10 @@ Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrato
 
 ## 🔄 Core Pipeline
 1. **Ingest**: Message stored in episodic memory.
-2. **Analyze**: Context Strategy identifies entities and retrieval needs.
+2. **Analyze**: Context Strategy identifies entities and retrieval needs using `CONTEXT_STRATEGY`.
 3. **Retrieve**: Iterative BFS traversal across semantic graph.
-4. **Generate**: Response produced with grounded context.
-5. **Consolidate**: Async extraction of new entities and memories.
+4. **Generate**: Response produced with grounded context using `UNIFIED_RESPONSE`.
+5. **Consolidate**: Async extraction of new entities and memories using `MEMORY_CONSOLIDATION`.
 
 ## 📂 Project Structure
 - `lattice/core/`: Pipeline, ingestion, and extraction logic.

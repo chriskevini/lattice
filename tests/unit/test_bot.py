@@ -377,7 +377,7 @@ class TestLatticeBot:
                     return_value=(
                         mock_response_obj,
                         "prompt",
-                        {"template": "BASIC_RESPONSE"},
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Hi there!"])
@@ -605,7 +605,7 @@ class TestLatticeBot:
                     return_value=(
                         mock_response_obj,
                         "rendered_prompt",
-                        {"template": "BASIC_RESPONSE", "template_version": 1},
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
                     )
                 )
                 mock_response.split_response = MagicMock(
@@ -714,8 +714,8 @@ class TestLatticeBot:
                         mock_response_obj,
                         "rendered_prompt_content",
                         {
-                            "template": "GOAL_RESPONSE",
-                            "template_version": 2,
+                            "template": "UNIFIED_RESPONSE",
+                            "template_version": 1,
                         },
                     )
                 )
@@ -820,7 +820,7 @@ class TestLatticeBot:
                     return_value=(
                         mock_response_obj,
                         "rendered_prompt",
-                        {"template": "BASIC_RESPONSE", "template_version": 1},
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -934,7 +934,7 @@ class TestLatticeBot:
                     return_value=(
                         mock_response_obj,
                         "rendered_prompt",
-                        {"template": "BASIC_RESPONSE", "template_version": 1},
+                        {"template": "UNIFIED_RESPONSE", "template_version": 1},
                     )
                 )
                 mock_response.split_response = MagicMock(return_value=["Response"])
@@ -1192,7 +1192,6 @@ class TestLatticeBot:
 
     # ============================================================================
     # Phase 2: Dream Channel Mirroring Tests (Lines 438-493)
-
     # ============================================================================
     # Additional Tests for 80% Coverage
     # ============================================================================

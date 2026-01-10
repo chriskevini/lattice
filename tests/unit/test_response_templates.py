@@ -1006,9 +1006,9 @@ class TestExtractionFieldsNotInPrompts:
         mock_extraction_conversation: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
     ) -> None:
-        """Test CONVERSATION_RESPONSE template does not include extraction fields."""
+        """Test UNIFIED_RESPONSE template does not include extraction fields."""
         mock_template = PromptTemplate(
-            prompt_key="CONVERSATION_RESPONSE",
+            prompt_key="UNIFIED_RESPONSE",
             template=(
                 "You are a warm AI companion.\n\n"
                 "## Context\n"
