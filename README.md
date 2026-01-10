@@ -105,7 +105,7 @@ See [scripts/schema.sql](scripts/schema.sql) for the canonical schema.
 | Table | Purpose |
 |-------|---------|
 | `raw_messages` | Stored Discord messages |
-| `message_extractions` | Query extraction output |
+| `context_strategies` | Context strategy output |
 | `entities` | Entity registry |
 | `semantic_memories` | Graph relationships |
 | `objectives` | User goals |

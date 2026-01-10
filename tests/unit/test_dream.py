@@ -192,6 +192,7 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert reactive_embed.title is not None
         assert reactive_embed.title.startswith("💬")
 
         proactive_embed, _ = AuditViewBuilder.build_standard_audit(
@@ -203,6 +204,7 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert proactive_embed.title is not None
         assert proactive_embed.title.startswith("🌟")
 
         extraction_embed, _ = AuditViewBuilder.build_standard_audit(
@@ -214,6 +216,7 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert extraction_embed.title is not None
         assert extraction_embed.title.startswith("🧠")
 
         reasoning_embed, _ = AuditViewBuilder.build_standard_audit(
@@ -225,6 +228,7 @@ class TestAuditViewBuilder:
             audit_id=audit_id,
             rendered_prompt="test",
         )
+        assert reasoning_embed.title is not None
         assert reasoning_embed.title.startswith("🌟")
 
     @pytest.mark.asyncio

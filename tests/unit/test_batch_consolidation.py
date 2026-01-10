@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import json
+from typing import Any
 import pytest
 
 from lattice.memory.batch_consolidation import (
@@ -928,7 +929,7 @@ class TestCanonicalFormIntegration:
                 "timestamp": datetime.now(UTC),
             }
         ]
-        memories = []
+        memories: list[dict[str, Any]] = []
 
         mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
@@ -1070,7 +1071,7 @@ class TestCanonicalFormIntegration:
                 "timestamp": datetime.now(UTC),
             }
         ]
-        memories = []
+        memories: list[dict[str, Any]] = []
 
         mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
@@ -1177,7 +1178,7 @@ class TestCanonicalFormIntegration:
                 "timestamp": datetime.now(UTC),
             }
         ]
-        memories = []
+        memories: list[dict[str, Any]] = []
 
         mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(

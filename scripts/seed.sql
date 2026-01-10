@@ -398,3 +398,20 @@ Return ONLY valid JSON:
   "content": "Message text" | null,
    "reason": "Justify the decision briefly, including which style you chose and why it fits now."
 }$TPL$, 0.7);
+
+-- ============================================================================
+-- Default Configuration
+-- ============================================================================
+INSERT INTO system_health (metric_key, metric_value) VALUES
+    ('scheduler_base_interval', '15'),
+    ('scheduler_current_interval', '15'),
+    ('scheduler_max_interval', '1440'),
+    ('dreaming_min_uses', '10'),
+    ('dreaming_enabled', 'true'),
+    ('user_timezone', 'UTC'),
+    ('active_hours_start', '9'),
+    ('active_hours_end', '21'),
+    ('active_hours_confidence', '0.0'),
+    ('active_hours_last_updated', NOW()::TEXT),
+    ('last_batch_message_id', '0')
+ON CONFLICT (metric_key) DO NOTHING;
