@@ -164,8 +164,8 @@ class AuditingLLMClient:
 
                         channel = bot.get_channel(effective_dream_channel_id)
                         if channel:
-                            bot.add_view(view)
                             await channel.send(embed=embed, view=view)
+                            bot.add_view(view)
                     except Exception as e:
                         logger.warning(
                             "Failed to post rich audit to dream channel",

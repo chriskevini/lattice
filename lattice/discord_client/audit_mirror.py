@@ -1,5 +1,6 @@
 """Audit mirroring for LatticeBot."""
 
+import time
 from typing import Any
 from uuid import UUID
 
@@ -23,6 +24,23 @@ class AuditMirror:
         """
         self.bot = bot
         self.dream_channel_id = dream_channel_id
+        self._active_views: dict[int, Any] = {}
+
+    async def get_active_view_count(self) -> int:
+        """Get count of currently tracked active views.
+
+        Returns:
+            Number of active views being tracked
+        """
+        return len(self._active_views)
+
+    async def log_view_stats(self) -> None:
+        """Log statistics about active views for monitoring."""
+        if self._active_views:
+            logger.info(
+                "Active views statistics",
+                count=len(self._active_views),
+            )
 
     async def mirror_audit(
         self,
@@ -63,8 +81,10 @@ class AuditMirror:
         )
 
         try:
-            self.bot.add_view(view)
             dream_msg = await dream_channel.send(embed=embed, view=view)
+            self.bot.add_view(view)
+            self._active_views[dream_msg.id] = (view, time.time())
+
             if audit_id:
                 from lattice.memory import prompt_audits
 

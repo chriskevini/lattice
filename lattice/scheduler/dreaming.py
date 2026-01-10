@@ -335,8 +335,8 @@ class DreamingScheduler:
             await channel.send(summary_text)
 
             view = TemplateComparisonView(proposal)
-            self.bot.add_view(view)
             await channel.send(view=view)
+            self.bot.add_view(view)
 
             logger.info(
                 "Posted proposal to dream channel", prompt_key=proposal.prompt_key
