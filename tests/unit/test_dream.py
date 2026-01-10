@@ -29,10 +29,10 @@ class TestAuditViewBuilder:
         assert embed.color == discord.Color.blurple()
         assert len(embed.fields) == 3
 
-        assert embed.fields[0].name == "INPUT"
+        assert embed.fields[0].name == "📥"
         assert "I'm planning to ship v2" in embed.fields[0].value
 
-        assert embed.fields[1].name == "OUTPUT"
+        assert embed.fields[1].name == "📤"
         assert "Got it! I'll track" in embed.fields[1].value
 
         assert embed.fields[2].name == "METADATA"
@@ -77,10 +77,10 @@ class TestAuditViewBuilder:
         assert embed.color == discord.Color.gold()
         assert len(embed.fields) == 3
 
-        assert embed.fields[0].name == "INPUT"
+        assert embed.fields[0].name == "📥"
         assert "User set deadline" in embed.fields[0].value
 
-        assert embed.fields[1].name == "OUTPUT"
+        assert embed.fields[1].name == "📤"
         assert "Hey! You mentioned" in embed.fields[1].value
 
         assert embed.fields[2].name == "METADATA"
@@ -118,10 +118,10 @@ class TestAuditViewBuilder:
         assert embed.color == discord.Color.purple()
         assert len(embed.fields) == 3
 
-        assert embed.fields[0].name == "INPUT"
+        assert embed.fields[0].name == "📥"
         assert "I'm planning to ship v2" in embed.fields[0].value
 
-        assert embed.fields[1].name == "OUTPUT"
+        assert embed.fields[1].name == "📤"
         assert "🔗 2 memories" in embed.fields[1].value
         assert "lattice → has_deadline → end_of_month" in embed.fields[1].value
 
@@ -145,7 +145,7 @@ class TestAuditViewBuilder:
         assert isinstance(embed, discord.Embed)
         assert len(embed.fields) == 3
 
-        assert embed.fields[1].name == "OUTPUT"
+        assert embed.fields[1].name == "📤"
         assert embed.fields[1].value == "Nothing extracted"
 
     @pytest.mark.asyncio
@@ -167,10 +167,10 @@ class TestAuditViewBuilder:
         assert embed.color == discord.Color.gold()
         assert len(embed.fields) == 3
 
-        assert embed.fields[0].name == "INPUT"
+        assert embed.fields[0].name == "📥"
         assert "deadline: 3 days" in embed.fields[0].value
 
-        assert embed.fields[1].name == "OUTPUT"
+        assert embed.fields[1].name == "📤"
         assert "Send proactive check-in" in embed.fields[1].value
 
         assert embed.fields[2].name == "METADATA"
@@ -285,10 +285,10 @@ class TestAuditViewBuilder:
             rendered_prompt="test",
         )
 
-        assert embed.fields[0].name == "INPUT"
+        assert embed.fields[0].name == "📥"
         assert len(embed.fields[0].value) <= 1024
 
-        assert embed.fields[1].name == "OUTPUT"
+        assert embed.fields[1].name == "📤"
         assert len(embed.fields[1].value) <= 1024
 
 

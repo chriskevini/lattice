@@ -268,14 +268,14 @@ class AuditView(discord.ui.DesignerView):
         self.raw_output = raw_output
 
         view_prompt_button: Any = discord.ui.Button(
-            emoji="📋",
+            emoji="📥",
             style=discord.ButtonStyle.secondary,
             custom_id="audit:view_prompt",
         )
         view_prompt_button.callback = self._make_view_prompt_callback()
 
         view_raw_button: Any = discord.ui.Button(
-            emoji="📄",
+            emoji="📤",
             style=discord.ButtonStyle.secondary,
             custom_id="audit:view_raw",
         )
@@ -537,7 +537,7 @@ class AuditViewBuilder:
         )
 
         embed.add_field(
-            name="INPUT",
+            name="📥",
             value=_truncate_for_field(input_text),
             inline=False,
         )
@@ -549,7 +549,7 @@ class AuditViewBuilder:
             final_output = renderer.render_result(result)
 
         embed.add_field(
-            name="OUTPUT",
+            name="📤",
             value=_truncate_for_field(final_output),
             inline=False,
         )
