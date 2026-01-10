@@ -70,18 +70,21 @@ class UserDatetime:
     Ensures consistent timezone handling across the codebase.
     """
 
-    def __init__(self, timezone_str: str | None = None) -> None:
+    def __init__(
+        self, timezone_str: str | None = None, now: datetime | None = None
+    ) -> None:
         """Initialize with a timezone.
 
         Args:
             timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+            now: Optional fixed time for testing.
 
         Raises:
             InvalidTimezoneError: If the timezone string is invalid.
         """
         self._timezone_str = timezone_str or "UTC"
         self._tz: ZoneInfo | None = None
-        self._now: datetime | None = None
+        self._now: datetime | None = now
 
     @property
     def tz(self) -> ZoneInfo:
@@ -199,19 +202,24 @@ def get_now(timezone_str: str | None = None) -> datetime:
     return _get_user_datetime(timezone_str).now
 
 
-def get_user_datetime(timezone_str: str | None = None) -> UserDatetime:
+def get_user_datetime(
+    timezone_str: str | None = None, now: datetime | None = None
+) -> UserDatetime:
     """Get a UserDatetime instance for the given timezone.
 
     Args:
         timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        now: Optional fixed time for testing.
 
     Returns:
         UserDatetime instance.
     """
-    return _get_user_datetime(timezone_str)
+    return _get_user_datetime(timezone_str, now=now)
 
 
-def _get_user_datetime(timezone_str: str | None = None) -> UserDatetime:
+def _get_user_datetime(
+    timezone_str: str | None = None, now: datetime | None = None
+) -> UserDatetime:
     """Get a UserDatetime instance for the given timezone.
 
     This is the single entry point for getting timezone-aware datetime.
@@ -219,7 +227,7 @@ def _get_user_datetime(timezone_str: str | None = None) -> UserDatetime:
     Raises:
         InvalidTimezoneError: If the timezone string is invalid.
     """
-    return UserDatetime(timezone_str)
+    return UserDatetime(timezone_str, now=now)
 
 
 def get_next_weekday(target_weekday: str, user_dt: UserDatetime) -> datetime:
@@ -395,8 +403,7 @@ def format_current_date(timezone_str: str | None = None) -> str:
     Returns:
         Formatted string like "2026/01/08, Thursday"
     """
-    user_dt = _get_user_datetime(timezone_str)
-    return user_dt.format("%Y/%m/%d, %A")
+    return _get_user_datetime(timezone_str).now.strftime("%Y/%m/%d, %A")
 
 
 def format_current_time(timezone_str: str | None = None) -> str:
@@ -408,8 +415,7 @@ def format_current_time(timezone_str: str | None = None) -> str:
     Returns:
         Formatted string like "14:30"
     """
-    user_dt = _get_user_datetime(timezone_str)
-    return user_dt.format("%H:%M")
+    return _get_user_datetime(timezone_str).now.strftime("%H:%M")
 
 
 class DateRange:

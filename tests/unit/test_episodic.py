@@ -1,8 +1,9 @@
 """Unit tests for episodic memory module."""
 
 import json
+from lattice.utils.date_resolution import get_now
 from zoneinfo import ZoneInfo
-from datetime import UTC, datetime
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -51,7 +52,7 @@ class TestEpisodicMessage:
     def test_init_with_all_fields(self) -> None:
         """Test EpisodicMessage initialization with all fields provided."""
         message_id = uuid4()
-        timestamp = datetime.now(UTC)
+        timestamp = get_now()
         metadata = {"model": "gpt-4", "tokens": 100}
 
         msg = EpisodicMessage(
@@ -95,21 +96,22 @@ class TestEpisodicMessage:
 
     def test_timestamp_defaults_to_now(self) -> None:
         """Test that timestamp defaults to current UTC time."""
-        before = datetime.now(UTC)
+        before = get_now()
         msg = EpisodicMessage(
             content="Test",
             discord_message_id=123,
             channel_id=456,
             is_bot=False,
         )
-        after = datetime.now(UTC)
+        after = get_now()
 
         assert before <= msg.timestamp <= after
         # Compare ZoneInfo objects if available, otherwise fallback to name comparison
         if isinstance(msg.timestamp.tzinfo, ZoneInfo):
             assert msg.timestamp.tzinfo == ZoneInfo("UTC")
         else:
-            assert msg.timestamp.tzinfo == UTC
+            assert msg.timestamp.tzinfo is not None
+            assert msg.timestamp.tzinfo.tzname(None) == "UTC"
 
     def test_user_timezone_defaults_to_utc_when_none(self) -> None:
         """Test that user_timezone defaults to 'UTC' when None."""
@@ -265,7 +267,7 @@ class TestGetRecentMessages:
                 "channel_id": 123,
                 "is_bot": True,
                 "is_proactive": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
                 "generation_metadata": json.dumps({"model": "gpt-4"}),
                 "user_timezone": "UTC",
             },
@@ -276,7 +278,7 @@ class TestGetRecentMessages:
                 "channel_id": 123,
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
                 "generation_metadata": None,
                 "user_timezone": "UTC",
             },
@@ -310,7 +312,7 @@ class TestGetRecentMessages:
                 "channel_id": 100,
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
                 "generation_metadata": None,
                 "user_timezone": "UTC",
             },
@@ -354,7 +356,7 @@ class TestGetRecentMessages:
                 "channel_id": 123,
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": datetime(2024, 1, 3, tzinfo=UTC),
+                "timestamp": datetime(2024, 1, 3, tzinfo=ZoneInfo("UTC")),
                 "generation_metadata": None,
                 "user_timezone": "UTC",
             },
@@ -365,7 +367,7 @@ class TestGetRecentMessages:
                 "channel_id": 123,
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": datetime(2024, 1, 1, tzinfo=UTC),
+                "timestamp": datetime(2024, 1, 1, tzinfo=ZoneInfo("UTC")),
                 "generation_metadata": None,
                 "user_timezone": "UTC",
             },
@@ -394,7 +396,7 @@ class TestGetRecentMessages:
                 "channel_id": 123,
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": datetime.now(UTC),
+                "timestamp": get_now(),
                 "generation_metadata": None,
                 "user_timezone": None,  # NULL from DB
             },

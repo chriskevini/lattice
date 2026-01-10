@@ -137,6 +137,8 @@ async def decide_proactive() -> ProactiveDecision:
     current_interval = await get_current_interval()
     from lattice.utils.date_resolution import get_now
 
+    from zoneinfo import ZoneInfo
+
     now = get_now(user_tz)
     local_date = now.strftime("%Y/%m/%d, %A")
     local_time = now.strftime("%H:%M")

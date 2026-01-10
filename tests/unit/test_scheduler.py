@@ -1,7 +1,9 @@
 """Unit tests for scheduler components."""
 
 import os
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,14 +37,14 @@ class TestGetConversationContext:
                 discord_message_id=1,
                 channel_id=1,
                 is_bot=False,
-                timestamp=datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                timestamp=datetime(2024, 1, 1, 10, 0, tzinfo=ZoneInfo("UTC")),
             ),
             EpisodicMessage(
                 content="Hi there",
                 discord_message_id=2,
                 channel_id=1,
                 is_bot=True,
-                timestamp=datetime(2024, 1, 1, 10, 1, tzinfo=UTC),
+                timestamp=datetime(2024, 1, 1, 10, 1, tzinfo=ZoneInfo("UTC")),
             ),
         ]
 
@@ -57,11 +59,41 @@ class TestGetConversationContext:
         assert "[2024-01-01 02:01] ASSISTANT: Hi there" in result
 
     @pytest.mark.asyncio
-    @patch("lattice.scheduler.triggers.get_recent_messages")
-    async def test_empty_context(self, mock_get_recent: MagicMock) -> None:
-        mock_get_recent.return_value = []
-        result = await get_conversation_context()
-        assert result == "No recent conversation history."
+    async def test_get_conversation_context_with_no_messages(self) -> None:
+        """Test conversation context when no messages exist."""
+        with patch(
+            "lattice.scheduler.triggers.get_recent_messages",
+            return_value=[],
+        ):
+            result = await get_conversation_context()
+            assert result == "No recent conversation history."
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_context_with_messages(self) -> None:
+        """Test conversation context with messages."""
+        messages = [
+            EpisodicMessage(
+                content="Hello!",
+                discord_message_id=1,
+                channel_id=12345,
+                is_bot=False,
+                timestamp=datetime(2024, 1, 1, 10, 0, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+            EpisodicMessage(
+                content="Hi there!",
+                discord_message_id=2,
+                channel_id=12345,
+                is_bot=True,
+                timestamp=datetime(2024, 1, 1, 10, 1, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+        ]
+        with patch(
+            "lattice.scheduler.triggers.get_recent_messages",
+            return_value=messages,
+        ):
+            result = await get_conversation_context()
+            assert "[2024-01-01 10:00] USER: Hello!" in result
+            assert "[2024-01-01 10:01] ASSISTANT: Hi there!" in result
 
 
 class TestProactiveDecision:
@@ -507,47 +539,6 @@ class TestSetCurrentInterval:
             mock_set_health.assert_called_once_with("scheduler_current_interval", "45")
 
 
-class TestGetConversationContext:
-    """Tests for get_conversation_context function."""
-
-    @pytest.mark.asyncio
-    async def test_get_conversation_context_with_no_messages(self) -> None:
-        """Test conversation context when no messages exist."""
-        with patch(
-            "lattice.scheduler.triggers.get_recent_messages",
-            return_value=[],
-        ):
-            result = await get_conversation_context()
-            assert result == "No recent conversation history."
-
-    @pytest.mark.asyncio
-    async def test_get_conversation_context_with_messages(self) -> None:
-        """Test conversation context with messages."""
-        messages = [
-            EpisodicMessage(
-                content="Hello!",
-                discord_message_id=1,
-                channel_id=12345,
-                is_bot=False,
-                timestamp=datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
-            ),
-            EpisodicMessage(
-                content="Hi there!",
-                discord_message_id=2,
-                channel_id=12345,
-                is_bot=True,
-                timestamp=datetime(2024, 1, 1, 10, 1, 0, tzinfo=UTC),
-            ),
-        ]
-        with patch(
-            "lattice.scheduler.triggers.get_recent_messages",
-            return_value=messages,
-        ):
-            result = await get_conversation_context()
-            assert "[2024-01-01 10:00] USER: Hello!" in result
-            assert "[2024-01-01 10:01] ASSISTANT: Hi there!" in result
-
-
 class TestGetGoalContext:
     """Tests for get_goal_context function."""
 
@@ -655,7 +646,7 @@ class TestAdaptiveActiveHours:
     async def test_calculate_active_hours_with_messages(self) -> None:
         """Test active hours calculation with sufficient messages."""
         # Create 100 messages concentrated in evening hours (18-22)
-        now = datetime.now(UTC)
+        now = get_now(timezone_str="UTC")
         messages = []
         for i in range(100):
             # Most messages in evening
@@ -705,11 +696,11 @@ class TestAdaptiveActiveHours:
             ),
         ):
             # Test time within active hours (noon)
-            within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+            within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(within_time) is True
 
             # Test time outside active hours (2 AM)
-            outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC)
+            outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(outside_time) is False
 
     @pytest.mark.asyncio
@@ -734,15 +725,15 @@ class TestAdaptiveActiveHours:
             ),
         ):
             # Test time within active hours (midnight)
-            within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+            within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(within_time) is True
 
             # Test time within active hours (6 AM)
-            within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=UTC)
+            within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(within_time2) is True
 
             # Test time outside active hours (noon)
-            outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+            outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert await is_within_active_hours(outside_time) is False
 
     @pytest.mark.asyncio
@@ -768,7 +759,7 @@ class TestAdaptiveActiveHours:
             patch("lattice.scheduler.adaptive.get_now") as mock_get_now,
         ):
             # Mock get_now() to return a time within active hours (3 PM)
-            mock_now = datetime(2024, 1, 1, 15, 0, 0, tzinfo=UTC)
+            mock_now = datetime(2024, 1, 1, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
             mock_get_now.return_value = mock_now
 
             # Call without specifying check_time (should use mocked get_now())

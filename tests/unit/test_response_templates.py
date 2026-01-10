@@ -1,7 +1,9 @@
 """Unit tests for response template selection and generation."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -28,7 +30,7 @@ def mock_extraction_declaration() -> ContextStrategy:
         rendered_prompt="test prompt",
         raw_response="test response",
         strategy_method="api",
-        created_at=datetime.now(UTC),
+        created_at=get_now(timezone_str="UTC"),
     )
 
 
@@ -44,7 +46,7 @@ def mock_extraction_query() -> ContextStrategy:
         rendered_prompt="test prompt",
         raw_response="test response",
         strategy_method="api",
-        created_at=datetime.now(UTC),
+        created_at=get_now(timezone_str="UTC"),
     )
 
 
@@ -60,7 +62,7 @@ def mock_extraction_activity() -> ContextStrategy:
         rendered_prompt="test prompt",
         raw_response="test response",
         strategy_method="api",
-        created_at=datetime.now(UTC),
+        created_at=get_now(timezone_str="UTC"),
     )
 
 
@@ -76,7 +78,7 @@ def mock_extraction_conversation() -> ContextStrategy:
         rendered_prompt="test prompt",
         raw_response="test response",
         strategy_method="api",
-        created_at=datetime.now(UTC),
+        created_at=get_now(timezone_str="UTC"),
     )
 
 
@@ -90,7 +92,7 @@ def mock_recent_messages() -> list[EpisodicMessage]:
             channel_id=9876543210,
             is_bot=False,
             message_id=uuid.uuid4(),
-            timestamp=datetime(2026, 1, 4, 10, 0, tzinfo=UTC),
+            timestamp=datetime(2026, 1, 4, 10, 0, tzinfo=ZoneInfo("UTC")),
         ),
         EpisodicMessage(
             content="Got it! Friday deadline for lattice.",
@@ -98,7 +100,7 @@ def mock_recent_messages() -> list[EpisodicMessage]:
             channel_id=9876543210,
             is_bot=True,
             message_id=uuid.uuid4(),
-            timestamp=datetime(2026, 1, 4, 10, 1, tzinfo=UTC),
+            timestamp=datetime(2026, 1, 4, 10, 1, tzinfo=ZoneInfo("UTC")),
         ),
     ]
 
@@ -511,7 +513,7 @@ class TestGenerateResponseWithTemplates:
             rendered_prompt="test",
             raw_response="test",
             strategy_method="api",
-            created_at=datetime.now(UTC),
+            created_at=get_now(timezone_str="UTC"),
         )
 
         mock_template = PromptTemplate(
@@ -574,21 +576,21 @@ class TestGenerateResponseWithTemplates:
                 discord_message_id=1111111111,
                 channel_id=123,
                 is_bot=False,
-                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=ZoneInfo("UTC")),
             ),
             EpisodicMessage(
                 content="Hi there!",
                 discord_message_id=2222222222,
                 channel_id=123,
                 is_bot=True,
-                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=ZoneInfo("UTC")),
             ),
             EpisodicMessage(
                 content=user_message_content,  # Current message (should be filtered)
                 discord_message_id=user_discord_id,
                 channel_id=123,
                 is_bot=False,
-                timestamp=datetime(2026, 1, 5, 10, 2, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 2, tzinfo=ZoneInfo("UTC")),
             ),
         ]
 
@@ -655,28 +657,28 @@ class TestGenerateResponseWithTemplates:
                 discord_message_id=1111111111,
                 channel_id=123,
                 is_bot=False,
-                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=ZoneInfo("UTC")),
             ),
             EpisodicMessage(
                 content=duplicate_content,  # First time asking
                 discord_message_id=2222222222,
                 channel_id=123,
                 is_bot=False,
-                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=ZoneInfo("UTC")),
             ),
             EpisodicMessage(
                 content="It's sunny!",
                 discord_message_id=3333333333,
                 channel_id=123,
                 is_bot=True,
-                timestamp=datetime(2026, 1, 5, 10, 2, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 2, tzinfo=ZoneInfo("UTC")),
             ),
             EpisodicMessage(
                 content=duplicate_content,  # Asking again (current message)
                 discord_message_id=4444444444,
                 channel_id=123,
                 is_bot=False,
-                timestamp=datetime(2026, 1, 5, 10, 3, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 3, tzinfo=ZoneInfo("UTC")),
             ),
         ]
 
@@ -744,14 +746,14 @@ class TestGenerateResponseWithTemplates:
                 discord_message_id=1111111111,
                 channel_id=123,
                 is_bot=False,
-                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=ZoneInfo("UTC")),
             ),
             EpisodicMessage(
                 content=user_message_content,  # Should be filtered by content
                 discord_message_id=2222222222,
                 channel_id=123,
                 is_bot=False,
-                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 5, 10, 1, tzinfo=ZoneInfo("UTC")),
             ),
         ]
 
@@ -1142,7 +1144,7 @@ class TestNoTemplateFound:
             rendered_prompt="test",
             raw_response="test",
             strategy_method="api",
-            created_at=datetime.now(UTC),
+            created_at=get_now(timezone_str="UTC"),
         )
 
         with patch(
@@ -1202,7 +1204,7 @@ class TestTimezoneConversionFailure:
                 channel_id=123,
                 is_bot=False,
                 user_timezone="Invalid/Timezone",  # Invalid timezone
-                timestamp=datetime(2026, 1, 4, 10, 0, tzinfo=UTC),
+                timestamp=datetime(2026, 1, 4, 10, 0, tzinfo=ZoneInfo("UTC")),
             ),
         ]
 
