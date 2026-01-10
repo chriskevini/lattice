@@ -129,7 +129,9 @@ class PlaceholderRegistry:
             PlaceholderDef(
                 name="local_date",
                 description="Current date with day of week (e.g., 2026/01/08, Thursday)",
-                resolver=lambda tz: format_current_date(tz or "UTC"),
+                resolver=lambda ctx: format_current_date(
+                    ctx.get("user_timezone", "UTC")
+                ),
                 category="time",
             )
         )
@@ -138,7 +140,9 @@ class PlaceholderRegistry:
             PlaceholderDef(
                 name="local_time",
                 description="Current time for proactive decisions (e.g., 14:30)",
-                resolver=lambda tz: format_current_time(tz or "UTC"),
+                resolver=lambda ctx: format_current_time(
+                    ctx.get("user_timezone", "UTC")
+                ),
                 category="time",
             )
         )
@@ -147,7 +151,9 @@ class PlaceholderRegistry:
             PlaceholderDef(
                 name="date_resolution_hints",
                 description="Resolved relative dates (e.g., Friday → 2026-01-10)",
-                resolver=lambda msg, tz: resolve_relative_dates(msg, tz or "UTC"),
+                resolver=lambda ctx: resolve_relative_dates(
+                    ctx.get("message_content", ""), ctx.get("user_timezone", "UTC")
+                ),
                 category="time",
             )
         )

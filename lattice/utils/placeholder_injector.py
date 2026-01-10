@@ -9,7 +9,6 @@ import re
 import structlog
 from typing import Any
 
-from lattice.memory.procedural import PromptTemplate
 from lattice.utils.placeholder_registry import PlaceholderDef, PlaceholderRegistry
 
 
@@ -30,7 +29,7 @@ class PlaceholderInjector:
         self.registry = registry if registry is not None else get_registry()
 
     async def inject(
-        self, template: PromptTemplate, context: dict[str, Any]
+        self, template: Any, context: dict[str, Any]
     ) -> tuple[str, dict[str, Any]]:
         """Resolve all placeholders and render template.
 
@@ -117,4 +116,6 @@ class PlaceholderInjector:
         Returns:
             Dictionary mapping placeholder names to descriptions
         """
-        return {name: defn.description for name, defn in self.registry.get_all().items()}
+        return {
+            name: defn.description for name, defn in self.registry.get_all().items()
+        }
