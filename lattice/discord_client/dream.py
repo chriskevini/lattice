@@ -306,7 +306,7 @@ class AuditView(discord.ui.DesignerView):
 
         quick_positive_button: Any = discord.ui.Button(
             emoji="👍",
-            style=discord.ButtonStyle.success,
+            style=discord.ButtonStyle.secondary,
             custom_id=f"audit:quick_positive:{audit_id}"
             if audit_id
             else "audit:quick_positive",
@@ -315,7 +315,7 @@ class AuditView(discord.ui.DesignerView):
 
         quick_negative_button: Any = discord.ui.Button(
             emoji="👎",
-            style=discord.ButtonStyle.danger,
+            style=discord.ButtonStyle.secondary,
             custom_id=f"audit:quick_negative:{audit_id}"
             if audit_id
             else "audit:quick_negative",
