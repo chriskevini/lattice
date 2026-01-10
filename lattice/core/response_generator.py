@@ -21,16 +21,6 @@ MAX_GRAPH_TRIPLES = 10
 
 MAX_GOALS_CONTEXT = 50
 
-AVAILABLE_PLACEHOLDERS = {
-    "episodic_context": "Recent conversation history with timestamps",
-    "semantic_context": "Relevant facts and graph relationships",
-    "user_message": "The user's current message",
-    "local_date": "Current date with day of week (e.g., 2026/01/08, Thursday)",
-    "local_time": "Current time for proactive decisions (e.g., 14:30)",
-    "date_resolution_hints": "Resolved relative dates (e.g., Friday → 2026-01-10)",
-    "unresolved_entities": "Entities requiring clarification (e.g., 'bf', 'lkea')",
-}
-
 
 def get_available_placeholders() -> dict[str, str]:
     """Return canonical list of placeholders available for templates.
@@ -40,11 +30,8 @@ def get_available_placeholders() -> dict[str, str]:
     use in prompt templates.
 
     Returns:
-        Dictionary mapping placeholder names to their descriptions.
-
-    Note:
-        Now uses the central PlaceholderRegistry for runtime extensibility.
-        Backward compatibility maintained by also exporting AVAILABLE_PLACEHOLDERS.
+        Dictionary mapping placeholder names to their descriptions from
+        the central PlaceholderRegistry.
     """
     from lattice.utils.placeholder_injector import PlaceholderInjector
 
@@ -64,7 +51,7 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     Returns:
         Tuple of (is_valid, unknown_placeholders)
         - is_valid: True if all placeholders are known
-        - unknown_placeholders: List of placeholder names not in AVAILABLE_PLACEHOLDERS
+        - unknown_placeholders: List of placeholder names not in registry
 
     Example:
         >>> validate_template_placeholders("Hello {user_message}!")
