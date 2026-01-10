@@ -11,10 +11,10 @@
 ## 🌟 Key Features
 
 - **ENGRAM Memory Framework**: Three-tier neuro-symbolic system (Episodic, Semantic, Procedural).
-- **Query Extraction**: API-based structured message analysis (Google Gemini Flash 1.5).
-- **Dreaming Cycle**: Self-optimization loop where AI proposes logic updates for human approval.
-- **Audit View**: In-Discord UI for inspecting the system's "thought process", including source attribution for memories.
-- **Resource-First Design**: Native support for low-memory environments via streaming and pooling.
+- **Query Extraction**: Structured message analysis and entity extraction.
+- **Dreaming Cycle**: Self-optimization loop where the system proposes logic updates for human approval.
+- **Audit View**: In-Discord UI for inspecting the system's "thought process" and memory source attribution.
+- **Resource-First Design**: Optimized for low-memory environments via streaming and connection pooling.
 - **Graph-First Retrieval**: Unified search across temporal logs and relationship graphs.
 - **Invisible Alignment**: Non-intrusive feedback loops using Discord's native UI elements.
 
@@ -25,9 +25,9 @@
 Lattice operates on the principle that **logic is data**. By moving prompts and configuration into the database, the system achieves total evolvability without code changes.
 
 ### Memory Tiers
-1.  **Episodic ([`raw_messages`](#1-episodic-memory-raw_messages))**: Immutable, time-ordered interaction log.
-2.  **Semantic ([`entities`](#2-semantic-memory-entities) + [`semantic_memories`](#3-semantic-relationships-semantic_memories))**: Text-based knowledge graph. Relationships are stored as `(subject, predicate, object)` strings without rigid IDs, facilitating natural language evolution and iterative BFS traversal.
-3.  **Procedural ([`prompt_registry`](#4-procedural-memory-prompt_registry))**: Versioned templates and behavioral strategies.
+1. **Episodic** ([`raw_messages`](#1-episodic-memory-raw_messages)): Immutable, time-ordered interaction log.
+2. **Semantic** ([`entities`](#2-semantic-memory-entities) + [`semantic_memories`](#3-semantic-relationships-semantic_memories)): Text-based knowledge graph with iterative BFS traversal.
+3. **Procedural** ([`prompt_registry`](#4-procedural-memory-prompt_registry)): Versioned templates and behavioral strategies.
 
 ### Unified Pipeline
 `Ingestion → Short-Circuit → Context Strategy → Semantic Retrieval → Generation → Memory Consolidation`
@@ -39,12 +39,12 @@ For a deep dive into the technical implementation, see the [Technical Implementa
 ## ⚙️ Technical Implementation
 
 ### Pipeline Flow
-1. **Ingestion + Logging**: Store message in episodic memory.
-2. **Context Strategy**: Analysis of recent messages (10 messages) for entities, context flags, and unresolved entities.
-3. **Context Retrieval**: Fetch context from `semantic_memories`.
-4. **Response Generation**: Using `UNIFIED_RESPONSE` template. Proactively clarifies unresolved entities.
-5. **Memory Consolidation**: Async extraction of entities, memories, and activities.
-6. **Canonicalization**: Deterministic storage of new entities/predicates in canonical registries.
+1. **Ingestion**: Store message in episodic memory.
+2. **Context Strategy**: Analyze recent messages for entities, context flags, and unresolved entities.
+3. **Retrieval**: Fetch relevant context from `semantic_memories`.
+4. **Generation**: Produce response using `UNIFIED_RESPONSE` template, proactively clarifying unresolved entities.
+5. **Consolidation**: Async extraction of new entities, memories, and activities.
+6. **Canonicalization**: Deterministic storage of new entities/predicates.
 
 ### Entity Extraction System
 - **Context Strategy (Step 2)**: Analyzes small window (10 msgs). Outputs canonical entities, context flags (`goal_context`, `activity_context`), and unresolved entities for clarification.
