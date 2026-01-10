@@ -110,11 +110,11 @@ class AuditingLLMClient:
                     model=result.model,
                 )
 
-            # Determine if we should post to dream channel
+            # Post to dream channel if requested or if it's a tracked message.
+            # This is the unified entry point for all LLM auditing UI.
             bot = bot or get_discord_bot()
             dream_channel_id_str = os.getenv("DISCORD_DREAM_CHANNEL_ID")
 
-            # Post if explicit audit_view requested OR if it's a tracked message with a bot available
             should_post = audit_view or (
                 bot is not None
                 and dream_channel_id_str is not None
@@ -137,9 +137,7 @@ class AuditingLLMClient:
                     params = audit_view_params or {}
                     from lattice.discord_client.dream import AuditViewBuilder
 
-                    # Use custom params if provided, otherwise default to standard rich audit
-                    input_text = params.get("input_text", prompt[:200] + "...")
-                    output_text = params.get("output_text", result.content)
+                    # Standardize metadata
                     metadata = params.get(
                         "metadata",
                         [
@@ -155,8 +153,8 @@ class AuditingLLMClient:
                         embed, view = AuditViewBuilder.build_standard_audit(
                             prompt_key=prompt_key or "UNKNOWN",
                             version=template_version or 1,
-                            input_text=input_text,
-                            output_text=output_text,
+                            input_text=params.get("input_text", prompt[:200] + "..."),
+                            output_text=params.get("output_text", result.content),
                             metadata_parts=metadata,
                             audit_id=audit_id,
                             rendered_prompt=prompt,
