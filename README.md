@@ -11,12 +11,13 @@
 ## 🌟 Key Features
 
 - **ENGRAM Memory Framework**: Three-tier neuro-symbolic system (Episodic, Semantic, Procedural).
-- **Query Extraction**: Structured message analysis and entity extraction.
+- **Context Strategy**: Structured message analysis and retrieval planning.
 - **Dreaming Cycle**: Self-optimization loop where the system proposes logic updates for human approval.
 - **Audit View**: In-Discord UI for inspecting the system's "thought process" and memory source attribution.
 - **Resource-First Design**: Optimized for low-memory environments via streaming and connection pooling.
 - **Graph-First Retrieval**: Unified search across temporal logs and relationship graphs.
 - **Invisible Alignment**: Non-intrusive feedback loops using Discord's native UI elements.
+- **Unified Pipeline**: Streamlined reactive flow using a single response template.
 
 ---
 
@@ -119,10 +120,10 @@ See [scripts/schema.sql](scripts/schema.sql) for the canonical schema.
 ```bash
 make install        # Install dependencies and pre-commit hooks
 cp .env.example .env # Configure your tokens and DB
-make init-db        # Initialize schema and seed data
+make init-db        # Initialize fresh schema and seed data
 make run            # Start the bot
 ```
 
-**Note:** No migrations needed for fresh setup. All prompt templates are in `scripts/seed.sql`.
+**Note:** No migrations needed for fresh setup. This branch uses a fresh database schema. All prompt templates are in `scripts/seed.sql`.
 
 **Lattice**: Building adaptive AI through conversation. 🧠✨
