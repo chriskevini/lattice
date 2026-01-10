@@ -12,9 +12,9 @@ import pytest
 
 from lattice.core.context_strategy import (
     build_smaller_episodic_context,
-    get_message_strategy,
     context_strategy,
     get_context_strategy,
+    get_message_strategy,
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
@@ -243,7 +243,7 @@ class TestContextStrategyFunction:
 
 
 class TestGetContextStrategy:
-    """Tests for the get_context_strategy and get_message_extraction functions."""
+    """Tests for the get_context_strategy function."""
 
     @pytest.mark.asyncio
     async def test_get_context_strategy_success(self) -> None:
