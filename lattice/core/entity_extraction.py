@@ -14,6 +14,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, TypeAlias
+from uuid import UUID
 
 import structlog
 
@@ -31,8 +32,10 @@ logger = structlog.get_logger(__name__)
 SMALLER_EPISODIC_WINDOW_SIZE = 10
 
 
+from lattice.memory.episodic import EpisodicMessage
+
 if TYPE_CHECKING:
-    from lattice.memory.episodic import EpisodicMessage
+    pass
 
 
 @dataclass
@@ -272,10 +275,11 @@ async def extract_entities(
 
 
 async def context_strategy(
-    message_id: uuid.UUID,
+    message_id: UUID,
     message_content: str,
-    recent_messages: list["EpisodicMessage"],
+    recent_messages: list[EpisodicMessage],
     user_timezone: str | None = None,
+    discord_message_id: int | None = None,
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
 ) -> ContextStrategy:
@@ -345,7 +349,7 @@ async def context_strategy(
         prompt=rendered_prompt,
         prompt_key="CONTEXT_STRATEGY",
         template_version=prompt_template.version,
-        main_discord_message_id=int(message_id),
+        main_discord_message_id=discord_message_id,
         temperature=prompt_template.temperature,
         audit_view=audit_view,
         audit_view_params=audit_view_params,
