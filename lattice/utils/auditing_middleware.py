@@ -143,6 +143,7 @@ class AuditingLLMClient:
                                         audit_id=audit_id,
                                         rendered_prompt=prompt,
                                         result=result,
+                                        message_id=main_discord_message_id,
                                     )
                                     await channel.send(embed=embed, view=view)
                                 except Exception as e:
@@ -169,7 +170,14 @@ class AuditingLLMClient:
                     else (effective_bot.dream_channel_id if effective_bot else None)
                 )
 
-                if effective_bot and effective_dream_channel_id:
+                # Skip if already posted via the unified summary loop above
+                already_posted = (
+                    bot is not None
+                    and os.getenv("DISCORD_DREAM_CHANNEL_ID") is not None
+                    and main_discord_message_id is not None
+                )
+
+                if not already_posted and effective_bot and effective_dream_channel_id:
                     params = audit_view_params or {}
                     if hasattr(effective_bot, "mirror_audit"):
                         await effective_bot.mirror_audit(

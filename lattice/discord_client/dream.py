@@ -531,6 +531,7 @@ class AuditViewBuilder:
         audit_id: UUID | None,
         rendered_prompt: str,
         result: GenerationResult | None = None,
+        message_id: int | None = None,
     ) -> tuple[discord.Embed, AuditView]:
         """Build a unified audit message for any LLM call.
 
@@ -543,6 +544,7 @@ class AuditViewBuilder:
             audit_id: Prompt audit UUID
             rendered_prompt: Full rendered prompt
             result: Optional full result for rich rendering
+            message_id: Optional main Discord message ID for feedback
 
         Returns:
             Tuple of (embed, view) for the audit message
@@ -595,7 +597,7 @@ class AuditViewBuilder:
 
         view = AuditView(
             audit_id=audit_id,
-            message_id=None,
+            message_id=message_id,
             prompt_key=prompt_key,
             version=version,
             rendered_prompt=rendered_prompt,
