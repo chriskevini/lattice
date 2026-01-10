@@ -9,6 +9,7 @@ from uuid import UUID
 
 import structlog
 
+from lattice.core.constants import DEFAULT_EPISODIC_LIMIT
 from lattice.memory import episodic
 from lattice.memory.graph import GraphTraversal
 from lattice.utils.database import db_pool
@@ -89,7 +90,7 @@ async def store_bot_message(
 async def retrieve_context(
     query: str,
     channel_id: int,
-    episodic_limit: int = 10,
+    episodic_limit: int = DEFAULT_EPISODIC_LIMIT,
     memory_depth: int = 1,
     entity_names: list[str] | None = None,
 ) -> tuple[
@@ -103,7 +104,7 @@ async def retrieve_context(
     Args:
         query: Query text (used for logging)
         channel_id: Discord channel ID for episodic search
-        episodic_limit: Maximum recent messages to retrieve
+        episodic_limit: Maximum recent messages to retrieve (default from DEFAULT_EPISODIC_LIMIT)
         memory_depth: Maximum depth for graph traversal (0 = disabled)
         entity_names: Entity names to traverse graph from (from entity extraction)
 

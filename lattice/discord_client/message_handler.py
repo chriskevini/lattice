@@ -9,6 +9,10 @@ import structlog
 from discord.ext import commands
 
 from lattice.core import memory_orchestrator, response_generator
+from lattice.core.constants import (
+    CONTEXT_STRATEGY_WINDOW_SIZE,
+    RESPONSE_EPISODIC_LIMIT,
+)
 from lattice.core.context_strategy import (
     ContextStrategy,
     context_strategy,
@@ -148,7 +152,7 @@ class MessageHandler:
                 # Build conversation window for context strategy
                 recent_msgs_for_strategy = await episodic.get_recent_messages(
                     channel_id=message.channel.id,
-                    limit=5,
+                    limit=CONTEXT_STRATEGY_WINDOW_SIZE,
                 )
 
                 strategy = await context_strategy(
@@ -214,7 +218,7 @@ class MessageHandler:
             ) = await memory_orchestrator.retrieve_context(
                 query=message.content,
                 channel_id=message.channel.id,
-                episodic_limit=15,
+                episodic_limit=RESPONSE_EPISODIC_LIMIT,
                 memory_depth=0,
                 entity_names=[],
             )
