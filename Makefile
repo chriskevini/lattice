@@ -1,4 +1,4 @@
-.PHONY: help install test lint format type-check security clean run docker-up docker-down docker-logs docker-rebuild
+.PHONY: help install test lint format type-check security clean run docker-up docker-down docker-logs docker-rebuild nuke-db
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -152,6 +152,12 @@ bump-version: ## Bump version using commitizen
 
 init-db: ## Initialize database schema and seed data
 	uv run python scripts/init_db.py
+
+nuke-db: ## Nuke and reinitialize the database (removes all data)
+	docker compose down
+	docker volume rm postgres_data || true
+	docker compose up -d
+	$(MAKE) init-db
 
 migrate: ## Run database migrations
 	uv run python scripts/migrate.py
