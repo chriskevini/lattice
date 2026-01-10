@@ -19,6 +19,7 @@ from uuid import UUID
 import structlog
 
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
+
 from lattice.memory.procedural import get_prompt
 from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import format_current_date, resolve_relative_dates
@@ -31,11 +32,8 @@ logger = structlog.get_logger(__name__)
 
 SMALLER_EPISODIC_WINDOW_SIZE = 10
 
-
-from lattice.memory.episodic import EpisodicMessage
-
 if TYPE_CHECKING:
-    pass
+    from lattice.memory.episodic import EpisodicMessage
 
 
 @dataclass
