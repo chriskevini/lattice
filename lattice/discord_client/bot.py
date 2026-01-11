@@ -125,7 +125,7 @@ class LatticeBot(commands.Bot):
                     )
                     return
 
-            # Load user timezone from system_health (cached for performance)
+            # Load user timezone from semantic memory (cached in memory for performance)
             self._user_timezone = await get_user_timezone()
             logger.info("User timezone loaded", timezone=self._user_timezone)
             self._message_handler.user_timezone = self._user_timezone
