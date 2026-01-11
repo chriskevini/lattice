@@ -1,10 +1,9 @@
 -- =============================================================================
 -- Canonical Prompt Template
--- Version: 1
 -- Convention: Keep canonical prompts at v1. Git handles version history.
 -- User customizations (via dream cycle) get v2, v3, etc.
 -- =============================================================================
--- Template: CONTEXTUAL_NUDGE (v1)
+-- Template: CONTEXTUAL_NUDGE
 -- Description: Proactive nudges aligned with user goals
 -- Temperature: 0.7
 

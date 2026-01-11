@@ -1,10 +1,9 @@
 -- =============================================================================
 -- Canonical Prompt Template
--- Version: 1
 -- Convention: Keep canonical prompts at v1. Git handles version history.
 -- User customizations (via dream cycle) get v2, v3, etc.
 -- =============================================================================
--- Template: MEMORY_REVIEW (v1)
+-- Template: MEMORY_REVIEW
 -- Description: Analyze semantic memory for conflicts and redundancies
 -- Temperature: 0.2
 
