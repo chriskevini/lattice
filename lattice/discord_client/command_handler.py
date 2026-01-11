@@ -116,23 +116,14 @@ class CommandHandler:
                 ctx: Command context
                 timezone: IANA timezone identifier (e.g., America/New_York, Europe/London)
             """
-            try:
-                from lattice.utils.database import set_user_timezone
+            await ctx.send(
+                "Timezone is now discovered organically through conversation. Mention your location (e.g., 'I'm in New York') and it will be remembered!"
+            )
 
-                await set_user_timezone(timezone)
-                if hasattr(self.bot, "set_user_timezone"):
-                    # Use getattr to avoid type checking issues with dynamic attributes
-                    set_tz = getattr(self.bot, "set_user_timezone")
-                    set_tz(timezone)
-                await ctx.send(f"✅ Timezone set to: {timezone}")
-
-                logger.info(
-                    "Timezone changed via command",
-                    timezone=timezone,
-                    user=ctx.author.name,
-                )
-            except ValueError as e:
-                await ctx.send(f"❌ Invalid timezone: {e}")
+            logger.info(
+                "Timezone command used, redirected to organic discovery",
+                user=ctx.author.name,
+            )
 
     def _setup_active_hours_command(self) -> None:
         """Setup the !active_hours command."""

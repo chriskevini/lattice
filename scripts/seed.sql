@@ -196,7 +196,6 @@ INSERT INTO system_health (metric_key, metric_value) VALUES
     ('scheduler_max_interval', '1440'),
     ('dreaming_min_uses', '10'),
     ('dreaming_enabled', 'true'),
-    ('user_timezone', 'UTC'),
     ('active_hours_start', '9'),
     ('active_hours_end', '21'),
     ('active_hours_confidence', '0.0'),

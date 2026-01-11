@@ -273,6 +273,62 @@ async def run_batch_consolidation() -> None:
             count=len(extracted_memories),
         )
 
+        # Check for new timezone information and update cache
+        from lattice.utils.database import _user_timezone_cache
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        tz_triple = next(
+            (
+                m
+                for m in extracted_memories
+                if m.get("predicate") == "lives in timezone"
+                and m.get("subject") == "User"
+            ),
+            None,
+        )
+        if tz_triple:
+            timezone_str = tz_triple["object"]
+            try:
+                ZoneInfo(timezone_str)
+                _user_timezone_cache = timezone_str
+                logger.info(
+                    "Updated user timezone cache from semantic memory",
+                    timezone=timezone_str,
+                )
+            except ZoneInfoNotFoundError:
+                logger.warning(
+                    "Invalid timezone extracted, skipping cache update",
+                    timezone=timezone_str,
+                )
+        if tz_triple:
+            timezone_str = tz_triple["object"]
+            try:
+                ZoneInfo(timezone_str)
+                _user_timezone_cache = timezone_str
+                logger.info(
+                    "Updated user timezone cache from semantic memory",
+                    timezone=timezone_str,
+                )
+            except ZoneInfoNotFoundError:
+                logger.warning(
+                    "Invalid timezone extracted, skipping cache update",
+                    timezone=timezone_str,
+                )
+        if tz_triple:
+            timezone_str = tz_triple["object"]
+            try:
+                ZoneInfo(timezone_str)
+                _user_timezone_cache = timezone_str
+                logger.info(
+                    "Updated user timezone cache from semantic memory",
+                    timezone=timezone_str,
+                )
+            except ZoneInfoNotFoundError:
+                logger.warning(
+                    "Invalid timezone extracted, skipping cache update",
+                    timezone=timezone_str,
+                )
+
     async with db_pool.pool.acquire() as conn:
         await _update_last_batch_id(conn, batch_id)
 

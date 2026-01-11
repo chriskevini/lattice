@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+_user_timezone_cache: str | None = None
+
 
 class DatabasePool:
     """Manages asyncpg connection pool for the database."""
@@ -141,34 +143,35 @@ async def set_next_check_at(dt: datetime) -> None:
 
 
 async def get_user_timezone() -> str:
-    """Get system-wide user timezone.
+    """Get user timezone from semantic memory or cache.
 
     Returns:
         IANA timezone string (e.g., 'America/New_York'), defaults to 'UTC'
     """
-    return await get_system_health("user_timezone") or "UTC"
+    global _user_timezone_cache
+    if _user_timezone_cache:
+        return _user_timezone_cache
 
+    # Query semantic memory first
+    async with db_pool.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT object FROM semantic_memories WHERE subject = 'User' AND predicate = 'lives in timezone' ORDER BY created_at DESC LIMIT 1"
+        )
+        if row:
+            tz = row["object"]
+            try:
+                from zoneinfo import ZoneInfo
 
-async def set_user_timezone(timezone: str) -> None:
-    """Set system-wide user timezone.
+                ZoneInfo(tz)
+                _user_timezone_cache = tz
+                return tz
+            except ZoneInfoNotFoundError:
+                pass
 
-    Args:
-        timezone: IANA timezone string (e.g., 'America/New_York')
-
-    Raises:
-        ValueError: If timezone is invalid
-    """
-    from zoneinfo import ZoneInfo
-
-    # Validate timezone
-    try:
-        ZoneInfo(timezone)
-    except ZoneInfoNotFoundError as e:
-        msg = f"Invalid timezone: {timezone}"
-        raise ValueError(msg) from e
-
-    await set_system_health("user_timezone", timezone)
-    logger.info("System timezone updated", timezone=timezone)
+    # Fallback to system_health
+    tz = await get_system_health("user_timezone") or "UTC"
+    _user_timezone_cache = tz
+    return tz
 
 
 db_pool = DatabasePool()
