@@ -3,6 +3,7 @@
 Handles prompt formatting, LLM generation, and message splitting for Discord.
 """
 
+import warnings
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -71,16 +72,29 @@ db_pool: Any = None
 
 
 def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
-    """Helper to resolve active database pool."""
+    """Helper to resolve active database pool with deprecation warning.
+
+    Args:
+        db_pool_arg: Database pool passed via DI (if provided, used directly)
+
+    Returns:
+        The active database pool instance
+
+    Raises:
+        RuntimeError: If no pool is available
+    """
     if db_pool_arg is not None:
         return db_pool_arg
 
-    # Fallback to module-level shim if set (for legacy tests)
     global db_pool
     if db_pool is not None:
+        warnings.warn(
+            "Module-level db_pool shim is deprecated. Pass db_pool as a parameter instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
         return db_pool
 
-    # Fallback to global singleton (lazy import to avoid circularity)
     from lattice.utils.database import db_pool as global_db_pool
 
     return global_db_pool

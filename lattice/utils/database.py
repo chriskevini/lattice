@@ -3,6 +3,7 @@
 Provides async PostgreSQL connection pooling.
 """
 
+import warnings
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfoNotFoundError
@@ -236,13 +237,20 @@ async def set_next_check_at(dt: datetime, db_pool: Any) -> None:
     await db_pool.set_next_check_at(dt)
 
 
+# Compatibility shim for global access while refactoring
 db_pool = DatabasePool()
 
 
-# Compatibility shim for global access while refactoring
 def get_db_pool() -> DatabasePool:
     """Get the global database pool.
 
     DEPRECATED: Use dependency injection instead.
+    This function exists for backward compatibility during migration.
     """
+    warnings.warn(
+        "get_db_pool() is deprecated. Use dependency injection instead. "
+        "Pass db_pool as a parameter to your function.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return db_pool
