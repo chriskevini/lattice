@@ -40,7 +40,7 @@ class TestGetCanonicalEntitiesList:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.get_canonical_entities_list()
 
             assert isinstance(result, list)
@@ -59,7 +59,7 @@ class TestGetCanonicalEntitiesList:
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.get_canonical_entities_list()
 
             assert result == []
@@ -81,7 +81,7 @@ class TestGetCanonicalPredicatesList:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.get_canonical_predicates_list()
 
             assert isinstance(result, list)
@@ -100,7 +100,7 @@ class TestGetCanonicalPredicatesList:
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.get_canonical_predicates_list()
 
             assert result == []
@@ -121,7 +121,7 @@ class TestGetCanonicalEntitiesSet:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.get_canonical_entities_set()
 
             assert isinstance(result, set)
@@ -144,7 +144,7 @@ class TestGetCanonicalPredicatesSet:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.get_canonical_predicates_set()
 
             assert isinstance(result, set)
@@ -162,7 +162,7 @@ class TestStoreCanonicalEntities:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             count = await canonical_module.store_canonical_entities(
                 ["entity1", "entity2"]
             )
@@ -177,7 +177,7 @@ class TestStoreCanonicalEntities:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             count = await canonical_module.store_canonical_entities([])
 
             assert count == 0
@@ -194,7 +194,7 @@ class TestStoreCanonicalPredicates:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             count = await canonical_module.store_canonical_predicates(
                 ["has goal", "due by"]
             )
@@ -213,7 +213,7 @@ class TestEntityExists:
         mock_conn.fetchval = AsyncMock(return_value=1)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.entity_exists("Mother")
 
             assert result is True
@@ -228,7 +228,7 @@ class TestEntityExists:
         mock_conn.fetchval = AsyncMock(return_value=None)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.entity_exists("Unknown")
 
             assert result is False
@@ -244,7 +244,7 @@ class TestPredicateExists:
         mock_conn.fetchval = AsyncMock(return_value=1)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.predicate_exists("has goal")
 
             assert result is True
@@ -256,7 +256,7 @@ class TestPredicateExists:
         mock_conn.fetchval = AsyncMock(return_value=None)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.predicate_exists("unknown predicate")
 
             assert result is False
@@ -422,7 +422,7 @@ class TestStoreCanonicalForms:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.store_canonical_forms(
                 ["new entity"], ["new predicate"]
             )
@@ -437,7 +437,7 @@ class TestStoreCanonicalForms:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch.object(canonical_module, "db_pool", mock_pool):
+        with patch("lattice.utils.database.db_pool", mock_pool):
             result = await canonical_module.store_canonical_forms([], [])
 
             assert result["entities"] == 0

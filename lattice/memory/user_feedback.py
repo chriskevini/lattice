@@ -14,9 +14,31 @@ from lattice.utils.date_resolution import get_now
 logger = structlog.get_logger(__name__)
 
 
-# Global singleton shim for backward compatibility
-# DEPRECATED: Access via dependency injection where possible
-db_pool: Any = None
+def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+    """Resolve active database pool.
+
+    Args:
+        db_pool_arg: Database pool passed via DI (if provided, used directly)
+
+    Returns:
+        The active database pool instance
+
+    Raises:
+        RuntimeError: If no pool is available
+    """
+    if db_pool_arg is not None:
+        return db_pool_arg
+
+    from lattice.utils.database import db_pool as global_db_pool
+
+    if global_db_pool is not None:
+        return global_db_pool
+
+    msg = (
+        "Database pool not available. Either pass db_pool as an argument "
+        "or ensure the global db_pool is initialized."
+    )
+    raise RuntimeError(msg)
 
 
 class UserFeedback:
@@ -59,10 +81,7 @@ async def store_feedback(feedback: UserFeedback, db_pool: Any = None) -> UUID:
     Returns:
         UUID of the stored feedback
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -103,10 +122,7 @@ async def get_feedback_by_user_message(
     Returns:
         UserFeedback if found, None otherwise
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -141,10 +157,7 @@ async def delete_feedback(feedback_id: UUID, db_pool: Any = None) -> bool:
     Returns:
         True if deleted, False if not found
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
@@ -171,10 +184,7 @@ async def get_all_feedback(db_pool: Any = None) -> list[UserFeedback]:
     Returns:
         List of all user feedback, ordered by creation time (newest first)
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         rows = await conn.fetch(

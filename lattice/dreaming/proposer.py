@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 from lattice.memory.procedural import get_prompt
 from lattice.dreaming.analyzer import get_feedback_with_context
+from lattice.utils.llm import get_auditing_llm_client
 from lattice.utils.placeholder_injector import PlaceholderInjector
 from lattice.core.response_generator import validate_template_placeholders
 
@@ -36,34 +37,31 @@ MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
 DETAILED_SAMPLES_COUNT = 3  # Number of samples with full rendered prompts
 
 
-# Global singleton shim for backward compatibility
-# DEPRECATED: Access via dependency injection where possible
-db_pool: Any = None
-
-
 def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
-    """Helper to resolve active database pool."""
+    """Resolve active database pool.
+
+    Args:
+        db_pool_arg: Database pool passed via DI (if provided, used directly)
+
+    Returns:
+        The active database pool instance
+
+    Raises:
+        RuntimeError: If no pool is available
+    """
     if db_pool_arg is not None:
         return db_pool_arg
 
-    # Fallback to module-level shim if set (for legacy tests)
-    global db_pool
-    if db_pool is not None:
-        return db_pool
-
-    # Fallback to global singleton (lazy import to avoid circularity)
     from lattice.utils.database import db_pool as global_db_pool
 
-    return global_db_pool
+    if global_db_pool is not None:
+        return global_db_pool
 
-
-def get_auditing_llm_client() -> Any:
-    """DEPRECATED: Use injected llm_client instead.
-    Shim for backward compatibility.
-    """
-    from lattice.utils.llm import get_auditing_llm_client as global_getter
-
-    return global_getter()
+    msg = (
+        "Database pool not available. Either pass db_pool as an argument "
+        "or ensure the global db_pool is initialized."
+    )
+    raise RuntimeError(msg)
 
 
 def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]:

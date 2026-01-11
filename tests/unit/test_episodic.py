@@ -165,7 +165,7 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await store_message(msg)
@@ -198,7 +198,7 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await store_message(msg)
@@ -223,7 +223,7 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await store_message(msg)
@@ -245,7 +245,7 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(side_effect=Exception("DB connection failed"))
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             with pytest.raises(Exception, match="DB connection failed"):
@@ -287,7 +287,7 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             messages = await get_recent_messages(channel_id=123, limit=10)
@@ -321,7 +321,7 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             messages = await get_recent_messages(channel_id=None, limit=5)
@@ -337,7 +337,7 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             messages = await get_recent_messages(channel_id=999, limit=10)
@@ -376,7 +376,7 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             messages = await get_recent_messages(channel_id=123, limit=10)
@@ -405,7 +405,7 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             messages = await get_recent_messages(channel_id=123, limit=10)
@@ -432,7 +432,7 @@ class TestStoreSemanticMemories:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             await store_semantic_memories(message_id, memories)
@@ -465,7 +465,7 @@ class TestStoreSemanticMemories:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             await store_semantic_memories(message_id, invalid_memories)
@@ -489,7 +489,7 @@ class TestStoreSemanticMemories:
             side_effect=[None, asyncpg.PostgresError("DB error")]
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             # Should not raise exception, continues to process all memories
@@ -514,7 +514,7 @@ class TestStoreSemanticMemories:
             side_effect=[None, asyncpg.PostgresError("DB error")]
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             # Should not raise exception, continues to process all memories
@@ -532,7 +532,7 @@ class TestStoreSemanticMemories:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             await store_semantic_memories(message_id, memories)

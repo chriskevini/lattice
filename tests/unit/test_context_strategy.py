@@ -91,9 +91,9 @@ class TestContextStrategyFunction:
                 return_value=["Mother", "boyfriend"],
             ),
             patch(
-                "lattice.core.context_strategy.get_auditing_llm_client",
+                "lattice.utils.llm.get_auditing_llm_client",
             ) as mock_llm_client,
-            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
+            patch("lattice.utils.database.db_pool") as mock_db_pool,
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
                 return_value=extraction_data,
@@ -163,7 +163,7 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.core.context_strategy.get_auditing_llm_client",
+                "lattice.utils.llm.get_auditing_llm_client",
             ) as mock_llm_client,
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
@@ -221,7 +221,7 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.core.context_strategy.get_auditing_llm_client",
+                "lattice.utils.llm.get_auditing_llm_client",
             ) as mock_llm_client,
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
@@ -264,7 +264,7 @@ class TestGetContextStrategy:
             "created_at": get_now(timezone_str="UTC"),
         }
 
-        with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
@@ -295,7 +295,7 @@ class TestGetContextStrategy:
             "created_at": get_now(timezone_str="UTC"),
         }
 
-        with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value=mock_row)
             mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn

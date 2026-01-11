@@ -69,34 +69,31 @@ async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
     )
 
 
-# Global singleton shim for backward compatibility
-# DEPRECATED: Access via dependency injection where possible
-db_pool: Any = None
-
-
 def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
-    """Helper to resolve active database pool."""
+    """Resolve active database pool.
+
+    Args:
+        db_pool_arg: Database pool passed via DI (if provided, used directly)
+
+    Returns:
+        The active database pool instance
+
+    Raises:
+        RuntimeError: If no pool is available
+    """
     if db_pool_arg is not None:
         return db_pool_arg
 
-    # Fallback to module-level shim if set (for legacy tests)
-    global db_pool
-    if db_pool is not None:
-        return db_pool
-
-    # Fallback to global singleton (lazy import to avoid circularity)
     from lattice.utils.database import db_pool as global_db_pool
 
-    return global_db_pool
+    if global_db_pool is not None:
+        return global_db_pool
 
-
-def get_auditing_llm_client() -> Any:
-    """DEPRECATED: Use injected llm_client instead.
-    Shim for backward compatibility.
-    """
-    from lattice.utils.llm import get_auditing_llm_client as global_getter
-
-    return global_getter()
+    msg = (
+        "Database pool not available. Either pass db_pool as an argument "
+        "or ensure the global db_pool is initialized."
+    )
+    raise RuntimeError(msg)
 
 
 async def check_and_run_batch(db_pool: Any = None) -> None:

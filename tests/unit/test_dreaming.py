@@ -41,7 +41,7 @@ class TestAnalyzer:
             }
         ]
 
-        with patch("lattice.dreaming.analyzer.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.fetch = AsyncMock(return_value=mock_rows)
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
@@ -60,7 +60,7 @@ class TestAnalyzer:
     @pytest.mark.asyncio
     async def test_analyze_prompt_effectiveness_empty_results(self) -> None:
         """Test that empty results return empty list."""
-        with patch("lattice.dreaming.analyzer.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.fetch = AsyncMock(return_value=[])
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
@@ -121,6 +121,7 @@ class TestProposer:
             patch(
                 "lattice.dreaming.proposer.get_auditing_llm_client"
             ) as mock_llm_client,
+            patch("lattice.utils.database.db_pool"),
         ):
 
             def get_prompt_side_effect(prompt_key: str, db_pool: Any = None):
@@ -137,7 +138,7 @@ class TestProposer:
             mock_get_prompt.side_effect = get_prompt_side_effect
 
             mock_llm = AsyncMock()
-            mock_llm.complete = AsyncMock(return_value=mock_llm_result)
+            mock_llm.complete.return_value = mock_llm_result
             mock_llm_client.return_value = mock_llm
 
             proposal = await propose_optimization(metrics)
@@ -166,7 +167,7 @@ class TestProposer:
             rendered_optimization_prompt="Optimize this: Old template",
         )
 
-        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
@@ -182,7 +183,7 @@ class TestProposer:
         """Test approving a proposal."""
         proposal_id = uuid4()
 
-        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(
                 return_value={
@@ -212,7 +213,7 @@ class TestProposer:
         """Test rejecting a proposal."""
         proposal_id = uuid4()
 
-        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.execute = AsyncMock(return_value="UPDATE 1")
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
@@ -226,7 +227,7 @@ class TestProposer:
     @pytest.mark.asyncio
     async def test_reject_stale_proposals(self) -> None:
         """Test rejecting stale proposals when version has changed."""
-        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             # Mock current version lookup
             mock_conn.fetchrow = AsyncMock(return_value={"version": 2})
@@ -246,7 +247,7 @@ class TestProposer:
     @pytest.mark.asyncio
     async def test_reject_stale_proposals_prompt_not_found(self) -> None:
         """Test that reject_stale_proposals handles missing prompt gracefully."""
-        with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             # Prompt not found
             mock_conn.fetchrow = AsyncMock(return_value=None)

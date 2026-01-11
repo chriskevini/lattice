@@ -65,7 +65,7 @@ class TestEpisodicMemoryFunctions:
             return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -112,7 +112,7 @@ class TestEpisodicMemoryFunctions:
             ]
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -234,7 +234,7 @@ class TestProceduralMemoryFunctions:
             }
         )
 
-        with patch("lattice.memory.procedural.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -252,7 +252,7 @@ class TestProceduralMemoryFunctions:
         mock_conn = MagicMock()
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
-        with patch("lattice.memory.procedural.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )

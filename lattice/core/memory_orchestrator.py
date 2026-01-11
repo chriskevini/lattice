@@ -17,6 +17,33 @@ from lattice.memory.graph import GraphTraversal
 logger = structlog.get_logger(__name__)
 
 
+def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+    """Resolve active database pool.
+
+    Args:
+        db_pool_arg: Database pool passed via DI (if provided, used directly)
+
+    Returns:
+        The active database pool instance
+
+    Raises:
+        RuntimeError: If no pool is available
+    """
+    if db_pool_arg is not None:
+        return db_pool_arg
+
+    from lattice.utils.database import db_pool as global_db_pool
+
+    if global_db_pool is not None:
+        return global_db_pool
+
+    msg = (
+        "Database pool not available. Either pass db_pool as an argument "
+        "or ensure the global db_pool is initialized."
+    )
+    raise RuntimeError(msg)
+
+
 async def store_user_message(
     content: str,
     discord_message_id: int,
@@ -131,10 +158,7 @@ async def retrieve_context(
 
     semantic_context: list[dict[str, Any]] = []
     if memory_depth > 0 and entity_names:
-        # Use injected db_pool if provided, otherwise fallback to global
-        from lattice.utils.database import db_pool as global_db_pool
-
-        active_db_pool = db_pool or global_db_pool
+        active_db_pool = _get_active_db_pool(db_pool)
 
         if active_db_pool.is_initialized():
             traverser = GraphTraversal(active_db_pool.pool, max_depth=memory_depth)

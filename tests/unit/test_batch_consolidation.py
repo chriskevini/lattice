@@ -55,7 +55,7 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
@@ -75,7 +75,7 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
@@ -95,7 +95,7 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
@@ -115,7 +115,7 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
@@ -138,7 +138,7 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
@@ -171,7 +171,7 @@ class TestRunBatchConsolidation:
         mock_pool = MagicMock()
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
                 await run_batch_consolidation()
@@ -195,7 +195,7 @@ class TestRunBatchConsolidation:
         mock_pool = MagicMock()
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
                 await run_batch_consolidation()
@@ -231,7 +231,7 @@ class TestRunBatchConsolidation:
         mock_pool = MagicMock()
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
                 with patch(
@@ -313,7 +313,7 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
                 with patch(
@@ -446,7 +446,7 @@ class TestRunBatchConsolidation:
 
         from lattice.utils.json_parser import JSONParseError
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.get_prompt",
@@ -564,7 +564,7 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
                 with patch(
@@ -681,7 +681,7 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.get_prompt",
@@ -784,7 +784,7 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
                 with patch(
@@ -897,7 +897,7 @@ class TestRaceCondition:
         mock_pool = MagicMock()
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
                 await run_batch_consolidation()
@@ -965,7 +965,7 @@ class TestCanonicalFormIntegration:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.get_prompt",
@@ -1113,7 +1113,7 @@ class TestCanonicalFormIntegration:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.get_prompt",
@@ -1214,7 +1214,7 @@ class TestCanonicalFormIntegration:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch(
                 "lattice.memory.batch_consolidation.get_prompt",

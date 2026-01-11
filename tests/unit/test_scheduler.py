@@ -424,7 +424,7 @@ class TestGetGoalContext:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        with patch("lattice.core.response_generator.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -461,7 +461,7 @@ class TestGetGoalContext:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(side_effect=[goals, predicates])
 
-        with patch("lattice.core.response_generator.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -505,7 +505,7 @@ class TestAdaptiveActiveHours:
         mock_conn.fetch = AsyncMock(return_value=[])  # No messages
 
         with (
-            patch("lattice.scheduler.adaptive.db_pool") as mock_pool,
+            patch("lattice.utils.database.db_pool") as mock_pool,
             patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
         ):
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
@@ -536,7 +536,7 @@ class TestAdaptiveActiveHours:
         mock_conn.fetch = AsyncMock(return_value=messages)
 
         with (
-            patch("lattice.scheduler.adaptive.db_pool") as mock_pool,
+            patch("lattice.utils.database.db_pool") as mock_pool,
             patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
         ):
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(

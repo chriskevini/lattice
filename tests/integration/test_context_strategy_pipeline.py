@@ -43,7 +43,6 @@ class TestContextStrategyPipeline:
         message_id = uuid.uuid4()
         message_content = "I need to finish the lattice project by Friday"
 
-        # Mock dependencies
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
@@ -52,11 +51,7 @@ class TestContextStrategyPipeline:
             patch(
                 "lattice.core.response_generator.procedural.get_prompt"
             ) as mock_resp_prompt,
-            patch.object(
-                response_generator, "get_auditing_llm_client"
-            ) as mock_resp_llm_client,
         ):
-            # Setup extraction mocks
             from lattice.memory.procedural import PromptTemplate
             from lattice.utils.llm import AuditResult
 
@@ -85,7 +80,6 @@ class TestContextStrategyPipeline:
             )
             extraction_llm.complete.return_value = extraction_result
 
-            # Setup database mock for extraction storage
             mock_conn = AsyncMock()
             mock_conn.fetchrow.return_value = {
                 "id": uuid.uuid4(),
@@ -97,13 +91,11 @@ class TestContextStrategyPipeline:
                 "prompt_version": 1,
                 "created_at": get_now("UTC"),
             }
-            # Mock the whole pool since asyncpg.Pool is read-only
             mock_pool = MagicMock()
             mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
             mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
             with patch.object(db_pool, "_pool", mock_pool):
-                # Ensure raw_message exists for foreign key
                 async with db_pool.pool.acquire() as conn:
                     await conn.execute(
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
@@ -113,7 +105,6 @@ class TestContextStrategyPipeline:
                         67890,
                         False,
                     )
-                # Setup response generation mocks
                 response_template = PromptTemplate(
                     prompt_key="UNIFIED_RESPONSE",
                     template=("Context: {episodic_context}\nUser: {user_message}"),
@@ -137,9 +128,7 @@ class TestContextStrategyPipeline:
                     audit_id=None,
                     prompt_key="UNIFIED_RESPONSE",
                 )
-                mock_resp_llm_client.return_value = response_llm
 
-                # Execute pipeline
                 extraction = await context_strategy(
                     message_id=message_id,
                     user_message=message_content,
@@ -148,11 +137,9 @@ class TestContextStrategyPipeline:
                     db_pool=db_pool,
                 )
 
-                # Verify extraction
                 assert extraction is not None
                 assert "lattice project" in extraction.entities
 
-                # Execute pipeline: Generate response with extraction
                 (
                     result,
                     rendered_prompt,
@@ -165,12 +152,10 @@ class TestContextStrategyPipeline:
                     db_pool=db_pool,
                 )
 
-                # Verify response generation
                 assert result is not None
                 assert "Friday deadline" in result.content
                 assert context_info["template"] == "UNIFIED_RESPONSE"
 
-                # Verify template placeholders were filled correctly
                 assert (
                     "lattice project" in rendered_prompt or "Friday" in rendered_prompt
                 )
@@ -183,9 +168,6 @@ class TestContextStrategyPipeline:
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
-            patch(
-                "lattice.core.context_strategy.get_auditing_llm_client"
-            ) as mock_llm_client,
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
             ),
@@ -221,7 +203,6 @@ class TestContextStrategyPipeline:
                 prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
-            mock_llm_client.return_value = planning_llm
 
             mock_conn = AsyncMock()
             mock_conn.fetchrow.return_value = {
@@ -237,13 +218,11 @@ class TestContextStrategyPipeline:
                 "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
                 "created_at": get_now("UTC"),
             }
-            # Mock the whole pool since asyncpg.Pool is read-only
             mock_pool = MagicMock()
             mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
             mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
             with patch.object(db_pool, "_pool", mock_pool):
-                # Ensure raw_message exists for foreign key
                 async with db_pool.pool.acquire() as conn:
                     await conn.execute(
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
@@ -274,9 +253,6 @@ class TestContextStrategyPipeline:
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
-            patch(
-                "lattice.core.context_strategy.get_auditing_llm_client"
-            ) as mock_llm_client,
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
             ),
@@ -312,7 +288,6 @@ class TestContextStrategyPipeline:
                 prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
-            mock_llm_client.return_value = planning_llm
 
             mock_conn = AsyncMock()
             mock_conn.fetchrow.return_value = {
@@ -328,13 +303,11 @@ class TestContextStrategyPipeline:
                 "raw_response": '{"entities": [], "context_flags": [], "unresolved_entities": []}',
                 "created_at": get_now("UTC"),
             }
-            # Mock the whole pool since asyncpg.Pool is read-only
             mock_pool = MagicMock()
             mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
             mock_pool.acquire.return_value.__aexit__ = AsyncMock()
 
             with patch.object(db_pool, "_pool", mock_pool):
-                # Ensure raw_message exists for foreign key
                 async with db_pool.pool.acquire() as conn:
                     await conn.execute(
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
@@ -400,9 +373,6 @@ class TestContextStrategyPipeline:
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.core.context_strategy.get_auditing_llm_client"
-            ) as mock_llm_client,
-            patch(
                 "lattice.memory.canonical.get_canonical_entities_list"
             ) as mock_canonical,
         ):
@@ -434,7 +404,6 @@ class TestContextStrategyPipeline:
                 prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
-            mock_llm_client.return_value = planning_llm
 
             with pytest.raises(ValueError, match="Missing required field"):
                 await context_strategy(
@@ -485,14 +454,11 @@ class TestRetrieveContext:
         context = await retrieve_context(
             entities=[],
             context_flags=["activity_context"],
-            memory_depth=2,  # Need depth to traverse from added entities
+            memory_depth=2,
             db_pool=db_pool,
         )
 
-        # With activity_context flag, activities are added to entities and
-        # should appear in semantic context via graph traversal
         assert "semantic_context" in context
-        # Note: activity_context no longer returned as separate field - appears in semantic_context
 
     @pytest.mark.asyncio
     async def test_retrieve_context_goal_flag(self, db_pool) -> None:
@@ -518,4 +484,3 @@ class TestRetrieveContext:
 
         assert "semantic_context" in context
         assert "goal_context" in context
-        # Note: activity_context no longer returned as separate field - appears in semantic_context

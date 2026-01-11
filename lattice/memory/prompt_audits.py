@@ -57,9 +57,31 @@ class PromptAudit:
     created_at: datetime
 
 
-# Global singleton shim for backward compatibility
-# DEPRECATED: Access via dependency injection where possible
-db_pool: Any = None
+def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+    """Resolve active database pool.
+
+    Args:
+        db_pool_arg: Database pool passed via DI (if provided, used directly)
+
+    Returns:
+        The active database pool instance
+
+    Raises:
+        RuntimeError: If no pool is available
+    """
+    if db_pool_arg is not None:
+        return db_pool_arg
+
+    from lattice.utils.database import db_pool as global_db_pool
+
+    if global_db_pool is not None:
+        return global_db_pool
+
+    msg = (
+        "Database pool not available. Either pass db_pool as an argument "
+        "or ensure the global db_pool is initialized."
+    )
+    raise RuntimeError(msg)
 
 
 async def store_prompt_audit(
@@ -107,10 +129,7 @@ async def store_prompt_audit(
     Returns:
         UUID of the stored audit entry
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     # Convert dicts to JSON strings for JSONB columns
     context_config_json = json.dumps(context_config) if context_config else None
@@ -191,10 +210,7 @@ async def update_audit_dream_message(
     Returns:
         True if updated, False if not found
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
@@ -232,10 +248,7 @@ async def link_feedback_to_audit(
     Returns:
         True if linked, False if audit not found
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
@@ -278,10 +291,7 @@ async def link_feedback_to_audit_by_id(
     Returns:
         True if linked, False if audit not found
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
@@ -318,10 +328,7 @@ async def get_audit_by_dream_message(
     Returns:
         PromptAudit if found, None otherwise
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -381,10 +388,7 @@ async def get_audits_with_feedback(
     Returns:
         List of prompt audits with feedback
     """
-    # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_db_pool = db_pool or global_db_pool
+    active_db_pool = _get_active_db_pool(db_pool)
 
     async with active_db_pool.pool.acquire() as conn:
         rows = await conn.fetch(

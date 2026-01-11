@@ -11,7 +11,6 @@ Templates:
 import asyncio
 import json
 import uuid
-import warnings
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -57,27 +56,8 @@ class ContextStrategy:
     created_at: datetime
 
 
-# Global singleton shim for backward compatibility
-# DEPRECATED: Access via dependency injection where possible
-db_pool: Any = None
-
-
-def get_auditing_llm_client() -> Any:
-    """DEPRECATED: Use injected llm_client instead.
-    Shim for backward compatibility.
-    """
-    warnings.warn(
-        "get_auditing_llm_client() is deprecated. Pass llm_client as a parameter instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from lattice.utils.llm import get_auditing_llm_client as global_getter
-
-    return global_getter()
-
-
 def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
-    """Helper to resolve active database pool with deprecation warning.
+    """Resolve active database pool.
 
     Args:
         db_pool_arg: Database pool passed via DI (if provided, used directly)
@@ -91,18 +71,16 @@ def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
     if db_pool_arg is not None:
         return db_pool_arg
 
-    global db_pool
-    if db_pool is not None:
-        warnings.warn(
-            "Module-level db_pool shim is deprecated. Pass db_pool as a parameter instead.",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        return db_pool
-
     from lattice.utils.database import db_pool as global_db_pool
 
-    return global_db_pool
+    if global_db_pool is not None:
+        return global_db_pool
+
+    msg = (
+        "Database pool not available. Either pass db_pool as an argument "
+        "or ensure the global db_pool is initialized."
+    )
+    raise RuntimeError(msg)
 
 
 def build_smaller_episodic_context(
