@@ -209,6 +209,7 @@ async def prepare_contextual_nudge(
     try:
         result = await active_llm_client.complete(
             prompt=prompt,
+            db_pool=active_db_pool,
             prompt_key="CONTEXTUAL_NUDGE",
             template_version=prompt_template.version,
             main_discord_message_id=0,

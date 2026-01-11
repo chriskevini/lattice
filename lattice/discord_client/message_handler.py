@@ -122,6 +122,7 @@ class MessageHandler:
                         from lattice.memory import prompt_audits
 
                         await prompt_audits.store_prompt_audit(
+                            db_pool=self.db_pool,
                             prompt_key="CONTEXTUAL_NUDGE",
                             rendered_prompt=decision.rendered_prompt,
                             response_content=result.content,
@@ -134,7 +135,6 @@ class MessageHandler:
                             completion_tokens=decision.completion_tokens,
                             cost_usd=decision.cost_usd,
                             latency_ms=decision.latency_ms,
-                            db_pool=self.db_pool,
                         )
             else:
                 logger.info("Silence strategy: wait", reason=decision.reason)

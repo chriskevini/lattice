@@ -273,6 +273,7 @@ async def generate_response(
     try:
         result = await client.complete(
             prompt=filled_prompt,
+            db_pool=active_db_pool,
             prompt_key=template_name,
             template_version=prompt_template.version,
             main_discord_message_id=main_discord_message_id,

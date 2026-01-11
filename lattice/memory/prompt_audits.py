@@ -57,34 +57,29 @@ class PromptAudit:
     created_at: datetime
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = (
+            "Database pool not available. Pass db_pool as an argument "
+            "(dependency injection required)."
+        )
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 async def store_prompt_audit(
+    db_pool: Any,
     prompt_key: str,
     response_content: str,
     main_discord_message_id: int,
@@ -102,11 +97,11 @@ async def store_prompt_audit(
     archetype_confidence: float | None = None,
     reasoning: dict[str, Any] | None = None,
     dream_discord_message_id: int | None = None,
-    db_pool: Any = None,
 ) -> UUID:
     """Store a prompt audit entry.
 
     Args:
+        db_pool: Database pool for dependency injection
         prompt_key: The prompt template key used
         response_content: The bot's response
         main_discord_message_id: Discord message ID in main channel
@@ -124,7 +119,6 @@ async def store_prompt_audit(
         archetype_confidence: Confidence score for archetype match
         reasoning: AI reasoning and decision factors
         dream_discord_message_id: Discord message ID in dream channel
-        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored audit entry
@@ -198,14 +192,14 @@ async def store_prompt_audit(
 
 
 async def update_audit_dream_message(
-    audit_id: UUID, dream_discord_message_id: int, db_pool: Any = None
+    db_pool: Any, audit_id: UUID, dream_discord_message_id: int
 ) -> bool:
     """Update audit with dream channel message ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         audit_id: UUID of the audit entry
         dream_discord_message_id: Discord message ID in dream channel
-        db_pool: Database pool for dependency injection
 
     Returns:
         True if updated, False if not found
@@ -236,14 +230,14 @@ async def update_audit_dream_message(
 
 
 async def link_feedback_to_audit(
-    dream_discord_message_id: int, feedback_id: UUID, db_pool: Any = None
+    db_pool: Any, dream_discord_message_id: int, feedback_id: UUID
 ) -> bool:
     """Link feedback to prompt audit via dream channel message ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         dream_discord_message_id: Discord message ID in dream channel
         feedback_id: UUID of the feedback entry
-        db_pool: Database pool for dependency injection
 
     Returns:
         True if linked, False if audit not found
@@ -274,7 +268,7 @@ async def link_feedback_to_audit(
 
 
 async def link_feedback_to_audit_by_id(
-    audit_id: UUID, feedback_id: UUID, db_pool: Any = None
+    db_pool: Any, audit_id: UUID, feedback_id: UUID
 ) -> bool:
     """Link feedback to prompt audit via audit UUID.
 
@@ -284,9 +278,9 @@ async def link_feedback_to_audit_by_id(
     so they may have NULL for dream_discord_message_id.
 
     Args:
+        db_pool: Database pool for dependency injection
         audit_id: UUID of the prompt audit entry
         feedback_id: UUID of the feedback entry
-        db_pool: Database pool for dependency injection
 
     Returns:
         True if linked, False if audit not found
@@ -317,13 +311,13 @@ async def link_feedback_to_audit_by_id(
 
 
 async def get_audit_by_dream_message(
-    dream_discord_message_id: int, db_pool: Any = None
+    db_pool: Any, dream_discord_message_id: int
 ) -> PromptAudit | None:
     """Get audit by dream channel message ID.
 
     Args:
-        dream_discord_message_id: Discord message ID in dream channel
         db_pool: Database pool for dependency injection
+        dream_discord_message_id: Discord message ID in dream channel
 
     Returns:
         PromptAudit if found, None otherwise
@@ -376,14 +370,14 @@ async def get_audit_by_dream_message(
 
 
 async def get_audits_with_feedback(
-    limit: int = 100, offset: int = 0, db_pool: Any = None
+    db_pool: Any, limit: int = 100, offset: int = 0
 ) -> list[PromptAudit]:
     """Get prompt audits that have feedback.
 
     Args:
+        db_pool: Database pool for dependency injection
         limit: Maximum number of audits to return
         offset: Offset for pagination
-        db_pool: Database pool for dependency injection
 
     Returns:
         List of prompt audits with feedback

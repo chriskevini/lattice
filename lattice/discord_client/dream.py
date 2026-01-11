@@ -220,7 +220,7 @@ class FeedbackModal(discord.ui.Modal):
 
         if self.audit_id:
             linked = await prompt_audits.link_feedback_to_audit_by_id(
-                self.audit_id, feedback_id
+                db_pool=get_db_pool(), audit_id=self.audit_id, feedback_id=feedback_id
             )
             if not linked:
                 logger.warning(
@@ -434,7 +434,9 @@ class AuditView(discord.ui.DesignerView):
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
-                    self.audit_id, feedback_id
+                    db_pool=get_db_pool(),
+                    audit_id=self.audit_id,
+                    feedback_id=feedback_id,
                 )
                 if not linked:
                     logger.warning(
@@ -481,7 +483,9 @@ class AuditView(discord.ui.DesignerView):
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
-                    self.audit_id, feedback_id
+                    db_pool=get_db_pool(),
+                    audit_id=self.audit_id,
+                    feedback_id=feedback_id,
                 )
                 if not linked:
                     logger.warning(

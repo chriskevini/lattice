@@ -265,6 +265,7 @@ async def propose_optimization(
     try:
         result = await active_llm_client.complete(
             prompt=rendered_prompt,
+            db_pool=active_db_pool,
             prompt_key="PROMPT_OPTIMIZATION",
             main_discord_message_id=0,
             temperature=optimization_prompt_template.temperature,

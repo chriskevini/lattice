@@ -50,6 +50,7 @@ class AuditingLLMClient:
     async def complete(
         self,
         prompt: str,
+        db_pool: Any,
         prompt_key: str | None = None,
         template_version: int | None = None,
         main_discord_message_id: int | None = None,
@@ -59,12 +60,12 @@ class AuditingLLMClient:
         bot: Any | None = None,
         audit_view: bool = False,
         audit_view_params: dict[str, Any] | None = None,
-        db_pool: Any | None = None,
     ) -> AuditResult:
         """Complete a prompt with automatic audit tracking and optional AuditView.
 
         Args:
             prompt: The prompt to complete
+            db_pool: Database pool for dependency injection
             prompt_key: Optional identifier for the prompt template/purpose
             template_version: Optional version of the template used
             main_discord_message_id: Discord message ID for audit linkage
@@ -94,6 +95,7 @@ class AuditingLLMClient:
                 from lattice.memory import prompt_audits
 
                 audit_id = await prompt_audits.store_prompt_audit(
+                    db_pool=db_pool,
                     prompt_key=prompt_key or "UNKNOWN",
                     rendered_prompt=prompt,
                     response_content=result.content,
@@ -220,6 +222,7 @@ class AuditingLLMClient:
             from lattice.memory import prompt_audits
 
             failed_audit_id = await prompt_audits.store_prompt_audit(
+                db_pool=db_pool,
                 prompt_key=prompt_key or "UNKNOWN",
                 rendered_prompt=prompt,
                 response_content=f"ERROR: {type(e).__name__}: {str(e)}",
@@ -246,64 +249,6 @@ class AuditingLLMClient:
                 audit_id=failed_audit_id,
                 prompt_key=prompt_key,
             )
-
-    async def _fallback_audit_view(
-        self,
-        audit_id: UUID | None,
-        prompt_key: str,
-        template_version: int,
-        rendered_prompt: str,
-        result: GenerationResult,
-        params: dict[str, Any],
-        bot: Any,
-        dream_channel_id: int,
-    ) -> None:
-        """Fallback AuditView for when bot hasn't implemented mirror_audit yet.
-
-        Args:
-            audit_id: UUID of the audit entry
-            prompt_key: Prompt key
-            template_version: Template version
-            rendered_prompt: Full rendered prompt
-            result: Generation result
-            params: Additional parameters
-            bot: Discord bot instance
-            dream_channel_id: Dream channel ID
-        """
-        from lattice.discord_client.dream import AuditViewBuilder
-
-        metadata = params.get("metadata", [])
-        metadata.append(f"{result.latency_ms}ms")
-        if result.cost_usd:
-            metadata.append(f"${result.cost_usd:.4f}")
-        if params.get("main_message_url"):
-            metadata.append(f"[LINK]({params['main_message_url']})")
-
-        embed, view = AuditViewBuilder.build_standard_audit(
-            prompt_key=prompt_key,
-            version=template_version,
-            input_text=params.get("input_text", rendered_prompt[:200] + "..."),
-            output_text=params.get("output_text", result.content),
-            metadata_parts=metadata,
-            audit_id=audit_id,
-            rendered_prompt=rendered_prompt,
-        )
-
-        try:
-            import discord
-
-            dream_channel = bot.get_channel(dream_channel_id)
-            if isinstance(dream_channel, discord.TextChannel):
-                dream_msg = await dream_channel.send(embed=embed, view=view)
-                if audit_id:
-                    from lattice.memory import prompt_audits
-
-                    await prompt_audits.update_audit_dream_message(
-                        audit_id=audit_id,
-                        dream_discord_message_id=dream_msg.id,
-                    )
-        except Exception:
-            logger.exception("Failed to send AuditView to dream channel (fallback)")
 
 
 _discord_bot: Any | None = None

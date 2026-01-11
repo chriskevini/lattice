@@ -288,6 +288,7 @@ async def run_batch_consolidation(
     # Call LLM
     result = await active_llm_client.complete(
         prompt=rendered_prompt,
+        db_pool=active_db_pool,
         prompt_key="MEMORY_CONSOLIDATION",
         main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
