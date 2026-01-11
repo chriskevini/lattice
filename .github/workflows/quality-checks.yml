@@ -41,3 +41,29 @@ jobs:
           enable-cache: true
       - run: uv sync --extra dev
       - run: .venv/bin/pytest tests --no-cov -q
+
+  test-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lattice
+          POSTGRES_PASSWORD: lattice_dev_password
+          POSTGRES_DB: lattice
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Initialize database
+        run: .venv/bin/python scripts/init_db.py
+        env:
+          DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
+      - run: uv sync --extra dev
+      - run: .venv/bin/pytest tests/integration/ --no-cov -q
+        env:
+          DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
