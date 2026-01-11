@@ -287,9 +287,12 @@ class TestUserTimezoneFunctions:
     @pytest.mark.asyncio
     async def test_get_user_timezone_with_value(self) -> None:
         """Test get_user_timezone retrieves stored timezone."""
-        with patch(
-            "lattice.utils.database.get_system_health", return_value="America/New_York"
+        with (
+            patch("lattice.utils.database._user_timezone_cache", None),
+            patch("lattice.utils.database.db_pool") as mock_pool,
         ):
+            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+            mock_conn.fetchrow.return_value = {"object": "America/New_York"}
             result = await get_user_timezone()
 
             assert result == "America/New_York"
@@ -297,7 +300,12 @@ class TestUserTimezoneFunctions:
     @pytest.mark.asyncio
     async def test_get_user_timezone_defaults_to_utc(self) -> None:
         """Test get_user_timezone defaults to UTC when not set."""
-        with patch("lattice.utils.database.get_system_health", return_value=None):
+        with (
+            patch("lattice.utils.database._user_timezone_cache", None),
+            patch("lattice.utils.database.db_pool") as mock_pool,
+        ):
+            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+            mock_conn.fetchrow.return_value = None
             result = await get_user_timezone()
 
             assert result == "UTC"
