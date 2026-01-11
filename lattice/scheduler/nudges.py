@@ -42,42 +42,36 @@ class NudgePlan:
     latency_ms: int | None = None
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = (
+            "Database pool not available. Pass db_pool as an argument "
+            "(dependency injection required)."
+        )
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 async def format_episodic_nudge_context(
-    user_timezone: str = "UTC", limit: int = 20, db_pool: Any = None
+    db_pool: Any, user_timezone: str = "UTC", limit: int = 20
 ) -> str:
     """Build conversation context in USER/ASSISTANT format.
 
     Args:
+        db_pool: Database pool for dependency injection
         user_timezone: User's timezone for timestamp formatting
         limit: Maximum number of recent messages to include
-        db_pool: Database pool for dependency injection
 
     Returns:
         Formatted conversation string
@@ -117,7 +111,7 @@ async def get_default_channel_id() -> int | None:
 
 
 async def prepare_contextual_nudge(
-    db_pool: Any = None, llm_client: Any = None
+    db_pool: Any, llm_client: Any | None = None
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 
@@ -157,7 +151,7 @@ async def prepare_contextual_nudge(
         user_tz = "UTC"
 
     conversation = await format_episodic_nudge_context(
-        user_timezone=user_tz, db_pool=active_db_pool
+        db_pool=active_db_pool, user_timezone=user_tz
     )
 
     from lattice.core import response_generator
@@ -168,7 +162,7 @@ async def prepare_contextual_nudge(
     from lattice.core.context_strategy import retrieve_context
 
     context_result = await retrieve_context(
-        entities=[], context_flags=["activity_context"], db_pool=active_db_pool
+        db_pool=active_db_pool, entities=[], context_flags=["activity_context"]
     )
     activity = context_result.get("activity_context", "No recent activity recorded.")
 

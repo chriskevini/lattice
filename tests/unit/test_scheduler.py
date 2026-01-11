@@ -48,11 +48,18 @@ class TestFormatEpisodicNudgeContext:
             ),
         ]
 
-        result = await format_episodic_nudge_context(user_timezone="UTC")
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+
+        result = await format_episodic_nudge_context(
+            db_pool=mock_pool, user_timezone="UTC"
+        )
         assert "[2024-01-01 10:00] USER: Hello" in result
         assert "[2024-01-01 10:01] ASSISTANT: Hi there" in result
 
-        result = await format_episodic_nudge_context(user_timezone="America/Vancouver")
+        result = await format_episodic_nudge_context(
+            db_pool=mock_pool, user_timezone="America/Vancouver"
+        )
         assert "[2024-01-01 02:00] USER: Hello" in result
         assert "[2024-01-01 02:01] ASSISTANT: Hi there" in result
 
@@ -63,7 +70,10 @@ class TestFormatEpisodicNudgeContext:
             "lattice.scheduler.nudges.get_recent_messages",
             return_value=[],
         ):
-            result = await format_episodic_nudge_context()
+            mock_pool = MagicMock()
+            mock_pool.pool = mock_pool
+
+            result = await format_episodic_nudge_context(db_pool=mock_pool)
             assert result == "No recent conversation history."
 
     @pytest.mark.asyncio
@@ -89,7 +99,10 @@ class TestFormatEpisodicNudgeContext:
             "lattice.scheduler.nudges.get_recent_messages",
             return_value=messages,
         ):
-            result = await format_episodic_nudge_context()
+            mock_pool = MagicMock()
+            mock_pool.pool = mock_pool
+
+            result = await format_episodic_nudge_context(db_pool=mock_pool)
             assert "[2024-01-01 10:00] USER: Hello!" in result
             assert "[2024-01-01 10:01] ASSISTANT: Hi there!" in result
 
