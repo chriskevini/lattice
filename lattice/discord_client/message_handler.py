@@ -148,10 +148,13 @@ class MessageHandler:
             channel: The channel to show typing in
             delay: Delay in seconds before showing typing
         """
-        if delay > 0:
-            await asyncio.sleep(delay)
-        async with channel.typing():
-            await asyncio.Future()
+        try:
+            if delay > 0:
+                await asyncio.sleep(delay)
+            async with channel.typing():
+                await asyncio.Future()
+        except asyncio.CancelledError:
+            pass
 
     @property
     def consecutive_failures(self) -> int:
@@ -229,6 +232,7 @@ class MessageHandler:
             len(message.content) * TYPING_DELAY_MS_PER_CHAR / 1000,
             MAX_TYPING_DELAY_SECONDS,
         )
+        typing_task = None
         typing_task = asyncio.create_task(
             self._delayed_typing(message.channel, typing_delay)
         )
@@ -409,4 +413,5 @@ class MessageHandler:
                 "Sorry, I encountered an error processing your message."
             )
         finally:
-            typing_task.cancel()
+            if typing_task is not None:
+                typing_task.cancel()
