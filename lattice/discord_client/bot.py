@@ -164,12 +164,6 @@ class LatticeBot(commands.Bot):
             if self._command_handler:
                 self._command_handler.setup()
 
-            # Register bot instance for LLM error mirroring
-            from lattice.utils.llm import set_discord_bot
-
-            set_discord_bot(self)
-            logger.info("Bot registered for LLM error mirroring")
-
             # Views are registered dynamically when sent for unique custom_ids
             # This prevents conflicts between multiple instances
             logger.info("Bot ready - views registered dynamically")

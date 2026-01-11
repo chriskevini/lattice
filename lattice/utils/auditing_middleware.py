@@ -257,29 +257,3 @@ class AuditingLLMClient:
                 audit_id=failed_audit_id,
                 prompt_key=prompt_key,
             )
-
-
-_discord_bot: Any | None = None
-
-
-def set_discord_bot(bot: Any) -> None:
-    """Set the global Discord bot instance for error mirroring.
-
-    DEPRECATED: Use dependency injection instead.
-
-    Args:
-        bot: Discord bot instance
-    """
-    global _discord_bot
-    _discord_bot = bot
-
-
-def get_discord_bot() -> Any | None:
-    """Get the global Discord bot instance.
-
-    DEPRECATED: Use dependency injection instead.
-
-    Returns:
-        Discord bot instance or None if not set
-    """
-    return _discord_bot
