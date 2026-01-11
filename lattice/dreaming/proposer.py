@@ -201,7 +201,9 @@ async def propose_optimization(
     active_llm_client = llm_client or get_auditing_llm_client()
 
     # Get current template
-    prompt_template = await get_prompt(metrics.prompt_key, db_pool=active_db_pool)
+    prompt_template = await get_prompt(
+        db_pool=active_db_pool, prompt_key=metrics.prompt_key
+    )
     if not prompt_template:
         logger.warning(
             "Cannot propose optimization - prompt not found",
@@ -211,7 +213,7 @@ async def propose_optimization(
 
     # Get optimization prompt template from database
     optimization_prompt_template = await get_prompt(
-        "PROMPT_OPTIMIZATION", db_pool=active_db_pool
+        db_pool=active_db_pool, prompt_key="PROMPT_OPTIMIZATION"
     )
     if not optimization_prompt_template:
         logger.warning(

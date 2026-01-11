@@ -183,7 +183,9 @@ async def prepare_contextual_nudge(
 
     date_hints = resolve_relative_dates("", timezone_str=user_tz)
 
-    prompt_template = await get_prompt("CONTEXTUAL_NUDGE", db_pool=active_db_pool)
+    prompt_template = await get_prompt(
+        db_pool=active_db_pool, prompt_key="CONTEXTUAL_NUDGE"
+    )
     if not prompt_template:
         logger.error("CONTEXTUAL_NUDGE prompt not found in database")
         return NudgePlan(

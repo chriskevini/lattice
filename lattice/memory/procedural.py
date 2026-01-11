@@ -11,7 +11,7 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
@@ -26,14 +26,9 @@ def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
     if db_pool_arg is not None:
         return db_pool_arg
 
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
     msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
+        "Database pool not available. Pass db_pool as an argument "
+        "(dependency injection required)."
     )
     raise RuntimeError(msg)
 
@@ -99,12 +94,12 @@ class PromptTemplate:
         return escaped.format(**kwargs)
 
 
-async def get_prompt(prompt_key: str, db_pool: Any = None) -> PromptTemplate | None:
+async def get_prompt(db_pool: Any, *, prompt_key: str) -> PromptTemplate | None:
     """Retrieve the latest active prompt template by key.
 
     Args:
-        prompt_key: The unique identifier for the template
         db_pool: Database pool for dependency injection
+        prompt_key: The unique identifier for the template
 
     Returns:
         The prompt template, or None if not found

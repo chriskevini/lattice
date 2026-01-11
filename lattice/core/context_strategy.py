@@ -174,7 +174,9 @@ async def context_strategy(
 
     active_db_pool = _get_active_db_pool(db_pool)
 
-    prompt_template = await get_prompt("CONTEXT_STRATEGY", db_pool=active_db_pool)
+    prompt_template = await get_prompt(
+        db_pool=active_db_pool, prompt_key="CONTEXT_STRATEGY"
+    )
     if not prompt_template:
         msg = "CONTEXT_STRATEGY prompt template not found in prompt_registry"
         raise ValueError(msg)

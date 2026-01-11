@@ -211,7 +211,9 @@ async def generate_response(
 
     # Get unified response template
     template_name = "UNIFIED_RESPONSE"
-    prompt_template = await procedural.get_prompt(template_name, db_pool=active_db_pool)
+    prompt_template = await procedural.get_prompt(
+        db_pool=active_db_pool, prompt_key=template_name
+    )
 
     if not prompt_template:
         logger.warning("Template not found", requested_template=template_name)

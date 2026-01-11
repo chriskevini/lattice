@@ -248,7 +248,9 @@ async def run_batch_consolidation(
             for m in messages
         )
 
-    prompt_template = await get_prompt("MEMORY_CONSOLIDATION", db_pool=active_db_pool)
+    prompt_template = await get_prompt(
+        db_pool=active_db_pool, prompt_key="MEMORY_CONSOLIDATION"
+    )
     if not prompt_template:
         logger.warning("MEMORY_CONSOLIDATION prompt not found")
         return

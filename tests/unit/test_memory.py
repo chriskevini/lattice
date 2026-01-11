@@ -1,7 +1,7 @@
 """Unit tests for Lattice memory modules."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
@@ -240,17 +240,19 @@ class TestProceduralMemoryFunctions:
             }
         )
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock()
 
-            result = await get_prompt("test_key")
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-            assert result is not None
-            assert result.prompt_key == "test_key"
-            assert result.template == "You are helpful."
+        result = await get_prompt(db_pool=mock_pool, prompt_key="test_key")
+
+        assert result is not None
+        assert result.prompt_key == "test_key"
+        assert result.template == "You are helpful."
 
     @pytest.mark.asyncio
     async def test_get_prompt_not_found(self) -> None:
@@ -258,15 +260,17 @@ class TestProceduralMemoryFunctions:
         mock_conn = MagicMock()
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock()
 
-            result = await get_prompt("nonexistent")
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-            assert result is None
+        result = await get_prompt(db_pool=mock_pool, prompt_key="nonexistent")
+
+        assert result is None
 
 
 class MockMessage:
