@@ -1,3 +1,9 @@
+-- =============================================================================
+-- Canonical Prompt Template
+-- Version: 1
+-- Convention: Keep canonical prompts at v1. Git handles version history.
+-- User customizations (via dream cycle) get v2, v3, etc.
+-- =============================================================================
 -- Template: PROMPT_OPTIMIZATION (v1)
 -- Description: Propose prompt improvements based on feedback
 -- Temperature: 0.7

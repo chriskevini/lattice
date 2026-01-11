@@ -1,3 +1,9 @@
+-- =============================================================================
+-- Canonical Prompt Template
+-- Version: 1
+-- Convention: Keep canonical prompts at v1. Git handles version history.
+-- User customizations (via dream cycle) get v2, v3, etc.
+-- =============================================================================
 -- Template: UNIFIED_RESPONSE (v1)
 -- Description: Primary template for all reactive responses
 -- Temperature: 0.7

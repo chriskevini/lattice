@@ -1,3 +1,9 @@
+-- =============================================================================
+-- Canonical Prompt Template
+-- Version: 1
+-- Convention: Keep canonical prompts at v1. Git handles version history.
+-- User customizations (via dream cycle) get v2, v3, etc.
+-- =============================================================================
 -- Template: CONTEXT_STRATEGY (v1)
 -- Description: Analyze conversation to extract entities and context needs
 -- Temperature: 0.2

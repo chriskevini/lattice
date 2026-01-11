@@ -9,6 +9,11 @@ Design principles:
 - Concurrent-safe: Uses INSERT ON CONFLICT as distributed lock
 - Ordered: Migrations run in numeric version order
 - Self-contained: Each migration is independent and fully defines its changes
+
+Prompt versioning convention:
+- Canonical prompts: ALWAYS v1. Git handles version history.
+- User customizations: v2, v3, etc. (via dream cycle)
+- migrate.py syncs v1 if user hasn't customized (no v2+)
 """
 
 import asyncio
