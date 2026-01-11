@@ -69,24 +69,6 @@ async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
     )
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 async def check_and_run_batch(db_pool: Any) -> None:
     """Check if memory consolidation is needed and run it.
 
@@ -97,9 +79,7 @@ async def check_and_run_batch(db_pool: Any) -> None:
     Args:
         db_pool: Database pool for dependency injection (required)
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         last_batch_id = await _get_last_batch_id(conn)
 
         count_row = await conn.fetchrow(
@@ -160,9 +140,7 @@ async def run_batch_consolidation(
         llm_client: LLM client for dependency injection
         bot: Discord bot instance for dependency injection
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         last_batch_id = await _get_last_batch_id(conn)
 
         count_row = await conn.fetchrow(
@@ -240,7 +218,7 @@ async def run_batch_consolidation(
         )
 
     prompt_template = await get_prompt(
-        db_pool=active_db_pool, prompt_key="MEMORY_CONSOLIDATION"
+        db_pool=db_pool, prompt_key="MEMORY_CONSOLIDATION"
     )
     if not prompt_template:
         logger.warning("MEMORY_CONSOLIDATION prompt not found")
@@ -248,10 +226,8 @@ async def run_batch_consolidation(
 
     user_message = "\n".join(m["content"] for m in messages)
 
-    canonical_entities_list = await get_canonical_entities_list(db_pool=active_db_pool)
-    canonical_predicates_list = await get_canonical_predicates_list(
-        db_pool=active_db_pool
-    )
+    canonical_entities_list = await get_canonical_entities_list(db_pool=db_pool)
+    canonical_predicates_list = await get_canonical_predicates_list(db_pool=db_pool)
 
     injector = PlaceholderInjector()
     context = {
@@ -279,7 +255,7 @@ async def run_batch_consolidation(
     # Call LLM
     result = await active_llm_client.complete(
         prompt=rendered_prompt,
-        db_pool=active_db_pool,
+        db_pool=db_pool,
         prompt_key="MEMORY_CONSOLIDATION",
         main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
@@ -336,8 +312,8 @@ async def run_batch_consolidation(
                 t.get("object", ""),
             )
         )
-        known_entities = await get_canonical_entities_set(db_pool=active_db_pool)
-        known_predicates = await get_canonical_predicates_set(db_pool=active_db_pool)
+        known_entities = await get_canonical_entities_set(db_pool=db_pool)
+        known_predicates = await get_canonical_predicates_set(db_pool=db_pool)
 
         new_entities, new_predicates = extract_canonical_forms(
             extracted_memories, known_entities, known_predicates
@@ -345,7 +321,7 @@ async def run_batch_consolidation(
 
         if new_entities or new_predicates:
             store_result = await store_canonical_forms(
-                db_pool=active_db_pool,
+                db_pool=db_pool,
                 new_entities=new_entities,
                 new_predicates=new_predicates,
             )
@@ -358,7 +334,7 @@ async def run_batch_consolidation(
 
         message_id = messages[-1]["id"]
         await store_semantic_memories(
-            db_pool=active_db_pool,
+            db_pool=db_pool,
             message_id=message_id,
             memories=extracted_memories,
             source_batch_id=batch_id,
@@ -369,7 +345,7 @@ async def run_batch_consolidation(
             count=len(extracted_memories),
         )
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         await _update_last_batch_id(conn, batch_id)
 
     logger.info(
