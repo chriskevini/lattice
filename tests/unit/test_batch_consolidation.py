@@ -369,7 +369,9 @@ class TestRunBatchConsolidation:
                                                             "predicates": 0,
                                                         },
                                                     ):
-                                                        await run_batch_consolidation(db_pool=mock_pool)
+                                                        await run_batch_consolidation(
+                                                            db_pool=mock_pool
+                                                        )
                                                     mock_store.assert_called_once()
                                                     call_kwargs = (
                                                         mock_store.call_args.kwargs
@@ -511,7 +513,9 @@ class TestRunBatchConsolidation:
                                                             "predicates": 0,
                                                         },
                                                     ):
-                                                        await run_batch_consolidation(db_pool=mock_pool)
+                                                        await run_batch_consolidation(
+                                                            db_pool=mock_pool
+                                                        )
                                                         mock_store.assert_not_called()
 
     @pytest.mark.asyncio
@@ -618,7 +622,9 @@ class TestRunBatchConsolidation:
                                                     "predicates": 0,
                                                 },
                                             ):
-                                                await run_batch_consolidation(db_pool=mock_pool)
+                                                await run_batch_consolidation(
+                                                    db_pool=mock_pool
+                                                )
                                                 call_args = (
                                                     mock_prompt.safe_format.call_args
                                                 )
@@ -735,7 +741,9 @@ class TestRunBatchConsolidation:
                                                 "predicates": 0,
                                             },
                                         ):
-                                            await run_batch_consolidation(db_pool=mock_pool)
+                                            await run_batch_consolidation(
+                                                db_pool=mock_pool
+                                            )
                                             # semantic_context should NOT be in call_args anymore
                                             call_args = (
                                                 mock_prompt.safe_format.call_args
@@ -840,7 +848,9 @@ class TestRunBatchConsolidation:
                                                     "predicates": 0,
                                                 },
                                             ):
-                                                await run_batch_consolidation(db_pool=mock_pool)
+                                                await run_batch_consolidation(
+                                                    db_pool=mock_pool
+                                                )
                                                 call_args = (
                                                     mock_prompt.safe_format.call_args
                                                 )
@@ -1048,7 +1058,9 @@ class TestCanonicalFormIntegration:
                                                         "predicates": 2,
                                                     },
                                                 ) as mock_store_canonical:
-                                                    await run_batch_consolidation(db_pool=mock_pool)
+                                                    await run_batch_consolidation(
+                                                        db_pool=mock_pool
+                                                    )
 
                                                     mock_store.assert_called_once()
                                                     store_kwargs = (
@@ -1184,7 +1196,9 @@ class TestCanonicalFormIntegration:
                                                     "predicates": 0,
                                                 },
                                             ):
-                                                await run_batch_consolidation(db_pool=mock_pool)
+                                                await run_batch_consolidation(
+                                                    db_pool=mock_pool
+                                                )
 
     @pytest.mark.asyncio
     async def test_batch_handles_dict_triples_format(self) -> None:
@@ -1300,7 +1314,9 @@ class TestCanonicalFormIntegration:
                                                         "predicates": 1,
                                                     },
                                                 ):
-                                                    await run_batch_consolidation(db_pool=mock_pool)
+                                                    await run_batch_consolidation(
+                                                        db_pool=mock_pool
+                                                    )
 
                                                     mock_store.assert_called_once()
                                                     call_kwargs = (
