@@ -96,18 +96,23 @@ jobs:
           PGPASSWORD: lattice_dev_password
       - name: Check for drift
         run: |
-          # pg_dump includes session-specific \restrict/\unrestrict tokens that change on each run
+          # pg_dump includes session-specific tokens that change on each run:
+          # - \restrict/\unrestrict tokens
+          # - Version comments (e.g., "Dumped by pg_dump version X.Y")
           # Filter them out before comparison
-          grep -v '^\\restrict' scripts/schema.sql > scripts/schema.sql.filtered
-          grep -v '^\\unrestrict' scripts/schema.sql.filtered > scripts/schema.sql.clean
-          grep -v '^\\restrict' tmp_schema.sql > tmp_schema.sql.filtered
-          grep -v '^\\unrestrict' tmp_schema.sql.filtered > tmp_schema.sql.clean
+          grep -v '^\\restrict' scripts/schema.sql | \
+            grep -v '^\\unrestrict' | \
+            grep -v '^-- Dumped by pg_dump' > scripts/schema.sql.clean
+
+          grep -v '^\\restrict' tmp_schema.sql | \
+            grep -v '^\\unrestrict' | \
+            grep -v '^-- Dumped by pg_dump' > tmp_schema.sql.clean
 
           if ! diff -u scripts/schema.sql.clean tmp_schema.sql.clean; then
             echo "Schema drift detected! The schema.sql does not match the migration output."
             echo "Please update schema.sql by running migrations on a clean database and dumping the schema."
-            rm -f scripts/schema.sql.filtered scripts/schema.sql.clean tmp_schema.sql.filtered tmp_schema.sql.clean
+            rm -f scripts/schema.sql.clean tmp_schema.sql.clean
             exit 1
           fi
-          rm -f scripts/schema.sql.filtered scripts/schema.sql.clean tmp_schema.sql.filtered tmp_schema.sql.clean
+          rm -f scripts/schema.sql.clean tmp_schema.sql.clean
 
