@@ -164,9 +164,10 @@ class Test_LLMClientOpenRouter:
         """Test that OpenRouter mode raises ImportError if openai not installed."""
         client = _LLMClient(provider="openrouter")
 
-        with patch.dict("sys.modules", {"openai": None}):
-            with pytest.raises(ImportError, match="openai package not installed"):
-                await client._openrouter_complete("test", 0.7, None)
+        with patch.dict("os.environ", {"FORCE_OPENAI_IMPORT_ERROR": "1"}):
+            with patch.dict("sys.modules", {"openai": None}):
+                with pytest.raises(ImportError, match="openai package not installed"):
+                    await client._openrouter_complete("test", 0.7, None)
 
     @pytest.mark.asyncio
     async def test_openrouter_complete_missing_api_key(self, mock_config) -> None:

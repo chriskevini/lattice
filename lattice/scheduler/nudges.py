@@ -16,7 +16,6 @@ from lattice.memory.episodic import get_recent_messages
 from lattice.memory.procedural import get_prompt
 from lattice.utils.config import get_config
 
-from lattice.utils.database import get_user_timezone
 from lattice.utils.date_resolution import get_now
 from lattice.utils.llm import get_auditing_llm_client
 from lattice.utils.placeholder_injector import PlaceholderInjector
@@ -124,7 +123,6 @@ async def prepare_contextual_nudge(
         NudgePlan with content and reason
     """
     # Use injected db_pool if provided, otherwise fallback to global
-    from lattice.utils.llm import get_auditing_llm_client
 
     active_db_pool = _get_active_db_pool(db_pool)
     active_llm_client = llm_client or get_auditing_llm_client()
@@ -140,11 +138,11 @@ async def prepare_contextual_nudge(
         else:
             from lattice.utils.database import get_user_timezone as global_get_tz
 
-            user_tz = await global_get_tz()
+            user_tz = await global_get_tz(db_pool=active_db_pool)
     except (AttributeError, TypeError):
         from lattice.utils.database import get_user_timezone as global_get_tz
 
-        user_tz = await global_get_tz()
+        user_tz = await global_get_tz(db_pool=active_db_pool)
 
     if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
         user_tz = "UTC"
@@ -157,7 +155,6 @@ async def prepare_contextual_nudge(
     )
 
     from lattice.core import response_generator
-    from lattice.utils.placeholder_injector import PlaceholderInjector
 
     # Retrieve goal and activity context
     goals = await response_generator.get_goal_context(db_pool=active_db_pool)
@@ -170,7 +167,6 @@ async def prepare_contextual_nudge(
     activity = context_result.get("activity_context", "No recent activity recorded.")
 
     channel_id = await get_default_channel_id()
-    from lattice.utils.date_resolution import get_now
 
     now = get_now(user_tz)
     local_date = now.strftime("%Y/%m/%d, %A")

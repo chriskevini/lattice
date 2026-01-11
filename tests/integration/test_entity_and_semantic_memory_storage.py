@@ -9,11 +9,11 @@ The entities table is no longer used for semantic memory storage.
 """
 
 import os
-
 import pytest
+from typing import AsyncGenerator
 
 from lattice.memory import episodic
-from lattice.utils.database import db_pool
+from lattice.utils.database import DatabasePool
 
 
 # Skip all tests if DATABASE_URL not set (CI environment)
@@ -23,16 +23,34 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.mark.integration
+@pytest.fixture
+async def db_pool() -> AsyncGenerator[DatabasePool, None]:
+    """Fixture to provide a managed DatabasePool for each test."""
+    pool = DatabasePool()
+    await pool.initialize()
+    yield pool
+    await pool.close()
+
+
+@pytest.fixture(autouse=True)
+async def cleanup_test_data(db_pool: DatabasePool) -> None:
+    """Fixture to clean up test data before each test."""
+    async with db_pool.pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM raw_messages WHERE discord_message_id IN (12345, 12346, 12348, 12349, 12350)"
+        )
+        # Also clean up semantic memories associated with these test batches
+        await conn.execute(
+            "DELETE FROM semantic_memories WHERE source_batch_id LIKE 'test_batch_%'"
+        )
+
+
+@pytest.mark.asyncio
 class TestSemanticMemoryStorage:
     """Test semantic memory storage functionality."""
 
-    @pytest.mark.asyncio
-    async def test_store_simple_memory(self) -> None:
+    async def test_store_simple_memory(self, db_pool: DatabasePool) -> None:
         """Test storing a simple semantic memory."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
         # Create a test message
         message = episodic.EpisodicMessage(
             content="Alice works at OpenAI",
@@ -40,11 +58,11 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message)
+        message_id = await episodic.store_message(message, db_pool=db_pool)
 
         # Store semantic memory
         memories = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
-        await episodic.store_semantic_memories(message_id, memories)
+        await episodic.store_semantic_memories(message_id, memories, db_pool=db_pool)
 
         # Verify memory was stored
         async with db_pool.pool.acquire() as conn:
@@ -70,12 +88,8 @@ class TestSemanticMemoryStorage:
                     break
             assert found, "Memory not found in database"
 
-    @pytest.mark.asyncio
-    async def test_store_multiple_memories(self) -> None:
+    async def test_store_multiple_memories(self, db_pool: DatabasePool) -> None:
         """Test storing multiple memories from same message."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
         # Create test message
         message = episodic.EpisodicMessage(
             content="Alice works at OpenAI and likes Python",
@@ -83,7 +97,7 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message)
+        message_id = await episodic.store_message(message, db_pool=db_pool)
 
         # Store multiple memories with a batch ID for tracking
         batch_id = "test_batch_12346"
@@ -92,7 +106,7 @@ class TestSemanticMemoryStorage:
             {"subject": "user", "predicate": "likes", "object": "Python"},
         ]
         await episodic.store_semantic_memories(
-            message_id, memories, source_batch_id=batch_id
+            message_id, memories, source_batch_id=batch_id, db_pool=db_pool
         )
 
         # Verify both memories stored
@@ -108,19 +122,15 @@ class TestSemanticMemoryStorage:
 
             assert rows[0]["count"] == 2
 
-    @pytest.mark.asyncio
-    async def test_skip_invalid_memories(self) -> None:
+    async def test_skip_invalid_memories(self, db_pool: DatabasePool) -> None:
         """Test that invalid memories are skipped gracefully."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
         message = episodic.EpisodicMessage(
             content="Test message",
             discord_message_id=12348,
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message)
+        message_id = await episodic.store_message(message, db_pool=db_pool)
 
         # Mix of valid and invalid memories
         batch_id = "test_batch_12348"
@@ -145,7 +155,7 @@ class TestSemanticMemoryStorage:
 
         # Should not raise exception
         await episodic.store_semantic_memories(
-            message_id, memories, source_batch_id=batch_id
+            message_id, memories, source_batch_id=batch_id, db_pool=db_pool
         )
 
         # Verify only valid memory was stored
@@ -165,23 +175,21 @@ class TestSemanticMemoryStorage:
             assert rows[0]["predicate"] == "works_at"
             assert rows[0]["object"] == "OpenAI"
 
-    @pytest.mark.asyncio
-    async def test_empty_memories_list(self) -> None:
+    async def test_empty_memories_list(self, db_pool: DatabasePool) -> None:
         """Test that empty memories list is handled gracefully."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
         message = episodic.EpisodicMessage(
             content="No memories here",
             discord_message_id=12349,
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message)
+        message_id = await episodic.store_message(message, db_pool=db_pool)
 
         # Should not raise exception
         batch_id = "test_batch_12349"
-        await episodic.store_semantic_memories(message_id, [], source_batch_id=batch_id)
+        await episodic.store_semantic_memories(
+            message_id, [], source_batch_id=batch_id, db_pool=db_pool
+        )
 
         # Verify no memories stored
         async with db_pool.pool.acquire() as conn:
@@ -195,19 +203,15 @@ class TestSemanticMemoryStorage:
             )
             assert rows[0]["count"] == 0
 
-    @pytest.mark.asyncio
-    async def test_text_based_memory_search(self) -> None:
+    async def test_text_based_memory_search(self, db_pool: DatabasePool) -> None:
         """Test searching for memories by text matching."""
-        if not db_pool.is_initialized():
-            await db_pool.initialize()
-
         message = episodic.EpisodicMessage(
             content="Test memory search",
             discord_message_id=12350,
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message)
+        message_id = await episodic.store_message(message, db_pool=db_pool)
 
         # Store a memory with unique identifiers
         batch_id = "test_batch_12350"
@@ -215,7 +219,7 @@ class TestSemanticMemoryStorage:
             {"subject": "user", "predicate": "lives_in", "object": "Richmond, BC"}
         ]
         await episodic.store_semantic_memories(
-            message_id, memories, source_batch_id=batch_id
+            message_id, memories, source_batch_id=batch_id, db_pool=db_pool
         )
 
         # Search by subject

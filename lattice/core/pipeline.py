@@ -98,7 +98,6 @@ class UnifiedPipeline:
             user_message=content,
             episodic_context=formatted_history,
             semantic_context=context["semantic_context"],
-            goal_context=context.get("goal_context", ""),
             llm_client=self.llm_client,
             db_pool=self.db_pool,
         )

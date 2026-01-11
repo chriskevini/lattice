@@ -160,6 +160,11 @@ async def store_prompt_audit(
             dream_discord_message_id,
         )
 
+        if row is None:
+            # This should not happen with RETURNING, but for robustness
+            msg = "Failed to store prompt audit"
+            raise RuntimeError(msg)
+
         audit_id = row["id"]
 
         logger.info(

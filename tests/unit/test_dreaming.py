@@ -1,6 +1,7 @@
 """Tests for dreaming cycle modules (analyzer, proposer, approval)."""
 
 from decimal import Decimal
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -93,9 +94,12 @@ class TestProposer:
 
         mock_template = MagicMock()
         mock_template.template = "You are a helpful assistant."
+        mock_template.version = 1
 
         mock_optimization_template = MagicMock()
         mock_optimization_template.template = "Optimize this: {current_template}"
+        mock_optimization_template.version = 1
+        mock_optimization_template.temperature = 0.7
         mock_optimization_template.safe_format = MagicMock(
             return_value="Optimize this: You are a helpful assistant."
         )
@@ -111,14 +115,15 @@ class TestProposer:
         with (
             patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
             patch(
-                "lattice.dreaming.proposer.get_feedback_with_context", return_value=[]
+                "lattice.dreaming.proposer.get_feedback_with_context",
+                return_value=[{"feedback_content": "good", "response_content": "hi"}],
             ),
             patch(
                 "lattice.dreaming.proposer.get_auditing_llm_client"
             ) as mock_llm_client,
         ):
 
-            def get_prompt_side_effect(prompt_key: str):
+            def get_prompt_side_effect(prompt_key: str, db_pool: Any = None):
                 if prompt_key == "BASIC_RESPONSE":
                     return mock_template
                 elif prompt_key == "PROMPT_OPTIMIZATION":

@@ -12,11 +12,6 @@ from zoneinfo import ZoneInfo
 
 import structlog
 
-from lattice.utils.database import (
-    get_system_health,
-    get_user_timezone,
-    set_system_health,
-)
 from lattice.utils.date_resolution import get_now
 
 
@@ -96,7 +91,7 @@ async def calculate_active_hours(db_pool: Any = None) -> ActiveHoursResult:
         # Fallback for MagicMock in tests
         from lattice.utils.database import get_user_timezone as global_get_tz
 
-        user_tz = await global_get_tz()
+        user_tz = await global_get_tz(db_pool=active_db_pool)
 
     if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
         user_tz = "UTC"
@@ -222,7 +217,7 @@ async def is_within_active_hours(
     except (AttributeError, TypeError):
         from lattice.utils.database import get_user_timezone as global_get_tz
 
-        user_tz = await global_get_tz()
+        user_tz = await global_get_tz(db_pool=active_db_pool)
 
     if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
         user_tz = "UTC"
@@ -256,12 +251,14 @@ async def is_within_active_hours(
         # Fallback for MagicMock in tests or uninitialized pool
         from lattice.utils.database import get_system_health as global_get_health
 
-        start_raw = await global_get_health("active_hours_start")
+        start_raw = await global_get_health(
+            "active_hours_start", db_pool=active_db_pool
+        )
         if isinstance(start_raw, MagicMock):
             start_raw = None
         start_hour = int(start_raw or 9)
 
-        end_raw = await global_get_health("active_hours_end")
+        end_raw = await global_get_health("active_hours_end", db_pool=active_db_pool)
         if isinstance(end_raw, MagicMock):
             end_raw = None
         end_hour = int(end_raw or 21)
@@ -329,10 +326,20 @@ async def update_active_hours(db_pool: Any = None) -> ActiveHoursResult:
     except (AttributeError, TypeError):
         from lattice.utils.database import set_system_health as global_set_health
 
-        await global_set_health("active_hours_start", str(result["start_hour"]))
-        await global_set_health("active_hours_end", str(result["end_hour"]))
-        await global_set_health("active_hours_confidence", str(result["confidence"]))
-        await global_set_health("active_hours_last_updated", get_now("UTC").isoformat())
+        await global_set_health(
+            "active_hours_start", str(result["start_hour"]), db_pool=active_db_pool
+        )
+        await global_set_health(
+            "active_hours_end", str(result["end_hour"]), db_pool=active_db_pool
+        )
+        await global_set_health(
+            "active_hours_confidence", str(result["confidence"]), db_pool=active_db_pool
+        )
+        await global_set_health(
+            "active_hours_last_updated",
+            get_now("UTC").isoformat(),
+            db_pool=active_db_pool,
+        )
 
     logger.info(
         "Updated active hours",

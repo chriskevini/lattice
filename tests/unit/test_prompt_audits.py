@@ -24,9 +24,13 @@ class TestStorePromptAudit:
         """Test successfully storing a prompt audit."""
         mock_conn = MagicMock()
         audit_id = UUID("12345678-1234-5678-1234-567812345678")
-        mock_conn.fetchrow = AsyncMock(return_value={"id": audit_id})
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        # Mock fetchrow to support dict-like access
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: {"id": audit_id}[key]
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -60,9 +64,13 @@ class TestStorePromptAudit:
         """Test storing prompt audit with minimal optional fields."""
         mock_conn = MagicMock()
         audit_id = UUID("87654321-4321-8765-4321-876543218765")
-        mock_conn.fetchrow = AsyncMock(return_value={"id": audit_id})
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        # Mock fetchrow to support dict-like access
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: {"id": audit_id}[key]
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -88,7 +96,7 @@ class TestUpdateAuditDreamMessage:
         mock_conn = MagicMock()
         mock_conn.execute = AsyncMock(return_value="UPDATE 1")
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -108,7 +116,7 @@ class TestUpdateAuditDreamMessage:
         mock_conn = MagicMock()
         mock_conn.execute = AsyncMock(return_value="UPDATE 0")
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -131,7 +139,7 @@ class TestLinkFeedbackToAudit:
         mock_conn = MagicMock()
         mock_conn.execute = AsyncMock(return_value="UPDATE 1")
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -151,7 +159,7 @@ class TestLinkFeedbackToAudit:
         mock_conn = MagicMock()
         mock_conn.execute = AsyncMock(return_value="UPDATE 0")
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -174,7 +182,7 @@ class TestLinkFeedbackToAuditById:
         mock_conn = MagicMock()
         mock_conn.execute = AsyncMock(return_value="UPDATE 1")
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -198,7 +206,7 @@ class TestLinkFeedbackToAuditById:
         mock_conn = MagicMock()
         mock_conn.execute = AsyncMock(return_value="UPDATE 0")
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -219,32 +227,33 @@ class TestGetAuditByDreamMessage:
     async def test_get_audit_by_dream_message_found(self) -> None:
         """Test retrieving audit by dream message ID."""
         mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={
-                "id": UUID("12345678-1234-5678-1234-567812345678"),
-                "prompt_key": "BASIC_RESPONSE",
-                "template_version": 1,
-                "message_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                "rendered_prompt": "Test prompt",
-                "response_content": "Test response",
-                "model": "gpt-4o-mini",
-                "provider": "openrouter",
-                "prompt_tokens": 100,
-                "completion_tokens": 50,
-                "cost_usd": 0.001,
-                "latency_ms": 250,
-                "context_config": {"episodic": 5, "semantic": 3, "graph": 0},
-                "archetype_matched": None,
-                "archetype_confidence": None,
-                "reasoning": None,
-                "main_discord_message_id": 123456789,
-                "dream_discord_message_id": 987654321,
-                "feedback_id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-                "created_at": datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
-            }
-        )
+        audit_data = {
+            "id": UUID("12345678-1234-5678-1234-567812345678"),
+            "prompt_key": "BASIC_RESPONSE",
+            "template_version": 1,
+            "message_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            "rendered_prompt": "Test prompt",
+            "response_content": "Test response",
+            "model": "gpt-4o-mini",
+            "provider": "openrouter",
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "cost_usd": 0.001,
+            "latency_ms": 250,
+            "context_config": {"episodic": 5, "semantic": 3, "graph": 0},
+            "archetype_matched": None,
+            "archetype_confidence": None,
+            "reasoning": None,
+            "main_discord_message_id": 123456789,
+            "dream_discord_message_id": 987654321,
+            "feedback_id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            "created_at": datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+        }
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: audit_data[key]
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -264,7 +273,7 @@ class TestGetAuditByDreamMessage:
         mock_conn = MagicMock()
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -282,56 +291,62 @@ class TestGetAuditsWithFeedback:
     async def test_get_audits_with_feedback_found(self) -> None:
         """Test retrieving audits with feedback."""
         mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
-            return_value=[
-                {
-                    "id": UUID("11111111-1111-1111-1111-111111111111"),
-                    "prompt_key": "BASIC_RESPONSE",
-                    "template_version": 1,
-                    "message_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                    "rendered_prompt": "Prompt 1",
-                    "response_content": "Response 1",
-                    "model": "gpt-4o-mini",
-                    "provider": "openrouter",
-                    "prompt_tokens": 100,
-                    "completion_tokens": 50,
-                    "cost_usd": 0.001,
-                    "latency_ms": 250,
-                    "context_config": {"episodic": 5, "semantic": 3, "graph": 0},
-                    "archetype_matched": None,
-                    "archetype_confidence": None,
-                    "reasoning": None,
-                    "main_discord_message_id": 111,
-                    "dream_discord_message_id": 222,
-                    "feedback_id": UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-                    "created_at": datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
-                },
-                {
-                    "id": UUID("22222222-2222-2222-2222-222222222222"),
-                    "prompt_key": "BASIC_RESPONSE",
-                    "template_version": 1,
-                    "message_id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-                    "rendered_prompt": "Prompt 2",
-                    "response_content": "Response 2",
-                    "model": "gpt-4o-mini",
-                    "provider": "openrouter",
-                    "prompt_tokens": 120,
-                    "completion_tokens": 60,
-                    "cost_usd": 0.002,
-                    "latency_ms": 300,
-                    "context_config": {"episodic": 3, "semantic": 2, "graph": 1},
-                    "archetype_matched": None,
-                    "archetype_confidence": None,
-                    "reasoning": None,
-                    "main_discord_message_id": 333,
-                    "dream_discord_message_id": 444,
-                    "feedback_id": UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
-                    "created_at": datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC),
-                },
-            ]
-        )
+        audit_data_list = [
+            {
+                "id": UUID("11111111-1111-1111-1111-111111111111"),
+                "prompt_key": "BASIC_RESPONSE",
+                "template_version": 1,
+                "message_id": UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "rendered_prompt": "Prompt 1",
+                "response_content": "Response 1",
+                "model": "gpt-4o-mini",
+                "provider": "openrouter",
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "cost_usd": 0.001,
+                "latency_ms": 250,
+                "context_config": {"episodic": 5, "semantic": 3, "graph": 0},
+                "archetype_matched": None,
+                "archetype_confidence": None,
+                "reasoning": None,
+                "main_discord_message_id": 111,
+                "dream_discord_message_id": 222,
+                "feedback_id": UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                "created_at": datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+            },
+            {
+                "id": UUID("22222222-2222-2222-2222-222222222222"),
+                "prompt_key": "BASIC_RESPONSE",
+                "template_version": 1,
+                "message_id": UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                "rendered_prompt": "Prompt 2",
+                "response_content": "Response 2",
+                "model": "gpt-4o-mini",
+                "provider": "openrouter",
+                "prompt_tokens": 120,
+                "completion_tokens": 60,
+                "cost_usd": 0.002,
+                "latency_ms": 300,
+                "context_config": {"episodic": 3, "semantic": 2, "graph": 1},
+                "archetype_matched": None,
+                "archetype_confidence": None,
+                "reasoning": None,
+                "main_discord_message_id": 333,
+                "dream_discord_message_id": 444,
+                "feedback_id": UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+                "created_at": datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC),
+            },
+        ]
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        mock_rows = []
+        for data in audit_data_list:
+            mock_row = MagicMock()
+            mock_row.__getitem__.side_effect = lambda key, d=data: d[key]
+            mock_rows.append(mock_row)
+
+        mock_conn.fetch = AsyncMock(return_value=mock_rows)
+
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -350,7 +365,7 @@ class TestGetAuditsWithFeedback:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )
@@ -366,7 +381,7 @@ class TestGetAuditsWithFeedback:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        with patch("lattice.memory.prompt_audits.db_pool") as mock_pool:
+        with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
             )

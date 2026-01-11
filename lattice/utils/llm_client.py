@@ -151,11 +151,14 @@ class _LLMClient:
         import os
 
         # Check if we are in a test environment and return placeholder if openai is missing
+        # BUT only if we are NOT in the middle of a test specifically checking for the ImportError
         in_test = os.getenv("PYTEST_CURRENT_TEST") is not None
         try:
             import openai
         except ImportError as e:
-            if in_test:
+            # We allow overriding this fallback via an env var if we want to force the error in tests
+            force_error = os.getenv("FORCE_OPENAI_IMPORT_ERROR") == "1"
+            if in_test and not force_error:
                 logger.warning(
                     "openai package not installed in test environment, falling back to placeholder"
                 )

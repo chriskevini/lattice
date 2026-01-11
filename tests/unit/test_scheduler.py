@@ -127,6 +127,9 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock()
 
+        mock_pool = MagicMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.nudges.format_episodic_nudge_context",
@@ -146,13 +149,8 @@ class TestPrepareContextualNudge:
             patch(
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
-            patch(
-                "lattice.scheduler.nudges.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
         ):
-            result = await prepare_contextual_nudge()
+            result = await prepare_contextual_nudge(db_pool=mock_pool)
             assert result.action == "wait"
             assert "prompt not found" in result.reason.lower()
 
@@ -191,7 +189,7 @@ class TestPrepareContextualNudge:
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
             patch(
-                "lattice.scheduler.nudges.get_user_timezone",
+                "lattice.utils.database.get_user_timezone",
                 new_callable=AsyncMock,
                 return_value="UTC",
             ),
@@ -227,6 +225,9 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(return_value=mock_result)
 
+        mock_pool = MagicMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.nudges.format_episodic_nudge_context",
@@ -247,16 +248,11 @@ class TestPrepareContextualNudge:
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
             patch(
-                "lattice.scheduler.nudges.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
                 "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await prepare_contextual_nudge()
+            result = await prepare_contextual_nudge(db_pool=mock_pool)
             assert result.action == "wait"
             assert "Failed to parse AI response" in result.reason
             assert result.channel_id == 12345
@@ -283,6 +279,9 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(return_value=mock_result)
 
+        mock_pool = MagicMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.nudges.format_episodic_nudge_context",
@@ -303,16 +302,11 @@ class TestPrepareContextualNudge:
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
             patch(
-                "lattice.scheduler.nudges.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
                 "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await prepare_contextual_nudge()
+            result = await prepare_contextual_nudge(db_pool=mock_pool)
             assert result.action == "wait"
             assert result.content is None
 
@@ -336,6 +330,9 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(return_value=mock_result)
 
+        mock_pool = MagicMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.nudges.format_episodic_nudge_context",
@@ -356,16 +353,11 @@ class TestPrepareContextualNudge:
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
             patch(
-                "lattice.scheduler.nudges.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
                 "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await prepare_contextual_nudge()
+            result = await prepare_contextual_nudge(db_pool=mock_pool)
             assert result.action == "wait"
             assert result.content is None
 
@@ -391,6 +383,9 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(return_value=mock_result)
 
+        mock_pool = MagicMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.nudges.format_episodic_nudge_context",
@@ -411,16 +406,11 @@ class TestPrepareContextualNudge:
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
             patch(
-                "lattice.scheduler.nudges.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
                 "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await prepare_contextual_nudge()
+            result = await prepare_contextual_nudge(db_pool=mock_pool)
             assert result.action == "wait"
             assert result.content is None
 
@@ -516,7 +506,7 @@ class TestAdaptiveActiveHours:
 
         with (
             patch("lattice.scheduler.adaptive.db_pool") as mock_pool,
-            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
         ):
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
@@ -547,7 +537,7 @@ class TestAdaptiveActiveHours:
 
         with (
             patch("lattice.scheduler.adaptive.db_pool") as mock_pool,
-            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
         ):
             mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
                 return_value=mock_conn
@@ -576,21 +566,13 @@ class TestAdaptiveActiveHours:
 
         with (
             patch(
-                "lattice.scheduler.adaptive.get_system_health",
-                side_effect=lambda key: {
-                    "active_hours_start": "9",
-                    "active_hours_end": "21",
-                }.get(key),
-            ),
-            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-            patch(
                 "lattice.utils.database.get_system_health",
                 side_effect=lambda key: {
                     "active_hours_start": "9",
                     "active_hours_end": "21",
                 }.get(key),
             ),
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
         ):
             # Test time within active hours (noon)
             within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
@@ -616,13 +598,13 @@ class TestAdaptiveActiveHours:
 
         with (
             patch(
-                "lattice.scheduler.adaptive.get_system_health",
+                "lattice.utils.database.get_system_health",
                 side_effect=lambda key: {
                     "active_hours_start": "21",  # 9 PM
                     "active_hours_end": "9",  # 9 AM
                 }.get(key),
             ),
-            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
             patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
             patch(
                 "lattice.utils.database.get_system_health",
@@ -660,13 +642,13 @@ class TestAdaptiveActiveHours:
 
         with (
             patch(
-                "lattice.scheduler.adaptive.get_system_health",
+                "lattice.utils.database.get_system_health",
                 side_effect=lambda key: {
                     "active_hours_start": "9",  # Realistic production defaults
                     "active_hours_end": "21",  # 9 AM - 9 PM
                 }.get(key),
             ),
-            patch("lattice.scheduler.adaptive.get_user_timezone", return_value="UTC"),
+            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
             patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
             patch(
                 "lattice.utils.database.get_system_health",
@@ -704,7 +686,7 @@ class TestAdaptiveActiveHours:
                 "lattice.scheduler.adaptive.calculate_active_hours",
                 return_value=mock_result,
             ),
-            patch("lattice.scheduler.adaptive.set_system_health") as mock_set,
+            patch("lattice.utils.database.set_system_health"),
         ):
             result = await update_active_hours(db_pool=mock_pool)
 

@@ -78,16 +78,6 @@ class DatabasePool:
             RuntimeError: If pool is not initialized
         """
         if not self._pool:
-            # Check if we are in a test environment
-            import os
-
-            if os.getenv("PYTEST_CURRENT_TEST"):
-                # Return a mock pool if we're in a test and pool isn't initialized
-                # This prevents breaking legacy tests that patch the global singleton
-                from unittest.mock import MagicMock
-
-                return MagicMock()
-
             msg = "Database pool not initialized. Call initialize() first."
             raise RuntimeError(msg)
         return self._pool
@@ -175,52 +165,75 @@ class DatabasePool:
         logger.info("System timezone updated", timezone=timezone)
 
 
-async def set_user_timezone(timezone: str, db_pool: Any = None) -> None:
-    """Set system-wide user timezone."""
-    from lattice.utils.database import db_pool as global_db_pool
+async def set_user_timezone(timezone: str, db_pool: Any) -> None:
+    """Set system-wide user timezone.
 
-    active_pool = db_pool or global_db_pool
-    await active_pool.set_user_timezone(timezone)
+    Args:
+        timezone: IANA timezone string
+        db_pool: Database pool (required for DI)
 
-
-async def get_user_timezone(db_pool: Any = None) -> str:
-    """Get system-wide user timezone."""
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_pool = db_pool or global_db_pool
-    return await active_pool.get_user_timezone()
+    Raises:
+        ValueError: If timezone is invalid
+    """
+    await db_pool.set_user_timezone(timezone)
 
 
-async def get_system_health(key: str, db_pool: Any = None) -> str | None:
-    """Get a value from the system_health table."""
-    from lattice.utils.database import db_pool as global_db_pool
+async def get_user_timezone(db_pool: Any) -> str:
+    """Get system-wide user timezone.
 
-    active_pool = db_pool or global_db_pool
-    return await active_pool.get_system_health(key)
+    Args:
+        db_pool: Database pool (required for DI)
 
-
-async def set_system_health(key: str, value: str, db_pool: Any = None) -> None:
-    """Set a value in the system_health table."""
-    from lattice.utils.database import db_pool as global_db_pool
-
-    active_pool = db_pool or global_db_pool
-    await active_pool.set_system_health(key, value)
+    Returns:
+        IANA timezone string
+    """
+    return await db_pool.get_user_timezone()
 
 
-async def get_next_check_at(db_pool: Any = None) -> datetime | None:
-    """Get the next proactive check timestamp."""
-    from lattice.utils.database import db_pool as global_db_pool
+async def get_system_health(key: str, db_pool: Any) -> str | None:
+    """Get a value from the system_health table.
 
-    active_pool = db_pool or global_db_pool
-    return await active_pool.get_next_check_at()
+    Args:
+        key: The metric key to retrieve
+        db_pool: Database pool (required for DI)
+
+    Returns:
+        The metric value, or None if not found
+    """
+    return await db_pool.get_system_health(key)
 
 
-async def set_next_check_at(dt: datetime, db_pool: Any = None) -> None:
-    """Set the next proactive check timestamp."""
-    from lattice.utils.database import db_pool as global_db_pool
+async def set_system_health(key: str, value: str, db_pool: Any) -> None:
+    """Set a value in the system_health table.
 
-    active_pool = db_pool or global_db_pool
-    await active_pool.set_next_check_at(dt)
+    Args:
+        key: The metric key to set
+        value: The value to store
+        db_pool: Database pool (required for DI)
+    """
+    await db_pool.set_system_health(key, value)
+
+
+async def get_next_check_at(db_pool: Any) -> datetime | None:
+    """Get the next proactive check timestamp.
+
+    Args:
+        db_pool: Database pool (required for DI)
+
+    Returns:
+        The next check datetime, or None if not set
+    """
+    return await db_pool.get_next_check_at()
+
+
+async def set_next_check_at(dt: datetime, db_pool: Any) -> None:
+    """Set the next proactive check timestamp.
+
+    Args:
+        dt: The datetime for next check
+        db_pool: Database pool (required for DI)
+    """
+    await db_pool.set_next_check_at(dt)
 
 
 db_pool = DatabasePool()

@@ -194,6 +194,23 @@ async def get_recent_messages(
     ]
 
 
+def format_messages(messages: list[EpisodicMessage]) -> str:
+    """Format a list of episodic messages for LLM context.
+
+    Args:
+        messages: List of messages to format
+
+    Returns:
+        Formatted string of messages
+    """
+    formatted_lines = []
+    for msg in messages:
+        role = "Assistant" if msg.is_bot else "User"
+        formatted_lines.append(f"{role}: {msg.content}")
+
+    return "\n".join(formatted_lines)
+
+
 async def store_semantic_memories(
     message_id: UUID,
     memories: list[dict[str, str]],

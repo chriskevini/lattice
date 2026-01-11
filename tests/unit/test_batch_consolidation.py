@@ -233,17 +233,18 @@ class TestRunBatchConsolidation:
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
-            with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                mock_prompt.return_value = None
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client"
-                ) as mock_llm:
+            with patch("lattice.utils.database.db_pool", mock_db_pool):
+                with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+                    mock_prompt.return_value = None
                     with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_memories"
-                    ) as mock_store:
-                        await run_batch_consolidation()
-                        mock_llm.assert_not_called()
-                        mock_store.assert_not_called()
+                        "lattice.utils.llm.get_auditing_llm_client"
+                    ) as mock_llm:
+                        with patch(
+                            "lattice.memory.batch_consolidation.store_semantic_memories"
+                        ) as mock_store:
+                            await run_batch_consolidation()
+                            mock_llm.assert_not_called()
+                            mock_store.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extracts_and_stores_triples(self) -> None:
@@ -314,55 +315,53 @@ class TestRunBatchConsolidation:
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
-            ):
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
+            with patch("lattice.utils.database.db_pool", mock_db_pool):
+                with patch("lattice.utils.llm.get_auditing_llm_client", return_value=mock_llm_client):
                     with patch(
-                        "lattice.memory.batch_consolidation.parse_llm_json_response",
-                        return_value=[
-                            {
-                                "subject": "User",
-                                "predicate": "lives_in",
-                                "object": "Vancouver",
-                            }
-                        ],
+                        "lattice.memory.batch_consolidation.get_prompt",
+                        return_value=mock_prompt,
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.store_semantic_memories"
-                        ) as mock_store:
+                            "lattice.memory.batch_consolidation.parse_llm_json_response",
+                            return_value=[
+                                {
+                                    "subject": "User",
+                                    "predicate": "lives_in",
+                                    "object": "Vancouver",
+                                }
+                            ],
+                        ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                                return_value=[],
-                            ):
+                                "lattice.memory.batch_consolidation.store_semantic_memories"
+                            ) as mock_store:
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                                    "lattice.memory.batch_consolidation.get_canonical_entities_list",
                                     return_value=[],
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                        return_value=set(),
+                                        "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                                        return_value=[],
                                     ):
                                         with patch(
-                                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                            "lattice.memory.batch_consolidation.get_canonical_entities_set",
                                             return_value=set(),
                                         ):
                                             with patch(
-                                                "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                                return_value=(set(), set()),
+                                                "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                                return_value=set(),
                                             ):
                                                 with patch(
-                                                    "lattice.memory.batch_consolidation.store_canonical_forms",
-                                                    return_value={
-                                                        "entities": 0,
-                                                        "predicates": 0,
-                                                    },
+                                                    "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                                    return_value=(set(), set()),
                                                 ):
-                                                    await run_batch_consolidation()
+                                                    with patch(
+                                                        "lattice.memory.batch_consolidation.store_canonical_forms",
+                                                        return_value={
+                                                            "entities": 0,
+                                                            "predicates": 0,
+                                                        },
+                                                    ):
+                                                        await run_batch_consolidation()
                                                     mock_store.assert_called_once()
                                                     call_args = mock_store.call_args
                                                     assert len(call_args[0][1]) == 1
@@ -451,7 +450,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
+                    "lattice.utils.llm.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(
@@ -564,46 +563,44 @@ class TestRunBatchConsolidation:
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
-            ):
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
+            with patch("lattice.utils.database.db_pool", mock_db_pool):
+                with patch("lattice.utils.llm.get_auditing_llm_client", return_value=mock_llm_client):
                     with patch(
-                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                        return_value=[],
+                        "lattice.memory.batch_consolidation.get_prompt",
+                        return_value=mock_prompt,
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                            "lattice.memory.batch_consolidation.get_canonical_entities_list",
                             return_value=[],
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                return_value=set(),
+                                "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                                return_value=[],
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                    "lattice.memory.batch_consolidation.get_canonical_entities_set",
                                     return_value=set(),
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                        return_value=(set(), set()),
+                                        "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                        return_value=set(),
                                     ):
                                         with patch(
-                                            "lattice.memory.batch_consolidation.store_canonical_forms",
-                                            return_value={
-                                                "entities": 0,
-                                                "predicates": 0,
-                                            },
+                                            "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                            return_value=(set(), set()),
                                         ):
-                                            await run_batch_consolidation()
-                                            call_args = (
-                                                mock_prompt.safe_format.call_args
-                                            )
-                                            assert (
+                                            with patch(
+                                                "lattice.memory.batch_consolidation.store_canonical_forms",
+                                                return_value={
+                                                    "entities": 0,
+                                                    "predicates": 0,
+                                                },
+                                            ):
+                                                await run_batch_consolidation()
+                                                call_args = (
+                                                    mock_prompt.safe_format.call_args
+                                                )
+                                                assert (
                                                 "bigger_episodic_context"
                                                 in call_args[1]
                                             )
@@ -685,7 +682,7 @@ class TestRunBatchConsolidation:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
+                    "lattice.utils.llm.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(
@@ -783,46 +780,44 @@ class TestRunBatchConsolidation:
 
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
-            ):
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
+            with patch("lattice.utils.database.db_pool", mock_db_pool):
+                with patch("lattice.utils.llm.get_auditing_llm_client", return_value=mock_llm_client):
                     with patch(
-                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                        return_value=[],
+                        "lattice.memory.batch_consolidation.get_prompt",
+                        return_value=mock_prompt,
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                            "lattice.memory.batch_consolidation.get_canonical_entities_list",
                             return_value=[],
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                return_value=set(),
+                                "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                                return_value=[],
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                    "lattice.memory.batch_consolidation.get_canonical_entities_set",
                                     return_value=set(),
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                        return_value=(set(), set()),
+                                        "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                        return_value=set(),
                                     ):
                                         with patch(
-                                            "lattice.memory.batch_consolidation.store_canonical_forms",
-                                            return_value={
-                                                "entities": 0,
-                                                "predicates": 0,
-                                            },
+                                            "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                            return_value=(set(), set()),
                                         ):
-                                            await run_batch_consolidation()
-                                            call_args = (
-                                                mock_prompt.safe_format.call_args
-                                            )
-                                            assert (
+                                            with patch(
+                                                "lattice.memory.batch_consolidation.store_canonical_forms",
+                                                return_value={
+                                                    "entities": 0,
+                                                    "predicates": 0,
+                                                },
+                                            ):
+                                                await run_batch_consolidation()
+                                                call_args = (
+                                                    mock_prompt.safe_format.call_args
+                                                )
+                                                assert (
                                                 "semantic_context" not in call_args[1]
                                             )
 
@@ -967,7 +962,7 @@ class TestCanonicalFormIntegration:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
+                    "lattice.utils.llm.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(
@@ -1115,7 +1110,7 @@ class TestCanonicalFormIntegration:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
+                    "lattice.utils.llm.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(
@@ -1216,7 +1211,7 @@ class TestCanonicalFormIntegration:
                 return_value=mock_prompt,
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
+                    "lattice.utils.llm.get_auditing_llm_client",
                     return_value=mock_llm_client,
                 ):
                     with patch(

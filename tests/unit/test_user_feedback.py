@@ -86,12 +86,16 @@ class TestStoreFeedback:
         )
         expected_id = uuid4()
 
+        # Mock row with dict-like access
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: {"id": expected_id}[key]
+
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": expected_id})
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result_id = await store_feedback(feedback)
@@ -112,12 +116,16 @@ class TestStoreFeedback:
         feedback = UserFeedback(content="Feedback without sentiment")
         expected_id = uuid4()
 
+        # Mock row with dict-like access
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: {"id": expected_id}[key]
+
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": expected_id})
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result_id = await store_feedback(feedback)
@@ -136,7 +144,7 @@ class TestGetFeedbackByUserMessage:
         feedback_id = uuid4()
         created_at = datetime(2026, 1, 6, 10, 0, 0, tzinfo=ZoneInfo("UTC"))
 
-        mock_row = {
+        feedback_data = {
             "id": feedback_id,
             "content": "Found feedback",
             "sentiment": "positive",
@@ -145,12 +153,16 @@ class TestGetFeedbackByUserMessage:
             "created_at": created_at,
         }
 
+        # Mock row with dict-like access
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: feedback_data[key]
+
         mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(return_value=mock_row)
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await get_feedback_by_user_message(22222)
@@ -177,7 +189,7 @@ class TestGetFeedbackByUserMessage:
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await get_feedback_by_user_message(99999)
@@ -190,7 +202,7 @@ class TestGetFeedbackByUserMessage:
         feedback_id = uuid4()
         created_at = datetime(2026, 1, 6, 10, 0, 0, tzinfo=ZoneInfo("UTC"))
 
-        mock_row = {
+        feedback_data = {
             "id": feedback_id,
             "content": "Feedback without sentiment",
             "sentiment": None,
@@ -199,12 +211,16 @@ class TestGetFeedbackByUserMessage:
             "created_at": created_at,
         }
 
+        # Mock row with dict-like access
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: feedback_data[key]
+
         mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(return_value=mock_row)
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await get_feedback_by_user_message(22222)
@@ -227,7 +243,7 @@ class TestDeleteFeedback:
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await delete_feedback(feedback_id)
@@ -249,7 +265,7 @@ class TestDeleteFeedback:
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             result = await delete_feedback(feedback_id)
@@ -268,7 +284,7 @@ class TestGetAllFeedback:
         time1 = datetime(2026, 1, 6, 10, 0, 0, tzinfo=ZoneInfo("UTC"))
         time2 = datetime(2026, 1, 6, 11, 0, 0, tzinfo=ZoneInfo("UTC"))
 
-        mock_rows = [
+        feedback_data_list = [
             {
                 "id": id2,
                 "content": "Second feedback",
@@ -287,12 +303,18 @@ class TestGetAllFeedback:
             },
         ]
 
+        mock_rows = []
+        for data in feedback_data_list:
+            mock_row = MagicMock()
+            mock_row.__getitem__.side_effect = lambda key, d=data: d[key]
+            mock_rows.append(mock_row)
+
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             results = await get_all_feedback()
@@ -322,7 +344,7 @@ class TestGetAllFeedback:
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("lattice.memory.user_feedback.db_pool") as mock_db_pool:
+        with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
 
             results = await get_all_feedback()

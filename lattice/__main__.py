@@ -72,7 +72,11 @@ async def main() -> None:
             error=str(e),
         )
 
-    bot = LatticeBot()
+    from lattice.utils.database import db_pool
+    from lattice.utils.auditing_middleware import AuditingLLMClient
+    from lattice.utils.llm_client import _LLMClient
+
+    bot = LatticeBot(db_pool=db_pool, llm_client=AuditingLLMClient(_LLMClient()))
     health_server = HealthServer(port=config.health_port)
 
     try:

@@ -1,7 +1,4 @@
 import structlog
-from typing import Any, Optional
-import asyncio
-import discord
 
 from lattice.discord_client.bot import LatticeBot
 from lattice.utils.database import DatabasePool

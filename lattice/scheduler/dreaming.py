@@ -26,7 +26,7 @@ from lattice.utils.date_resolution import get_now
 
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    pass
 
 
 logger = structlog.get_logger(__name__)
@@ -172,19 +172,6 @@ class DreamingScheduler:
             await self.db_pool.get_system_health("dreaming_min_uses")
             or DREAMING_MIN_USES_DEFAULT
         )
-        lookback_days = int(
-            await self.db_pool.get_system_health("dreaming_lookback_days")
-            or DREAMING_LOOKBACK_DAYS_DEFAULT
-        )
-        enabled_str = await self.db_pool.get_system_health("dreaming_enabled")
-        enabled = enabled_str != "false"
-
-        return DreamingConfig(
-            min_uses=min_uses,
-            lookback_days=lookback_days,
-            enabled=enabled,
-        )
-
         lookback_days = int(
             await self.db_pool.get_system_health("dreaming_lookback_days")
             or DREAMING_LOOKBACK_DAYS_DEFAULT

@@ -18,7 +18,7 @@ import structlog
 
 
 if TYPE_CHECKING:
-    import asyncpg
+    pass
 
 
 logger = structlog.get_logger(__name__)
