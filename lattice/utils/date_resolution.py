@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from zoneinfo import ZoneInfo
 
-from lattice.utils.database import _user_timezone_cache
+import lattice.utils.database
 
 WEEKDAYS = {
     "monday": 0,
@@ -286,7 +286,7 @@ def resolve_relative_dates(message: str, timezone_str: str | None = None) -> str
         or empty string if no relative dates found
     """
     if timezone_str is None:
-        timezone_str = _user_timezone_cache or "UTC"
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     user_dt = _get_user_datetime(timezone_str)
     hints: list[str] = []
 
@@ -408,7 +408,7 @@ def format_current_date(timezone_str: str | None = None) -> str:
         Formatted string like "2026/01/08, Thursday"
     """
     if timezone_str is None:
-        timezone_str = _user_timezone_cache or "UTC"
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     return _get_user_datetime(timezone_str).now.strftime("%Y/%m/%d, %A")
 
 
@@ -422,7 +422,7 @@ def format_current_time(timezone_str: str | None = None) -> str:
         Formatted string like "14:30"
     """
     if timezone_str is None:
-        timezone_str = _user_timezone_cache or "UTC"
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     return _get_user_datetime(timezone_str).now.strftime("%H:%M")
 
 
@@ -478,7 +478,7 @@ def parse_relative_date_range(
         DateRange object with start and end datetimes, or None if no date range detected
     """
     if timezone_str is None:
-        timezone_str = _user_timezone_cache or "UTC"
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     user_dt = _get_user_datetime(timezone_str)
     now = user_dt.now
     message_lower = message.lower()

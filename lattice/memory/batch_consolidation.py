@@ -274,7 +274,7 @@ async def run_batch_consolidation() -> None:
         )
 
         # Check for new timezone information and update cache
-        from lattice.utils.database import _user_timezone_cache
+        import lattice.utils.database
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
         tz_triple = next(
@@ -290,7 +290,7 @@ async def run_batch_consolidation() -> None:
             timezone_str = tz_triple["object"]
             try:
                 ZoneInfo(timezone_str)
-                _user_timezone_cache = timezone_str
+                lattice.utils.database._user_timezone_cache = timezone_str
                 logger.info(
                     "Updated user timezone cache from semantic memory",
                     timezone=timezone_str,
