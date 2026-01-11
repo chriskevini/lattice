@@ -58,7 +58,9 @@ class TestMultiHopReasoningIntegration:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
         mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         # Create traverser with mock pool
@@ -89,7 +91,9 @@ class TestMultiHopReasoningIntegration:
                 }
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
         mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         # Create traverser with mock pool

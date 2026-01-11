@@ -287,7 +287,9 @@ class TestRunBatchConsolidation:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template with {bigger_episodic_context}"
@@ -415,7 +417,9 @@ class TestRunBatchConsolidation:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template"
@@ -536,7 +540,9 @@ class TestRunBatchConsolidation:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{bigger_episodic_context}"
@@ -646,7 +652,9 @@ class TestRunBatchConsolidation:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "No placeholders"
@@ -746,7 +754,9 @@ class TestRunBatchConsolidation:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "No placeholders"
@@ -923,7 +933,9 @@ class TestCanonicalFormIntegration:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{canonical_entities} {canonical_predicates}"
@@ -1067,7 +1079,9 @@ class TestCanonicalFormIntegration:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{canonical_entities} {canonical_predicates}"
@@ -1175,7 +1189,9 @@ class TestCanonicalFormIntegration:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template"

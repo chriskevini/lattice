@@ -92,7 +92,9 @@ class TestContextStrategyPipeline:
                 "created_at": get_now("UTC"),
             }
             mock_pool = MagicMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             with patch.object(db_pool, "_pool", mock_pool):
@@ -219,7 +221,9 @@ class TestContextStrategyPipeline:
                 "created_at": get_now("UTC"),
             }
             mock_pool = MagicMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             with patch.object(db_pool, "_pool", mock_pool):
@@ -304,7 +308,9 @@ class TestContextStrategyPipeline:
                 "created_at": get_now("UTC"),
             }
             mock_pool = MagicMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+                return_value=mock_conn
+            )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
             with patch.object(db_pool, "_pool", mock_pool):
