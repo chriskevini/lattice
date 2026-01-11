@@ -232,7 +232,6 @@ class MessageHandler:
             len(message.content) * TYPING_DELAY_MS_PER_CHAR / 1000,
             MAX_TYPING_DELAY_SECONDS,
         )
-        typing_task = None
         typing_task = asyncio.create_task(
             self._delayed_typing(message.channel, typing_delay)
         )
