@@ -65,38 +65,29 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     return injector.validate_template(template)
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
-async def fetch_goal_names(db_pool: Any = None) -> list[str]:
+async def fetch_goal_names(db_pool: Any) -> list[str]:
     """Fetch unique goal names from knowledge graph.
 
     Args:
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         List of unique goal strings
@@ -124,15 +115,13 @@ async def fetch_goal_names(db_pool: Any = None) -> list[str]:
     return [g["object"] for g in goals]
 
 
-async def get_goal_context(
-    goal_names: list[str] | None = None, db_pool: Any = None
-) -> str:
+async def get_goal_context(db_pool: Any, goal_names: list[str] | None = None) -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
     Args:
+        db_pool: Database pool for dependency injection (required)
         goal_names: Optional pre-fetched goal names to avoid duplicate DB call.
                     If None, fetches from database.
-        db_pool: Database pool for dependency injection
 
     Returns:
         Formatted goals string showing goals and their predicates

@@ -443,7 +443,7 @@ class TestGetGoalContext:
             )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            result = await get_goal_context()
+            result = await get_goal_context(db_pool=mock_pool)
             assert result == "No active goals."
 
     @pytest.mark.asyncio
@@ -480,7 +480,7 @@ class TestGetGoalContext:
             )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            result = await get_goal_context()
+            result = await get_goal_context(db_pool=mock_pool)
             assert "User goals:" in result
             assert "Complete project by Friday" in result
             assert "Review documentation" in result
