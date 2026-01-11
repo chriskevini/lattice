@@ -33,7 +33,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
     def __init__(
         self,
         proposal: OptimizationProposal,
-        db_pool: Any = None,
+        db_pool: Any,
         llm_client: Any = None,
     ) -> None:
         """Initialize template comparison view.
