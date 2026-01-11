@@ -1,6 +1,5 @@
 """Unit tests for LLM client utilities."""
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
