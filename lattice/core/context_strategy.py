@@ -30,6 +30,79 @@ from lattice.utils.placeholder_injector import PlaceholderInjector
 
 logger = structlog.get_logger(__name__)
 
+
+def _build_semantic_tree(
+    semantic_memories: list[dict[str, Any]],
+    root_entities: list[str],
+) -> str:
+    """Build hierarchical tree from semantic memories.
+
+    Groups memories by subject and builds a tree structure starting from
+    root entities. Uses indentation with Unicode tree characters for LLM legibility.
+
+    Args:
+        semantic_memories: List of memory dicts with subject, predicate, object, depth
+        root_entities: Starting entities for tree roots
+
+    Returns:
+        Formatted tree string
+    """
+    if not semantic_memories:
+        return "No relevant context found."
+
+    if not root_entities:
+        return "No relevant context found."
+
+    memories_by_subject: dict[str, list[dict[str, Any]]] = {}
+    for memory in semantic_memories:
+        subject = memory.get("subject", "")
+        if subject:
+            if subject not in memories_by_subject:
+                memories_by_subject[subject] = []
+            memories_by_subject[subject].append(memory)
+
+    visited: set[str] = set()
+    lines = ["Relevant knowledge from past conversations:"]
+
+    def add_tree_children(
+        entity: str,
+        parent_prefix: str,
+        max_depth: int,
+        current_depth: int,
+    ) -> None:
+        """Recursively add children for an entity."""
+        if current_depth > max_depth or entity in visited:
+            return
+
+        visited.add(entity)
+
+        if entity not in memories_by_subject:
+            return
+
+        memories = memories_by_subject[entity]
+        for i, memory in enumerate(memories):
+            pred = memory.get("predicate", "")
+            obj = memory.get("object", "")
+            if not pred or not obj:
+                continue
+
+            is_last = i == len(memories) - 1
+            child_prefix = parent_prefix + ("    " if is_last else "│   ")
+            tree_line = f"{parent_prefix}{('└── ' if is_last else '├── ')}{pred}: {obj}"
+            lines.append(tree_line)
+
+            if obj not in visited:
+                add_tree_children(obj, child_prefix, max_depth, current_depth + 1)
+
+    for i, root_entity in enumerate(root_entities):
+        is_last_root = i == len(root_entities) - 1
+        lines.append(f"{'└── ' if is_last_root else '├── '}{root_entity}")
+        root_indent = "    " if is_last_root else "│   "
+        add_tree_children(root_entity, root_indent, max_depth=3, current_depth=1)
+
+    return "\n".join(lines)
+
+
 from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
 if TYPE_CHECKING:
@@ -505,23 +578,6 @@ async def retrieve_context(
         else:
             logger.warning("Database pool not initialized, skipping graph traversal")
 
-    if semantic_memories:
-        relationships = []
-        for memory in semantic_memories[:10]:
-            subject = memory.get("subject", "")
-            predicate = memory.get("predicate", "")
-            obj = memory.get("object", "")
-            if subject and predicate and obj:
-                relationships.append(f"{subject} {predicate} {obj}")
-
-        if relationships:
-            context["semantic_context"] = (
-                "Relevant knowledge from past conversations:\n"
-                + "\n".join(f"- {rel}" for rel in relationships)
-            )
-        else:
-            context["semantic_context"] = "No relevant context found."
-    else:
-        context["semantic_context"] = "No relevant context found."
+    context["semantic_context"] = _build_semantic_tree(semantic_memories, entities)
 
     return context
