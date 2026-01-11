@@ -236,9 +236,11 @@ async def generate_response(
         prompt_length=len(filled_prompt),
     )
 
-    client = llm_client if llm_client is not None else get_auditing_llm_client()
+    if llm_client is None:
+        raise ValueError("llm_client is required for generate_response")
+
     try:
-        result = await client.complete(
+        result = await llm_client.complete(
             prompt=filled_prompt,
             db_pool=db_pool,
             prompt_key=template_name,
