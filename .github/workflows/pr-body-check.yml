@@ -23,7 +23,7 @@ jobs:
           
           # Validate PR title follows conventional commits format
           # Format: type: description or type(scope): description
-          if ! [[ "$PR_TITLE" =~ ^(feat|fix|chore|docs|style|refactor|perf|test|ci|build|revert)(\([a-z]+\))?:\s.+ ]]; then
+          if ! [[ "$PR_TITLE" =~ ^(feat|fix|chore|docs|style|refactor|perf|test|ci|build|revert)(\([a-z]+\))?:\ .+ ]]; then
             echo "❌ PR title must follow conventional commits with standard type"
             echo "   Allowed types: feat, fix, chore, docs, style, refactor, perf, test, ci, build, revert"
             echo "   Found: '$PR_TITLE'"
