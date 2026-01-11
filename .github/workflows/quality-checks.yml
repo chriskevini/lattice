@@ -96,9 +96,18 @@ jobs:
           PGPASSWORD: lattice_dev_password
       - name: Check for drift
         run: |
-          if ! diff -u scripts/schema.sql tmp_schema.sql; then
+          # pg_dump includes session-specific \restrict/\unrestrict tokens that change on each run
+          # Filter them out before comparison
+          grep -v '^\\restrict' scripts/schema.sql > scripts/schema.sql.filtered
+          grep -v '^\\unrestrict' scripts/schema.sql.filtered > scripts/schema.sql.clean
+          grep -v '^\\restrict' tmp_schema.sql > tmp_schema.sql.filtered
+          grep -v '^\\unrestrict' tmp_schema.sql.filtered > tmp_schema.sql.clean
+
+          if ! diff -u scripts/schema.sql.clean tmp_schema.sql.clean; then
             echo "Schema drift detected! The schema.sql does not match the migration output."
             echo "Please update schema.sql by running migrations on a clean database and dumping the schema."
+            rm -f scripts/schema.sql.filtered scripts/schema.sql.clean tmp_schema.sql.filtered tmp_schema.sql.clean
             exit 1
           fi
+          rm -f scripts/schema.sql.filtered scripts/schema.sql.clean tmp_schema.sql.filtered tmp_schema.sql.clean
 
