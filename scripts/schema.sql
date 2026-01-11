@@ -1,12 +1,10 @@
 -- ============================================================================
 -- Lattice Database Schema (Computed Snapshot)
 -- ============================================================================
--- This file is a computed snapshot of the database state after applying all migrations.
--- It is generated automatically and should not be edited manually.
--- To modify the schema, create new migration files in scripts/migrations/
+-- This file is a computed snapshot of the database state after applying all
+-- migrations in scripts/migrations/. It is regenerated automatically.
+-- DO NOT EDIT MANUALLY. To modify the schema, create new migration files.
 -- ============================================================================
-
-
 
 -- ----------------------------------------------------------------------------
 -- prompt_registry: Prompt templates with version history (append-only)
@@ -39,7 +37,6 @@ CREATE TABLE IF NOT EXISTS raw_messages (
     user_timezone TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_raw_messages_timestamp ON raw_messages(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_message_id);
 CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_message_id);
 
 -- ----------------------------------------------------------------------------

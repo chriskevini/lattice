@@ -1,9 +1,10 @@
--- ----------------------------------------------------------------------------
+-- Migration 004: Create all application tables
+-- All tables use IF NOT EXISTS for idempotency.
+-- Note: superseded_by column on semantic_memories is added by migration 002_add_superseded_by.sql
+
 -- prompt_registry: Prompt templates with version history (append-only)
--- ----------------------------------------------------------------------------
 -- Query current version with: ORDER BY version DESC LIMIT 1
 -- All versions are preserved - version number alone determines "active"
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prompt_registry (
     prompt_key TEXT NOT NULL,
     version INT NOT NULL,
@@ -14,9 +15,7 @@ CREATE TABLE IF NOT EXISTS prompt_registry (
     PRIMARY KEY (prompt_key, version)
 );
 
--- ----------------------------------------------------------------------------
 -- raw_messages: Stored Discord messages
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS raw_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     discord_message_id BIGINT UNIQUE NOT NULL,
@@ -30,11 +29,8 @@ CREATE TABLE IF NOT EXISTS raw_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_raw_messages_timestamp ON raw_messages(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_message_id);
-CREATE INDEX IF NOT EXISTS idx_raw_messages_discord_id ON raw_messages(discord_message_id);
 
--- ----------------------------------------------------------------------------
 -- context_strategies: Reactive planning for targeted retrieval
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS context_strategies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES raw_messages(id) ON DELETE CASCADE,
@@ -48,16 +44,14 @@ CREATE TABLE IF NOT EXISTS context_strategies (
 CREATE INDEX IF NOT EXISTS idx_strategies_entities ON context_strategies USING gin((strategy->'entities'));
 CREATE INDEX IF NOT EXISTS idx_strategies_created_at ON context_strategies(created_at DESC);
 
--- ----------------------------------------------------------------------------
 -- semantic_memories: Canonical knowledge graph triples (ENGRAM Semantic Memory)
--- ----------------------------------------------------------------------------
+-- superseded_by column and idx_semantic_memories_active index are added by migration 002_add_superseded_by.sql
 CREATE TABLE IF NOT EXISTS semantic_memories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subject TEXT NOT NULL,
     predicate TEXT NOT NULL,
     object TEXT NOT NULL,
     source_batch_id TEXT,
-    superseded_by UUID REFERENCES semantic_memories(id),
     created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_subject ON semantic_memories(subject);
@@ -65,11 +59,8 @@ CREATE INDEX IF NOT EXISTS idx_semantic_memories_predicate ON semantic_memories(
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_object ON semantic_memories(object);
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_created_at ON semantic_memories(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_source_batch ON semantic_memories(source_batch_id);
-CREATE INDEX IF NOT EXISTS idx_semantic_memories_active ON semantic_memories(subject, predicate, created_at DESC) WHERE superseded_by IS NULL;
 
--- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prompt_audits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     prompt_key TEXT NOT NULL,
@@ -98,9 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_audits_created ON prompt_audits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audits_main_message ON prompt_audits(main_discord_message_id);
 CREATE INDEX IF NOT EXISTS idx_audits_dream_message ON prompt_audits(dream_discord_message_id);
 
--- ----------------------------------------------------------------------------
 -- user_feedback: Evaluation of bot responses and planning quality
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS user_feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     content TEXT,
@@ -115,9 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment ON user_feedback(sentimen
 CREATE INDEX IF NOT EXISTS idx_user_feedback_strategy_id ON user_feedback(strategy_id) WHERE strategy_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_user_feedback_audit_id ON user_feedback(audit_id) WHERE audit_id IS NOT NULL;
 
--- ----------------------------------------------------------------------------
 -- dreaming_proposals: Prompt optimization and memory review proposals
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS dreaming_proposals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     proposal_type TEXT NOT NULL DEFAULT 'prompt_optimization',
@@ -142,18 +129,14 @@ CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_created_at ON dreaming_proposa
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_prompt_key ON dreaming_proposals(prompt_key);
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_type_status ON dreaming_proposals(proposal_type, status) WHERE status = 'pending';
 
--- ----------------------------------------------------------------------------
 -- system_health: Configuration and metrics
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS system_health (
     metric_key TEXT PRIMARY KEY,
     metric_value TEXT,
     recorded_at TIMESTAMPTZ DEFAULT now()
 );
 
--- ----------------------------------------------------------------------------
 -- entities: Canonical entity names for LLM-based entity normalization
--- ----------------------------------------------------------------------------
 -- Stores canonical entity names for conversational context tracking.
 -- No UUID primary key - name is the canonical identifier.
 -- Example: "bf" → "boyfriend", "mom" → "Mother"
@@ -163,9 +146,7 @@ CREATE TABLE IF NOT EXISTS entities (
 );
 CREATE INDEX IF NOT EXISTS idx_entities_created_at ON entities(created_at DESC);
 
--- ----------------------------------------------------------------------------
 -- predicates: Canonical predicate names for LLM-based predicate normalization
--- ----------------------------------------------------------------------------
 -- Stores canonical predicate names for knowledge graph consistency.
 -- Predicates use space-separated natural English phrases.
 -- Example: "loves" → "likes", "works at" → "work at"

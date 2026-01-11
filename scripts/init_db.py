@@ -1,76 +1,40 @@
-"""Initialize the database schema for Lattice.
+"""Initialize the database for Lattice.
 
-Applies schema.sql (canonical source) and runs migrations for data.
-Prompt templates are managed via migrations (see scripts/migrations/).
+Runs all migrations to set up the database schema and seed data.
+Migrations are the source of truth for schema evolution.
 """
 
 import asyncio
 import os
+import subprocess
 import sys
 
-import asyncpg
-from dotenv import load_dotenv
+
+def run_migrations() -> None:
+    """Run database migrations using migrate.py."""
+    migrations_script = os.path.join(os.path.dirname(__file__), "migrate.py")
+    result = subprocess.run(
+        [sys.executable, migrations_script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"ERROR: Migrations failed:\n{result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    print(result.stdout)
 
 
-load_dotenv()
-
-
-async def init_database() -> None:
-    """Initialize the database schema."""
+def init_database() -> None:
+    """Initialize the database schema via migrations."""
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         print("ERROR: DATABASE_URL environment variable not set", file=sys.stderr)
         sys.exit(1)
 
-    print("Connecting to database...")
-    try:
-        conn = await asyncpg.connect(database_url)
-        print("Connected to database successfully")
-    except Exception as e:
-        print(f"ERROR: Failed to connect to database: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
-        print(f"Loading schema from {schema_path}...")
-        with open(schema_path) as f:
-            schema_sql = f.read()
-
-        try:
-            await conn.execute(schema_sql)
-            print("Schema applied successfully!")
-        except Exception as e:
-            print(f"ERROR: Failed to apply schema.sql: {e}", file=sys.stderr)
-            raise
-
-        seed_path = os.path.join(os.path.dirname(__file__), "seed.sql")
-        if os.path.exists(seed_path):
-            print(f"Loading seed data from {seed_path}...")
-            with open(seed_path) as f:
-                seed_sql = f.read()
-
-            try:
-                await conn.execute(seed_sql)
-                print("Seed data applied!")
-            except Exception as e:
-                print(f"ERROR: Failed to apply seed.sql: {e}", file=sys.stderr)
-                raise
-
-        print("\nDatabase schema initialization complete!")
-        print(
-            "Tables: prompt_registry, raw_messages, context_strategies, semantic_triples,"
-        )
-        print("        prompt_audits, dreaming_proposals, user_feedback,")
-        print("        system_health, schema_migrations, entities, predicates")
-        print("\nAll prompt templates seeded from seed.sql")
-
-    except Exception as e:
-        print(f"ERROR: Database initialization failed: {e}", file=sys.stderr)
-        raise
-    finally:
-        await conn.close()
-        print("Database connection closed.")
+    print("Initializing database via migrations...\n")
+    run_migrations()
+    print("\nDatabase initialization complete!")
 
 
 if __name__ == "__main__":
-    asyncio.run(init_database())
+    init_database()
