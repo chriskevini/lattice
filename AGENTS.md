@@ -55,6 +55,7 @@ make view-logs TAIL=500         # View 500 lines
 - **Docs**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff and Mypy.
 - **LLM**: All calls must use `AuditingLLMClient` for observability.
+- **PRs**: Follow pull request template when creating PRs.
 
 ## ⚙️ Key Concepts
 - **Dream Channel**: Meta-discussion and prompt approval. Messages here are never ingested.
