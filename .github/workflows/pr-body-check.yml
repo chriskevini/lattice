@@ -43,7 +43,8 @@ jobs:
           
           # Verify Related section contains "None" or an issue reference
           # Valid patterns: "None", "#123", "Closes #111", "Implements #169", "Related to #123"
-          if [[ "$RELATED" != *"None"* ]] && ! [[ "$RELATED" =~ #[0-9]+|Closes|Completes|Implements|Related\ to ]]; then
+          RELATED=$(echo "$PR_BODY" | sed -n '/## Related/,/## Summary/p' | tail -n +2)
+          if [[ "$RELATED" != *"None"* ]] && ! [[ "$RELATED" =~ ^.*#[0-9]+.*$|^.*Closes.*$|^.*Completes.*$|^.*Implements.*$|^.*Related\ to.*$ ]]; then
             echo "❌ ## Related section must contain 'None' or an issue reference (e.g., #123, Closes #111)"
             echo "   Found: '$RELATED'"
             exit 1
