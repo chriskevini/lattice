@@ -14,7 +14,6 @@ from lattice.utils.database import (
     get_user_timezone,
     set_next_check_at,
     set_system_health,
-    set_user_timezone,
 )
 from lattice.utils.date_resolution import (
     DateRange,
@@ -302,20 +301,6 @@ class TestUserTimezoneFunctions:
             result = await get_user_timezone()
 
             assert result == "UTC"
-
-    @pytest.mark.asyncio
-    async def test_set_user_timezone_valid_timezone(self) -> None:
-        """Test set_user_timezone validates and stores valid timezone."""
-        with patch("lattice.utils.database.set_system_health") as mock_set:
-            await set_user_timezone("America/Los_Angeles")
-
-            mock_set.assert_called_once_with("user_timezone", "America/Los_Angeles")
-
-    @pytest.mark.asyncio
-    async def test_set_user_timezone_invalid_timezone(self) -> None:
-        """Test set_user_timezone raises ValueError for invalid timezone."""
-        with pytest.raises(ValueError, match="Invalid timezone: Invalid/Timezone"):
-            await set_user_timezone("Invalid/Timezone")
 
 
 @pytest.fixture
