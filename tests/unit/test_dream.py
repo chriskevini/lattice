@@ -310,6 +310,38 @@ class TestAuditViewBuilder:
         assert embed.fields[1].name == "📤"
         assert len(embed.fields[1].value) <= 1024
 
+    @pytest.mark.asyncio
+    async def test_build_audit_no_message_id(self, db_pool: AsyncMock) -> None:
+        """Test building an audit embed without a Discord message ID."""
+        audit_id = uuid4()
+        embed, view = AuditViewBuilder.build_standard_audit(
+            prompt_key="CONTEXTUAL_NUDGE",
+            version=1,
+            input_text="Deterministic contextual nudge",
+            output_text="Checking in on your goals...",
+            metadata_parts=["250ms", "$0.001"],
+            audit_id=audit_id,
+            rendered_prompt="System: Generate nudge...",
+            db_pool=db_pool,
+            message_id=None,
+        )
+
+        assert isinstance(embed, discord.Embed)
+        assert embed.title == "🤖 CONTEXTUAL_NUDGE v1"
+        assert len(embed.fields) == 3
+
+        assert embed.fields[0].name == "📥"
+        assert "Deterministic contextual nudge" in embed.fields[0].value
+
+        assert embed.fields[1].name == "📤"
+        assert "Checking in on your goals..." in embed.fields[1].value
+
+        assert embed.fields[2].name == "METADATA"
+        assert "250ms" in embed.fields[2].value
+        assert "$0.001" in embed.fields[2].value
+
+        assert view.message_id is None
+
 
 class TestTruncateHelpers:
     """Tests for truncation helper functions."""

@@ -106,7 +106,7 @@ class AuditingLLMClient:
                 db_pool=effective_db_pool,
                 prompt_key=prompt_key or "UNKNOWN",
                 response_content=result.content,
-                main_discord_message_id=main_discord_message_id or 0,
+                main_discord_message_id=main_discord_message_id,
                 rendered_prompt=prompt,
                 template_version=template_version,
                 model=result.model,
@@ -128,9 +128,7 @@ class AuditingLLMClient:
             dream_channel_id_str = os.getenv("DISCORD_DREAM_CHANNEL_ID")
 
             should_post = audit_view or (
-                bot is not None
-                and dream_channel_id_str is not None
-                and main_discord_message_id is not None
+                bot is not None and dream_channel_id_str is not None
             )
 
             if should_post and bot:
@@ -234,7 +232,7 @@ class AuditingLLMClient:
                 prompt_key=prompt_key or "UNKNOWN",
                 rendered_prompt=prompt,
                 response_content=f"ERROR: {type(e).__name__}: {str(e)}",
-                main_discord_message_id=main_discord_message_id or 0,
+                main_discord_message_id=main_discord_message_id,
                 template_version=template_version,
                 model="FAILED",
                 provider=None,

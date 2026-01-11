@@ -67,10 +67,10 @@ class TestStorePromptAudit:
         mock_conn.fetchrow.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_store_prompt_audit_minimal(self) -> None:
-        """Test storing prompt audit with minimal optional fields."""
+    async def test_store_prompt_audit_no_message_id(self) -> None:
+        """Test storing prompt audit with None for main_discord_message_id."""
         mock_conn = MagicMock()
-        audit_id = UUID("87654321-4321-8765-4321-876543218765")
+        audit_id = UUID("aaaa0000-0000-0000-0000-000000000000")
 
         mock_row = MagicMock()
         mock_row.__getitem__.side_effect = lambda key: {"id": audit_id}[key]
@@ -80,10 +80,10 @@ class TestStorePromptAudit:
 
         result = await store_prompt_audit(
             db_pool=mock_pool,
-            prompt_key="BASIC_RESPONSE",
-            rendered_prompt="Minimal prompt",
-            response_content="Minimal response",
-            main_discord_message_id=987654321,
+            prompt_key="CONTEXTUAL_NUDGE",
+            rendered_prompt="Nudge prompt",
+            response_content="Nudge response",
+            main_discord_message_id=None,
         )
 
         assert result == audit_id

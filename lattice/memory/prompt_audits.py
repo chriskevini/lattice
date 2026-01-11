@@ -50,7 +50,7 @@ class PromptAudit:
     reasoning: dict[str, Any] | None
 
     # Discord linkage
-    main_discord_message_id: int
+    main_discord_message_id: int | None
     dream_discord_message_id: int | None
 
     # Feedback linkage
@@ -64,7 +64,7 @@ async def store_prompt_audit(
     db_pool: "DatabasePool",
     prompt_key: str,
     response_content: str,
-    main_discord_message_id: int,
+    main_discord_message_id: int | None,
     rendered_prompt: str | None = None,
     template_version: int | None = None,
     message_id: UUID | None = None,

@@ -146,8 +146,8 @@ class FeedbackModal(discord.ui.Modal):
     def __init__(
         self,
         audit_id: UUID,
-        message_id: int,
-        bot_message_id: int,
+        message_id: int | None,
+        bot_message_id: int | None,
         db_pool: "DatabasePool",
     ) -> None:
         """Initialize feedback modal.
@@ -223,6 +223,7 @@ class FeedbackModal(discord.ui.Modal):
             user_discord_message_id=interaction.message.id
             if interaction.message
             else None,
+            audit_id=self.audit_id,
         )
         feedback_id = await user_feedback.store_feedback(
             db_pool=self.db_pool, feedback=feedback
@@ -242,7 +243,11 @@ class FeedbackModal(discord.ui.Modal):
         emoji = {"positive": "👍", "negative": "👎"}[sentiment]
         try:
             channel = interaction.channel
-            if channel and hasattr(channel, "fetch_message"):
+            if (
+                channel
+                and hasattr(channel, "fetch_message")
+                and self.bot_message_id is not None
+            ):
                 bot_message = await cast("discord.TextChannel", channel).fetch_message(
                     self.bot_message_id
                 )
@@ -401,9 +406,9 @@ class AuditView(discord.ui.DesignerView):
 
         async def feedback_callback(interaction: discord.Interaction) -> None:
             """Handle FEEDBACK button click - opens modal."""
-            if not self.audit_id or not self.message_id:
+            if not self.audit_id:
                 await interaction.response.send_message(
-                    "Message information not available.",
+                    "Audit information not available.",
                     ephemeral=True,
                 )
                 return
@@ -428,9 +433,9 @@ class AuditView(discord.ui.DesignerView):
 
         async def quick_positive_callback(interaction: discord.Interaction) -> None:
             """Handle quick positive feedback."""
-            if not self.audit_id or not self.message_id:
+            if not self.audit_id:
                 await interaction.response.send_message(
-                    "Message information not available.",
+                    "Audit information not available.",
                     ephemeral=True,
                 )
                 return
@@ -442,6 +447,7 @@ class AuditView(discord.ui.DesignerView):
                 user_discord_message_id=(
                     interaction.message.id if interaction.message is not None else None
                 ),
+                audit_id=self.audit_id,
             )
             feedback_id = await user_feedback.store_feedback(
                 db_pool=self.db_pool, feedback=feedback
@@ -477,9 +483,9 @@ class AuditView(discord.ui.DesignerView):
 
         async def quick_negative_callback(interaction: discord.Interaction) -> None:
             """Handle quick negative feedback."""
-            if not self.audit_id or not self.message_id:
+            if not self.audit_id:
                 await interaction.response.send_message(
-                    "Message information not available.",
+                    "Audit information not available.",
                     ephemeral=True,
                 )
                 return
@@ -491,6 +497,7 @@ class AuditView(discord.ui.DesignerView):
                 user_discord_message_id=(
                     interaction.message.id if interaction.message is not None else None
                 ),
+                audit_id=self.audit_id,
             )
             feedback_id = await user_feedback.store_feedback(
                 db_pool=self.db_pool, feedback=feedback
