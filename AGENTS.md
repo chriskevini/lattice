@@ -45,10 +45,6 @@ All functions receive `db_pool` and `llm_client` as explicit parameters.
 
 Refer to the [Makefile](Makefile) for all available automation.
 
-### Pull Requests
-
-Always follow the [pull request template](.github/pull_request_template.md) when creating PRs.
-
 ```bash
 make install           # Deps + pre-commit hooks
 make init-db           # Initialize database
@@ -62,6 +58,10 @@ make view-logs         # View last 100 lines of bot
 make view-logs SERVICE=postgres  # View postgres logs
 make view-logs TAIL=500         # View 500 lines
 ```
+
+### Pull Requests
+
+Always follow the [pull request template](.github/pull_request_template.md) when creating PRs.
 
 ### Standards
 - **Strict Typing**: Mandatory for all functions.
