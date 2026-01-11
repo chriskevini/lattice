@@ -3,40 +3,44 @@ name: Manual Rollback
 on:
   workflow_dispatch:
     inputs:
-      commit_sha:
-        description: 'The full commit SHA to roll back to'
+      image_tag:
+        description: 'The image tag to roll back to (e.g., specific SHA or "latest")'
         required: true
+        default: 'latest'
 
 jobs:
   rollback:
     runs-on: ubuntu-latest
     steps:
-      - name: Rollback to Specific SHA
+      - name: Rollback to Specific Image
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/lattice
+        script: |
+          set -e
+          cd ~/lattice
 
-            # Sync to specific SHA
-            git fetch origin
-            git reset --hard ${{ github.event.inputs.commit_sha }}
+          # Update .env with rollback image tag
+          sed -i "s|BOT_IMAGE=.*|BOT_IMAGE=ghcr.io/${{ github.repository }}/lattice-bot:${{ github.event.inputs.image_tag }}|g" .env
 
-            # Rebuild and restart
-            docker compose build
-            docker compose up -d --remove-orphans
+          # Pull specified image
+          docker compose -f docker-compose.base.yml -f docker-compose.prod.yml pull
 
-            # Wait for health check
-            echo "Waiting for health check..."
-            for i in {1..10}; do
-              if curl -s http://localhost:8080/health | grep -q "OK"; then
-                echo "Rollback health check passed!"
-                exit 0
-              fi
+          # Restart with rolled back image
+          docker compose -f docker-compose.base.yml -f docker-compose.prod.yml up -d --remove-orphans
+
+          # Wait for health check
+          echo "Waiting for health check..."
+          for i in {1..10}; do
+            if curl -s http://localhost:8080/health | grep -q "OK"; then
+              echo "Rollback health check passed!"
+              exit 0
+            fi
               echo "Retrying health check ($i/10)..."
-              sleep 5
-            done
-            echo "Rollback health check failed!"
-            exit 1
+            sleep 5
+          done
+          echo "Rollback health check failed!"
+          docker compose -f docker-compose.base.yml -f docker-compose.prod.yml logs bot
+          exit 1

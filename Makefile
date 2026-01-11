@@ -16,13 +16,13 @@ LIMIT ?= 50
 KEY ?=
 
 docker-up: ## Start all services with Docker Compose
-	docker compose up -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d
 
 docker-down: ## Stop all services
-	docker compose down
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down
 
 view-logs: ## View recent logs (use: make view-logs SERVICE=postgres TAIL=1000)
-	docker compose logs --tail $(TAIL) $(SERVICE)
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml logs --tail $(TAIL) $(SERVICE)
 
 docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
 	docker compose down
@@ -30,25 +30,25 @@ docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuil
 	docker compose up -d
 
 docker-restart: ## Restart all services
-	docker compose restart
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml restart
 	@echo "All services restarted. View logs with: make view-logs"
 
 restart: docker-restart ## Short alias
 
 docker-reload-env: ## Recreate containers to reload .env changes
-	docker compose up --force-recreate -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up --force-recreate -d
 	@echo "Containers recreated with updated .env. View logs with: make view-logs"
 
 docker-shell: ## Open shell in bot container
-	docker compose exec bot /bin/bash
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml exec bot /bin/bash
 
 docker-db-shell: ## Open PostgreSQL shell (interactive)
-	docker compose exec postgres psql -U lattice -d lattice
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml exec postgres psql -U lattice -d lattice
 
 db-shell: docker-db-shell ## Short alias
 
 docker-clean: ## Remove all containers, volumes, and images
-	docker compose down -v
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down -v
 	docker system prune -f
 
 # ============================================================================
