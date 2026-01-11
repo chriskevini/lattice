@@ -42,7 +42,12 @@ All functions receive `db_pool` and `llm_client` as explicit parameters.
 - `Makefile`: Central automation for installation, testing, and execution.
 
 ## 🛠️ Development Workflow
+
 Refer to the [Makefile](Makefile) for all available automation.
+
+### Pull Requests
+
+Always follow the [pull request template](.github/pull_request_template.md) when creating PRs.
 
 ```bash
 make install           # Deps + pre-commit hooks
