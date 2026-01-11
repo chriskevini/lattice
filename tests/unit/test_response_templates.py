@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import Any
 from lattice.utils.date_resolution import get_now
 from unittest.mock import ANY, AsyncMock, patch
 
@@ -139,6 +140,16 @@ def mock_generation_result() -> AuditResult:
     )
 
 
+@pytest.fixture
+def mock_pool() -> Any:
+    """Create a mock database pool for dependency injection."""
+    from unittest.mock import MagicMock
+
+    pool = MagicMock()
+    pool.pool = pool
+    return pool
+
+
 class TestPlaceholderRegistry:
     """Tests for placeholder registry and validation."""
 
@@ -219,7 +230,7 @@ class TestUnifiedResponseTemplate:
         mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test that UNIFIED_RESPONSE is selected for goal-type messages."""
         with (
             patch(
@@ -242,6 +253,7 @@ class TestUnifiedResponseTemplate:
             mock_get_client.return_value = mock_client
 
             await generate_response(
+            db_pool=mock_pool,
                 user_message="I need to finish the lattice project by Friday",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -269,7 +281,7 @@ class TestGenerateResponseWithTemplates:
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test response generation with goal extraction."""
         with (
             patch(
@@ -285,6 +297,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="I need to finish the lattice project by Friday",
                 episodic_context="Recent conversation history",
                 semantic_context="I need to finish the lattice project by Friday",
@@ -308,7 +321,7 @@ class TestGenerateResponseWithTemplates:
         mock_extraction_query: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test response generation with entity extraction."""
         mock_template = PromptTemplate(
             prompt_key="UNIFIED_RESPONSE",
@@ -332,6 +345,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="When is the lattice deadline?",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -354,7 +368,7 @@ class TestGenerateResponseWithTemplates:
         mock_extraction_activity: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test response generation with activity update extraction."""
         mock_template = PromptTemplate(
             prompt_key="UNIFIED_RESPONSE",
@@ -378,6 +392,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="Spent 180 minutes coding today",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -394,7 +409,7 @@ class TestGenerateResponseWithTemplates:
         self,
         mock_recent_messages: list[EpisodicMessage],
         mock_generation_result: AuditResult,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test response generation without extraction."""
         mock_template = PromptTemplate(
             prompt_key="UNIFIED_RESPONSE",
@@ -418,6 +433,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="Hello",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -436,7 +452,7 @@ class TestGenerateResponseWithTemplates:
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test fallback to UNIFIED_RESPONSE when template doesn't exist."""
         with (
             patch(
@@ -453,6 +469,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="I need to finish the lattice project by Friday",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -468,7 +485,7 @@ class TestGenerateResponseWithTemplates:
         mock_recent_messages: list[EpisodicMessage],
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test response generation includes graph memories in context."""
         # Text-based memories use 'subject' and 'object' keys
 
@@ -486,6 +503,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="When is the lattice deadline?",
                 episodic_context="Recent conversation history",
                 semantic_context="lattice project has deadline Friday\nuser working on lattice project",
@@ -502,7 +520,7 @@ class TestGenerateResponseWithTemplates:
     async def test_generate_empty_extraction_fields(
         self,
         mock_recent_messages: list[EpisodicMessage],
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test handling of extraction with empty/None fields."""
         ContextStrategy(
             id=uuid.uuid4(),
@@ -552,6 +570,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="Hello",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -564,7 +583,7 @@ class TestGenerateResponseWithTemplates:
     async def test_filter_current_message_from_episodic_context(
         self,
         mock_prompt_template: PromptTemplate,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test that current user message is filtered from episodic context."""
         user_message_content = "What's the weather?"
         user_discord_id = 9999999999
@@ -622,6 +641,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="Hello!",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -646,7 +666,7 @@ class TestGenerateResponseWithTemplates:
     async def test_handle_duplicate_message_content(
         self,
         mock_prompt_template: PromptTemplate,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test that ID-based filtering handles duplicate message content correctly."""
         duplicate_content = "What's the weather?"
 
@@ -710,6 +730,7 @@ class TestGenerateResponseWithTemplates:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message=duplicate_content,
                 episodic_context=f"Hello!\n{duplicate_content}\nIt's sunny!",
                 semantic_context="Relevant facts",
@@ -736,7 +757,7 @@ class TestGenerateResponseWithTemplates:
     async def test_fallback_to_content_filtering_without_message_id(
         self,
         mock_prompt_template: PromptTemplate,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test backward compatibility: content-based filtering when ID not provided."""
         user_message_content = "What's the weather?"
 
@@ -786,6 +807,7 @@ class TestGenerateResponseWithTemplates:
 
             # Don't pass user_discord_message_id (backward compatibility test)
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message=user_message_content,
                 episodic_context="Hello!",
                 semantic_context="Relevant facts",
@@ -812,7 +834,7 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test UNIFIED_RESPONSE template does not include extraction fields in prompt."""
         # Use the actual template from migration 018 (no extraction section)
         mock_template = PromptTemplate(
@@ -859,6 +881,7 @@ class TestExtractionFieldsNotInPrompts:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="When is the lattice deadline?",
                 episodic_context="Recent conversation history",
                 semantic_context="I need to finish the lattice project by Friday",
@@ -879,7 +902,7 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_query: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test QUERY_RESPONSE template does not include extraction fields in prompt."""
         mock_template = PromptTemplate(
             prompt_key="QUERY_RESPONSE",
@@ -925,6 +948,7 @@ class TestExtractionFieldsNotInPrompts:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="When is the lattice deadline?",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -943,7 +967,7 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_activity: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test UNIFIED_RESPONSE template does not include extraction fields."""
         mock_template = PromptTemplate(
             prompt_key="UNIFIED_RESPONSE",
@@ -989,6 +1013,7 @@ class TestExtractionFieldsNotInPrompts:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="Spent 180 minutes coding today",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -1007,7 +1032,7 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_conversation: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test UNIFIED_RESPONSE template does not include extraction fields."""
         mock_template = PromptTemplate(
             prompt_key="UNIFIED_RESPONSE",
@@ -1053,6 +1078,7 @@ class TestExtractionFieldsNotInPrompts:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="Spent 180 minutes coding today",
                 episodic_context="Just made some tea",
                 semantic_context="Relevant facts",
@@ -1071,7 +1097,7 @@ class TestExtractionFieldsNotInPrompts:
         self,
         mock_extraction_declaration: ContextStrategy,
         mock_recent_messages: list[EpisodicMessage],
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test that extraction data is still available for routing/analytics.
 
         Even though extraction fields aren't shown to the LLM, they should still
@@ -1113,6 +1139,7 @@ class TestExtractionFieldsNotInPrompts:
             mock_get_client.return_value = mock_client
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="When is the lattice deadline?",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -1133,7 +1160,7 @@ class TestNoTemplateFound:
     async def test_generate_response_no_template_found(
         self,
         mock_recent_messages: list[EpisodicMessage],
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test fallback response when no templates are available in database."""
         ContextStrategy(
             id=uuid.uuid4(),
@@ -1154,6 +1181,7 @@ class TestNoTemplateFound:
             mock_get_prompt.return_value = None
 
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="I need to finish the lattice project by Friday",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
@@ -1188,7 +1216,7 @@ class TestTimezoneConversionFailure:
     async def test_invalid_timezone_falls_back_to_utc(
         self,
         mock_prompt_template: PromptTemplate,
-    ) -> None:
+    mock_pool: Any) -> None:
         """Test that invalid timezone falls back to UTC formatting.
 
         When an invalid timezone is provided, the function should:
@@ -1237,6 +1265,7 @@ class TestTimezoneConversionFailure:
 
             # Should not raise an exception
             result, rendered_prompt, context_info = await generate_response(
+            db_pool=mock_pool,
                 user_message="Test message",
                 episodic_context="2026-01-04 10:00 UTC\nHello!",
                 semantic_context="Relevant facts",

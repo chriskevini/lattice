@@ -345,6 +345,7 @@ class MessageHandler:
                 user_message=message.content,
                 episodic_context=episodic_context,
                 semantic_context=semantic_context,
+                db_pool=self.db_pool,
                 unresolved_entities=strategy.unresolved_entities if strategy else None,
                 user_tz=self.user_timezone,
                 audit_view=True,

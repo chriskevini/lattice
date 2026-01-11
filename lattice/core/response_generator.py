@@ -171,12 +171,12 @@ async def generate_response(
     user_message: str,
     episodic_context: str,
     semantic_context: str,
+    db_pool: Any,
     unresolved_entities: list[str] | None = None,
     user_tz: str = "UTC",
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
     llm_client: Any | None = None,
-    db_pool: Any | None = None,
     main_discord_message_id: int | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any]]:
     """Generate a response using the unified prompt template.
@@ -185,12 +185,12 @@ async def generate_response(
         user_message: The user's message
         episodic_context: Recent conversation history pre-formatted
         semantic_context: Relevant facts from graph pre-formatted
+        db_pool: Database pool for dependency injection
         unresolved_entities: Entities requiring clarification
         user_tz: IANA timezone string for date resolution
         audit_view: Whether to send an AuditView to the dream channel
         audit_view_params: Parameters for the AuditView
         llm_client: LLM client for dependency injection
-        db_pool: Database pool for dependency injection
         main_discord_message_id: Discord message ID for audit linkage
 
     Returns:
