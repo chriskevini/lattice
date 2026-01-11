@@ -233,7 +233,7 @@ async def propose_optimization(
     )
 
     try:
-        result = await active_llm_client.complete(
+        result = await llm_client.complete(
             prompt=rendered_prompt,
             db_pool=db_pool,
             prompt_key="PROMPT_OPTIMIZATION",
