@@ -1,0 +1,30 @@
+name: Commit Message Lint
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Lint commit messages
+        run: |
+          # Check all commits in PR or push
+          for sha in $(git rev-list HEAD~$COMMITS..HEAD); do
+            msg=$(git log -1 --format=%B $sha)
+            
+            # Check conventional commits format: type: description
+            if ! echo "$msg" | head -1 | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?: '; then
+              echo "❌ Commit $sha: must follow 'type: description' or 'type(scope): description'"
+              echo "   Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert"
+              git log -1 --oneline $sha
+              exit 1
+            fi
+          done
