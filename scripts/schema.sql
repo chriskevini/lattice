@@ -92,11 +92,13 @@ CREATE TABLE IF NOT EXISTS user_feedback (
     sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
     referenced_discord_message_id BIGINT,
     user_discord_message_id BIGINT,
+    audit_id UUID REFERENCES prompt_audits(id),
     strategy_id UUID REFERENCES context_strategies(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment ON user_feedback(sentiment) WHERE sentiment IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_user_feedback_strategy_id ON user_feedback(strategy_id) WHERE strategy_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_feedback_audit_id ON user_feedback(audit_id) WHERE audit_id IS NOT NULL;
 
 -- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage
