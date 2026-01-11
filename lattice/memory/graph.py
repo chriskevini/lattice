@@ -101,6 +101,7 @@ class GraphTraversal:
                         FROM semantic_memories
                         WHERE (subject ILIKE $1 OR object ILIKE $1)
                           AND predicate = ANY($2)
+                          AND superseded_by IS NULL
                         ORDER BY created_at DESC
                         LIMIT 50
                         """
@@ -114,6 +115,7 @@ class GraphTraversal:
                             created_at
                         FROM semantic_memories
                         WHERE (subject ILIKE $1 OR object ILIKE $1)
+                          AND superseded_by IS NULL
                         ORDER BY created_at DESC
                         LIMIT 50
                         """
@@ -203,7 +205,7 @@ class GraphTraversal:
                         object,
                         created_at
                     FROM semantic_memories
-                    WHERE 1=1
+                    WHERE superseded_by IS NULL
                 """
                 params: list[Any] = []
 

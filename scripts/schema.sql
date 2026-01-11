@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS semantic_memories (
     predicate TEXT NOT NULL,
     object TEXT NOT NULL,
     source_batch_id TEXT,
+    superseded_by UUID REFERENCES semantic_memories(id),
     created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_subject ON semantic_memories(subject);
@@ -82,6 +83,7 @@ CREATE INDEX IF NOT EXISTS idx_semantic_memories_predicate ON semantic_memories(
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_object ON semantic_memories(object);
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_created_at ON semantic_memories(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_source_batch ON semantic_memories(source_batch_id);
+CREATE INDEX IF NOT EXISTS idx_semantic_memories_active ON semantic_memories(subject, predicate, created_at DESC) WHERE superseded_by IS NULL;
 
 -- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage
@@ -132,17 +134,20 @@ CREATE INDEX IF NOT EXISTS idx_user_feedback_strategy_id ON user_feedback(strate
 CREATE INDEX IF NOT EXISTS idx_user_feedback_audit_id ON user_feedback(audit_id) WHERE audit_id IS NOT NULL;
 
 -- ----------------------------------------------------------------------------
--- dreaming_proposals: Prompt optimization proposals
+-- dreaming_proposals: Prompt optimization and memory review proposals
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS dreaming_proposals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    prompt_key TEXT NOT NULL,
-    current_version INTEGER NOT NULL,
-    proposed_version INTEGER NOT NULL,
-    current_template TEXT NOT NULL,
-    proposed_template TEXT NOT NULL,
-    rationale TEXT NOT NULL,
+    proposal_type TEXT NOT NULL DEFAULT 'prompt_optimization',
+    prompt_key TEXT,
+    current_version INTEGER,
+    proposed_version INTEGER,
+    current_template TEXT,
+    proposed_template TEXT,
+    rationale TEXT,
     proposal_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    review_data JSONB,
+    applied_changes JSONB DEFAULT '[]',
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'deferred')),
     human_feedback TEXT,
     rendered_optimization_prompt TEXT,
@@ -153,6 +158,7 @@ CREATE TABLE IF NOT EXISTS dreaming_proposals (
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_status ON dreaming_proposals(status) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_created_at ON dreaming_proposals(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_prompt_key ON dreaming_proposals(prompt_key);
+CREATE INDEX IF NOT EXISTS idx_dreaming_proposals_type_status ON dreaming_proposals(proposal_type, status) WHERE status = 'pending';
 
 -- ----------------------------------------------------------------------------
 -- system_health: Configuration and metrics
