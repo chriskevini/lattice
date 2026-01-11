@@ -60,10 +60,45 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --extra dev
-      - name: Initialize database
-        run: .venv/bin/python scripts/init_db.py
+      - name: Run migrations
+        run: .venv/bin/python scripts/migrate.py
         env:
           DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
       - run: .venv/bin/pytest tests/integration/ --no-cov -q
         env:
           DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
+
+  schema-drift:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lattice
+          POSTGRES_PASSWORD: lattice_dev_password
+          POSTGRES_DB: lattice
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --extra dev
+      - name: Run migrations
+        run: .venv/bin/python scripts/migrate.py
+        env:
+          DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
+      - name: Dump schema
+        run: pg_dump -s -h localhost -U lattice lattice > tmp_schema.sql
+        env:
+          PGPASSWORD: lattice_dev_password
+      - name: Check for drift
+        run: |
+          if ! diff -u scripts/schema.sql tmp_schema.sql; then
+            echo "Schema drift detected! The schema.sql does not match the migration output."
+            echo "Please update schema.sql by running migrations on a clean database and dumping the schema."
+            exit 1
+          fi
+

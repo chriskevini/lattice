@@ -30,25 +30,28 @@ def get_migration_files() -> list[Path]:
     return sorted(files)
 
 
-def extract_migration_name(file_path: Path) -> str:
-    """Extract migration name from filename (e.g., '001_add_context_archetypes')."""
-    return file_path.name.replace(".sql", "")
+def extract_migration_version_name(file_path: Path) -> tuple[int, str]:
+    """Extract migration version and name from filename (e.g., 1, 'add_context_archetypes')."""
+    name = file_path.name.replace(".sql", "")
+    version_str, name_part = name.split("_", 1)
+    return int(version_str), name_part
 
 
-async def get_applied_migrations(conn: asyncpg.Connection) -> set[str]:
-    """Get set of already-applied migration names."""
+async def get_applied_migrations(conn: asyncpg.Connection) -> set[int]:
+    """Get set of already-applied migration versions."""
     try:
-        rows = await conn.fetch("SELECT migration_name FROM schema_migrations")
-        return {row["migration_name"] for row in rows}
+        rows = await conn.fetch("SELECT version FROM schema_migrations")
+        return {row["version"] for row in rows}
     except asyncpg.UndefinedTableError:
         return set()
 
 
 async def apply_migration(conn: asyncpg.Connection, file_path: Path) -> None:
     """Apply a single migration file with concurrency protection."""
-    migration_name = extract_migration_name(file_path)
+    version, name = extract_migration_version_name(file_path)
+    migration_id = f"{version}_{name}"
 
-    print(f"Applying migration: {migration_name}")
+    print(f"Applying migration: {migration_id}")
     async with conn.transaction():
         # Check if schema_migrations table exists
         # NOTE: First migration (001) creates this table, so we need bootstrap logic
@@ -65,16 +68,17 @@ async def apply_migration(conn: asyncpg.Connection, file_path: Path) -> None:
             # Try to claim this migration (acts as distributed lock)
             result = await conn.execute(
                 """
-                INSERT INTO schema_migrations (migration_name)
-                VALUES ($1)
-                ON CONFLICT (migration_name) DO NOTHING
+                INSERT INTO schema_migrations (version, name)
+                VALUES ($1, $2)
+                ON CONFLICT (version) DO NOTHING
                 """,
-                migration_name,
+                version,
+                name,
             )
 
             # Check if we won the race (INSERT 0 1 = inserted, INSERT 0 0 = conflict)
             if result == "INSERT 0 0":
-                print(f"  ⊘ Already applied by another process: {migration_name}")
+                print(f"  ⊘ Already applied by another process: {migration_id}")
                 return
 
         # Apply the migration SQL
@@ -86,13 +90,14 @@ async def apply_migration(conn: asyncpg.Connection, file_path: Path) -> None:
         if not table_exists:
             await conn.execute(
                 """
-                INSERT INTO schema_migrations (migration_name)
-                VALUES ($1)
+                INSERT INTO schema_migrations (version, name)
+                VALUES ($1, $2)
                 """,
-                migration_name,
+                version,
+                name,
             )
 
-    print(f"  ✓ Applied: {migration_name}")
+    print(f"  ✓ Applied: {migration_id}")
 
 
 async def run_migrations() -> None:
@@ -117,11 +122,11 @@ async def run_migrations() -> None:
             print("No migration files found in scripts/migrations/")
             return
 
-        applied_migrations = await get_applied_migrations(conn)
+        applied_versions = await get_applied_migrations(conn)
         pending_migrations = [
             f
             for f in migration_files
-            if extract_migration_name(f) not in applied_migrations
+            if extract_migration_version_name(f)[0] not in applied_versions
         ]
 
         if not pending_migrations:
