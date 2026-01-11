@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS prompt_audits (
     archetype_matched TEXT,
     archetype_confidence FLOAT,
     reasoning JSONB,
-    main_discord_message_id BIGINT NOT NULL,
+    main_discord_message_id BIGINT,
     dream_discord_message_id BIGINT,
     feedback_id UUID REFERENCES user_feedback(id),
     created_at TIMESTAMPTZ DEFAULT now()

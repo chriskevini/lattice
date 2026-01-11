@@ -185,7 +185,7 @@ async def prepare_contextual_nudge(
             db_pool=db_pool,
             prompt_key="CONTEXTUAL_NUDGE",
             template_version=prompt_template.version,
-            main_discord_message_id=0,
+            main_discord_message_id=None,
             temperature=prompt_template.temperature,
             audit_view=True,
             audit_view_params={

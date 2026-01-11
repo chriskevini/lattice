@@ -262,7 +262,7 @@ async def run_batch_consolidation(
         prompt=rendered_prompt,
         db_pool=db_pool,
         prompt_key="MEMORY_CONSOLIDATION",
-        main_discord_message_id=int(batch_id),
+        main_discord_message_id=None,
         temperature=prompt_template.temperature,
         audit_view=True,
         bot=active_bot,
