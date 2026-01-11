@@ -214,6 +214,3 @@ async def set_next_check_at(dt: datetime, db_pool: Any) -> None:
         db_pool: Database pool (required for DI)
     """
     await db_pool.set_next_check_at(dt)
-
-
-db_pool = DatabasePool()

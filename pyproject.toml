@@ -164,7 +164,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "os.environ.get" = { msg = "Centralize environment variable access in config modules if possible." }
 "datetime.datetime.now" = { msg = "Use lattice.utils.date_resolution.get_now() instead for consistent timezone handling." }
 "datetime.datetime.utcnow" = { msg = "Use lattice.utils.date_resolution.get_now('UTC') instead." }
-"lattice.utils.llm_client._LLMClient" = { msg = "Use AuditingLLMClient (via get_auditing_llm_client()) for all production LLM calls to ensure observability." }
+"lattice.utils.llm_client._LLMClient" = { msg = "Use AuditingLLMClient for all production LLM calls to ensure observability. Create via: AuditingLLMClient(_LLMClient())" }
 "openai" = { msg = "Use lattice.utils.llm_client._LLMClient or AuditingLLMClient instead of importing openai directly." }
 "asyncpg" = { msg = "Use lattice.utils.database.db_pool to acquire connections instead of importing asyncpg directly (except in utility/setup scripts)." }
 "logging" = { msg = "Use structlog (from lattice.utils.llm_client or similar) for structured logging instead of the standard logging module." }

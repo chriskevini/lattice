@@ -236,27 +236,3 @@ class _LLMClient:
             latency_ms=latency_ms,
             temperature=temperature,
         )
-
-
-_auditing_llm_client: Any | None = None
-
-
-def get_auditing_llm_client(db_pool: Any = None) -> Any:
-    """Get the global AuditingLLMClient instance.
-
-    Args:
-        db_pool: Optional database pool to inject into the client.
-
-    Returns:
-        The AuditingLLMClient instance.
-    """
-    global _auditing_llm_client
-    if _auditing_llm_client is None:
-        from lattice.utils.auditing_middleware import AuditingLLMClient
-
-        _auditing_llm_client = AuditingLLMClient(_LLMClient())
-
-    if db_pool and hasattr(_auditing_llm_client, "db_pool"):
-        _auditing_llm_client.db_pool = db_pool
-
-    return _auditing_llm_client

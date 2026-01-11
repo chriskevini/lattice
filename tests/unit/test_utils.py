@@ -271,12 +271,10 @@ class TestUserTimezoneFunctions:
     @pytest.mark.asyncio
     async def test_get_user_timezone_with_value(self) -> None:
         """Test get_user_timezone retrieves stored timezone."""
-        with (
-            patch("lattice.utils.database._user_timezone_cache", None),
-            patch("lattice.utils.database.db_pool") as mock_pool,
-        ):
-            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
-            mock_conn.fetchrow.return_value = {"object": "America/New_York"}
+        mock_pool = MagicMock()
+        mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchrow.return_value = {"object": "America/New_York"}
+        with patch("lattice.utils.database._user_timezone_cache", None):
             result = await get_user_timezone(db_pool=mock_pool)
 
             assert result == "America/New_York"
@@ -284,12 +282,10 @@ class TestUserTimezoneFunctions:
     @pytest.mark.asyncio
     async def test_get_user_timezone_defaults_to_utc(self) -> None:
         """Test get_user_timezone defaults to UTC when not set."""
-        with (
-            patch("lattice.utils.database._user_timezone_cache", None),
-            patch("lattice.utils.database.db_pool") as mock_pool,
-        ):
-            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
-            mock_conn.fetchrow.return_value = None
+        mock_pool = MagicMock()
+        mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchrow.return_value = None
+        with patch("lattice.utils.database._user_timezone_cache", None):
             result = await get_user_timezone(db_pool=mock_pool)
 
             assert result == "UTC"

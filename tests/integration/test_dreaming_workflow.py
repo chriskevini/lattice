@@ -85,10 +85,12 @@ async def test_full_dreaming_cycle_workflow(db_pool) -> None:
         "justification": "Will address negative feedback about verbosity"
     }"""
 
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value=mock_llm_result)
+
     with (
         patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
         patch("lattice.dreaming.proposer.get_feedback_with_context") as mock_feedback,
-        patch("lattice.dreaming.proposer.get_auditing_llm_client") as mock_llm_client,
     ):
 
         def get_prompt_side_effect(prompt_key: str, **kwargs: Any) -> Any:
@@ -114,11 +116,9 @@ async def test_full_dreaming_cycle_workflow(db_pool) -> None:
             },
         ]
 
-        mock_llm = AsyncMock()
-        mock_llm.complete = AsyncMock(return_value=mock_llm_result)
-        mock_llm_client.return_value = mock_llm
-
-        proposal = await propose_optimization(metrics[0], db_pool=db_pool)
+        proposal = await propose_optimization(
+            metrics[0], db_pool=db_pool, llm_client=mock_llm
+        )
 
         assert proposal is not None
         assert proposal.current_version == 1

@@ -13,7 +13,6 @@ from lattice.utils.auditing_middleware import (
 from lattice.utils.llm_client import (
     GenerationResult,
     _LLMClient,
-    get_auditing_llm_client,
 )
 
 
@@ -22,7 +21,6 @@ __all__ = [
     "AuditingLLMClient",
     "GenerationResult",
     "_LLMClient",
-    "get_auditing_llm_client",
     "get_discord_bot",
     "set_discord_bot",
 ]
