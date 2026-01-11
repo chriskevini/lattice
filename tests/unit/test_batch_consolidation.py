@@ -28,6 +28,7 @@ def create_mock_pool_with_conn() -> tuple[MagicMock, AsyncMock]:
     mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
     mock_pool = MagicMock()
+    mock_pool.pool = mock_pool
     mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
     return mock_pool, mock_conn
@@ -61,7 +62,7 @@ class TestCheckAndRunBatch:
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
             ) as mock_run:
                 mock_run.return_value = None
-                await check_and_run_batch()
+                await check_and_run_batch(db_pool=mock_pool)
                 mock_run.assert_not_called()
 
     @pytest.mark.asyncio
@@ -81,7 +82,7 @@ class TestCheckAndRunBatch:
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
             ) as mock_run:
                 mock_run.return_value = None
-                await check_and_run_batch()
+                await check_and_run_batch(db_pool=mock_pool)
                 mock_run.assert_called_once()
 
     @pytest.mark.asyncio
@@ -101,7 +102,7 @@ class TestCheckAndRunBatch:
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
             ) as mock_run:
                 mock_run.return_value = None
-                await check_and_run_batch()
+                await check_and_run_batch(db_pool=mock_pool)
                 mock_run.assert_called_once()
 
     @pytest.mark.asyncio
@@ -121,7 +122,7 @@ class TestCheckAndRunBatch:
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
             ) as mock_run:
                 mock_run.return_value = None
-                await check_and_run_batch()
+                await check_and_run_batch(db_pool=mock_pool)
                 call_args = mock_conn.fetchrow.call_args_list[1]
                 assert "discord_message_id > $1" in call_args[0][0]
                 assert call_args[0][1] == 0
@@ -144,7 +145,7 @@ class TestCheckAndRunBatch:
                 "lattice.memory.batch_consolidation.run_batch_consolidation"
             ) as mock_run:
                 mock_run.return_value = None
-                await check_and_run_batch()
+                await check_and_run_batch(db_pool=mock_pool)
                 call_args = mock_conn.fetchrow.call_args_list[1]
                 assert call_args[0][1] == 0
 
@@ -169,12 +170,13 @@ class TestRunBatchConsolidation:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                await run_batch_consolidation()
+                await run_batch_consolidation(db_pool=mock_pool)
                 mock_prompt.assert_not_called()
 
     @pytest.mark.asyncio
@@ -193,12 +195,13 @@ class TestRunBatchConsolidation:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                await run_batch_consolidation()
+                await run_batch_consolidation(db_pool=mock_pool)
                 mock_prompt.assert_not_called()
 
     @pytest.mark.asyncio
@@ -229,6 +232,7 @@ class TestRunBatchConsolidation:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         with patch("lattice.utils.database.db_pool") as mock_db_pool:
@@ -242,7 +246,7 @@ class TestRunBatchConsolidation:
                         with patch(
                             "lattice.memory.batch_consolidation.store_semantic_memories"
                         ) as mock_store:
-                            await run_batch_consolidation()
+                            await run_batch_consolidation(db_pool=mock_pool)
                             mock_llm.assert_not_called()
                             mock_store.assert_not_called()
 
@@ -289,6 +293,7 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -364,7 +369,7 @@ class TestRunBatchConsolidation:
                                                             "predicates": 0,
                                                         },
                                                     ):
-                                                        await run_batch_consolidation()
+                                                        await run_batch_consolidation(db_pool=mock_pool)
                                                     mock_store.assert_called_once()
                                                     call_kwargs = (
                                                         mock_store.call_args.kwargs
@@ -431,6 +436,7 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -505,7 +511,7 @@ class TestRunBatchConsolidation:
                                                             "predicates": 0,
                                                         },
                                                     ):
-                                                        await run_batch_consolidation()
+                                                        await run_batch_consolidation(db_pool=mock_pool)
                                                         mock_store.assert_not_called()
 
     @pytest.mark.asyncio
@@ -551,6 +557,7 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -611,7 +618,7 @@ class TestRunBatchConsolidation:
                                                     "predicates": 0,
                                                 },
                                             ):
-                                                await run_batch_consolidation()
+                                                await run_batch_consolidation(db_pool=mock_pool)
                                                 call_args = (
                                                     mock_prompt.safe_format.call_args
                                                 )
@@ -668,6 +675,7 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -727,7 +735,7 @@ class TestRunBatchConsolidation:
                                                 "predicates": 0,
                                             },
                                         ):
-                                            await run_batch_consolidation()
+                                            await run_batch_consolidation(db_pool=mock_pool)
                                             # semantic_context should NOT be in call_args anymore
                                             call_args = (
                                                 mock_prompt.safe_format.call_args
@@ -771,6 +779,7 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -831,7 +840,7 @@ class TestRunBatchConsolidation:
                                                     "predicates": 0,
                                                 },
                                             ):
-                                                await run_batch_consolidation()
+                                                await run_batch_consolidation(db_pool=mock_pool)
                                                 call_args = (
                                                     mock_prompt.safe_format.call_args
                                                 )
@@ -904,12 +913,13 @@ class TestRaceCondition:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         with patch("lattice.utils.database.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                await run_batch_consolidation()
+                await run_batch_consolidation(db_pool=mock_pool)
                 mock_prompt.assert_not_called()
 
 
@@ -952,6 +962,7 @@ class TestCanonicalFormIntegration:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -1037,7 +1048,7 @@ class TestCanonicalFormIntegration:
                                                         "predicates": 2,
                                                     },
                                                 ) as mock_store_canonical:
-                                                    await run_batch_consolidation()
+                                                    await run_batch_consolidation(db_pool=mock_pool)
 
                                                     mock_store.assert_called_once()
                                                     store_kwargs = (
@@ -1103,6 +1114,7 @@ class TestCanonicalFormIntegration:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -1172,7 +1184,7 @@ class TestCanonicalFormIntegration:
                                                     "predicates": 0,
                                                 },
                                             ):
-                                                await run_batch_consolidation()
+                                                await run_batch_consolidation(db_pool=mock_pool)
 
     @pytest.mark.asyncio
     async def test_batch_handles_dict_triples_format(self) -> None:
@@ -1210,6 +1222,7 @@ class TestCanonicalFormIntegration:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
         mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
 
         mock_prompt = MagicMock()
@@ -1287,7 +1300,7 @@ class TestCanonicalFormIntegration:
                                                         "predicates": 1,
                                                     },
                                                 ):
-                                                    await run_batch_consolidation()
+                                                    await run_batch_consolidation(db_pool=mock_pool)
 
                                                     mock_store.assert_called_once()
                                                     call_kwargs = (

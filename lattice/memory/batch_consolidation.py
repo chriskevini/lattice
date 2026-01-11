@@ -69,34 +69,25 @@ async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
     )
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
-async def check_and_run_batch(db_pool: Any = None) -> None:
+async def check_and_run_batch(db_pool: Any) -> None:
     """Check if memory consolidation is needed and run it.
 
     Called after each message is stored. Performs a fast threshold check
@@ -104,7 +95,7 @@ async def check_and_run_batch(db_pool: Any = None) -> None:
     which performs a second check under the database transaction to prevent races.
 
     Args:
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
     """
     active_db_pool = _get_active_db_pool(db_pool)
 
@@ -150,7 +141,7 @@ async def check_and_run_batch(db_pool: Any = None) -> None:
 
 
 async def run_batch_consolidation(
-    db_pool: Any = None, llm_client: Any = None, bot: Any = None
+    db_pool: Any, llm_client: Any = None, bot: Any = None
 ) -> None:
     """Run memory consolidation: fetch messages, extract memories, store them.
 
@@ -165,7 +156,7 @@ async def run_batch_consolidation(
     Only one worker will successfully update last_batch_message_id.
 
     Args:
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
         llm_client: LLM client for dependency injection
         bot: Discord bot instance for dependency injection
     """
