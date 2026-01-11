@@ -105,16 +105,12 @@ class TestContextStrategyFunction:
                 return_value=["Mother", "boyfriend"],
             ),
             patch(
-                "lattice.utils.llm.get_auditing_llm_client",
-            ) as mock_llm_client,
-            patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
                 return_value=extraction_data,
             ),
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=mock_generation_result)
-            mock_llm_client.return_value = mock_client
 
             recent_messages = [
                 EpisodicMessage(
@@ -130,6 +126,7 @@ class TestContextStrategyFunction:
                 message_id=message_id,
                 user_message="I need to finish the lattice project by Friday",
                 recent_messages=recent_messages,
+                llm_client=mock_client,
             )
 
             assert strategy.message_id == message_id
@@ -181,9 +178,6 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.utils.llm.get_auditing_llm_client",
-            ) as mock_llm_client,
-            patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
             ) as mock_parse,
             patch(
@@ -192,7 +186,6 @@ class TestContextStrategyFunction:
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=mock_generation_result)
-            mock_llm_client.return_value = mock_client
 
             parse_error = JSONParseError(
                 raw_content="not json",
@@ -206,6 +199,7 @@ class TestContextStrategyFunction:
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    llm_client=mock_client,
                 )
 
     @pytest.mark.asyncio
@@ -242,16 +236,12 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.utils.llm.get_auditing_llm_client",
-            ) as mock_llm_client,
-            patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
                 return_value={"entities": []},
             ),
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=mock_result)
-            mock_llm_client.return_value = mock_client
 
             with pytest.raises(ValueError, match="Missing required field"):
                 await context_strategy(
@@ -259,6 +249,7 @@ class TestContextStrategyFunction:
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    llm_client=mock_client,
                 )
 
 
