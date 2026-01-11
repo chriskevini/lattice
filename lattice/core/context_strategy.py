@@ -37,8 +37,8 @@ def _build_semantic_tree(
 ) -> str:
     """Build hierarchical tree from semantic memories.
 
-    Groups memories by subject and builds a tree structure starting from
-    root entities. Uses indentation with Unicode tree characters for LLM legibility.
+    Groups memories by subject and predicate, builds a tree structure starting
+    from root entities. Uses indentation with Unicode tree characters for LLM legibility.
 
     Args:
         semantic_memories: List of memory dicts with subject, predicate, object, depth
@@ -53,13 +53,16 @@ def _build_semantic_tree(
     if not root_entities:
         return "No relevant context found."
 
-    memories_by_subject: dict[str, list[dict[str, Any]]] = {}
+    memories_by_subject_predicate: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for memory in semantic_memories:
         subject = memory.get("subject", "")
-        if subject:
-            if subject not in memories_by_subject:
-                memories_by_subject[subject] = []
-            memories_by_subject[subject].append(memory)
+        predicate = memory.get("predicate", "")
+        if subject and predicate:
+            if subject not in memories_by_subject_predicate:
+                memories_by_subject_predicate[subject] = {}
+            if predicate not in memories_by_subject_predicate[subject]:
+                memories_by_subject_predicate[subject][predicate] = []
+            memories_by_subject_predicate[subject][predicate].append(memory)
 
     visited: set[str] = set()
     lines = ["Relevant knowledge from past conversations:"]
@@ -76,23 +79,45 @@ def _build_semantic_tree(
 
         visited.add(entity)
 
-        if entity not in memories_by_subject:
+        if entity not in memories_by_subject_predicate:
             return
 
-        memories = memories_by_subject[entity]
-        for i, memory in enumerate(memories):
-            pred = memory.get("predicate", "")
-            obj = memory.get("object", "")
-            if not pred or not obj:
+        predicates = memories_by_subject_predicate[entity]
+        predicate_names = list(predicates.keys())
+
+        for i, predicate in enumerate(predicate_names):
+            memories = predicates[predicate]
+            objects = [m.get("object", "") for m in memories if m.get("object", "")]
+            objects = [obj for obj in objects if obj]
+
+            if not objects:
                 continue
 
-            is_last = i == len(memories) - 1
-            child_prefix = parent_prefix + ("    " if is_last else "│   ")
-            tree_line = f"{parent_prefix}{('└── ' if is_last else '├── ')}{pred}: {obj}"
-            lines.append(tree_line)
+            is_last_predicate = i == len(predicate_names) - 1
+            predicate_prefix = parent_prefix + ("    " if is_last_predicate else "│   ")
 
-            if obj not in visited:
-                add_tree_children(obj, child_prefix, max_depth, current_depth + 1)
+            if len(objects) == 1:
+                tree_line = f"{parent_prefix}{('└── ' if is_last_predicate else '├── ')}{predicate}: {objects[0]}"
+                lines.append(tree_line)
+
+                if objects[0] not in visited:
+                    add_tree_children(
+                        objects[0], predicate_prefix, max_depth, current_depth + 1
+                    )
+            else:
+                tree_line = f"{parent_prefix}{('└── ' if is_last_predicate else '├── ')}{predicate}:"
+                lines.append(tree_line)
+
+                for j, obj in enumerate(objects):
+                    is_last_obj = j == len(objects) - 1
+                    obj_prefix = predicate_prefix + ("    " if is_last_obj else "│   ")
+                    obj_line = (
+                        f"{predicate_prefix}{('└── ' if is_last_obj else '├── ')}{obj}"
+                    )
+                    lines.append(obj_line)
+
+                    if obj not in visited:
+                        add_tree_children(obj, obj_prefix, max_depth, current_depth + 1)
 
     for i, root_entity in enumerate(root_entities):
         is_last_root = i == len(root_entities) - 1
