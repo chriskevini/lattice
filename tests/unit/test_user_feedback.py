@@ -43,6 +43,7 @@ class TestUserFeedbackInit:
             sentiment="positive",
             referenced_discord_message_id=123456,
             user_discord_message_id=789012,
+            audit_id=None,
             created_at=created_at,
         )
 
@@ -51,6 +52,7 @@ class TestUserFeedbackInit:
         assert feedback.sentiment == "positive"
         assert feedback.referenced_discord_message_id == 123456
         assert feedback.user_discord_message_id == 789012
+        assert feedback.audit_id is None
         assert feedback.created_at == created_at
 
     def test_init_with_minimal_fields(self) -> None:
@@ -114,6 +116,7 @@ class TestStoreFeedback:
         assert call_args[0][2] == "positive"
         assert call_args[0][3] == 12345
         assert call_args[0][4] == 67890
+        assert call_args[0][5] is None
 
     @pytest.mark.asyncio
     async def test_store_feedback_with_none_sentiment(self) -> None:
@@ -150,6 +153,7 @@ class TestGetFeedbackByUserMessage:
             "sentiment": "positive",
             "referenced_discord_message_id": 11111,
             "user_discord_message_id": 22222,
+            "audit_id": None,
             "created_at": created_at,
         }
 
@@ -202,6 +206,7 @@ class TestGetFeedbackByUserMessage:
             "sentiment": None,
             "referenced_discord_message_id": 11111,
             "user_discord_message_id": 22222,
+            "audit_id": None,
             "created_at": created_at,
         }
 
@@ -273,6 +278,7 @@ class TestGetAllFeedback:
                 "sentiment": "negative",
                 "referenced_discord_message_id": 222,
                 "user_discord_message_id": 444,
+                "audit_id": None,
                 "created_at": time2,
             },
             {
@@ -281,6 +287,7 @@ class TestGetAllFeedback:
                 "sentiment": "positive",
                 "referenced_discord_message_id": 111,
                 "user_discord_message_id": 333,
+                "audit_id": None,
                 "created_at": time1,
             },
         ]
