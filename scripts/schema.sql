@@ -84,23 +84,6 @@ CREATE INDEX IF NOT EXISTS idx_semantic_memories_created_at ON semantic_memories
 CREATE INDEX IF NOT EXISTS idx_semantic_memories_source_batch ON semantic_memories(source_batch_id);
 
 -- ----------------------------------------------------------------------------
--- user_feedback: Evaluation of bot responses and planning quality
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS user_feedback (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    content TEXT,
-    sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
-    referenced_discord_message_id BIGINT,
-    user_discord_message_id BIGINT,
-    audit_id UUID REFERENCES prompt_audits(id),
-    strategy_id UUID REFERENCES context_strategies(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment ON user_feedback(sentiment) WHERE sentiment IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_user_feedback_strategy_id ON user_feedback(strategy_id) WHERE strategy_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_user_feedback_audit_id ON user_feedback(audit_id) WHERE audit_id IS NOT NULL;
-
--- ----------------------------------------------------------------------------
 -- prompt_audits: LLM call tracking with feedback linkage
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS prompt_audits (
@@ -130,6 +113,23 @@ CREATE INDEX IF NOT EXISTS idx_audits_feedback ON prompt_audits(feedback_id) WHE
 CREATE INDEX IF NOT EXISTS idx_audits_created ON prompt_audits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audits_main_message ON prompt_audits(main_discord_message_id);
 CREATE INDEX IF NOT EXISTS idx_audits_dream_message ON prompt_audits(dream_discord_message_id);
+
+-- ----------------------------------------------------------------------------
+-- user_feedback: Evaluation of bot responses and planning quality
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    content TEXT,
+    sentiment TEXT CHECK (sentiment IN ('positive', 'negative', 'neutral')),
+    referenced_discord_message_id BIGINT,
+    user_discord_message_id BIGINT,
+    audit_id UUID REFERENCES prompt_audits(id),
+    strategy_id UUID REFERENCES context_strategies(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_sentiment ON user_feedback(sentiment) WHERE sentiment IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_feedback_strategy_id ON user_feedback(strategy_id) WHERE strategy_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_feedback_audit_id ON user_feedback(audit_id) WHERE audit_id IS NOT NULL;
 
 -- ----------------------------------------------------------------------------
 -- dreaming_proposals: Prompt optimization proposals
