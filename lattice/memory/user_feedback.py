@@ -14,27 +14,6 @@ from lattice.utils.date_resolution import get_now
 logger = structlog.get_logger(__name__)
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = (
-            "Database pool not available. Pass db_pool as an argument "
-            "(dependency injection required)."
-        )
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 class UserFeedback:
     """Represents user feedback submitted via dream channel buttons/modals."""
 
@@ -75,9 +54,7 @@ async def store_feedback(db_pool: Any, feedback: UserFeedback) -> UUID:
     Returns:
         UUID of the stored feedback
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO user_feedback (
@@ -116,9 +93,7 @@ async def get_feedback_by_user_message(
     Returns:
         UserFeedback if found, None otherwise
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, created_at
@@ -151,9 +126,7 @@ async def delete_feedback(db_pool: Any, feedback_id: UUID) -> bool:
     Returns:
         True if deleted, False if not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             DELETE FROM user_feedback WHERE id = $1
@@ -178,9 +151,7 @@ async def get_all_feedback(db_pool: Any) -> list[UserFeedback]:
     Returns:
         List of all user feedback, ordered by creation time (newest first)
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, created_at
