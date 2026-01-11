@@ -247,7 +247,7 @@ class TestUnifiedResponseTemplate:
                 semantic_context="Relevant facts",
             )
 
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
 
 class TestGenerateResponseWithTemplates:
@@ -291,7 +291,7 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify template selection
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
             # Verify extraction fields in rendered prompt
             assert "I need to finish the lattice project by Friday" in rendered_prompt
@@ -338,7 +338,7 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify template selection
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
             # User message should be in prompt
             assert "When is the lattice deadline?" in rendered_prompt
@@ -384,7 +384,7 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify template selection
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
             # User message should be in prompt
             assert "Spent 180 minutes coding today" in rendered_prompt
@@ -424,7 +424,7 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify UNIFIED_RESPONSE is used
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
             # Verify context info includes template info
             assert context_info["template"] == "UNIFIED_RESPONSE"
@@ -459,7 +459,7 @@ class TestGenerateResponseWithTemplates:
             )
 
             # Verify UNIFIED_RESPONSE was tried once
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
     @pytest.mark.asyncio
     async def test_generate_with_graph_memories(
@@ -1119,7 +1119,7 @@ class TestExtractionFieldsNotInPrompts:
             )
 
             # Verify extraction was used for template selection
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
             # Verify extraction metadata is in context_info for analytics
             assert context_info["template"] == "UNIFIED_RESPONSE"
@@ -1178,7 +1178,7 @@ class TestNoTemplateFound:
             assert context_info == {}
 
             # Verify UNIFIED_RESPONSE was tried once
-            mock_get_prompt.assert_any_call("UNIFIED_RESPONSE", db_pool=ANY)
+            mock_get_prompt.assert_any_call(db_pool=ANY, prompt_key="UNIFIED_RESPONSE")
 
 
 class TestTimezoneConversionFailure:

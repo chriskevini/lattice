@@ -587,10 +587,14 @@ class TestAuditing_LLMClient:
         """Test Auditing_LLMClient returns None audit_id when no message_id provided."""
         from lattice.utils.llm import AuditResult, get_auditing_llm_client
 
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+
         client = get_auditing_llm_client()
 
         result = await client.complete(
             prompt="test prompt",
+            db_pool=mock_pool,
             prompt_key="TEST_PROMPT",
             template_version=1,
             main_discord_message_id=None,
@@ -609,6 +613,8 @@ class TestAuditing_LLMClient:
         from lattice.utils.llm import AuditResult, get_auditing_llm_client
 
         mock_audit_id = uuid4()
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
 
         with patch(
             "lattice.memory.prompt_audits.store_prompt_audit",
@@ -618,6 +624,7 @@ class TestAuditing_LLMClient:
 
             result = await client.complete(
                 prompt="test prompt",
+                db_pool=mock_pool,
                 prompt_key="TEST_PROMPT",
                 template_version=1,
                 main_discord_message_id=12345,
