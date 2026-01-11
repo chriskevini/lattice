@@ -351,7 +351,9 @@ async def run_batch_consolidation(
 
         if new_entities or new_predicates:
             store_result = await store_canonical_forms(
-                new_entities, new_predicates, db_pool=active_db_pool
+                db_pool=active_db_pool,
+                new_entities=new_entities,
+                new_predicates=new_predicates,
             )
             logger.info(
                 "Stored canonical forms from memory consolidation",

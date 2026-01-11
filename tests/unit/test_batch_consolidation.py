@@ -1039,14 +1039,16 @@ class TestCanonicalFormIntegration:
                                                     )
 
                                                     mock_store_canonical.assert_called_once()
-                                                    store_args = (
-                                                        mock_store_canonical.call_args[
-                                                            0
-                                                        ]
-                                                    )
-                                                    assert "IKEA" in store_args[0]
+                                                    store_kwargs = mock_store_canonical.call_args.kwargs
                                                     assert (
-                                                        "did activity" in store_args[1]
+                                                        "IKEA"
+                                                        in store_kwargs["new_entities"]
+                                                    )
+                                                    assert (
+                                                        "did activity"
+                                                        in store_kwargs[
+                                                            "new_predicates"
+                                                        ]
                                                     )
 
     @pytest.mark.asyncio

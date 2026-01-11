@@ -34,34 +34,28 @@ class CanonicalRegistryError(Exception):
     pass
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = (
+            "Database pool not available. Pass db_pool as an argument "
+            "(dependency injection required)."
+        )
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
-async def get_canonical_entities_list(db_pool: Any = None) -> list[str]:
+async def get_canonical_entities_list(db_pool: Any) -> list[str]:
     """Fetch all canonical entity names from database.
 
     Args:
@@ -73,13 +67,9 @@ async def get_canonical_entities_list(db_pool: Any = None) -> list[str]:
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
-        # If we are in a test and have a mock pool, allow it to proceed
-        # instead of returning empty list early
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -90,8 +80,6 @@ async def get_canonical_entities_list(db_pool: Any = None) -> list[str]:
             if is_mock:
                 pass
             else:
-                # Return empty list for tests if db is not initialized
-                # This helps legacy tests that patch the global singleton
                 return []
         else:
             logger.warning(
@@ -104,7 +92,7 @@ async def get_canonical_entities_list(db_pool: Any = None) -> list[str]:
         return [row["name"] for row in rows]
 
 
-async def get_canonical_predicates_list(db_pool: Any = None) -> list[str]:
+async def get_canonical_predicates_list(db_pool: Any) -> list[str]:
     """Fetch all canonical predicate names from database.
 
     Args:
@@ -116,13 +104,9 @@ async def get_canonical_predicates_list(db_pool: Any = None) -> list[str]:
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
-        # If we are in a test and have a mock pool, allow it to proceed
-        # instead of returning empty list early
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -133,8 +117,6 @@ async def get_canonical_predicates_list(db_pool: Any = None) -> list[str]:
             if is_mock:
                 pass
             else:
-                # Return empty list for tests if db is not initialized
-                # This helps legacy tests that patch the global singleton
                 return []
         else:
             logger.warning(
@@ -147,7 +129,7 @@ async def get_canonical_predicates_list(db_pool: Any = None) -> list[str]:
         return [row["name"] for row in rows]
 
 
-async def get_canonical_entities_set(db_pool: Any = None) -> set[str]:
+async def get_canonical_entities_set(db_pool: Any) -> set[str]:
     """Fetch all canonical entities as a set for O(1) lookup.
 
     Args:
@@ -159,11 +141,9 @@ async def get_canonical_entities_set(db_pool: Any = None) -> set[str]:
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -174,8 +154,6 @@ async def get_canonical_entities_set(db_pool: Any = None) -> set[str]:
             if is_mock:
                 pass
             else:
-                # Return empty set for tests if db is not initialized
-                # This helps legacy tests that patch the global singleton
                 return set()
         else:
             logger.warning(
@@ -188,7 +166,7 @@ async def get_canonical_entities_set(db_pool: Any = None) -> set[str]:
         return {row["name"] for row in rows}
 
 
-async def get_canonical_predicates_set(db_pool: Any = None) -> set[str]:
+async def get_canonical_predicates_set(db_pool: Any) -> set[str]:
     """Fetch all canonical predicates as a set for O(1) lookup.
 
     Args:
@@ -200,11 +178,9 @@ async def get_canonical_predicates_set(db_pool: Any = None) -> set[str]:
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -215,8 +191,6 @@ async def get_canonical_predicates_set(db_pool: Any = None) -> set[str]:
             if is_mock:
                 pass
             else:
-                # Return empty set for tests if db is not initialized
-                # This helps legacy tests that patch the global singleton
                 return set()
         else:
             logger.warning(
@@ -229,12 +203,12 @@ async def get_canonical_predicates_set(db_pool: Any = None) -> set[str]:
         return {row["name"] for row in rows}
 
 
-async def store_canonical_entities(names: list[str], db_pool: Any = None) -> int:
+async def store_canonical_entities(db_pool: Any, names: list[str]) -> int:
     """Store new canonical entities, ignoring duplicates.
 
     Args:
-        names: List of entity names to store
         db_pool: Database pool for dependency injection
+        names: List of entity names to store
 
     Returns:
         Number of entities actually inserted
@@ -245,11 +219,9 @@ async def store_canonical_entities(names: list[str], db_pool: Any = None) -> int
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -260,7 +232,6 @@ async def store_canonical_entities(names: list[str], db_pool: Any = None) -> int
             if is_mock:
                 pass
             else:
-                # Return 0 for tests if db is not initialized
                 return 0
         else:
             logger.warning(
@@ -278,12 +249,12 @@ async def store_canonical_entities(names: list[str], db_pool: Any = None) -> int
     return len(names)
 
 
-async def store_canonical_predicates(names: list[str], db_pool: Any = None) -> int:
+async def store_canonical_predicates(db_pool: Any, names: list[str]) -> int:
     """Store new canonical predicates, ignoring duplicates.
 
     Args:
-        names: List of predicate names to store
         db_pool: Database pool for dependency injection
+        names: List of predicate names to store
 
     Returns:
         Number of predicates actually inserted
@@ -294,11 +265,9 @@ async def store_canonical_predicates(names: list[str], db_pool: Any = None) -> i
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -309,7 +278,6 @@ async def store_canonical_predicates(names: list[str], db_pool: Any = None) -> i
             if is_mock:
                 pass
             else:
-                # Return 0 for tests if db is not initialized
                 return 0
         else:
             logger.warning(
@@ -327,12 +295,12 @@ async def store_canonical_predicates(names: list[str], db_pool: Any = None) -> i
     return len(names)
 
 
-async def entity_exists(name: str, db_pool: Any = None) -> bool:
+async def entity_exists(db_pool: Any, name: str) -> bool:
     """Check if an entity name already exists.
 
     Args:
-        name: Entity name to check
         db_pool: Database pool for dependency injection
+        name: Entity name to check
 
     Returns:
         True if entity exists
@@ -340,11 +308,9 @@ async def entity_exists(name: str, db_pool: Any = None) -> bool:
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -355,7 +321,6 @@ async def entity_exists(name: str, db_pool: Any = None) -> bool:
             if is_mock:
                 pass
             else:
-                # Return False for tests if db is not initialized
                 return False
         else:
             logger.warning(
@@ -370,12 +335,12 @@ async def entity_exists(name: str, db_pool: Any = None) -> bool:
         return result is not None
 
 
-async def predicate_exists(name: str, db_pool: Any = None) -> bool:
+async def predicate_exists(db_pool: Any, name: str) -> bool:
     """Check if a predicate name already exists.
 
     Args:
-        name: Predicate name to check
         db_pool: Database pool for dependency injection
+        name: Predicate name to check
 
     Returns:
         True if predicate exists
@@ -383,11 +348,9 @@ async def predicate_exists(name: str, db_pool: Any = None) -> bool:
     active_db_pool = _get_active_db_pool(db_pool)
 
     if not active_db_pool.is_initialized():
-        # Check if we are in a test environment
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
-            # Check for various types of mocks/wrappers used in tests
             is_mock = (
                 hasattr(active_db_pool, "pool")
                 or hasattr(active_db_pool, "acquire")
@@ -398,7 +361,6 @@ async def predicate_exists(name: str, db_pool: Any = None) -> bool:
             if is_mock:
                 pass
             else:
-                # Return False for tests if db is not initialized
                 return False
         else:
             logger.warning(
@@ -490,20 +452,20 @@ def extract_canonical_forms(
 
 
 async def store_canonical_forms(
-    new_entities: list[str], new_predicates: list[str], db_pool: Any = None
+    db_pool: Any, new_entities: list[str], new_predicates: list[str]
 ) -> dict[str, int]:
     """Store new canonical entities and predicates in database.
 
     Args:
+        db_pool: Database pool for dependency injection
         new_entities: Sorted list of new entity names to store
         new_predicates: Sorted list of new predicate names to store
-        db_pool: Database pool for dependency injection
 
     Returns:
         Dictionary with 'entities' and 'predicates' counts of items stored
     """
-    entity_count = await store_canonical_entities(new_entities, db_pool=db_pool)
-    predicate_count = await store_canonical_predicates(new_predicates, db_pool=db_pool)
+    entity_count = await store_canonical_entities(db_pool, new_entities)
+    predicate_count = await store_canonical_predicates(db_pool, new_predicates)
 
     if new_entities or new_predicates:
         logger.info(

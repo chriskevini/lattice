@@ -1,6 +1,6 @@
 """Unit tests for canonical entity and predicate registry."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -40,17 +40,16 @@ class TestGetCanonicalEntitiesList:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.get_canonical_entities_list()
+        result = await canonical_module.get_canonical_entities_list(db_pool=mock_pool)
 
-            assert isinstance(result, list)
-            assert len(result) == 3
-            assert "Mother" in result
-            assert "boyfriend" in result
-            assert "marathon" in result
-            mock_conn.fetch.assert_called_once_with(
-                "SELECT name FROM entities ORDER BY created_at DESC"
-            )
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert "Mother" in result
+        assert "boyfriend" in result
+        assert "marathon" in result
+        mock_conn.fetch.assert_called_once_with(
+            "SELECT name FROM entities ORDER BY created_at DESC"
+        )
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_empty(self) -> None:
@@ -59,10 +58,9 @@ class TestGetCanonicalEntitiesList:
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.get_canonical_entities_list()
+        result = await canonical_module.get_canonical_entities_list(db_pool=mock_pool)
 
-            assert result == []
+        assert result == []
 
 
 class TestGetCanonicalPredicatesList:
@@ -81,17 +79,16 @@ class TestGetCanonicalPredicatesList:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.get_canonical_predicates_list()
+        result = await canonical_module.get_canonical_predicates_list(db_pool=mock_pool)
 
-            assert isinstance(result, list)
-            assert len(result) == 3
-            assert "has goal" in result
-            assert "due by" in result
-            assert "did activity" in result
-            mock_conn.fetch.assert_called_once_with(
-                "SELECT name FROM predicates ORDER BY created_at DESC"
-            )
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert "has goal" in result
+        assert "due by" in result
+        assert "did activity" in result
+        mock_conn.fetch.assert_called_once_with(
+            "SELECT name FROM predicates ORDER BY created_at DESC"
+        )
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_empty(self) -> None:
@@ -100,10 +97,9 @@ class TestGetCanonicalPredicatesList:
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.get_canonical_predicates_list()
+        result = await canonical_module.get_canonical_predicates_list(db_pool=mock_pool)
 
-            assert result == []
+        assert result == []
 
 
 class TestGetCanonicalEntitiesSet:
@@ -121,12 +117,11 @@ class TestGetCanonicalEntitiesSet:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.get_canonical_entities_set()
+        result = await canonical_module.get_canonical_entities_set(db_pool=mock_pool)
 
-            assert isinstance(result, set)
-            assert "Mother" in result
-            assert "boyfriend" in result
+        assert isinstance(result, set)
+        assert "Mother" in result
+        assert "boyfriend" in result
 
 
 class TestGetCanonicalPredicatesSet:
@@ -144,12 +139,11 @@ class TestGetCanonicalPredicatesSet:
         )
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.get_canonical_predicates_set()
+        result = await canonical_module.get_canonical_predicates_set(db_pool=mock_pool)
 
-            assert isinstance(result, set)
-            assert "has goal" in result
-            assert "due by" in result
+        assert isinstance(result, set)
+        assert "has goal" in result
+        assert "due by" in result
 
 
 class TestStoreCanonicalEntities:
@@ -162,13 +156,12 @@ class TestStoreCanonicalEntities:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            count = await canonical_module.store_canonical_entities(
-                ["entity1", "entity2"]
-            )
+        count = await canonical_module.store_canonical_entities(
+            db_pool=mock_pool, names=["entity1", "entity2"]
+        )
 
-            assert count == 2
-            mock_conn.executemany.assert_called_once()
+        assert count == 2
+        mock_conn.executemany.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_returns_zero_for_empty_list(self) -> None:
@@ -177,11 +170,12 @@ class TestStoreCanonicalEntities:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            count = await canonical_module.store_canonical_entities([])
+        count = await canonical_module.store_canonical_entities(
+            db_pool=mock_pool, names=[]
+        )
 
-            assert count == 0
-            mock_conn.executemany.assert_not_called()
+        assert count == 0
+        mock_conn.executemany.assert_not_called()
 
 
 class TestStoreCanonicalPredicates:
@@ -194,13 +188,12 @@ class TestStoreCanonicalPredicates:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            count = await canonical_module.store_canonical_predicates(
-                ["has goal", "due by"]
-            )
+        count = await canonical_module.store_canonical_predicates(
+            db_pool=mock_pool, names=["has goal", "due by"]
+        )
 
-            assert count == 2
-            mock_conn.executemany.assert_called_once()
+        assert count == 2
+        mock_conn.executemany.assert_called_once()
 
 
 class TestEntityExists:
@@ -213,13 +206,12 @@ class TestEntityExists:
         mock_conn.fetchval = AsyncMock(return_value=1)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.entity_exists("Mother")
+        result = await canonical_module.entity_exists(db_pool=mock_pool, name="Mother")
 
-            assert result is True
-            mock_conn.fetchval.assert_called_once_with(
-                "SELECT 1 FROM entities WHERE name = $1 LIMIT 1", "Mother"
-            )
+        assert result is True
+        mock_conn.fetchval.assert_called_once_with(
+            "SELECT 1 FROM entities WHERE name = $1 LIMIT 1", "Mother"
+        )
 
     @pytest.mark.asyncio
     async def test_returns_false_when_not_exists(self) -> None:
@@ -228,10 +220,9 @@ class TestEntityExists:
         mock_conn.fetchval = AsyncMock(return_value=None)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.entity_exists("Unknown")
+        result = await canonical_module.entity_exists(db_pool=mock_pool, name="Unknown")
 
-            assert result is False
+        assert result is False
 
 
 class TestPredicateExists:
@@ -244,10 +235,11 @@ class TestPredicateExists:
         mock_conn.fetchval = AsyncMock(return_value=1)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.predicate_exists("has goal")
+        result = await canonical_module.predicate_exists(
+            db_pool=mock_pool, name="has goal"
+        )
 
-            assert result is True
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_returns_false_when_not_exists(self) -> None:
@@ -256,10 +248,11 @@ class TestPredicateExists:
         mock_conn.fetchval = AsyncMock(return_value=None)
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.predicate_exists("unknown predicate")
+        result = await canonical_module.predicate_exists(
+            db_pool=mock_pool, name="unknown predicate"
+        )
 
-            assert result is False
+        assert result is False
 
 
 class TestExceptionClass:
@@ -422,13 +415,14 @@ class TestStoreCanonicalForms:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.store_canonical_forms(
-                ["new entity"], ["new predicate"]
-            )
+        result = await canonical_module.store_canonical_forms(
+            db_pool=mock_pool,
+            new_entities=["new entity"],
+            new_predicates=["new predicate"],
+        )
 
-            assert result["entities"] == 1
-            assert result["predicates"] == 1
+        assert result["entities"] == 1
+        assert result["predicates"] == 1
 
     @pytest.mark.asyncio
     async def test_returns_zero_counts_for_empty(self) -> None:
@@ -437,8 +431,9 @@ class TestStoreCanonicalForms:
         mock_conn.executemany = AsyncMock()
         mock_pool = create_mock_pool_with_conn(mock_conn)
 
-        with patch("lattice.utils.database.db_pool", mock_pool):
-            result = await canonical_module.store_canonical_forms([], [])
+        result = await canonical_module.store_canonical_forms(
+            db_pool=mock_pool, new_entities=[], new_predicates=[]
+        )
 
-            assert result["entities"] == 0
-            assert result["predicates"] == 0
+        assert result["entities"] == 0
+        assert result["predicates"] == 0
