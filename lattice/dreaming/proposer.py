@@ -238,7 +238,7 @@ async def propose_optimization(
             prompt=rendered_prompt,
             db_pool=db_pool,
             prompt_key="PROMPT_OPTIMIZATION",
-            main_discord_message_id=0,
+            main_discord_message_id=None,
             temperature=optimization_prompt_template.temperature,
             audit_view=True,
             audit_view_params={

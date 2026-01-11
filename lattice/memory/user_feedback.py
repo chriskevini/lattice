@@ -27,6 +27,7 @@ class UserFeedback:
         sentiment: str | None = None,
         referenced_discord_message_id: int | None = None,
         user_discord_message_id: int | None = None,
+        audit_id: UUID | None = None,
         created_at: datetime | None = None,
     ) -> None:
         """Initialize user feedback.
@@ -37,6 +38,7 @@ class UserFeedback:
             sentiment: Sentiment of feedback (positive/negative/neutral)
             referenced_discord_message_id: ID of the bot message being replied to/quoted
             user_discord_message_id: ID of the user's message containing the feedback
+            audit_id: UUID of the associated prompt audit
             created_at: Timestamp (defaults to now)
         """
         self.content = content
@@ -44,6 +46,7 @@ class UserFeedback:
         self.sentiment = sentiment
         self.referenced_discord_message_id = referenced_discord_message_id
         self.user_discord_message_id = user_discord_message_id
+        self.audit_id = audit_id
         self.created_at = created_at or get_now("UTC")
 
 
@@ -61,15 +64,16 @@ async def store_feedback(db_pool: Any, feedback: UserFeedback) -> UUID:
         row = await conn.fetchrow(
             """
             INSERT INTO user_feedback (
-                content, sentiment, referenced_discord_message_id, user_discord_message_id
+                content, sentiment, referenced_discord_message_id, user_discord_message_id, audit_id
             )
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
             feedback.content,
             feedback.sentiment,
             feedback.referenced_discord_message_id,
             feedback.user_discord_message_id,
+            feedback.audit_id,
         )
 
         feedback_id = cast("UUID", row["id"])
@@ -99,7 +103,7 @@ async def get_feedback_by_user_message(
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, created_at
+            SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, audit_id, created_at
             FROM user_feedback
             WHERE user_discord_message_id = $1
             """,
@@ -115,6 +119,7 @@ async def get_feedback_by_user_message(
             sentiment=row["sentiment"],
             referenced_discord_message_id=row["referenced_discord_message_id"],
             user_discord_message_id=row["user_discord_message_id"],
+            audit_id=row["audit_id"],
             created_at=row["created_at"],
         )
 
@@ -157,7 +162,7 @@ async def get_all_feedback(db_pool: Any) -> list[UserFeedback]:
     async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, created_at
+            SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, audit_id, created_at
             FROM user_feedback
             ORDER BY created_at DESC
             """
@@ -170,6 +175,7 @@ async def get_all_feedback(db_pool: Any) -> list[UserFeedback]:
                 sentiment=row["sentiment"],
                 referenced_discord_message_id=row["referenced_discord_message_id"],
                 user_discord_message_id=row["user_discord_message_id"],
+                audit_id=row["audit_id"],
                 created_at=row["created_at"],
             )
             for row in rows
