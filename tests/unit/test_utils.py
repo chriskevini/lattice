@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 
 from lattice.utils.config import get_config
 from lattice.utils.database import (
-    set_user_timezone,
     DatabasePool,
     get_next_check_at,
     get_system_health,
@@ -272,41 +271,28 @@ class TestUserTimezoneFunctions:
     @pytest.mark.asyncio
     async def test_get_user_timezone_with_value(self) -> None:
         """Test get_user_timezone retrieves stored timezone."""
-        mock_db_pool = AsyncMock()
-        mock_db_pool.get_user_timezone = AsyncMock(return_value="America/New_York")
+        with (
+            patch("lattice.utils.database._user_timezone_cache", None),
+            patch("lattice.utils.database.db_pool") as mock_pool,
+        ):
+            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+            mock_conn.fetchrow.return_value = {"object": "America/New_York"}
+            result = await get_user_timezone(db_pool=mock_pool)
 
-        result = await get_user_timezone(db_pool=mock_db_pool)
-
-        assert result == "America/New_York"
+            assert result == "America/New_York"
 
     @pytest.mark.asyncio
     async def test_get_user_timezone_defaults_to_utc(self) -> None:
         """Test get_user_timezone defaults to UTC when not set."""
-        mock_db_pool = AsyncMock()
-        mock_db_pool.get_user_timezone = AsyncMock(return_value="UTC")
+        with (
+            patch("lattice.utils.database._user_timezone_cache", None),
+            patch("lattice.utils.database.db_pool") as mock_pool,
+        ):
+            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+            mock_conn.fetchrow.return_value = None
+            result = await get_user_timezone(db_pool=mock_pool)
 
-        result = await get_user_timezone(db_pool=mock_db_pool)
-
-        assert result == "UTC"
-
-    @pytest.mark.asyncio
-    async def test_set_user_timezone_valid_timezone(self) -> None:
-        """Test set_user_timezone validates and stores valid timezone."""
-        mock_db_pool = AsyncMock()
-        mock_db_pool.set_user_timezone = AsyncMock()
-
-        await set_user_timezone("America/Los_Angeles", db_pool=mock_db_pool)
-
-        mock_db_pool.set_user_timezone.assert_called_once_with("America/Los_Angeles")
-
-    @pytest.mark.asyncio
-    async def test_set_user_timezone_invalid_timezone(self) -> None:
-        """Test set_user_timezone passes through to db_pool without validation."""
-        mock_db_pool = AsyncMock()
-        mock_db_pool.set_user_timezone = AsyncMock()
-
-        await set_user_timezone("Invalid/Timezone", db_pool=mock_db_pool)
-        mock_db_pool.set_user_timezone.assert_called_once_with("Invalid/Timezone")
+            assert result == "UTC"
 
 
 @pytest.fixture

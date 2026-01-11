@@ -137,58 +137,37 @@ class DatabasePool:
         """
         await self.set_system_health("next_check_at", dt.isoformat())
 
-    async def get_user_timezone(self) -> str:
-        """Get system-wide user timezone.
-
-        Returns:
-            IANA timezone string (e.g., 'America/New_York'), defaults to 'UTC'
-        """
-        return await self.get_system_health("user_timezone") or "UTC"
-
-    async def set_user_timezone(self, timezone: str) -> None:
-        """Set system-wide user timezone.
-
-        Args:
-            timezone: IANA timezone string (e.g., 'America/New_York')
-
-        Raises:
-            ValueError: If timezone is invalid
-        """
-        from zoneinfo import ZoneInfo
-
-        try:
-            ZoneInfo(timezone)
-        except ZoneInfoNotFoundError as e:
-            msg = f"Invalid timezone: {timezone}"
-            raise ValueError(msg) from e
-
-        await self.set_system_health("user_timezone", timezone)
-        logger.info("System timezone updated", timezone=timezone)
-
-
-async def set_user_timezone(timezone: str, db_pool: Any) -> None:
-    """Set system-wide user timezone.
-
-    Args:
-        timezone: IANA timezone string
-        db_pool: Database pool (required for DI)
-
-    Raises:
-        ValueError: If timezone is invalid
-    """
-    await db_pool.set_user_timezone(timezone)
-
 
 async def get_user_timezone(db_pool: Any) -> str:
-    """Get system-wide user timezone.
+    """Get user timezone from semantic memory or cache.
 
     Args:
-        db_pool: Database pool (required for DI)
+        db_pool: Database pool for DI
 
     Returns:
-        IANA timezone string
+        IANA timezone string (e.g., 'America/New_York'), defaults to 'UTC'
     """
-    return await db_pool.get_user_timezone()
+    global _user_timezone_cache
+    if _user_timezone_cache:
+        return _user_timezone_cache
+
+    async with db_pool.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT object FROM semantic_memories WHERE subject = 'User' AND predicate = 'lives in timezone' ORDER BY created_at DESC LIMIT 1"
+        )
+        if row:
+            tz = row["object"]
+            try:
+                from zoneinfo import ZoneInfo
+
+                ZoneInfo(tz)
+                _user_timezone_cache = tz
+                return tz
+            except ZoneInfoNotFoundError:
+                pass
+
+    _user_timezone_cache = "UTC"
+    return "UTC"
 
 
 async def get_system_health(key: str, db_pool: Any) -> str | None:
@@ -235,3 +214,6 @@ async def set_next_check_at(dt: datetime, db_pool: Any) -> None:
         db_pool: Database pool (required for DI)
     """
     await db_pool.set_next_check_at(dt)
+
+
+db_pool = DatabasePool()

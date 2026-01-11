@@ -9,7 +9,6 @@ from discord.ext import commands
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.date_resolution import get_now
-from lattice.utils.database import set_user_timezone
 
 logger = structlog.get_logger(__name__)
 
@@ -124,20 +123,14 @@ class CommandHandler:
                 ctx: Command context
                 timezone: IANA timezone identifier (e.g., America/New_York, Europe/London)
             """
-            try:
-                await set_user_timezone(timezone, db_pool=self.db_pool)
-                if hasattr(self.bot, "set_user_timezone"):
-                    set_tz = getattr(self.bot, "set_user_timezone")
-                    set_tz(timezone)
-                await ctx.send(f"✅ Timezone set to: {timezone}")
+            await ctx.send(
+                "Timezone is now discovered organically through conversation. Mention your location (e.g., 'I'm in New York') and it will be remembered!"
+            )
 
-                logger.info(
-                    "Timezone changed via command",
-                    timezone=timezone,
-                    user=ctx.author.name,
-                )
-            except ValueError as e:
-                await ctx.send(f"❌ Invalid timezone: {e}")
+            logger.info(
+                "Timezone command used, redirected to organic discovery",
+                user=ctx.author.name,
+            )
 
     def _setup_active_hours_command(self) -> None:
         """Setup the !active_hours command."""
