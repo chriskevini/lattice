@@ -12,8 +12,6 @@ from uuid import UUID
 
 import structlog
 
-from lattice.utils.database import db_pool
-
 
 logger = structlog.get_logger(__name__)
 
@@ -59,6 +57,11 @@ class PromptAudit:
     created_at: datetime
 
 
+# Global singleton shim for backward compatibility
+# DEPRECATED: Access via dependency injection where possible
+db_pool: Any = None
+
+
 async def store_prompt_audit(
     prompt_key: str,
     response_content: str,
@@ -77,6 +80,7 @@ async def store_prompt_audit(
     archetype_confidence: float | None = None,
     reasoning: dict[str, Any] | None = None,
     dream_discord_message_id: int | None = None,
+    db_pool: Any = None,
 ) -> UUID:
     """Store a prompt audit entry.
 
@@ -98,15 +102,21 @@ async def store_prompt_audit(
         archetype_confidence: Confidence score for archetype match
         reasoning: AI reasoning and decision factors
         dream_discord_message_id: Discord message ID in dream channel
+        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored audit entry
     """
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
     # Convert dicts to JSON strings for JSONB columns
     context_config_json = json.dumps(context_config) if context_config else None
     reasoning_json = json.dumps(reasoning) if reasoning else None
 
-    async with db_pool.pool.acquire() as conn:
+    async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO prompt_audits (
@@ -164,18 +174,24 @@ async def store_prompt_audit(
 
 
 async def update_audit_dream_message(
-    audit_id: UUID, dream_discord_message_id: int
+    audit_id: UUID, dream_discord_message_id: int, db_pool: Any = None
 ) -> bool:
     """Update audit with dream channel message ID.
 
     Args:
         audit_id: UUID of the audit entry
         dream_discord_message_id: Discord message ID in dream channel
+        db_pool: Database pool for dependency injection
 
     Returns:
         True if updated, False if not found
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE prompt_audits
@@ -199,18 +215,24 @@ async def update_audit_dream_message(
 
 
 async def link_feedback_to_audit(
-    dream_discord_message_id: int, feedback_id: UUID
+    dream_discord_message_id: int, feedback_id: UUID, db_pool: Any = None
 ) -> bool:
     """Link feedback to prompt audit via dream channel message ID.
 
     Args:
         dream_discord_message_id: Discord message ID in dream channel
         feedback_id: UUID of the feedback entry
+        db_pool: Database pool for dependency injection
 
     Returns:
         True if linked, False if audit not found
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE prompt_audits
@@ -233,7 +255,9 @@ async def link_feedback_to_audit(
         return updated
 
 
-async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> bool:
+async def link_feedback_to_audit_by_id(
+    audit_id: UUID, feedback_id: UUID, db_pool: Any = None
+) -> bool:
     """Link feedback to prompt audit via audit UUID.
 
     Unlike link_feedback_to_audit(), this function looks up audits by their internal UUID
@@ -244,11 +268,17 @@ async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> boo
     Args:
         audit_id: UUID of the prompt audit entry
         feedback_id: UUID of the feedback entry
+        db_pool: Database pool for dependency injection
 
     Returns:
         True if linked, False if audit not found
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE prompt_audits
@@ -272,17 +302,23 @@ async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> boo
 
 
 async def get_audit_by_dream_message(
-    dream_discord_message_id: int,
+    dream_discord_message_id: int, db_pool: Any = None
 ) -> PromptAudit | None:
     """Get audit by dream channel message ID.
 
     Args:
         dream_discord_message_id: Discord message ID in dream channel
+        db_pool: Database pool for dependency injection
 
     Returns:
         PromptAudit if found, None otherwise
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT
@@ -328,18 +364,24 @@ async def get_audit_by_dream_message(
 
 
 async def get_audits_with_feedback(
-    limit: int = 100, offset: int = 0
+    limit: int = 100, offset: int = 0, db_pool: Any = None
 ) -> list[PromptAudit]:
     """Get prompt audits that have feedback.
 
     Args:
         limit: Maximum number of audits to return
         offset: Offset for pagination
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of prompt audits with feedback
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT

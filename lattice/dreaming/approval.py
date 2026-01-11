@@ -4,7 +4,7 @@ Provides Discord buttons and modals for human-in-the-loop approval workflow with
 persistence support (buttons work after bot restart).
 """
 
-from typing import Any
+from typing import Any, cast
 
 import discord
 import structlog
@@ -30,15 +30,24 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
     template display with clear visual separation using Separators.
     """
 
-    def __init__(self, proposal: OptimizationProposal) -> None:
+    def __init__(
+        self,
+        proposal: OptimizationProposal,
+        db_pool: Any = None,
+        llm_client: Any = None,
+    ) -> None:
         """Initialize template comparison view.
 
         Args:
             proposal: The optimization proposal containing both templates
+            db_pool: Database pool for dependency injection
+            llm_client: LLM client for dependency injection
         """
         super().__init__(timeout=None)  # No timeout for proposal views
         self.proposal_id = proposal.proposal_id
         self.rendered_optimization_prompt = proposal.rendered_optimization_prompt
+        self.db_pool = db_pool
+        self.llm_client = llm_client
 
         # Extract data from proposal_metadata JSONB
         changes = proposal.proposal_metadata.get("changes", [])
@@ -146,9 +155,13 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
 
     def _disable_all_buttons(self) -> None:
         for item in self.children:
-            if hasattr(item, "children"):
-                for button in item.children:
-                    if isinstance(button, discord.ui.Button):
+            if hasattr(item, "disabled"):
+                item_any = cast(Any, item)
+                item_any.disabled = True
+            elif hasattr(item, "children"):
+                item_any = cast(Any, item)
+                for button in item_any.children:
+                    if hasattr(button, "disabled"):
                         button.disabled = True
 
     async def _finalize_proposal_action(
@@ -165,7 +178,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
     async def _fetch_proposal_or_error(
         self, interaction: discord.Interaction
     ) -> OptimizationProposal | None:
-        proposal = await get_proposal_by_id(self.proposal_id)
+        proposal = await get_proposal_by_id(self.proposal_id, db_pool=self.db_pool)
         if not proposal:
             await interaction.response.send_message(
                 "❌ Proposal not found. It may have been deleted.",
@@ -214,6 +227,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
                 feedback="Approved via Discord button",
+                db_pool=self.db_pool,
             )
 
             if success:
@@ -250,6 +264,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
                 feedback="Rejected via Discord button",
+                db_pool=self.db_pool,
             )
 
             if success:

@@ -7,10 +7,29 @@ from typing import Any
 
 import structlog
 
-from lattice.utils.database import db_pool
-
 
 logger = structlog.get_logger(__name__)
+
+
+# Global singleton shim for backward compatibility
+# DEPRECATED: Access via dependency injection where possible
+db_pool: Any = None
+
+
+def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+    """Helper to resolve active database pool."""
+    if db_pool_arg is not None:
+        return db_pool_arg
+
+    # Fallback to module-level shim if set (for legacy tests)
+    global db_pool
+    if db_pool is not None:
+        return db_pool
+
+    # Fallback to global singleton (lazy import to avoid circularity)
+    from lattice.utils.database import db_pool as global_db_pool
+
+    return global_db_pool
 
 
 class PromptTemplate:
@@ -74,16 +93,19 @@ class PromptTemplate:
         return escaped.format(**kwargs)
 
 
-async def get_prompt(prompt_key: str) -> PromptTemplate | None:
+async def get_prompt(prompt_key: str, db_pool: Any = None) -> PromptTemplate | None:
     """Retrieve the latest active prompt template by key.
 
     Args:
         prompt_key: The unique identifier for the template
+        db_pool: Database pool for dependency injection
 
     Returns:
         The prompt template, or None if not found
     """
-    async with db_pool.pool.acquire() as conn:
+    active_db_pool = _get_active_db_pool(db_pool)
+
+    async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT prompt_key, template, temperature, version, active

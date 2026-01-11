@@ -10,8 +10,6 @@ from typing import Any
 
 import structlog
 
-from lattice.utils.database import db_pool
-
 
 logger = structlog.get_logger(__name__)
 
@@ -77,10 +75,32 @@ class PromptMetrics:
     priority_score: float
 
 
+# Global singleton shim for backward compatibility
+# DEPRECATED: Access via dependency injection where possible
+db_pool: Any = None
+
+
+def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+    """Helper to resolve active database pool."""
+    if db_pool_arg is not None:
+        return db_pool_arg
+
+    # Fallback to module-level shim if set (for legacy tests)
+    global db_pool
+    if db_pool is not None:
+        return db_pool
+
+    # Fallback to global singleton (lazy import to avoid circularity)
+    from lattice.utils.database import db_pool as global_db_pool
+
+    return global_db_pool
+
+
 async def analyze_prompt_effectiveness(
     min_uses: int = 10,
     lookback_days: int = 30,
     min_feedback: int = 10,
+    db_pool: Any | None = None,
 ) -> list[PromptMetrics]:
     """Analyze prompt effectiveness from audit data.
 
@@ -88,11 +108,14 @@ async def analyze_prompt_effectiveness(
         min_uses: Minimum number of uses to consider for analysis
         lookback_days: Number of days to look back for analysis
         min_feedback: Minimum number of feedback items to consider for analysis
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of prompt metrics, sorted by priority (highest first)
     """
-    async with db_pool.pool.acquire() as conn:
+    active_db_pool = _get_active_db_pool(db_pool)
+
+    async with active_db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
             WITH current_versions AS (
@@ -196,6 +219,7 @@ async def get_feedback_samples(
     prompt_key: str,
     limit: int = 10,
     sentiment_filter: str | None = None,
+    db_pool: Any | None = None,
 ) -> list[str]:
     """Get sample feedback content for a prompt's current version.
 
@@ -206,11 +230,14 @@ async def get_feedback_samples(
         prompt_key: The prompt key to get feedback for
         limit: Maximum number of samples to return
         sentiment_filter: Filter by sentiment ('positive', 'negative', 'neutral')
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of feedback content strings
     """
-    async with db_pool.pool.acquire() as conn:
+    active_db_pool = _get_active_db_pool(db_pool)
+
+    async with active_db_pool.pool.acquire() as conn:
         query = """
             SELECT uf.content
             FROM user_feedback uf
@@ -239,6 +266,7 @@ async def get_feedback_with_context(
     limit: int = 10,
     include_rendered_prompt: bool = True,
     max_prompt_chars: int = 5000,
+    db_pool: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Get feedback along with the response and relevant user message.
 
@@ -248,17 +276,21 @@ async def get_feedback_with_context(
     3. The bot's response
     4. The user's feedback
     5. Sentiment
+    6. Database pool for dependency injection
 
     Args:
         prompt_key: The prompt key to get feedback for
         limit: Maximum number of samples to return
         include_rendered_prompt: Whether to include the rendered prompt (default True)
         max_prompt_chars: Maximum characters of rendered prompt to include (default 5000)
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of dicts containing message, rendered_prompt (if requested), response, and feedback
     """
-    async with db_pool.pool.acquire() as conn:
+    active_db_pool = _get_active_db_pool(db_pool)
+
+    async with active_db_pool.pool.acquire() as conn:
         # Use separate queries based on whether we need rendered_prompt
         # This avoids dynamic SQL construction which triggers security warnings
         if include_rendered_prompt:

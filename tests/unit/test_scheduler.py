@@ -167,6 +167,10 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(side_effect=ValueError("LLM service unavailable"))
 
+        # Injected pool and client
+        mock_pool = MagicMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.nudges.format_episodic_nudge_context",
@@ -196,7 +200,9 @@ class TestPrepareContextualNudge:
                 return_value=mock_llm,
             ),
         ):
-            result = await prepare_contextual_nudge()
+            result = await prepare_contextual_nudge(
+                db_pool=mock_pool, llm_client=mock_llm
+            )
             assert result.action == "wait"
             assert "LLM call failed" in result.reason
             assert result.channel_id == 12345
@@ -559,6 +565,15 @@ class TestAdaptiveActiveHours:
     @pytest.mark.asyncio
     async def test_is_within_active_hours_normal_window(self) -> None:
         """Test active hours check for normal window (9 AM - 9 PM)."""
+        mock_pool = MagicMock()
+        mock_pool.get_system_health = AsyncMock(
+            side_effect=lambda key: {
+                "active_hours_start": "9",
+                "active_hours_end": "21",
+            }.get(key)
+        )
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.adaptive.get_system_health",
@@ -579,15 +594,26 @@ class TestAdaptiveActiveHours:
         ):
             # Test time within active hours (noon)
             within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(within_time) is True
+            assert await is_within_active_hours(within_time, db_pool=mock_pool) is True
 
             # Test time outside active hours (2 AM)
             outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(outside_time) is False
+            assert (
+                await is_within_active_hours(outside_time, db_pool=mock_pool) is False
+            )
 
     @pytest.mark.asyncio
     async def test_is_within_active_hours_wrap_around(self) -> None:
         """Test active hours check for window wrapping midnight (9 PM - 9 AM)."""
+        mock_pool = MagicMock()
+        mock_pool.get_system_health = AsyncMock(
+            side_effect=lambda key: {
+                "active_hours_start": "21",
+                "active_hours_end": "9",
+            }.get(key)
+        )
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.adaptive.get_system_health",
@@ -608,19 +634,30 @@ class TestAdaptiveActiveHours:
         ):
             # Test time within active hours (midnight)
             within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(within_time) is True
+            assert await is_within_active_hours(within_time, db_pool=mock_pool) is True
 
             # Test time within active hours (6 AM)
             within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(within_time2) is True
+            assert await is_within_active_hours(within_time2, db_pool=mock_pool) is True
 
             # Test time outside active hours (noon)
             outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(outside_time) is False
+            assert (
+                await is_within_active_hours(outside_time, db_pool=mock_pool) is False
+            )
 
     @pytest.mark.asyncio
     async def test_is_within_active_hours_defaults_to_now(self) -> None:
         """Test active hours check defaults to current time when not specified."""
+        mock_pool = MagicMock()
+        mock_pool.get_system_health = AsyncMock(
+            side_effect=lambda key: {
+                "active_hours_start": "9",
+                "active_hours_end": "21",
+            }.get(key)
+        )
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
+
         with (
             patch(
                 "lattice.scheduler.adaptive.get_system_health",
@@ -645,7 +682,7 @@ class TestAdaptiveActiveHours:
             mock_get_now.return_value = mock_now
 
             # Call without specifying check_time (should use mocked get_now())
-            result = await is_within_active_hours()
+            result = await is_within_active_hours(db_pool=mock_pool)
             assert result is True  # 3 PM is within 9 AM - 9 PM window
 
     @pytest.mark.asyncio
@@ -659,6 +696,9 @@ class TestAdaptiveActiveHours:
             "timezone": "UTC",
         }
 
+        mock_pool = MagicMock()
+        mock_pool.set_system_health = AsyncMock()
+
         with (
             patch(
                 "lattice.scheduler.adaptive.calculate_active_hours",
@@ -666,11 +706,13 @@ class TestAdaptiveActiveHours:
             ),
             patch("lattice.scheduler.adaptive.set_system_health") as mock_set,
         ):
-            result = await update_active_hours()
+            result = await update_active_hours(db_pool=mock_pool)
 
             assert result == mock_result
-            # Verify system_health was updated
-            assert mock_set.call_count >= 4  # start, end, confidence, last_updated
+            # Verify system_health was updated via injected pool
+            assert (
+                mock_pool.set_system_health.call_count >= 4
+            )  # start, end, confidence, last_updated
 
 
 if __name__ == "__main__":

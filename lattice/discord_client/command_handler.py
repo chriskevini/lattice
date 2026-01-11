@@ -1,5 +1,7 @@
 """Command handlers for LatticeBot."""
 
+from typing import Any
+
 import discord
 import structlog
 from discord.ext import commands
@@ -19,6 +21,8 @@ class CommandHandler:
         bot: commands.Bot,
         dream_channel_id: int,
         dreaming_scheduler: DreamingScheduler | None = None,
+        db_pool: Any | None = None,
+        llm_client: Any | None = None,
     ) -> None:
         """Initialize the command handler.
 
@@ -26,10 +30,14 @@ class CommandHandler:
             bot: The Discord bot instance
             dream_channel_id: ID of the dream channel
             dreaming_scheduler: The dreaming scheduler instance
+            db_pool: Database pool for dependency injection
+            llm_client: LLM client for dependency injection
         """
         self.bot = bot
         self.dream_channel_id = dream_channel_id
         self.dreaming_scheduler = dreaming_scheduler
+        self.db_pool = db_pool
+        self.llm_client = llm_client
 
     def setup(self) -> None:
         """Setup all bot commands."""
@@ -119,7 +127,7 @@ class CommandHandler:
             try:
                 from lattice.utils.database import set_user_timezone
 
-                await set_user_timezone(timezone)
+                await set_user_timezone(timezone, db_pool=self.db_pool)
                 if hasattr(self.bot, "set_user_timezone"):
                     # Use getattr to avoid type checking issues with dynamic attributes
                     set_tz = getattr(self.bot, "set_user_timezone")
@@ -149,7 +157,7 @@ class CommandHandler:
             await ctx.send("🔄 **Analyzing message patterns...**")
 
             try:
-                result = await update_active_hours()
+                result = await update_active_hours(db_pool=self.db_pool)
 
                 # Format hours for display
                 start_h = result["start_hour"]

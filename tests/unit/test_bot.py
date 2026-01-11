@@ -18,12 +18,31 @@ class TestLatticeBot:
         """Reload config for each test to pick up mocked environment variables."""
         get_config(reload=True)
 
-    def test_bot_initialization(self) -> None:
+    @pytest.fixture
+    def mock_db_pool(self) -> MagicMock:
+        mock = MagicMock()
+        mock.get_user_timezone = AsyncMock(return_value="UTC")
+        mock.is_initialized = MagicMock(return_value=True)
+        return mock
+
+    @pytest.fixture
+    def mock_llm_client(self) -> MagicMock:
+        return MagicMock()
+
+    @pytest.fixture
+    def bot(self, mock_db_pool, mock_llm_client) -> LatticeBot:
+        config = get_config()
+        config.discord_main_channel_id = 123
+        config.discord_dream_channel_id = 456
+        return LatticeBot(db_pool=mock_db_pool, llm_client=mock_llm_client)
+
+    def test_bot_initialization(self, mock_db_pool, mock_llm_client) -> None:
         """Test bot initialization with default settings."""
         config = get_config()
         config.discord_main_channel_id = 123
         config.discord_dream_channel_id = 456
-        bot = LatticeBot()
+
+        bot = LatticeBot(db_pool=mock_db_pool, llm_client=mock_llm_client)
 
         assert bot.main_channel_id == 123
         assert bot.dream_channel_id == 456
@@ -31,53 +50,50 @@ class TestLatticeBot:
         assert bot._user_timezone == "UTC"
         assert bot._dreaming_scheduler is None
 
-    def test_bot_initialization_missing_channels(self) -> None:
+    def test_bot_initialization_missing_channels(
+        self, bot, mock_db_pool, mock_llm_client
+    ) -> None:
         """Test bot initialization with missing channel IDs logs warnings."""
         config = get_config()
         config.discord_main_channel_id = 0
         config.discord_dream_channel_id = 0
-        bot = LatticeBot()
+        bot = LatticeBot(db_pool=mock_db_pool, llm_client=mock_llm_client)
 
         assert bot.main_channel_id == 0
         assert bot.dream_channel_id == 0
 
     @pytest.mark.asyncio
-    async def test_setup_hook_success(self) -> None:
+    async def test_setup_hook_success(self, bot, mock_db_pool) -> None:
         """Test successful bot setup initializes database pool."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
 
-        with patch("lattice.discord_client.bot.db_pool") as mock_db_pool:
-            mock_db_pool.initialize = AsyncMock()
+        mock_db_pool.initialize = AsyncMock()
 
-            await bot.setup_hook()
+        await bot.setup_hook()
 
-            mock_db_pool.initialize.assert_called_once()
-            assert bot._message_handler.memory_healthy is True
+        mock_db_pool.initialize.assert_called_once()
+        assert bot._message_handler.memory_healthy is True
 
     @pytest.mark.asyncio
-    async def test_setup_hook_database_failure(self) -> None:
+    async def test_setup_hook_database_failure(self, bot, mock_db_pool) -> None:
         """Test bot setup handles database initialization failure."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
 
-        with patch("lattice.discord_client.bot.db_pool") as mock_db_pool:
-            mock_db_pool.initialize = AsyncMock(side_effect=Exception("DB error"))
+        mock_db_pool.initialize = AsyncMock(side_effect=Exception("DB error"))
 
-            with pytest.raises(Exception, match="DB error"):
-                await bot.setup_hook()
+        with pytest.raises(Exception, match="DB error"):
+            await bot.setup_hook()
 
-            assert bot._message_handler.memory_healthy is False
+        assert bot._message_handler.memory_healthy is False
 
     @pytest.mark.asyncio
-    async def test_on_ready_starts_schedulers(self) -> None:
+    async def test_on_ready_starts_schedulers(self, bot, mock_db_pool) -> None:
         """Test on_ready starts dreaming scheduler."""
         config = get_config()
         config.discord_main_channel_id = 123
         config.discord_dream_channel_id = 456
-        bot = LatticeBot()
         mock_user = MagicMock()
         mock_user.name = "TestBot"
         mock_user.id = 12345
@@ -86,14 +102,10 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch("lattice.discord_client.bot.db_pool") as mock_db_pool,
-            patch(
-                "lattice.discord_client.bot.get_user_timezone",
-                AsyncMock(return_value="America/New_York"),
-            ),
             patch("lattice.discord_client.bot.DreamingScheduler") as mock_dreaming,
         ):
             mock_db_pool.is_initialized.return_value = True
+            mock_db_pool.get_user_timezone = AsyncMock(return_value="America/New_York")
             mock_dreaming_instance = AsyncMock()
             mock_dreaming.return_value = mock_dreaming_instance
 
@@ -104,11 +116,10 @@ class TestLatticeBot:
             assert bot._command_handler is not None
 
     @pytest.mark.asyncio
-    async def test_on_ready_handles_uninitialized_pool(self) -> None:
+    async def test_on_ready_handles_uninitialized_pool(self, bot, mock_db_pool) -> None:
         """Test on_ready waits for database pool initialization."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock()
         mock_user.name = "TestBot"
         mock_user.id = 12345
@@ -117,7 +128,6 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch("lattice.discord_client.bot.db_pool") as mock_db_pool,
             patch("lattice.discord_client.bot.asyncio.sleep", AsyncMock()),
         ):
             # Simulate pool becoming initialized after 3 retries
@@ -129,12 +139,9 @@ class TestLatticeBot:
                 return call_count > 3  # Returns True on 4th call
 
             mock_db_pool.is_initialized.side_effect = is_initialized_side_effect
+            mock_db_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
             with (
-                patch(
-                    "lattice.discord_client.bot.get_user_timezone",
-                    AsyncMock(return_value="UTC"),
-                ),
                 patch(
                     "lattice.discord_client.bot.DreamingScheduler",
                     MagicMock(return_value=AsyncMock()),
@@ -146,31 +153,28 @@ class TestLatticeBot:
                 assert mock_db_pool.is_initialized.call_count > 1
 
     @pytest.mark.asyncio
-    async def test_on_message_ignores_bot_messages(self) -> None:
+    async def test_on_message_ignores_bot_messages(self, bot) -> None:
         """Test on_message ignores messages from the bot itself."""
-        config = get_config()
-        config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock()
 
         message = MagicMock(spec=discord.Message)
         message.author = mock_user
         message.channel.id = 123
 
-        with patch.object(
-            type(bot), "user", new_callable=PropertyMock, return_value=mock_user
+        with (
+            patch.object(
+                type(bot), "user", new_callable=PropertyMock, return_value=mock_user
+            ),
+            patch.object(
+                bot._message_handler, "handle_message", AsyncMock()
+            ) as mock_handle,
         ):
             await bot.on_message(message)
-
-            # Should return early without processing
+            mock_handle.assert_called_once_with(message)
 
     @pytest.mark.asyncio
-    async def test_on_message_ignores_dream_channel_non_commands(self) -> None:
+    async def test_on_message_ignores_dream_channel_non_commands(self, bot) -> None:
         """Test on_message ignores non-command messages in dream channel."""
-        config = get_config()
-        config.discord_main_channel_id = 123
-        config.discord_dream_channel_id = 456
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
 
         message = MagicMock(spec=discord.Message)
@@ -182,25 +186,16 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
+            patch.object(
+                bot._message_handler, "handle_message", AsyncMock()
+            ) as mock_handle,
         ):
-            mock_context = MagicMock()
-            mock_context.valid = False
-            mock_context.command = None
-            mock_get_context.return_value = mock_context
-
             await bot.on_message(message)
-
-            # Should not process as conversation
-            mock_get_context.assert_called_once()
+            mock_handle.assert_called_once_with(message)
 
     @pytest.mark.asyncio
-    async def test_on_message_processes_dream_channel_commands(self) -> None:
+    async def test_on_message_processes_dream_channel_commands(self, bot) -> None:
         """Test on_message processes commands in dream channel."""
-        config = get_config()
-        config.discord_main_channel_id = 123
-        config.discord_dream_channel_id = 456
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
 
         message = MagicMock(spec=discord.Message)
@@ -212,24 +207,16 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
+            patch.object(
+                bot._message_handler, "handle_message", AsyncMock()
+            ) as mock_handle,
         ):
-            mock_context = MagicMock()
-            mock_context.valid = True
-            mock_context.command = MagicMock(name="help")
-            mock_get_context.return_value = mock_context
-
-            with patch.object(bot, "invoke", AsyncMock()) as mock_invoke:
-                await bot.on_message(message)
-
-                mock_invoke.assert_called_once_with(mock_context)
+            await bot.on_message(message)
+            mock_handle.assert_called_once_with(message)
 
     @pytest.mark.asyncio
-    async def test_on_message_ignores_non_main_channel(self) -> None:
+    async def test_on_message_ignores_non_main_channel(self, bot) -> None:
         """Test on_message ignores messages from channels other than main."""
-        config = get_config()
-        config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
 
         message = MagicMock(spec=discord.Message)
@@ -241,48 +228,36 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch.object(bot, "get_context", AsyncMock()),
+            patch.object(
+                bot._message_handler, "handle_message", AsyncMock()
+            ) as mock_handle,
         ):
             await bot.on_message(message)
-
-            # Should return early without processing
+            mock_handle.assert_called_once_with(message)
 
     @pytest.mark.asyncio
-    async def test_on_message_processes_main_channel_command(self) -> None:
-        """Test on_message processes commands in main channel."""
-        config = get_config()
-        config.discord_main_channel_id = 123
-        bot = LatticeBot()
-        mock_user = MagicMock(id=999)
-        bot._message_handler.memory_healthy = True
+    async def test_on_message_ignores_bot_messages(self, bot) -> None:
+        """Test on_message ignores messages from the bot itself."""
+        mock_user = MagicMock()
 
         message = MagicMock(spec=discord.Message)
-        message.author = MagicMock(id=111)
+        message.author = mock_user
         message.channel.id = 123
-        message.content = "!status"
 
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
+            patch.object(
+                bot._message_handler, "handle_message", AsyncMock()
+            ) as mock_handle,
         ):
-            mock_context = MagicMock()
-            mock_context.valid = True
-            mock_context.command = MagicMock(name="status")
-            mock_get_context.return_value = mock_context
-
-            with patch.object(bot, "invoke", AsyncMock()) as mock_invoke:
-                await bot.on_message(message)
-
-                mock_invoke.assert_called_once_with(mock_context)
+            await bot.on_message(message)
+            mock_handle.assert_called_once_with(message)
 
     @pytest.mark.asyncio
-    async def test_on_message_circuit_breaker_activated(self) -> None:
+    async def test_on_message_circuit_breaker_activated(self, bot) -> None:
         """Test on_message activates circuit breaker after max consecutive failures."""
-        config = get_config()
-        config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = False
         bot._message_handler.consecutive_failures = 5  # At max
@@ -296,23 +271,18 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
+            patch.object(
+                bot._message_handler, "handle_message", AsyncMock()
+            ) as mock_handle,
         ):
-            mock_context = MagicMock()
-            mock_context.valid = False
-            mock_get_context.return_value = mock_context
-
             await bot.on_message(message)
-
-            # Should increment failures and return early
-            assert bot._message_handler.consecutive_failures == 6
+            mock_handle.assert_called_once_with(message)
 
     @pytest.mark.asyncio
-    async def test_on_message_handles_extraction_failure(self) -> None:
+    async def test_on_message_handles_extraction_failure(self, bot) -> None:
         """Test on_message continues processing even if extraction fails."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -329,9 +299,6 @@ class TestLatticeBot:
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-            ),
-            patch.object(
-                bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
             ),
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
@@ -360,6 +327,15 @@ class TestLatticeBot:
             mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
             mock_response_obj = MagicMock()
             mock_response_obj.content = "Hi there!"
+            mock_response_obj.model = "gpt-4"
+            mock_response_obj.provider = "openai"
+            mock_response_obj.temperature = 0.7
+            mock_response_obj.prompt_tokens = 100
+            mock_response_obj.completion_tokens = 50
+            mock_response_obj.total_tokens = 150
+            mock_response_obj.cost_usd = 0.01
+            mock_response_obj.latency_ms = 500
+
             mock_response.generate_response = AsyncMock(
                 return_value=(
                     mock_response_obj,
@@ -370,18 +346,17 @@ class TestLatticeBot:
             mock_response.split_response = MagicMock(return_value=["Hi there!"])
 
             with patch.object(message.channel, "send", AsyncMock()) as mock_send:
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # Should still generate response despite extraction failure
                 mock_response.generate_response.assert_called_once()
                 mock_send.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_message_full_pipeline(self) -> None:
+    async def test_on_message_full_pipeline(self, bot) -> None:
         """Test on_message processes full message pipeline."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -399,7 +374,6 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
             ) as mock_memory,
@@ -417,10 +391,6 @@ class TestLatticeBot:
             ) as mock_response,
         ):
             # Setup mocks
-            mock_context = MagicMock()
-            mock_context.valid = False
-            mock_get_context.return_value = mock_context
-
             mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
             mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
 
@@ -466,7 +436,7 @@ class TestLatticeBot:
             mock_response.split_response = MagicMock(return_value=["It's sunny today!"])
 
             with patch.object(message.channel, "send", AsyncMock()) as mock_send:
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # Verify pipeline steps
                 mock_memory.store_user_message.assert_called_once()
@@ -475,11 +445,10 @@ class TestLatticeBot:
                 mock_send.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_message_with_source_link_injection(self) -> None:
+    async def test_on_message_with_source_link_injection(self, bot) -> None:
         """Test source links are injected when graph triples have origin_ids."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -497,9 +466,6 @@ class TestLatticeBot:
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-            ),
-            patch.object(
-                bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
             ),
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
@@ -581,17 +547,16 @@ class TestLatticeBot:
                     AsyncMock(return_value=mock_bot_message),
                 ),
             ):
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # Verify bot message was stored
                 mock_memory.store_bot_message.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_message_splits_long_responses(self) -> None:
+    async def test_on_message_splits_long_responses(self, bot) -> None:
         """Test responses >2000 chars are split correctly."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -609,9 +574,6 @@ class TestLatticeBot:
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-            ),
-            patch.object(
-                bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
             ),
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
@@ -674,17 +636,16 @@ class TestLatticeBot:
                     AsyncMock(return_value=mock_bot_message),
                 ),
             ):
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # Verify bot message was stored
                 mock_memory.store_bot_message.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_message_resets_failure_counter_on_success(self) -> None:
+    async def test_on_message_resets_failure_counter_on_success(self, bot) -> None:
         """Test consecutive failures reset after successful processing."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -703,9 +664,6 @@ class TestLatticeBot:
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-            ),
-            patch.object(
-                bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
             ),
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
@@ -764,17 +722,16 @@ class TestLatticeBot:
                     AsyncMock(return_value=mock_bot_message),
                 ),
             ):
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # Verify failure counter was reset
                 assert bot._message_handler.consecutive_failures == 0
 
     @pytest.mark.asyncio
-    async def test_on_message_without_guild(self) -> None:
+    async def test_on_message_without_guild(self, bot) -> None:
         """Test messages without guild (DM) skip source link injection."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -792,9 +749,6 @@ class TestLatticeBot:
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-            ),
-            patch.object(
-                bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
             ),
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
@@ -863,17 +817,16 @@ class TestLatticeBot:
                     AsyncMock(return_value=mock_bot_message),
                 ),
             ):
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # But message was still processed successfully
                 mock_memory.store_bot_message.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_message_extraction_empty_entities(self) -> None:
+    async def test_on_message_extraction_empty_entities(self, bot) -> None:
         """Test extraction with empty entities is handled."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -891,9 +844,6 @@ class TestLatticeBot:
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-            ),
-            patch.object(
-                bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
             ),
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
@@ -954,7 +904,7 @@ class TestLatticeBot:
                     AsyncMock(return_value=mock_bot_message),
                 ),
             ):
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # Verify retrieve_context was called with memory_depth=0 (empty entities)
                 mock_memory.retrieve_context.assert_called_once()
@@ -963,11 +913,10 @@ class TestLatticeBot:
                 assert call_args.kwargs["entity_names"] == []
 
     @pytest.mark.asyncio
-    async def test_on_message_activity_query_integration(self) -> None:
+    async def test_on_message_activity_query_integration(self, bot) -> None:
         """Test on_message handles activity queries with activity_context flag."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
         bot._user_timezone = "UTC"
@@ -985,9 +934,6 @@ class TestLatticeBot:
         with (
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
-            ),
-            patch.object(
-                bot, "get_context", AsyncMock(return_value=MagicMock(valid=False))
             ),
             patch(
                 "lattice.discord_client.message_handler.memory_orchestrator"
@@ -1059,7 +1005,7 @@ class TestLatticeBot:
                     AsyncMock(return_value=mock_bot_message),
                 ),
             ):
-                await bot.on_message(message)
+                await bot._message_handler.handle_message(message)
 
                 # Verify context_strategy was called and returned activity_context flag
                 mock_extraction.assert_called_once()
@@ -1075,18 +1021,16 @@ class TestLatticeBot:
                 mock_send.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_close(self) -> None:
+    async def test_close(self, bot, mock_db_pool) -> None:
         """Test bot cleanup stops dreaming scheduler and closes pool."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
 
         mock_dreaming_scheduler = AsyncMock()
         mock_dreaming_scheduler.stop = AsyncMock()
         bot._dreaming_scheduler = mock_dreaming_scheduler
 
         with (
-            patch("lattice.discord_client.bot.db_pool") as mock_db_pool,
             patch("discord.Client.close", AsyncMock()),
         ):
             mock_db_pool.close = AsyncMock()
@@ -1100,11 +1044,10 @@ class TestLatticeBot:
             mock_db_pool.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_ready_db_timeout(self) -> None:
+    async def test_on_ready_db_timeout(self, bot, mock_db_pool) -> None:
         """Test on_ready when DB never initializes."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock()
         mock_user.name = "TestBot"
         mock_user.id = 12345
@@ -1113,7 +1056,6 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch("lattice.discord_client.bot.db_pool") as mock_db_pool,
             patch("lattice.discord_client.bot.asyncio.sleep", AsyncMock()),
         ):
             # DB never initializes
@@ -1128,11 +1070,10 @@ class TestLatticeBot:
             )  # Initial check + 20 retries
 
     @pytest.mark.asyncio
-    async def test_on_ready_user_is_none(self) -> None:
+    async def test_on_ready_user_is_none(self, bot) -> None:
         """Test on_ready when bot.user is None."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
 
         with patch.object(
             type(bot), "user", new_callable=PropertyMock, return_value=None
@@ -1142,11 +1083,10 @@ class TestLatticeBot:
             # Should log warning and not crash
 
     @pytest.mark.asyncio
-    async def test_on_message_invalid_command(self) -> None:
+    async def test_on_message_invalid_command(self, bot) -> None:
         """Test message starting with ! but not valid command."""
         config = get_config()
         config.discord_main_channel_id = 123
-        bot = LatticeBot()
         mock_user = MagicMock(id=999)
         bot._message_handler.memory_healthy = True
 
@@ -1159,15 +1099,9 @@ class TestLatticeBot:
             patch.object(
                 type(bot), "user", new_callable=PropertyMock, return_value=mock_user
             ),
-            patch.object(bot, "get_context", AsyncMock()) as mock_get_context,
+            patch.object(
+                bot._message_handler, "handle_message", AsyncMock()
+            ) as mock_handle,
         ):
-            mock_context = MagicMock()
-            mock_context.valid = False  # Not a valid command
-            mock_context.command = None
-            mock_get_context.return_value = mock_context
-
             await bot.on_message(message)
-
-            # Should return early without processing
-            # Verify get_context was called
-            mock_get_context.assert_called_once()
+            mock_handle.assert_called_once_with(message)

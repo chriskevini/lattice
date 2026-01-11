@@ -31,11 +31,9 @@ _llm_client: "_LLMClient | None" = None
 
 
 def _get_llm_client() -> "_LLMClient":
-    """Get or create the global LLM client instance.
+    """Get or create the global LLM client instance."""
+    from lattice.utils.llm_client import _LLMClient
 
-    Returns:
-        Configured LLM client
-    """
     global _llm_client
     if _llm_client is None:
         _llm_client = _LLMClient(provider=config.llm_provider)
@@ -45,12 +43,11 @@ def _get_llm_client() -> "_LLMClient":
 def get_auditing_llm_client() -> "AuditingLLMClient":
     """Get or create the global auditing LLM client instance.
 
-    This wrapper automatically audits every LLM call and returns AuditResult
-
-    Returns:
-        AuditingLLMClient instance
+    DEPRECATED: Use dependency injection instead.
     """
+    from lattice.utils.auditing_middleware import AuditingLLMClient
+
     global _auditing_client
     if _auditing_client is None:
-        _auditing_client = AuditingLLMClient(provider=config.llm_provider)
+        _auditing_client = AuditingLLMClient(llm_client=_get_llm_client())
     return _auditing_client

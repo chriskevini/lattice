@@ -1,6 +1,7 @@
 """Integration tests for dreaming cycle workflow."""
 
 from decimal import Decimal
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -48,12 +49,12 @@ async def test_full_dreaming_cycle_workflow() -> None:
 
     mock_template = MagicMock()
     mock_template.template = "You are a helpful Discord bot."
+    mock_template.version = 1
 
     mock_optimization_template = MagicMock()
     mock_optimization_template.template = "Optimize this: {current_template}"
-    mock_optimization_template.safe_format = MagicMock(
-        return_value="Optimize this: You are a helpful Discord bot."
-    )
+    mock_optimization_template.version = 1
+    mock_optimization_template.temperature = 0.7
 
     mock_llm_result = MagicMock()
     mock_llm_result.content = """{
@@ -69,7 +70,7 @@ async def test_full_dreaming_cycle_workflow() -> None:
         patch("lattice.dreaming.proposer.get_auditing_llm_client") as mock_llm_client,
     ):
 
-        def get_prompt_side_effect(prompt_key: str):
+        def get_prompt_side_effect(prompt_key: str, **kwargs: Any) -> Any:
             if prompt_key == "BASIC_RESPONSE":
                 return mock_template
             elif prompt_key == "PROMPT_OPTIMIZATION":

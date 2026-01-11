@@ -12,7 +12,6 @@ import structlog
 from lattice.core.constants import DEFAULT_EPISODIC_LIMIT
 from lattice.memory import episodic
 from lattice.memory.graph import GraphTraversal
-from lattice.utils.database import db_pool
 
 
 logger = structlog.get_logger(__name__)
@@ -23,6 +22,7 @@ async def store_user_message(
     discord_message_id: int,
     channel_id: int,
     timezone: str = "UTC",
+    db_pool: Any = None,
 ) -> UUID:
     """Store a user message in episodic memory.
 
@@ -31,6 +31,7 @@ async def store_user_message(
         discord_message_id: Discord's unique message ID
         channel_id: Discord channel ID
         timezone: IANA timezone string (e.g., 'America/New_York')
+        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored episodic message
@@ -47,7 +48,8 @@ async def store_user_message(
             channel_id=channel_id,
             is_bot=False,
             user_timezone=timezone,
-        )
+        ),
+        db_pool=db_pool,
     )
 
     return user_message_id
@@ -60,6 +62,7 @@ async def store_bot_message(
     is_proactive: bool = False,
     generation_metadata: dict[str, Any] | None = None,
     timezone: str = "UTC",
+    db_pool: Any = None,
 ) -> UUID:
     """Store a bot message in episodic memory.
 
@@ -70,6 +73,7 @@ async def store_bot_message(
         is_proactive: Whether the bot initiated this message
         generation_metadata: LLM generation metadata
         timezone: IANA timezone string (e.g., 'America/New_York')
+        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored episodic message
@@ -83,7 +87,8 @@ async def store_bot_message(
             is_proactive=is_proactive,
             generation_metadata=generation_metadata,
             user_timezone=timezone,
-        )
+        ),
+        db_pool=db_pool,
     )
 
 
@@ -93,6 +98,7 @@ async def retrieve_context(
     episodic_limit: int = DEFAULT_EPISODIC_LIMIT,
     memory_depth: int = 1,
     entity_names: list[str] | None = None,
+    db_pool: Any = None,
 ) -> tuple[
     list[episodic.EpisodicMessage],
     list[dict[str, Any]],
@@ -107,6 +113,7 @@ async def retrieve_context(
         episodic_limit: Maximum recent messages to retrieve (default from DEFAULT_EPISODIC_LIMIT)
         memory_depth: Maximum depth for graph traversal (0 = disabled)
         entity_names: Entity names to traverse graph from (from entity extraction)
+        db_pool: Database pool for dependency injection
 
     Returns:
         Tuple of (recent_messages, semantic_context)
@@ -114,6 +121,7 @@ async def retrieve_context(
     recent_messages = await episodic.get_recent_messages(
         channel_id=channel_id,
         limit=episodic_limit,
+        db_pool=db_pool,
     )
 
     logger.debug(
@@ -123,8 +131,13 @@ async def retrieve_context(
 
     semantic_context: list[dict[str, Any]] = []
     if memory_depth > 0 and entity_names:
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
+        # Use injected db_pool if provided, otherwise fallback to global
+        from lattice.utils.database import db_pool as global_db_pool
+
+        active_db_pool = db_pool or global_db_pool
+
+        if active_db_pool.is_initialized():
+            traverser = GraphTraversal(active_db_pool.pool, max_depth=memory_depth)
 
             traverse_tasks = [
                 traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
@@ -133,15 +146,15 @@ async def retrieve_context(
 
             if traverse_tasks:
                 traverse_results = await asyncio.gather(*traverse_tasks)
-                seen_memory_ids = set()
+                seen_memory_ids: set[tuple[str, str, str]] = set()
                 for result in traverse_results:
                     for memory in result:
                         memory_key = (
-                            memory.get("subject"),
-                            memory.get("predicate"),
-                            memory.get("object"),
+                            memory.get("subject", ""),
+                            memory.get("predicate", ""),
+                            memory.get("object", ""),
                         )
-                        if memory_key not in seen_memory_ids:
+                        if memory_key not in seen_memory_ids and all(memory_key):
                             semantic_context.append(memory)
                             seen_memory_ids.add(memory_key)
 

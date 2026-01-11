@@ -27,9 +27,6 @@ class TestContextStrategyPipeline:
         # Mock dependencies
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
-            patch(
-                "lattice.core.context_strategy.get_auditing_llm_client"
-            ) as mock_llm_client,
             patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
             patch(
                 "lattice.memory.canonical.get_canonical_entities_list", return_value=[]
@@ -69,7 +66,6 @@ class TestContextStrategyPipeline:
                 prompt_key="CONTEXT_STRATEGY",
             )
             extraction_llm.complete.return_value = extraction_result
-            mock_llm_client.return_value = extraction_llm
 
             # Setup database mock for extraction storage
             mock_conn = AsyncMock()
@@ -100,22 +96,24 @@ class TestContextStrategyPipeline:
                 content="Got it! Friday deadline for lattice. That's coming up quick—how's it looking so far?",
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
-                prompt_tokens=150,
+                prompt_tokens=120,
                 completion_tokens=30,
-                total_tokens=180,
-                cost_usd=0.002,
-                latency_ms=600,
+                total_tokens=150,
+                cost_usd=0.001,
+                latency_ms=450,
                 temperature=0.7,
                 audit_id=None,
                 prompt_key="UNIFIED_RESPONSE",
             )
             mock_resp_llm_client.return_value = response_llm
 
-            # Execute pipeline: Extract query structure
+            # Execute pipeline
             extraction = await context_strategy(
                 message_id=message_id,
                 user_message=message_content,
                 recent_messages=[],
+                llm_client=extraction_llm,
+                db_pool=mock_db_pool,
             )
 
             # Verify extraction
@@ -131,6 +129,8 @@ class TestContextStrategyPipeline:
                 user_message=message_content,
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
+                llm_client=response_llm,
+                db_pool=mock_db_pool,
             )
 
             # Verify response generation
@@ -197,6 +197,7 @@ class TestContextStrategyPipeline:
                     message_id=uuid.uuid4(),
                     user_message=message_content,
                     recent_messages=[],
+                    db_pool=AsyncMock(),
                 )
             except Exception:
                 # Extraction failed, continue without it
@@ -211,6 +212,8 @@ class TestContextStrategyPipeline:
                 user_message=message_content,
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
+                llm_client=response_llm,
+                db_pool=AsyncMock(),
             )
 
             # Verify fallback to UNIFIED_RESPONSE
@@ -268,7 +271,6 @@ class TestContextStrategyPipeline:
                 prompt_key="CONTEXT_STRATEGY",
             )
             extraction_llm.complete.return_value = extraction_result
-            mock_llm_client.return_value = extraction_llm
 
             mock_conn = AsyncMock()
             mock_conn.fetchrow.return_value = {
@@ -314,6 +316,7 @@ class TestContextStrategyPipeline:
                 message_id=message_id,
                 user_message=message_content,
                 recent_messages=[],
+                llm_client=extraction_llm,
             )
 
             # Verify entity extraction
@@ -391,7 +394,6 @@ class TestContextStrategyPipelineIntegration:
                 prompt_key="CONTEXT_STRATEGY",
             )
             planning_llm.complete.return_value = planning_result
-            mock_llm_client.return_value = planning_llm
 
             mock_conn = AsyncMock()
             mock_conn.fetchrow.return_value = {
@@ -432,6 +434,7 @@ class TestContextStrategyPipelineIntegration:
                 message_id=message_id,
                 user_message=message_content,
                 recent_messages=recent_messages,
+                llm_client=planning_llm,
             )
 
             assert planning is not None
@@ -511,6 +514,8 @@ class TestContextStrategyPipelineIntegration:
                 message_id=message_id,
                 user_message=message_content,
                 recent_messages=recent_messages,
+                llm_client=planning_llm,
+                db_pool=mock_db_pool,
             )
 
             assert planning is not None
@@ -588,6 +593,8 @@ class TestContextStrategyPipelineIntegration:
                 message_id=message_id,
                 user_message=message_content,
                 recent_messages=recent_messages,
+                llm_client=planning_llm,
+                db_pool=mock_db_pool,
             )
 
             assert planning is not None
@@ -682,6 +689,8 @@ class TestContextStrategyPipelineIntegration:
                 message_id=message_id,
                 user_message=message_content,
                 recent_messages=recent_messages,
+                llm_client=planning_llm,
+                db_pool=mock_db_pool,
             )
 
             assert planning is not None
@@ -702,6 +711,7 @@ class TestContextStrategyPipelineIntegration:
                     message_id=uuid.uuid4(),
                     user_message="Test message",
                     recent_messages=[],
+                    db_pool=AsyncMock(),
                 )
 
     @pytest.mark.asyncio
@@ -753,6 +763,8 @@ class TestContextStrategyPipelineIntegration:
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    llm_client=planning_llm,
+                    db_pool=AsyncMock(),
                 )
 
 

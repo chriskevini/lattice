@@ -35,11 +35,11 @@ class GraphTraversal:
     related entities across multiple hops.
     """
 
-    def __init__(self, db_pool: "asyncpg.Pool", max_depth: int = 3) -> None:
+    def __init__(self, db_pool: Any, max_depth: int = 3) -> None:
         """Initialize graph traverser.
 
         Args:
-            db_pool: Database connection pool
+            db_pool: Database connection pool (asyncpg.Pool)
             max_depth: Default maximum traversal depth for BFS
         """
         self.db_pool = db_pool

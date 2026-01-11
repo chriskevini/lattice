@@ -9,7 +9,14 @@ import discord
 import structlog
 from discord.ext import commands
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
+    from lattice.utils.auditing_middleware import AuditingLLMClient
+
 from lattice.core import memory_orchestrator, response_generator
+
 from lattice.core.constants import (
     CONTEXT_STRATEGY_WINDOW_SIZE,
     RESPONSE_EPISODIC_LIMIT,
@@ -37,6 +44,8 @@ class MessageHandler:
         bot: commands.Bot,
         main_channel_id: int,
         dream_channel_id: int,
+        db_pool: "DatabasePool",
+        llm_client: "AuditingLLMClient",
         user_timezone: str = "UTC",
     ) -> None:
         """Initialize the message handler.
@@ -45,11 +54,15 @@ class MessageHandler:
             bot: The Discord bot instance
             main_channel_id: ID of the main channel for conversations
             dream_channel_id: ID of the dream channel (meta discussions)
+            db_pool: Database pool for dependency injection
+            llm_client: LLM client for dependency injection
             user_timezone: The user's timezone
         """
         self.bot = bot
         self.main_channel_id = main_channel_id
         self.dream_channel_id = dream_channel_id
+        self.db_pool = db_pool
+        self.llm_client = llm_client
         self.user_timezone = user_timezone
         self._memory_healthy = False
         self._consecutive_failures = 0
@@ -68,7 +81,9 @@ class MessageHandler:
 
             from lattice.scheduler.nudges import prepare_contextual_nudge
 
-            decision = await prepare_contextual_nudge()
+            decision = await prepare_contextual_nudge(
+                db_pool=self.db_pool, llm_client=self.llm_client
+            )
 
             if (
                 decision.action == "message"
@@ -76,9 +91,10 @@ class MessageHandler:
                 and decision.channel_id
             ):
                 from lattice.core.pipeline import UnifiedPipeline
-                from lattice.utils.database import db_pool
 
-                pipeline = UnifiedPipeline(db_pool=db_pool, bot=self.bot)
+                pipeline = UnifiedPipeline(
+                    db_pool=self.db_pool, bot=self.bot, llm_client=self.llm_client
+                )
                 result = await pipeline.dispatch_autonomous_nudge(
                     content=decision.content,
                     channel_id=decision.channel_id,
@@ -97,7 +113,8 @@ class MessageHandler:
                             is_bot=True,
                             is_proactive=True,
                             user_timezone=self.user_timezone,
-                        )
+                        ),
+                        db_pool=self.db_pool,
                     )
 
                     # Audit trail
@@ -117,6 +134,7 @@ class MessageHandler:
                             completion_tokens=decision.completion_tokens,
                             cost_usd=decision.cost_usd,
                             latency_ms=decision.latency_ms,
+                            db_pool=self.db_pool,
                         )
             else:
                 logger.info("Silence strategy: wait", reason=decision.reason)
@@ -214,6 +232,7 @@ class MessageHandler:
                 discord_message_id=message.id,
                 channel_id=message.channel.id,
                 timezone=self.user_timezone,
+                db_pool=self.db_pool,
             )
 
             # CONTEXT_STRATEGY: Analyze conversation window for entities, flags, and unresolved entities
@@ -223,6 +242,7 @@ class MessageHandler:
                 recent_msgs_for_strategy = await episodic.get_recent_messages(
                     channel_id=message.channel.id,
                     limit=CONTEXT_STRATEGY_WINDOW_SIZE,
+                    db_pool=self.db_pool,
                 )
 
                 strategy = await context_strategy(
@@ -236,6 +256,8 @@ class MessageHandler:
                         "input_text": message.content,
                         "main_message_url": message.jump_url,
                     },
+                    llm_client=self.llm_client,
+                    db_pool=self.db_pool,
                 )
 
                 if strategy:
@@ -271,6 +293,7 @@ class MessageHandler:
                 entities=entities,
                 context_flags=context_flags,
                 memory_depth=2 if entities else 0,
+                db_pool=self.db_pool,
             )
             semantic_context = cast(str, context_result.get("semantic_context", ""))
             memory_origins: set[UUID] = cast(
@@ -287,6 +310,7 @@ class MessageHandler:
                 episodic_limit=RESPONSE_EPISODIC_LIMIT,
                 memory_depth=0,
                 entity_names=[],
+                db_pool=self.db_pool,
             )
             # Format episodic context (excluding current message)
             from zoneinfo import ZoneInfo
@@ -328,6 +352,7 @@ class MessageHandler:
                     "main_message_url": message.jump_url,
                     "metadata": audit_metadata,
                 },
+                llm_client=self.llm_client,
             )
 
             # Split response for Discord length limits
@@ -367,6 +392,7 @@ class MessageHandler:
                     is_proactive=False,
                     generation_metadata=generation_metadata,
                     timezone=self.user_timezone,
+                    db_pool=self.db_pool,
                 )
 
             self._consecutive_failures = 0

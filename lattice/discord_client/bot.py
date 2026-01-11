@@ -19,7 +19,11 @@ from lattice.discord_client.error_manager import ErrorManager
 from lattice.discord_client.message_handler import MessageHandler
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
-from lattice.utils.database import db_pool, get_user_timezone
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
+    from lattice.utils.auditing_middleware import AuditingLLMClient
 
 
 logger = structlog.get_logger(__name__)
@@ -32,7 +36,11 @@ DB_INIT_RETRY_INTERVAL = 0.5  # seconds
 class LatticeBot(commands.Bot):
     """The Lattice Discord bot with ENGRAM memory framework."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        db_pool: "DatabasePool",
+        llm_client: "AuditingLLMClient",
+    ) -> None:
         """Initialize the Lattice bot."""
         intents = discord.Intents.default()
         intents.message_content = True
@@ -44,6 +52,9 @@ class LatticeBot(commands.Bot):
             intents=intents,
             help_command=None,
         )
+
+        self.db_pool = db_pool
+        self.llm_client = llm_client
 
         self.main_channel_id = config.discord_main_channel_id
         if not self.main_channel_id:
@@ -63,6 +74,8 @@ class LatticeBot(commands.Bot):
             bot=self,
             main_channel_id=self.main_channel_id,
             dream_channel_id=self.dream_channel_id,
+            db_pool=self.db_pool,
+            llm_client=self.llm_client,
             user_timezone=self._user_timezone,
         )
 
@@ -93,7 +106,7 @@ class LatticeBot(commands.Bot):
         logger.info("Bot setup starting")
 
         try:
-            await db_pool.initialize()
+            await self.db_pool.initialize()
             logger.info("Database pool initialized successfully")
         except Exception:
             logger.exception("Failed to initialize database pool")
@@ -112,11 +125,11 @@ class LatticeBot(commands.Bot):
             )
 
             # Ensure database pool is initialized before starting schedulers
-            if not db_pool.is_initialized():
+            if not self.db_pool.is_initialized():
                 logger.warning("Database pool not initialized yet, waiting...")
                 # Wait up to 10 seconds for initialization
                 for _ in range(DB_INIT_MAX_RETRIES):
-                    if db_pool.is_initialized():
+                    if self.db_pool.is_initialized():
                         break
                     await asyncio.sleep(DB_INIT_RETRY_INTERVAL)
                 else:
@@ -126,13 +139,16 @@ class LatticeBot(commands.Bot):
                     return
 
             # Load user timezone from system_health (cached for performance)
-            self._user_timezone = await get_user_timezone()
+            self._user_timezone = await self.db_pool.get_user_timezone()
             logger.info("User timezone loaded", timezone=self._user_timezone)
             self._message_handler.user_timezone = self._user_timezone
 
             # Start dreaming cycle scheduler
             self._dreaming_scheduler = DreamingScheduler(
-                bot=self, dream_channel_id=self.dream_channel_id
+                bot=self,
+                dream_channel_id=self.dream_channel_id,
+                db_pool=self.db_pool,
+                llm_client=self.llm_client,
             )
             await self._dreaming_scheduler.start()
 
@@ -141,6 +157,8 @@ class LatticeBot(commands.Bot):
                 bot=self,
                 dream_channel_id=self.dream_channel_id,
                 dreaming_scheduler=self._dreaming_scheduler,
+                db_pool=self.db_pool,
+                llm_client=self.llm_client,
             )
             if self._command_handler:
                 self._command_handler.setup()
@@ -191,5 +209,5 @@ class LatticeBot(commands.Bot):
         logger.info("Bot shutting down")
         if self._dreaming_scheduler:
             await self._dreaming_scheduler.stop()
-        await db_pool.close()
+        await self.db_pool.close()
         await super().close()

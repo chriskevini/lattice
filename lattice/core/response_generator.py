@@ -9,7 +9,7 @@ import structlog
 
 from lattice.memory import procedural
 from lattice.utils.llm import AuditResult, get_auditing_llm_client
-from lattice.utils.database import db_pool
+
 
 if TYPE_CHECKING:
     pass
@@ -65,18 +65,44 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     return injector.validate_template(template)
 
 
-async def fetch_goal_names() -> list[str]:
+# Global singleton shim for backward compatibility
+# DEPRECATED: Access via dependency injection where possible
+db_pool: Any = None
+
+
+def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+    """Helper to resolve active database pool."""
+    if db_pool_arg is not None:
+        return db_pool_arg
+
+    # Fallback to module-level shim if set (for legacy tests)
+    global db_pool
+    if db_pool is not None:
+        return db_pool
+
+    # Fallback to global singleton (lazy import to avoid circularity)
+    from lattice.utils.database import db_pool as global_db_pool
+
+    return global_db_pool
+
+
+async def fetch_goal_names(db_pool: Any = None) -> list[str]:
     """Fetch unique goal names from knowledge graph.
+
+    Args:
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of unique goal strings
     """
-    if not db_pool.is_initialized():
+    active_db_pool = _get_active_db_pool(db_pool)
+
+    if not active_db_pool.is_initialized():
         logger.warning("Database pool not initialized, cannot fetch goal names")
         return []
 
     try:
-        async with db_pool.pool.acquire() as conn:
+        async with active_db_pool.pool.acquire() as conn:
             goals = await conn.fetch(
                 f"""
                 SELECT DISTINCT object FROM semantic_memories
@@ -92,24 +118,29 @@ async def fetch_goal_names() -> list[str]:
     return [g["object"] for g in goals]
 
 
-async def get_goal_context(goal_names: list[str] | None = None) -> str:
+async def get_goal_context(
+    goal_names: list[str] | None = None, db_pool: Any = None
+) -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
     Args:
         goal_names: Optional pre-fetched goal names to avoid duplicate DB call.
                     If None, fetches from database.
+        db_pool: Database pool for dependency injection
 
     Returns:
         Formatted goals string showing goals and their predicates
     """
     if goal_names is None:
-        goal_names = await fetch_goal_names()
+        goal_names = await fetch_goal_names(db_pool=db_pool)
 
     if not goal_names:
         return "No active goals."
 
+    active_db_pool = _get_active_db_pool(db_pool)
+
     try:
-        async with db_pool.pool.acquire() as conn:
+        async with active_db_pool.pool.acquire() as conn:
             placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
             query = f"SELECT subject, predicate, object FROM semantic_memories WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
             predicates = await conn.fetch(query, *goal_names)
@@ -149,6 +180,9 @@ async def generate_response(
     user_tz: str = "UTC",
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
+    llm_client: Any | None = None,
+    db_pool: Any | None = None,
+    main_discord_message_id: int | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any]]:
     """Generate a response using the unified prompt template.
 
@@ -160,13 +194,18 @@ async def generate_response(
         user_tz: IANA timezone string for date resolution
         audit_view: Whether to send an AuditView to the dream channel
         audit_view_params: Parameters for the AuditView
+        llm_client: LLM client for dependency injection
+        db_pool: Database pool for dependency injection
+        main_discord_message_id: Discord message ID for audit linkage
 
     Returns:
         Tuple of (AuditResult, rendered_prompt, context_info)
     """
+    active_db_pool = _get_active_db_pool(db_pool)
+
     # Get unified response template
     template_name = "UNIFIED_RESPONSE"
-    prompt_template = await procedural.get_prompt(template_name)
+    prompt_template = await procedural.get_prompt(template_name, db_pool=active_db_pool)
 
     if not prompt_template:
         logger.warning("Template not found", requested_template=template_name)
@@ -222,15 +261,32 @@ async def generate_response(
         prompt_length=len(filled_prompt),
     )
 
-    client = get_auditing_llm_client()
-    result = await client.complete(
-        prompt=filled_prompt,
-        prompt_key=template_name,
-        template_version=prompt_template.version,
-        temperature=temperature,
-        audit_view=audit_view,
-        audit_view_params=audit_view_params,
-    )
+    client = llm_client if llm_client is not None else get_auditing_llm_client()
+    try:
+        result = await client.complete(
+            prompt=filled_prompt,
+            prompt_key=template_name,
+            template_version=prompt_template.version,
+            main_discord_message_id=main_discord_message_id,
+            temperature=temperature,
+            audit_view=audit_view,
+            audit_view_params=audit_view_params,
+        )
+    except Exception as e:
+        logger.error("LLM call failed", error=str(e), prompt_key=template_name)
+        result = AuditResult(
+            content="I'm having trouble connecting to my brain right now.",
+            model="FAILED",
+            provider=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            cost_usd=None,
+            latency_ms=0,
+            temperature=temperature,
+            prompt_key=template_name,
+            audit_id=None,
+        )
 
     logger.info(
         "LLM response received",

@@ -11,7 +11,6 @@ from uuid import UUID
 
 import structlog
 
-from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import get_now
 
 
@@ -20,6 +19,27 @@ if TYPE_CHECKING:
 
 
 logger = structlog.get_logger(__name__)
+
+
+# Global singleton shim for backward compatibility
+# DEPRECATED: Access via dependency injection where possible
+db_pool: Any = None
+
+
+def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+    """Helper to resolve active database pool."""
+    if db_pool_arg is not None:
+        return db_pool_arg
+
+    # Fallback to module-level shim if set (for legacy tests)
+    global db_pool
+    if db_pool is not None:
+        return db_pool
+
+    # Fallback to global singleton (lazy import to avoid circularity)
+    from lattice.utils.database import db_pool as global_db_pool
+
+    return global_db_pool
 
 
 class EpisodicMessage:
@@ -66,11 +86,12 @@ class EpisodicMessage:
         return "ASSISTANT" if self.is_bot else "USER"
 
 
-async def store_message(message: EpisodicMessage) -> UUID:
+async def store_message(message: EpisodicMessage, db_pool: Any = None) -> UUID:
     """Store a message in episodic memory.
 
     Args:
         message: The message to store
+        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored message
@@ -78,7 +99,9 @@ async def store_message(message: EpisodicMessage) -> UUID:
     Raises:
         Exception: If database operation fails
     """
-    async with db_pool.pool.acquire() as conn:
+    active_db_pool = _get_active_db_pool(db_pool)
+
+    async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO raw_messages (
@@ -109,7 +132,7 @@ async def store_message(message: EpisodicMessage) -> UUID:
 
     from lattice.memory import batch_consolidation
 
-    asyncio.create_task(batch_consolidation.check_and_run_batch())
+    asyncio.create_task(batch_consolidation.check_and_run_batch(db_pool=db_pool))
 
     return message_id
 
@@ -117,18 +140,22 @@ async def store_message(message: EpisodicMessage) -> UUID:
 async def get_recent_messages(
     channel_id: int | None = None,
     limit: int = 10,
+    db_pool: Any = None,
 ) -> list[EpisodicMessage]:
     """Get recent messages from a channel or all channels.
 
     Args:
         channel_id: Discord channel ID (None for all channels)
         limit: Maximum number of messages to return
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of recent messages, ordered by timestamp (oldest first)
     """
+    active_db_pool = _get_active_db_pool(db_pool)
+
     if channel_id:
-        async with db_pool.pool.acquire() as conn:
+        async with active_db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
@@ -141,7 +168,7 @@ async def get_recent_messages(
                 limit,
             )
     else:
-        async with db_pool.pool.acquire() as conn:
+        async with active_db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
@@ -171,6 +198,7 @@ async def store_semantic_memories(
     message_id: UUID,
     memories: list[dict[str, str]],
     source_batch_id: str | None = None,
+    db_pool: Any = None,
 ) -> None:
     """Store extracted memories in semantic_memories table.
 
@@ -178,6 +206,7 @@ async def store_semantic_memories(
         message_id: UUID of origin message
         memories: List of {"subject": str, "predicate": str, "object": str}
         source_batch_id: Optional batch identifier for traceability
+        db_pool: Database pool for dependency injection
 
     Raises:
         Exception: If database operation fails
@@ -185,7 +214,9 @@ async def store_semantic_memories(
     if not memories:
         return
 
-    async with db_pool.pool.acquire() as conn, conn.transaction():
+    active_db_pool = _get_active_db_pool(db_pool)
+
+    async with active_db_pool.pool.acquire() as conn, conn.transaction():
         for memory in memories:
             subject = memory.get("subject", "").strip()
             predicate = memory.get("predicate", "").strip()

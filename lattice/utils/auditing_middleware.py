@@ -39,11 +39,13 @@ class AuditingLLMClient:
     - Unified mirror/display generation
     """
 
-    def __init__(self, provider: str = "placeholder") -> None:
-        """Initialize the auditing client with underlying LLM client."""
-        from lattice.utils.llm_client import _LLMClient
+    def __init__(self, llm_client: Any) -> None:
+        """Initialize the auditing client with underlying LLM client.
 
-        self._client = _LLMClient(provider=provider)
+        Args:
+            llm_client: The underlying LLM client to wrap.
+        """
+        self._client = llm_client
 
     async def complete(
         self,
@@ -57,6 +59,7 @@ class AuditingLLMClient:
         bot: Any | None = None,
         audit_view: bool = False,
         audit_view_params: dict[str, Any] | None = None,
+        db_pool: Any | None = None,
     ) -> AuditResult:
         """Complete a prompt with automatic audit tracking and optional AuditView.
 

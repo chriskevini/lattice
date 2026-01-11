@@ -4,16 +4,19 @@ Stores feedback submitted via Discord buttons and modals in the dream channel.
 """
 
 from datetime import datetime
-from typing import cast
+from typing import cast, Any
 from uuid import UUID, uuid4
 
 import structlog
 
-from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import get_now
 
-
 logger = structlog.get_logger(__name__)
+
+
+# Global singleton shim for backward compatibility
+# DEPRECATED: Access via dependency injection where possible
+db_pool: Any = None
 
 
 class UserFeedback:
@@ -46,16 +49,22 @@ class UserFeedback:
         self.created_at = created_at or get_now("UTC")
 
 
-async def store_feedback(feedback: UserFeedback) -> UUID:
+async def store_feedback(feedback: UserFeedback, db_pool: Any = None) -> UUID:
     """Store user feedback in the database.
 
     Args:
         feedback: The feedback to store
+        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored feedback
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO user_feedback (
@@ -83,17 +92,23 @@ async def store_feedback(feedback: UserFeedback) -> UUID:
 
 
 async def get_feedback_by_user_message(
-    user_discord_message_id: int,
+    user_discord_message_id: int, db_pool: Any = None
 ) -> UserFeedback | None:
     """Get feedback by the user's Discord message ID.
 
     Args:
         user_discord_message_id: The user's Discord message ID
+        db_pool: Database pool for dependency injection
 
     Returns:
         UserFeedback if found, None otherwise
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, created_at
@@ -116,16 +131,22 @@ async def get_feedback_by_user_message(
         )
 
 
-async def delete_feedback(feedback_id: UUID) -> bool:
+async def delete_feedback(feedback_id: UUID, db_pool: Any = None) -> bool:
     """Delete feedback by its UUID.
 
     Args:
         feedback_id: UUID of the feedback to delete
+        db_pool: Database pool for dependency injection
 
     Returns:
         True if deleted, False if not found
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             DELETE FROM user_feedback WHERE id = $1
@@ -141,13 +162,21 @@ async def delete_feedback(feedback_id: UUID) -> bool:
         return deleted
 
 
-async def get_all_feedback() -> list[UserFeedback]:
+async def get_all_feedback(db_pool: Any = None) -> list[UserFeedback]:
     """Get all user feedback entries.
+
+    Args:
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of all user feedback, ordered by creation time (newest first)
     """
-    async with db_pool.pool.acquire() as conn:
+    # Use injected db_pool if provided, otherwise fallback to global
+    from lattice.utils.database import db_pool as global_db_pool
+
+    active_db_pool = db_pool or global_db_pool
+
+    async with active_db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, created_at

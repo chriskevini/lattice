@@ -22,12 +22,11 @@ from lattice.dreaming.proposer import (
     store_proposal,
 )
 from lattice.utils.config import get_config
-from lattice.utils.database import get_system_health
 from lattice.utils.date_resolution import get_now
 
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -62,6 +61,8 @@ class DreamingScheduler:
         bot: Any,
         dream_channel_id: int | None = None,
         dream_time: time = DEFAULT_DREAM_TIME,
+        db_pool: Any | None = None,
+        llm_client: Any | None = None,
     ) -> None:
         """Initialize the dreaming scheduler.
 
@@ -69,10 +70,26 @@ class DreamingScheduler:
             bot: Discord bot instance for sending messages
             dream_channel_id: Dream channel ID for posting proposals
             dream_time: Time of day to run dreaming cycle (default: 3:00 AM UTC)
+            db_pool: Database pool for dependency injection
+            llm_client: LLM client for dependency injection
         """
         self.bot = bot
         self.dream_channel_id = dream_channel_id
         self.dream_time = dream_time
+        if db_pool is None:
+            from lattice.utils.database import db_pool as global_db_pool
+
+            self.db_pool = global_db_pool
+        else:
+            self.db_pool = db_pool
+
+        if llm_client is None:
+            from lattice.utils.llm import get_auditing_llm_client
+
+            self.llm_client = get_auditing_llm_client()
+        else:
+            self.llm_client = llm_client
+
         self._running: bool = False
         self._scheduler_task: asyncio.Task[None] | None = None
 
@@ -142,7 +159,7 @@ class DreamingScheduler:
         Returns:
             True if dreaming is enabled, False otherwise
         """
-        enabled_str = await get_system_health("dreaming_enabled")
+        enabled_str = await self.db_pool.get_system_health("dreaming_enabled")
         return enabled_str != "false"
 
     async def _get_dreaming_config(self) -> DreamingConfig:
@@ -152,13 +169,27 @@ class DreamingScheduler:
             DreamingConfig with loaded settings
         """
         min_uses = int(
-            await get_system_health("dreaming_min_uses") or DREAMING_MIN_USES_DEFAULT
+            await self.db_pool.get_system_health("dreaming_min_uses")
+            or DREAMING_MIN_USES_DEFAULT
         )
         lookback_days = int(
-            await get_system_health("dreaming_lookback_days")
+            await self.db_pool.get_system_health("dreaming_lookback_days")
             or DREAMING_LOOKBACK_DAYS_DEFAULT
         )
-        enabled_str = await get_system_health("dreaming_enabled")
+        enabled_str = await self.db_pool.get_system_health("dreaming_enabled")
+        enabled = enabled_str != "false"
+
+        return DreamingConfig(
+            min_uses=min_uses,
+            lookback_days=lookback_days,
+            enabled=enabled,
+        )
+
+        lookback_days = int(
+            await self.db_pool.get_system_health("dreaming_lookback_days")
+            or DREAMING_LOOKBACK_DAYS_DEFAULT
+        )
+        enabled_str = await self.db_pool.get_system_health("dreaming_enabled")
         enabled = enabled_str != "false"
 
         return DreamingConfig(
@@ -188,6 +219,7 @@ class DreamingScheduler:
                 min_uses=min_uses,
                 lookback_days=dream_config.lookback_days,
                 min_feedback=min_feedback,
+                db_pool=self.db_pool,
             )
 
             if not metrics:
@@ -206,7 +238,9 @@ class DreamingScheduler:
             proposals: list[OptimizationProposal] = []
 
             for prompt_metrics in metrics[:MAX_PROPOSALS_PER_CYCLE]:
-                rejected_count = await reject_stale_proposals(prompt_metrics.prompt_key)
+                rejected_count = await reject_stale_proposals(
+                    prompt_metrics.prompt_key, db_pool=self.db_pool
+                )
                 if rejected_count > 0:
                     logger.info(
                         "Cleaned up stale proposals before generating new one",
@@ -214,10 +248,14 @@ class DreamingScheduler:
                         rejected_count=rejected_count,
                     )
 
-                proposal = await propose_optimization(metrics=prompt_metrics)
+                proposal = await propose_optimization(
+                    metrics=prompt_metrics,
+                    db_pool=self.db_pool,
+                    llm_client=self.llm_client,
+                )
 
                 if proposal:
-                    await store_proposal(proposal)
+                    await store_proposal(proposal, db_pool=self.db_pool)
                     proposals.append(proposal)
 
                     logger.info(
@@ -335,7 +373,9 @@ class DreamingScheduler:
 
             await channel.send(summary_text)
 
-            view = TemplateComparisonView(proposal)
+            view = TemplateComparisonView(
+                proposal, db_pool=self.db_pool, llm_client=self.llm_client
+            )
             await channel.send(view=view)
             self.bot.add_view(view)
 
@@ -391,7 +431,11 @@ class DreamingScheduler:
 
 
 async def trigger_dreaming_cycle_manually(
-    bot: Any, dream_channel_id: int | None = None, force: bool = True
+    bot: Any,
+    dream_channel_id: int | None = None,
+    force: bool = True,
+    db_pool: Any | None = None,
+    llm_client: Any | None = None,
 ) -> None:
     """Manually trigger the dreaming cycle (for testing or manual invocation).
 
@@ -399,6 +443,13 @@ async def trigger_dreaming_cycle_manually(
         bot: Discord bot instance
         dream_channel_id: Dream channel ID for posting proposals
         force: Whether to bypass statistical thresholds
+        db_pool: Database pool for dependency injection
+        llm_client: LLM client for dependency injection
     """
-    scheduler = DreamingScheduler(bot=bot, dream_channel_id=dream_channel_id)
+    scheduler = DreamingScheduler(
+        bot=bot,
+        dream_channel_id=dream_channel_id,
+        db_pool=db_pool,
+        llm_client=llm_client,
+    )
     await scheduler._run_dreaming_cycle(force=force)  # noqa: SLF001
