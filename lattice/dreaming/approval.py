@@ -26,6 +26,175 @@ from lattice.dreaming.proposer import (
 logger = structlog.get_logger(__name__)
 
 
+class MemoryReviewView(discord.ui.DesignerView):  # type: ignore[name-defined]
+    """V2 component view for memory review proposals.
+
+    Shows conflict resolutions with approve/reject buttons for each conflict.
+    """
+
+    def __init__(
+        self,
+        proposal_id: str,
+        conflicts: list[dict[str, Any]],
+        db_pool: "DatabasePool",
+    ) -> None:
+        """Initialize memory review view.
+
+        Args:
+            proposal_id: UUID of memory review proposal
+            conflicts: List of conflict resolution dictionaries
+            db_pool: Database pool for dependency injection
+        """
+        super().__init__(timeout=None)  # No timeout for proposal views
+        self.proposal_id = proposal_id
+        self.db_pool = db_pool
+
+        from uuid import UUID
+
+        self.proposal_uuid = UUID(proposal_id)
+
+        # Build conflict sections
+        for idx, conflict in enumerate(conflicts[:10]):  # Limit to 10 conflicts
+            subject = conflict.get("subject", "Unknown")
+            conflict_type = conflict.get("type", "unknown")
+            canonical = conflict.get("canonical_memory", {})
+            superseded = conflict.get("superseded_memories", [])
+            reason = conflict.get("reason", "No reason provided")
+
+            # Format canonical memory
+            canonical_text = f"**Subject:** {canonical.get('subject', 'N/A')}\n"
+            canonical_text += f"**Predicate:** {canonical.get('predicate', 'N/A')}\n"
+            canonical_text += f"**Object:** {canonical.get('object', 'N/A')}\n"
+            canonical_text += f"**Created:** {canonical.get('created_at', 'N/A')}"
+
+            # Format superseded memories
+            superseded_text = ""
+            for old_mem in superseded[:3]:  # Limit to 3 old memories
+                old_obj = old_mem.get("object", "N/A")
+                old_time = old_mem.get("created_at", "N/A")
+                superseded_text += f"• {old_obj} ({old_time})\n"
+            if len(superseded) > 3:
+                superseded_text += f"• ... and {len(superseded) - 3} more"
+
+            # Create sections
+            canonical_section = self._create_text_section(
+                "✅ CANONICAL MEMORY", canonical_text
+            )
+            superseded_section = self._create_text_section(
+                "❌ SUPERSEDED MEMORIES", superseded_text
+            )
+            reason_section = self._create_text_section(
+                f"💡 REASON ({conflict_type.upper()})", reason
+            )
+
+            # Header for this conflict
+            header_text = (
+                f"**Conflict {idx + 1}: {subject}**\n**Type:** {conflict_type}"
+            )
+            header_section: discord.ui.TextDisplay = discord.ui.TextDisplay(
+                content=header_text
+            )
+
+            # Add sections
+            self.add_item(header_section)
+            self.add_item(reason_section)
+            self.add_item(superseded_section)
+            self.add_item(canonical_section)
+
+            # Separator between conflicts
+            if idx < min(len(conflicts), 10) - 1:
+                self.add_item(discord.ui.Separator())
+
+            # Approve/Reject buttons
+            approve_button: Any = discord.ui.Button(
+                label="✓ Apply",
+                style=discord.ButtonStyle.green,
+                custom_id=f"memory_review_approve_{self.proposal_uuid}_{idx}",
+            )
+            approve_button.callback = self._make_approve_callback(idx)
+            self.add_item(approve_button)
+
+            reject_button: Any = discord.ui.Button(
+                label="✗ Reject",
+                style=discord.ButtonStyle.red,
+                custom_id=f"memory_review_reject_{self.proposal_uuid}_{idx}",
+            )
+            reject_button.callback = self._make_reject_callback(idx)
+            self.add_item(reject_button)
+
+            # Add separator before next conflict
+            if idx < min(len(conflicts), 10) - 1:
+                self.add_item(discord.ui.Separator())
+
+    def _create_text_section(
+        self, label: str, content: str, code_block: bool = False
+    ) -> discord.ui.TextDisplay:
+        """Create a text section with optional code block formatting.
+
+        Args:
+            label: Section label
+            content: Section content
+            code_block: Whether to wrap in code block
+
+        Returns:
+            TextDisplay component
+        """
+        display_content = f"**{label}**\n{content}"
+        return discord.ui.TextDisplay(content=display_content[:1000])
+
+    async def _make_approve_callback(self, conflict_index: int):
+        """Create callback for approve button.
+
+        Args:
+            conflict_index: Index of conflict to approve
+
+        Returns:
+            Callback function
+        """
+
+        async def callback(interaction: discord.Interaction):
+            from lattice.dreaming.memory_review import apply_conflict_resolution
+
+            try:
+                success = await apply_conflict_resolution(
+                    db_pool=self.db_pool,
+                    proposal_id=self.proposal_uuid,
+                    conflict_index=conflict_index,
+                )
+
+                if success:
+                    await interaction.response.send_message(
+                        f"✓ Conflict {conflict_index + 1} applied successfully"
+                    )
+                else:
+                    await interaction.response.send_message(
+                        f"✗ Failed to apply conflict {conflict_index + 1}"
+                    )
+            except Exception:
+                await interaction.response.send_message(
+                    f"✗ Error applying conflict {conflict_index + 1}"
+                )
+
+        return callback
+
+    async def _make_reject_callback(self, conflict_index: int):
+        """Create callback for reject button.
+
+        Args:
+            conflict_index: Index of conflict to reject
+
+        Returns:
+            Callback function
+        """
+
+        async def callback(interaction: discord.Interaction):
+            await interaction.response.send_message(
+                f"✗ Conflict {conflict_index + 1} rejected"
+            )
+
+        return callback
+
+
 class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defined]
     """V2 component view showing full templates side-by-side with approval buttons.
 

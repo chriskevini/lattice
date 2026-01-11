@@ -15,6 +15,7 @@ import structlog
 
 from lattice.dreaming.analyzer import analyze_prompt_effectiveness
 from lattice.dreaming.approval import TemplateComparisonView
+from lattice.dreaming.memory_review import run_memory_review
 from lattice.dreaming.proposer import (
     OptimizationProposal,
     propose_optimization,
@@ -255,6 +256,14 @@ class DreamingScheduler:
 
             await self._post_proposals_to_dream_channel(proposals)
 
+            memory_review_result = await self._run_memory_review_cycle()
+            if memory_review_result:
+                return {
+                    "status": "success",
+                    "prompt_proposals": len(proposals),
+                    "memory_review_id": str(memory_review_result),
+                }
+
             return {
                 "status": "success",
                 "prompts_analyzed": len(metrics),
@@ -274,6 +283,40 @@ class DreamingScheduler:
                 "proposals_created": 0,
                 "message": "Dreaming cycle failed",
             }
+
+    async def _run_memory_review_cycle(self) -> str | None:
+        """Run memory review cycle.
+
+        Args:
+            Returns:
+            UUID of memory review proposal as string, or None if no conflicts found
+        """
+        try:
+            memory_review_id = await run_memory_review(
+                db_pool=self.db_pool,
+                llm_client=self.llm_client,
+                bot=self.bot,
+            )
+
+            if memory_review_id:
+                logger.info(
+                    "Memory review completed",
+                    memory_review_id=str(memory_review_id),
+                )
+
+            return str(memory_review_id) if memory_review_id else None
+
+        except Exception:  # noqa: BLE001
+            logger.exception("Memory review cycle failed")
+            channel = await self._get_dream_channel()
+            if channel:
+                try:
+                    await channel.send(
+                        "❌ Memory review failed. Check logs for details."
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            return None
 
     async def _get_dream_channel(self) -> discord.TextChannel | None:
         """Get the dream channel for posting proposals.
