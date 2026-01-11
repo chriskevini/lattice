@@ -44,11 +44,12 @@ class TestAnalyzer:
         with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.fetch = AsyncMock(return_value=mock_rows)
+            mock_pool.pool = mock_pool
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
             metrics = await analyze_prompt_effectiveness(
-                min_uses=10, lookback_days=30, min_feedback=0
+                db_pool=mock_pool, min_uses=10, lookback_days=30, min_feedback=0
             )
 
             assert len(metrics) == 1
@@ -63,10 +64,11 @@ class TestAnalyzer:
         with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.fetch = AsyncMock(return_value=[])
+            mock_pool.pool = mock_pool
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-            metrics = await analyze_prompt_effectiveness()
+            metrics = await analyze_prompt_effectiveness(db_pool=mock_pool)
 
             assert len(metrics) == 0
 

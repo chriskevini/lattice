@@ -75,46 +75,37 @@ class PromptMetrics:
     priority_score: float
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 async def analyze_prompt_effectiveness(
+    db_pool: Any,
     min_uses: int = 10,
     lookback_days: int = 30,
     min_feedback: int = 10,
-    db_pool: Any | None = None,
 ) -> list[PromptMetrics]:
     """Analyze prompt effectiveness from audit data.
 
     Args:
+        db_pool: Database pool for dependency injection (required)
         min_uses: Minimum number of uses to consider for analysis
         lookback_days: Number of days to look back for analysis
         min_feedback: Minimum number of feedback items to consider for analysis
-        db_pool: Database pool for dependency injection
 
     Returns:
         List of prompt metrics, sorted by priority (highest first)
@@ -223,9 +214,9 @@ async def analyze_prompt_effectiveness(
 
 async def get_feedback_samples(
     prompt_key: str,
+    db_pool: Any,
     limit: int = 10,
     sentiment_filter: str | None = None,
-    db_pool: Any | None = None,
 ) -> list[str]:
     """Get sample feedback content for a prompt's current version.
 
@@ -234,9 +225,9 @@ async def get_feedback_samples(
 
     Args:
         prompt_key: The prompt key to get feedback for
+        db_pool: Database pool for dependency injection (required)
         limit: Maximum number of samples to return
         sentiment_filter: Filter by sentiment ('positive', 'negative', 'neutral')
-        db_pool: Database pool for dependency injection
 
     Returns:
         List of feedback content strings
@@ -269,10 +260,10 @@ async def get_feedback_samples(
 
 async def get_feedback_with_context(
     prompt_key: str,
+    db_pool: Any,
     limit: int = 10,
     include_rendered_prompt: bool = True,
     max_prompt_chars: int = 5000,
-    db_pool: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Get feedback along with the response and relevant user message.
 
@@ -286,10 +277,10 @@ async def get_feedback_with_context(
 
     Args:
         prompt_key: The prompt key to get feedback for
+        db_pool: Database pool for dependency injection (required)
         limit: Maximum number of samples to return
         include_rendered_prompt: Whether to include the rendered prompt (default True)
         max_prompt_chars: Maximum characters of rendered prompt to include (default 5000)
-        db_pool: Database pool for dependency injection
 
     Returns:
         List of dicts containing message, rendered_prompt (if requested), response, and feedback
