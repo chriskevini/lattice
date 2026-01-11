@@ -11,28 +11,6 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If no pool is available
-    """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    msg = (
-        "Database pool not available. Pass db_pool as an argument "
-        "(dependency injection required)."
-    )
-    raise RuntimeError(msg)
-
-
 class PromptTemplate:
     """Represents a prompt template in procedural memory."""
 
@@ -104,9 +82,7 @@ async def get_prompt(db_pool: Any, *, prompt_key: str) -> PromptTemplate | None:
     Returns:
         The prompt template, or None if not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT prompt_key, template, temperature, version, active
