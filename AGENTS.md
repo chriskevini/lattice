@@ -38,10 +38,16 @@ Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrato
 Refer to the [Makefile](Makefile) for all available automation.
 
 ```bash
-make install    # Deps + pre-commit hooks
-make test       # Run test suite
-make check-all  # Lint, type-check, and test
-make run        # Run bot locally
+make install       # Deps + pre-commit hooks
+make init-db       # Initialize database
+make nuke-db       # Delete all data
+make run           # Run bot locally
+make restart       # Restart all services
+make test          # Run test suite
+make check-all     # Lint, type-check, and test
+make view-logs     # View last 100 lines of bot
+make view-logs SERVICE=postgres  # View postgres logs
+make view-logs TAIL=500         # View 500 lines
 ```
 
 ### Standards
@@ -49,6 +55,7 @@ make run        # Run bot locally
 - **Docs**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff and Mypy.
 - **LLM**: All calls must use `AuditingLLMClient` for observability.
+- **PRs**: Follow [pull request template](.github/pull_request_template.md) when creating PRs.
 
 ## ⚙️ Key Concepts
 - **Dream Channel**: Meta-discussion and prompt approval. Messages here are never ingested.

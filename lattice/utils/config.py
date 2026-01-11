@@ -49,7 +49,6 @@ class Config:
     # Application Settings
     environment: str
     log_level: str
-    log_file: str
     structured_logs: bool
     health_port: int
 
@@ -75,7 +74,6 @@ class Config:
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             environment=os.getenv("ENVIRONMENT", "production"),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
-            log_file=os.getenv("LOG_FILE", "logs/lattice.log"),
             structured_logs=_get_env_bool("STRUCTURED_LOGS", True),
             health_port=_get_env_int("HEALTH_PORT", 8080),
         )
