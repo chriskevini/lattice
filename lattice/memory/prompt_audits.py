@@ -57,27 +57,6 @@ class PromptAudit:
     created_at: datetime
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = (
-            "Database pool not available. Pass db_pool as an argument "
-            "(dependency injection required)."
-        )
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 async def store_prompt_audit(
     db_pool: Any,
     prompt_key: str,
@@ -123,13 +102,10 @@ async def store_prompt_audit(
     Returns:
         UUID of the stored audit entry
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    # Convert dicts to JSON strings for JSONB columns
     context_config_json = json.dumps(context_config) if context_config else None
     reasoning_json = json.dumps(reasoning) if reasoning else None
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO prompt_audits (
@@ -204,9 +180,7 @@ async def update_audit_dream_message(
     Returns:
         True if updated, False if not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE prompt_audits
@@ -242,9 +216,7 @@ async def link_feedback_to_audit(
     Returns:
         True if linked, False if audit not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE prompt_audits
@@ -285,9 +257,7 @@ async def link_feedback_to_audit_by_id(
     Returns:
         True if linked, False if audit not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE prompt_audits
@@ -322,9 +292,7 @@ async def get_audit_by_dream_message(
     Returns:
         PromptAudit if found, None otherwise
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT
@@ -382,9 +350,7 @@ async def get_audits_with_feedback(
     Returns:
         List of prompt audits with feedback
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT
