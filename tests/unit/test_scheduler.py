@@ -500,13 +500,13 @@ class TestAdaptiveActiveHours:
                 "active_hours_end": "21",
             }.get(key)
         )
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-        within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-        assert await is_within_active_hours(mock_pool, check_time=within_time) is True
+        with patch("lattice.utils.database.get_user_timezone", return_value="UTC"):
+            within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+            assert await is_within_active_hours(mock_pool, check_time=within_time) is True
 
-        outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
-        assert await is_within_active_hours(mock_pool, check_time=outside_time) is False
+            outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
+            assert await is_within_active_hours(mock_pool, check_time=outside_time) is False
 
     @pytest.mark.asyncio
     async def test_is_within_active_hours_wrap_around(self) -> None:
@@ -518,16 +518,16 @@ class TestAdaptiveActiveHours:
                 "active_hours_end": "9",
             }.get(key)
         )
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-        within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
-        assert await is_within_active_hours(mock_pool, check_time=within_time) is True
+        with patch("lattice.utils.database.get_user_timezone", return_value="UTC"):
+            within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
+            assert await is_within_active_hours(mock_pool, check_time=within_time) is True
 
-        within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
-        assert await is_within_active_hours(mock_pool, check_time=within_time2) is True
+            within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
+            assert await is_within_active_hours(mock_pool, check_time=within_time2) is True
 
-        outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-        assert await is_within_active_hours(mock_pool, check_time=outside_time) is False
+            outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+            assert await is_within_active_hours(mock_pool, check_time=outside_time) is False
 
     @pytest.mark.asyncio
     async def test_is_within_active_hours_defaults_to_now(self) -> None:
@@ -539,14 +539,14 @@ class TestAdaptiveActiveHours:
                 "active_hours_end": "21",
             }.get(key)
         )
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-        with patch("lattice.scheduler.adaptive.get_now") as mock_get_now:
-            mock_now = datetime(2024, 1, 1, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
-            mock_get_now.return_value = mock_now
+        with patch("lattice.utils.database.get_user_timezone", return_value="UTC"):
+            with patch("lattice.scheduler.adaptive.get_now") as mock_get_now:
+                mock_now = datetime(2024, 1, 1, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
+                mock_get_now.return_value = mock_now
 
-            result = await is_within_active_hours(db_pool=mock_pool)
-            assert result is True
+                result = await is_within_active_hours(db_pool=mock_pool)
+                assert result is True
 
     @pytest.mark.asyncio
     async def test_update_active_hours_stores_result(self) -> None:

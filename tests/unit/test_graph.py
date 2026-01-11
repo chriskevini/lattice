@@ -117,8 +117,10 @@ class TestGraphTraversal:
                 }
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(predicate="did activity")
@@ -142,8 +144,10 @@ class TestGraphTraversal:
                 }
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -169,8 +173,10 @@ class TestGraphTraversal:
                 }
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories()
@@ -183,8 +189,10 @@ class TestGraphTraversal:
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(subject="nonexistent")
@@ -208,8 +216,10 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -238,8 +248,10 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -266,8 +278,10 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -295,8 +309,10 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -323,8 +339,10 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -351,8 +369,10 @@ class TestGraphTraversal:
             for i in range(5)
         ]
         mock_conn.fetch = AsyncMock(return_value=memories[:2])
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(limit=2)
@@ -369,8 +389,10 @@ class TestBFSTraversal:
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=1)
         await traverser.traverse_from_entity("test%_entity")
@@ -414,8 +436,10 @@ class TestBFSTraversal:
         ]
 
         mock_conn.fetch = AsyncMock(return_value=cycle_memories)
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_entity("A", max_hops=5)
@@ -441,8 +465,10 @@ class TestBFSTraversal:
         mock_conn = MagicMock()
 
         mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=1)
         result = await traverser.traverse_from_entity("test", max_hops=2)
@@ -465,8 +491,10 @@ class TestBFSTraversal:
             ]
         )
 
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.traverse_from_entity("Alice", max_hops=1)
@@ -492,8 +520,10 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -522,8 +552,10 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -550,8 +582,10 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(
@@ -581,8 +615,10 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         traverser = GraphTraversal(mock_pool, max_depth=3)
         result = await traverser.find_semantic_memories(

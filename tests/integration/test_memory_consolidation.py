@@ -58,8 +58,8 @@ class TestMultiHopReasoningIntegration:
                 },
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         # Create traverser with mock pool
         traverser = GraphTraversal(mock_pool, max_depth=3)
@@ -89,8 +89,8 @@ class TestMultiHopReasoningIntegration:
                 }
             ]
         )
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
         # Create traverser with mock pool
         traverser = GraphTraversal(mock_pool, max_depth=3)

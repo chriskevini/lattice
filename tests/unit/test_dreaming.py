@@ -46,8 +46,8 @@ class TestAnalyzer:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire().__aexit__ = AsyncMock()
+        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
         metrics = await analyze_prompt_effectiveness(
             db_pool=mock_pool, min_uses=10, lookback_days=30, min_feedback=0
@@ -67,8 +67,8 @@ class TestAnalyzer:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire().__aexit__ = AsyncMock()
+        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
         metrics = await analyze_prompt_effectiveness(db_pool=mock_pool)
 
@@ -174,8 +174,8 @@ class TestProposer:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire().__aexit__ = AsyncMock()
+        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
         result_id = await store_proposal(proposal, db_pool=mock_pool)
 
@@ -204,8 +204,8 @@ class TestProposer:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire().__aexit__ = AsyncMock()
+        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
         success = await approve_proposal(
             proposal_id, "user123", mock_pool, "Looks good"
@@ -226,8 +226,8 @@ class TestProposer:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire().__aexit__ = AsyncMock()
+        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
         success = await reject_proposal(proposal_id, "user123", mock_pool, "Not ready")
 
@@ -245,8 +245,8 @@ class TestProposer:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire().__aexit__ = AsyncMock()
+        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
         rejected_count = await reject_stale_proposals(
             "BASIC_RESPONSE", db_pool=mock_pool
@@ -267,8 +267,8 @@ class TestProposer:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire().__aexit__ = AsyncMock()
+        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
         rejected_count = await reject_stale_proposals("NONEXISTENT", db_pool=mock_pool)
 

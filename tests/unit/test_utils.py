@@ -179,7 +179,7 @@ class TestSystemHealthFunctions:
         mock_conn = AsyncMock()
         mock_conn.fetchval = AsyncMock(return_value="test_value")
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
         mock_db_pool = AsyncMock()
         mock_db_pool.get_system_health = AsyncMock(return_value="test_value")

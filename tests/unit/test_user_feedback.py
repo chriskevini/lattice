@@ -24,8 +24,7 @@ def create_mock_pool_with_conn(mock_conn: AsyncMock) -> MagicMock:
     mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
     mock_pool = MagicMock()
-    mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
-    mock_pool.pool = mock_pool
+    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
     return mock_pool
 

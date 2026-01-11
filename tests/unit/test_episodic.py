@@ -37,7 +37,7 @@ def create_mock_pool_with_transaction() -> tuple[MagicMock, AsyncMock]:
     mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
     mock_pool = MagicMock()
-    mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
     return mock_pool, mock_conn
 
@@ -158,7 +158,6 @@ class TestStoreMessage:
         )
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
         result = await store_message(db_pool=mock_pool, message=msg)
@@ -189,7 +188,6 @@ class TestStoreMessage:
         )
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
         result = await store_message(db_pool=mock_pool, message=msg)
@@ -211,7 +209,6 @@ class TestStoreMessage:
         )
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
         result = await store_message(db_pool=mock_pool, message=msg)
@@ -231,7 +228,6 @@ class TestStoreMessage:
         )
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetchrow = AsyncMock(side_effect=Exception("DB connection failed"))
 
         with pytest.raises(Exception, match="DB connection failed"):
@@ -270,7 +266,6 @@ class TestGetRecentMessages:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
         messages = await get_recent_messages(
@@ -303,7 +298,6 @@ class TestGetRecentMessages:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
         messages = await get_recent_messages(
@@ -318,7 +312,6 @@ class TestGetRecentMessages:
     async def test_get_recent_messages_empty_result(self) -> None:
         """Test get_recent_messages returns empty list when no messages exist."""
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetch = AsyncMock(return_value=[])
 
         messages = await get_recent_messages(
@@ -356,7 +349,6 @@ class TestGetRecentMessages:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
         messages = await get_recent_messages(
@@ -384,7 +376,6 @@ class TestGetRecentMessages:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
         messages = await get_recent_messages(
@@ -411,7 +402,6 @@ class TestStoreSemanticMemories:
         memories = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.execute = AsyncMock()
 
         await store_semantic_memories(
@@ -438,7 +428,6 @@ class TestStoreSemanticMemories:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.execute = AsyncMock()
 
         await store_semantic_memories(
@@ -457,7 +446,6 @@ class TestStoreSemanticMemories:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.execute = AsyncMock(
             side_effect=[None, asyncpg.PostgresError("DB error")]
         )
@@ -478,7 +466,6 @@ class TestStoreSemanticMemories:
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.execute = AsyncMock(
             side_effect=[None, asyncpg.PostgresError("DB error")]
         )
@@ -496,7 +483,6 @@ class TestStoreSemanticMemories:
         memories = [{"subject": "A", "predicate": "rel", "object": "B"}]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_pool.pool = mock_pool
         mock_conn.execute = AsyncMock()
 
         await store_semantic_memories(

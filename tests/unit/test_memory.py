@@ -71,7 +71,7 @@ class TestEpisodicMemoryFunctions:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         message = EpisodicMessage(
             content="Test message",
@@ -120,7 +120,7 @@ class TestEpisodicMemoryFunctions:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         messages = await get_recent_messages(
             db_pool=mock_pool, channel_id=67890, limit=10
@@ -246,7 +246,7 @@ class TestProceduralMemoryFunctions:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         result = await get_prompt(db_pool=mock_pool, prompt_key="test_key")
 
@@ -266,7 +266,7 @@ class TestProceduralMemoryFunctions:
 
         mock_pool = MagicMock()
         mock_pool.pool = mock_pool
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         result = await get_prompt(db_pool=mock_pool, prompt_key="nonexistent")
 
