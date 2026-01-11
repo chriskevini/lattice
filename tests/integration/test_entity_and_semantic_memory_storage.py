@@ -58,11 +58,11 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message, db_pool=db_pool)
+        message_id = await episodic.store_message(db_pool, message)
 
         # Store semantic memory
         memories = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
-        await episodic.store_semantic_memories(message_id, memories, db_pool=db_pool)
+        await episodic.store_semantic_memories(db_pool, message_id, memories)
 
         # Verify memory was stored
         async with db_pool.pool.acquire() as conn:
@@ -97,7 +97,7 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message, db_pool=db_pool)
+        message_id = await episodic.store_message(db_pool, message)
 
         # Store multiple memories with a batch ID for tracking
         batch_id = "test_batch_12346"
@@ -106,7 +106,7 @@ class TestSemanticMemoryStorage:
             {"subject": "user", "predicate": "likes", "object": "Python"},
         ]
         await episodic.store_semantic_memories(
-            message_id, memories, source_batch_id=batch_id, db_pool=db_pool
+            db_pool, message_id, memories, source_batch_id=batch_id
         )
 
         # Verify both memories stored
@@ -130,7 +130,7 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message, db_pool=db_pool)
+        message_id = await episodic.store_message(db_pool, message)
 
         # Mix of valid and invalid memories
         batch_id = "test_batch_12348"
@@ -155,7 +155,7 @@ class TestSemanticMemoryStorage:
 
         # Should not raise exception
         await episodic.store_semantic_memories(
-            message_id, memories, source_batch_id=batch_id, db_pool=db_pool
+            db_pool, message_id, memories, source_batch_id=batch_id
         )
 
         # Verify only valid memory was stored
@@ -183,12 +183,12 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message, db_pool=db_pool)
+        message_id = await episodic.store_message(db_pool, message)
 
         # Should not raise exception
         batch_id = "test_batch_12349"
         await episodic.store_semantic_memories(
-            message_id, [], source_batch_id=batch_id, db_pool=db_pool
+            db_pool, message_id, [], source_batch_id=batch_id
         )
 
         # Verify no memories stored
@@ -211,7 +211,7 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(message, db_pool=db_pool)
+        message_id = await episodic.store_message(db_pool, message)
 
         # Store a memory with unique identifiers
         batch_id = "test_batch_12350"
@@ -219,7 +219,7 @@ class TestSemanticMemoryStorage:
             {"subject": "user", "predicate": "lives_in", "object": "Richmond, BC"}
         ]
         await episodic.store_semantic_memories(
-            message_id, memories, source_batch_id=batch_id, db_pool=db_pool
+            db_pool, message_id, memories, source_batch_id=batch_id
         )
 
         # Search by subject

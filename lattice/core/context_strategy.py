@@ -448,7 +448,7 @@ async def retrieve_context(
         additional_entities = []
 
         if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=1)
+            traverser = GraphTraversal(db_pool, max_depth=1)
 
             if "activity_context" in context_flags:
                 activity_memories = await traverser.find_semantic_memories(
@@ -506,7 +506,7 @@ async def retrieve_context(
 
     if entities and memory_depth > 0:
         if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
+            traverser = GraphTraversal(db_pool, max_depth=memory_depth)
 
             traverse_tasks = [
                 traverser.traverse_from_entity(entity_name, max_hops=memory_depth)

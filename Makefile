@@ -98,6 +98,11 @@ test: ## Run all tests with coverage
 test-fast: ## Run tests without coverage (faster)
 	uv run pytest -x
 
+test-integration: ## Run integration tests with database
+	@docker compose up -d postgres || true
+	@docker compose exec -T bot uv run pytest tests/integration/ -v --no-cov
+	@docker compose down postgres
+
 lint: ## Run linting checks
 	uv run ruff check .
 
