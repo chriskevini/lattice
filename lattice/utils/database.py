@@ -152,7 +152,7 @@ async def get_user_timezone() -> str:
     if _user_timezone_cache:
         return _user_timezone_cache
 
-    # Query semantic memory first
+    # Query semantic memory
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT object FROM semantic_memories WHERE subject = 'User' AND predicate = 'lives in timezone' ORDER BY created_at DESC LIMIT 1"
@@ -168,10 +168,9 @@ async def get_user_timezone() -> str:
             except ZoneInfoNotFoundError:
                 pass
 
-    # Fallback to system_health
-    tz = await get_system_health("user_timezone") or "UTC"
-    _user_timezone_cache = tz
-    return tz
+    # Default to UTC if no valid timezone found
+    _user_timezone_cache = "UTC"
+    return "UTC"
 
 
 db_pool = DatabasePool()
