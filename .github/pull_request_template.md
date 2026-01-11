@@ -1,9 +1,5 @@
 ## Related
-<!-- Link related issues, e.g.:
-Closes #111
-Completes Phase 1 of #222
-Related to #123
--->
+None
 
 ## Summary
 <!-- One-line description following conventional commits format
