@@ -10,14 +10,17 @@ help: ## Show this help message
 # Docker Commands
 # ============================================================================
 
+SERVICE ?= bot
+TAIL ?= 100
+
 docker-up: ## Start all services with Docker Compose
 	docker compose up -d
 
 docker-down: ## Stop all services
 	docker compose down
 
-view-logs: ## View recent bot logs (non-blocking)
-	docker compose logs --tail 500 bot
+view-logs: ## View recent logs (use: make view-logs SERVICE=postgres TAIL=1000)
+	docker compose logs --tail $(TAIL) $(SERVICE)
 
 docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
 	docker compose down
