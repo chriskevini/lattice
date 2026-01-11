@@ -14,18 +14,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check PR body structure
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          BODY="${{ github.event.pull_request.body }}"
-
-          # Required sections
-          REQUIRED=("## Summary" "## Changes" "## Impact")
-
-          for section in "${REQUIRED[@]}"; do
-            if ! echo "$BODY" | grep -q "$section"; then
-              echo "❌ Missing required section: $section"
-              echo "Please use the PR template and include all required sections."
-              exit 1
-            fi
-          done
-
+          # Check for required sections in PR body
+          echo "Checking PR body for required sections..."
+          
+          if [[ "$PR_BODY" != *"## Summary"* ]]; then
+            echo "❌ Missing required section: ## Summary"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          if [[ "$PR_BODY" != *"## Changes"* ]]; then
+            echo "❌ Missing required section: ## Changes"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          if [[ "$PR_BODY" != *"## Impact"* ]]; then
+            echo "❌ Missing required section: ## Impact"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
           echo "✅ PR body structure is valid"
