@@ -28,15 +28,33 @@ jobs:
           fi
           
           # Verify Related section contains "None"
-          RELATED=$(echo "$PR_BODY" | sed -n '/## Related/,/## /p' | sed '$d' | tail -n +2)
+          RELATED=$(echo "$PR_BODY" | sed -n '/## Related/,/## Summary/p' | tail -n +2)
           if [[ "$RELATED" != *"None"* ]]; then
             echo "❌ ## Related section must contain 'None' or a related issue reference"
             echo "   Found: '$RELATED'"
             exit 1
           fi
           
+          if [[ "$PR_BODY" != *"## Summary"* ]]; then
+            echo "❌ Missing required section: ## Summary"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          if [[ "$PR_BODY" != *"## Changes"* ]]; then
+            echo "❌ Missing required section: ## Changes"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          if [[ "$PR_BODY" != *"## Impact"* ]]; then
+            echo "❌ Missing required section: ## Impact"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
           # Check sections appear in order: Related → Summary → Changes → Impact
-          if ! echo "$PR_BODY" | grep -qPz '## Related.*## Summary.*## Changes.*## Impact'; then
+          if [[ "$PR_BODY" != *"## Related"*"## Summary"*"## Changes"*"## Impact"* ]]; then
             echo "❌ Sections must be in order: ## Related, ## Summary, ## Changes, ## Impact"
             echo "   Please use the PR template."
             exit 1
