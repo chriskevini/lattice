@@ -101,10 +101,6 @@ class MemoryReviewView(discord.ui.DesignerView):  # type: ignore[name-defined]
             self.add_item(superseded_section)
             self.add_item(canonical_section)
 
-            # Separator between conflicts
-            if idx < min(len(conflicts), 10) - 1:
-                self.add_item(discord.ui.Separator())
-
             # Approve/Reject buttons
             approve_button: Any = discord.ui.Button(
                 label="✓ Apply",

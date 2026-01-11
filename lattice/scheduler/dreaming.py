@@ -287,8 +287,7 @@ class DreamingScheduler:
     async def _run_memory_review_cycle(self) -> str | None:
         """Run memory review cycle.
 
-        Args:
-            Returns:
+        Returns:
             UUID of memory review proposal as string, or None if no conflicts found
         """
         try:

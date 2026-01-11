@@ -330,97 +330,97 @@ async def apply_conflict_resolution(
     Returns:
         True if applied successfully, False otherwise
     """
-    # Fetch proposal
     async with db_pool.pool.acquire() as conn:
-        proposal_row = await conn.fetchrow(
-            "SELECT review_data FROM dreaming_proposals WHERE id = $1",
-            proposal_id,
-        )
-
-        if not proposal_row:
-            logger.warning(
-                "Memory review proposal not found",
-                proposal_id=str(proposal_id),
+        async with conn.transaction():
+            proposal_row = await conn.fetchrow(
+                "SELECT review_data FROM dreaming_proposals WHERE id = $1",
+                proposal_id,
             )
-            return False
 
-        conflicts = proposal_row["review_data"]
+            if not proposal_row:
+                logger.warning(
+                    "Memory review proposal not found",
+                    proposal_id=str(proposal_id),
+                )
+                return False
 
-        if conflict_index >= len(conflicts):
-            logger.warning(
-                "Conflict index out of range",
-                proposal_id=str(proposal_id),
-                conflict_index=conflict_index,
-                total_conflicts=len(conflicts),
-            )
-            return False
+            conflicts = proposal_row["review_data"]
 
-        conflict = conflicts[conflict_index]
-        canonical = conflict["canonical_memory"]
+            if conflict_index >= len(conflicts):
+                logger.warning(
+                    "Conflict index out of range",
+                    proposal_id=str(proposal_id),
+                    conflict_index=conflict_index,
+                    total_conflicts=len(conflicts),
+                )
+                return False
 
-        # Find canonical memory by matching (subject, predicate, created_at)
-        canonical_row = await conn.fetchrow(
-            """
-            SELECT id FROM semantic_memories
-            WHERE subject = $1
-              AND predicate = $2
-              AND created_at = $3::TIMESTAMPTZ
-              AND superseded_by IS NULL
-            LIMIT 1
-            """,
-            canonical["subject"],
-            canonical["predicate"],
-            canonical["created_at"],
-        )
+            conflict = conflicts[conflict_index]
+            canonical = conflict["canonical_memory"]
 
-        if not canonical_row:
-            logger.warning(
-                "Canonical memory not found for conflict resolution",
-                proposal_id=str(proposal_id),
-                conflict_index=conflict_index,
-                subject=canonical["subject"],
-                predicate=canonical["predicate"],
-            )
-            return False
-
-        canonical_id = canonical_row["id"]
-
-        # Supersede old memories
-        superseded_count = 0
-        for old_mem in conflict["superseded_memories"]:
-            old = await conn.fetchrow(
+            # Find canonical memory by matching (subject, predicate, created_at)
+            canonical_row = await conn.fetchrow(
                 """
                 SELECT id FROM semantic_memories
                 WHERE subject = $1
                   AND predicate = $2
-                  AND object = $3
-                  AND created_at = $4::TIMESTAMPTZ
+                  AND created_at = $3::TIMESTAMPTZ
                   AND superseded_by IS NULL
                 LIMIT 1
                 """,
-                old_mem["subject"],
-                old_mem["predicate"],
-                old_mem["object"],
-                old_mem["created_at"],
+                canonical["subject"],
+                canonical["predicate"],
+                canonical["created_at"],
             )
 
-            if old:
-                await conn.execute(
-                    "UPDATE semantic_memories SET superseded_by = $1 WHERE id = $2",
-                    canonical_id,
-                    old["id"],
+            if not canonical_row:
+                logger.warning(
+                    "Canonical memory not found for conflict resolution",
+                    proposal_id=str(proposal_id),
+                    conflict_index=conflict_index,
+                    subject=canonical["subject"],
+                    predicate=canonical["predicate"],
                 )
-                superseded_count += 1
+                return False
 
-        logger.info(
-            "Applied memory conflict resolution",
-            proposal_id=str(proposal_id),
-            conflict_index=conflict_index,
-            canonical_id=str(canonical_id),
-            superseded_count=superseded_count,
-        )
+            canonical_id = canonical_row["id"]
 
-        return True
+            # Supersede old memories
+            superseded_count = 0
+            for old_mem in conflict["superseded_memories"]:
+                old = await conn.fetchrow(
+                    """
+                    SELECT id FROM semantic_memories
+                    WHERE subject = $1
+                      AND predicate = $2
+                      AND object = $3
+                      AND created_at = $4::TIMESTAMPTZ
+                      AND superseded_by IS NULL
+                    LIMIT 1
+                    """,
+                    old_mem["subject"],
+                    old_mem["predicate"],
+                    old_mem["object"],
+                    old_mem["created_at"],
+                )
+
+                if old:
+                    await conn.execute(
+                        "UPDATE semantic_memories SET superseded_by = $1 WHERE id = $2",
+                        canonical_id,
+                        old["id"],
+                    )
+                    superseded_count += 1
+
+            logger.info(
+                "Applied memory conflict resolution",
+                proposal_id=str(proposal_id),
+                conflict_index=conflict_index,
+                canonical_id=str(canonical_id),
+                superseded_count=superseded_count,
+            )
+
+            return True
 
 
 async def notify_memory_review_proposal(
