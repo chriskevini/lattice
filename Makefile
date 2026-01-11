@@ -16,17 +16,8 @@ docker-up: ## Start all services with Docker Compose
 docker-down: ## Stop all services
 	docker compose down
 
-docker-logs: ## Show logs from all services
-	docker compose logs -f
-
-docker-logs-bot: ## Show logs from bot service only (follows, blocking)
-	docker compose logs -f bot
-
 view-logs: ## View recent bot logs (non-blocking)
 	docker compose logs --tail 500 bot
-
-docker-logs-db: ## Show logs from database service only (follows, blocking)
-	docker compose logs -f postgres
 
 docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
 	docker compose down
@@ -35,17 +26,21 @@ docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuil
 
 docker-restart: ## Restart all services
 	docker compose restart
-	@echo "All services restarted. View logs with: make docker-logs"
+	@echo "All services restarted. View logs with: make view-logs"
+
+restart: docker-restart ## Short alias
 
 docker-reload-env: ## Recreate containers to reload .env changes
 	docker compose up --force-recreate -d
-	@echo "Containers recreated with updated .env. View logs with: make docker-logs"
+	@echo "Containers recreated with updated .env. View logs with: make view-logs"
 
 docker-shell: ## Open shell in bot container
 	docker compose exec bot /bin/bash
 
 docker-db-shell: ## Open PostgreSQL shell (interactive)
 	docker compose exec postgres psql -U lattice -d lattice
+
+db-shell: docker-db-shell ## Short alias
 
 docker-clean: ## Remove all containers, volumes, and images
 	docker compose down -v
