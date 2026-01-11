@@ -27,13 +27,31 @@ tests/
 
 ### CI Configuration
 
-Integration tests are automatically skipped in CI when `DATABASE_URL` is not set:
+Integration tests run in CI with a real PostgreSQL service container:
 
-```python
-pytestmark = pytest.mark.skipif(
-    not os.getenv("DATABASE_URL"),
-    reason="Requires real database connection",
-)
+```yaml
+# .github/workflows/quality-checks.yml
+jobs:
+  integration:
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lattice
+          POSTGRES_DB: lattice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+```
+
+For local testing, ensure postgres is running and `DATABASE_URL` is set:
+
+```bash
+make test-integration
 ```
 
 ---
@@ -282,12 +300,15 @@ pytest -x                   # Stop on first failure
 ### Integration Tests
 
 ```bash
-# Set DATABASE_URL to run integration tests
+# Run integration tests locally
+make test-integration
+
+# Or manually with DATABASE_URL
 export DATABASE_URL="postgresql://user:pass@localhost:5432/lattice"
 pytest tests/integration/ -v
 ```
 
-Without `DATABASE_URL`, integration tests are automatically skipped.
+Without a running database, integration tests will fail.
 
 ---
 
@@ -313,6 +334,3 @@ Without `DATABASE_URL`, integration tests are automatically skipped.
 - [DEVELOPMENT.md](DEVELOPMENT.md): Setup and troubleshooting
 
 ---
-
-*Last updated: 2026-01-06*
-*Based on lessons from Test Suite Audit (GitHub Issue #113)*

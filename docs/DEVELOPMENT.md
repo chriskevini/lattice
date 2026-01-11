@@ -35,6 +35,7 @@ make docker-rebuild     # Rebuild and restart
 make docker-shell       # Open shell in bot container
 make docker-db-shell    # Open PostgreSQL shell
 make docker-clean       # Remove all containers and volumes
+make test-integration   # Run integration tests with postgres
 ```
 
 ## Local Development Setup
@@ -108,6 +109,9 @@ uv run pytest tests/unit/test_memory.py
 
 # Run with verbose output
 uv run pytest -v
+
+# Run integration tests (requires running postgres)
+make test-integration
 ```
 
 ## Git Workflow

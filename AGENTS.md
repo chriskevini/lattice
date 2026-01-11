@@ -12,12 +12,18 @@
 
 Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrator.py).
 
+### Dependency Injection Infrastructure
+
+All module functions receive `db_pool` and `llm_client` as explicit parameters. The `LatticeApp` class ([lattice/app.py](lattice/app.py)) manages component lifecycle and wires dependencies together.
+
 ## 🔄 Core Pipeline
 1. **Ingest**: Message stored in episodic memory.
 2. **Analyze**: Context Strategy identifies entities and retrieval needs using `CONTEXT_STRATEGY`.
 3. **Retrieve**: Iterative BFS traversal across semantic graph.
 4. **Generate**: Response produced with grounded context using `UNIFIED_RESPONSE`.
 5. **Consolidate**: Async extraction of new entities and memories using `MEMORY_CONSOLIDATION`.
+
+All functions receive `db_pool` and `llm_client` as explicit parameters.
 
 ## 📂 Project Structure
 - `lattice/core/`: Pipeline, ingestion, and extraction logic.
@@ -28,24 +34,27 @@ Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrato
 - `lattice/scheduler/`: Task orchestration (triggers and adaptive runners).
 - `lattice/discord_client/`: Bot interface and UI handlers.
 - `lattice/prompts/`: Template management.
- - `lattice/utils/`: LLM client, auditing, database utilities, and placeholder registry/injector.
+- `lattice/app.py`: `LatticeApp` class for component lifecycle and DI wiring.
+- `lattice/utils/`: LLM client, auditing, database utilities, and placeholder registry/injector.
 - `scripts/`: Database schema, seeding, and migration tools.
 - `docs/`: Deep-dive guides for development and testing.
 - `tests/`: Unit and integration test suites.
 - `Makefile`: Central automation for installation, testing, and execution.
 
 ## 🛠️ Development Workflow
+
 Refer to the [Makefile](Makefile) for all available automation.
 
 ```bash
-make install       # Deps + pre-commit hooks
-make init-db       # Initialize database
-make nuke-db       # Delete all data
-make run           # Run bot locally
-make restart       # Restart all services
-make test          # Run test suite
-make check-all     # Lint, type-check, and test
-make view-logs     # View last 100 lines of bot
+make install           # Deps + pre-commit hooks
+make init-db           # Initialize database
+make nuke-db           # Delete all data
+make run               # Run bot locally
+make restart           # Restart all services
+make test              # Run test suite
+make test-integration  # Run integration tests with database
+make check-all         # Lint, type-check, and test
+make view-logs         # View last 100 lines of bot
 make view-logs SERVICE=postgres  # View postgres logs
 make view-logs TAIL=500         # View 500 lines
 ```
@@ -55,7 +64,7 @@ make view-logs TAIL=500         # View 500 lines
 - **Docs**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff and Mypy.
 - **LLM**: All calls must use `AuditingLLMClient` for observability.
-- **PRs**: Follow [pull request template](.github/pull_request_template.md) when creating PRs.
+- **PRs**: ALWAYS follow the [pull request template](.github/pull_request_template.md) when creating PRs.
 
 ## ⚙️ Key Concepts
 - **Dream Channel**: Meta-discussion and prompt approval. Messages here are never ingested.
@@ -64,6 +73,7 @@ make view-logs TAIL=500         # View 500 lines
 - **Context Strategy**: Dynamic retrieval planning based on detected entities.
 - **Audit View**: In-Discord UI for inspecting the system's "thought process".
 - **Source Links**: Transparent attribution back to episodic memory for all generated memories.
+- **Dependency Injection**: `db_pool` and `llm_client` are explicit parameters, not globals. The `LatticeApp` class wires components together.
 
 ## 📚 Resources
 - **[README.md](README.md)**: Technical specs and setup.
