@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS prompt_audits (
     reasoning JSONB,
     main_discord_message_id BIGINT,
     dream_discord_message_id BIGINT,
-    feedback_id UUID REFERENCES user_feedback(id),
+    feedback_id UUID,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_audits_prompt_key ON prompt_audits(prompt_key);
