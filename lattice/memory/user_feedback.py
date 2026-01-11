@@ -14,31 +14,25 @@ from lattice.utils.date_resolution import get_now
 logger = structlog.get_logger(__name__)
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = (
+            "Database pool not available. Pass db_pool as an argument "
+            "(dependency injection required)."
+        )
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 class UserFeedback:
@@ -71,12 +65,12 @@ class UserFeedback:
         self.created_at = created_at or get_now("UTC")
 
 
-async def store_feedback(feedback: UserFeedback, db_pool: Any = None) -> UUID:
+async def store_feedback(db_pool: Any, feedback: UserFeedback) -> UUID:
     """Store user feedback in the database.
 
     Args:
-        feedback: The feedback to store
         db_pool: Database pool for dependency injection
+        feedback: The feedback to store
 
     Returns:
         UUID of the stored feedback
@@ -111,13 +105,13 @@ async def store_feedback(feedback: UserFeedback, db_pool: Any = None) -> UUID:
 
 
 async def get_feedback_by_user_message(
-    user_discord_message_id: int, db_pool: Any = None
+    db_pool: Any, user_discord_message_id: int
 ) -> UserFeedback | None:
     """Get feedback by the user's Discord message ID.
 
     Args:
-        user_discord_message_id: The user's Discord message ID
         db_pool: Database pool for dependency injection
+        user_discord_message_id: The user's Discord message ID
 
     Returns:
         UserFeedback if found, None otherwise
@@ -147,12 +141,12 @@ async def get_feedback_by_user_message(
         )
 
 
-async def delete_feedback(feedback_id: UUID, db_pool: Any = None) -> bool:
+async def delete_feedback(db_pool: Any, feedback_id: UUID) -> bool:
     """Delete feedback by its UUID.
 
     Args:
-        feedback_id: UUID of the feedback to delete
         db_pool: Database pool for dependency injection
+        feedback_id: UUID of the feedback to delete
 
     Returns:
         True if deleted, False if not found
@@ -175,7 +169,7 @@ async def delete_feedback(feedback_id: UUID, db_pool: Any = None) -> bool:
         return deleted
 
 
-async def get_all_feedback(db_pool: Any = None) -> list[UserFeedback]:
+async def get_all_feedback(db_pool: Any) -> list[UserFeedback]:
     """Get all user feedback entries.
 
     Args:

@@ -12,6 +12,7 @@ import discord
 import structlog
 
 from lattice.memory import prompt_audits, user_feedback
+from lattice.utils.database import get_db_pool
 from lattice.utils.llm_client import GenerationResult
 
 
@@ -213,7 +214,9 @@ class FeedbackModal(discord.ui.Modal):
             if interaction.message
             else None,
         )
-        feedback_id = await user_feedback.store_feedback(feedback)
+        feedback_id = await user_feedback.store_feedback(
+            db_pool=get_db_pool(), feedback=feedback
+        )
 
         if self.audit_id:
             linked = await prompt_audits.link_feedback_to_audit_by_id(
@@ -425,7 +428,9 @@ class AuditView(discord.ui.DesignerView):
                     interaction.message.id if interaction.message is not None else None
                 ),
             )
-            feedback_id = await user_feedback.store_feedback(feedback)
+            feedback_id = await user_feedback.store_feedback(
+                db_pool=get_db_pool(), feedback=feedback
+            )
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
@@ -470,7 +475,9 @@ class AuditView(discord.ui.DesignerView):
                     interaction.message.id if interaction.message is not None else None
                 ),
             )
-            feedback_id = await user_feedback.store_feedback(feedback)
+            feedback_id = await user_feedback.store_feedback(
+                db_pool=get_db_pool(), feedback=feedback
+            )
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
