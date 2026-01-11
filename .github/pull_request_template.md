@@ -6,7 +6,12 @@ Related to #123
 -->
 
 ## Summary
-<!-- One-line description for squash commit title -->
+<!-- One-line description following conventional commits format
+Examples:
+- feat: add activity tracking support
+- fix: prevent null pointer in scheduler
+- refactor: consolidate timezone handling
+-->
 
 ## Changes
 <!-- Bullet list of key changes -->
