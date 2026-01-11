@@ -41,36 +41,38 @@ class TestAnalyzer:
             }
         ]
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            mock_conn.fetch = AsyncMock(return_value=mock_rows)
-            mock_pool.pool = mock_pool
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-            metrics = await analyze_prompt_effectiveness(
-                db_pool=mock_pool, min_uses=10, lookback_days=30, min_feedback=0
-            )
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire().__aexit__ = AsyncMock()
 
-            assert len(metrics) == 1
-            assert metrics[0].prompt_key == "BASIC_RESPONSE"
-            assert metrics[0].total_uses == 100
-            assert metrics[0].success_rate == 0.95
-            assert metrics[0].priority_score == 25.0
+        metrics = await analyze_prompt_effectiveness(
+            db_pool=mock_pool, min_uses=10, lookback_days=30, min_feedback=0
+        )
+
+        assert len(metrics) == 1
+        assert metrics[0].prompt_key == "BASIC_RESPONSE"
+        assert metrics[0].total_uses == 100
+        assert metrics[0].success_rate == 0.95
+        assert metrics[0].priority_score == 25.0
 
     @pytest.mark.asyncio
     async def test_analyze_prompt_effectiveness_empty_results(self) -> None:
         """Test that empty results return empty list."""
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            mock_conn.fetch = AsyncMock(return_value=[])
-            mock_pool.pool = mock_pool
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
 
-            metrics = await analyze_prompt_effectiveness(db_pool=mock_pool)
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire().__aexit__ = AsyncMock()
 
-            assert len(metrics) == 0
+        metrics = await analyze_prompt_effectiveness(db_pool=mock_pool)
+
+        assert len(metrics) == 0
 
 
 class TestProposer:
@@ -114,37 +116,34 @@ class TestProposer:
             "justification": "Will help reduce response length"
         }"""
 
+        mock_db_pool = MagicMock()
+
+        def get_prompt_side_effect(prompt_key: str, db_pool: Any = None):
+            if prompt_key == "BASIC_RESPONSE":
+                return mock_template
+            elif prompt_key == "PROMPT_OPTIMIZATION":
+                return mock_optimization_template
+            elif prompt_key == "MEMORY_CONSOLIDATION":
+                return mock_template
+            elif prompt_key == "CONTEXT_STRATEGY":
+                return mock_template
+            return None
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.complete = AsyncMock(return_value=mock_llm_result)
+
         with (
             patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
             patch(
                 "lattice.dreaming.proposer.get_feedback_with_context",
                 return_value=[{"feedback_content": "good", "response_content": "hi"}],
             ),
-            patch(
-                "lattice.dreaming.proposer.get_auditing_llm_client"
-            ) as mock_llm_client,
-            patch("lattice.utils.database.db_pool") as mock_db_pool,
         ):
-            mock_db_pool.pool = mock_db_pool
-
-            def get_prompt_side_effect(prompt_key: str, db_pool: Any = None):
-                if prompt_key == "BASIC_RESPONSE":
-                    return mock_template
-                elif prompt_key == "PROMPT_OPTIMIZATION":
-                    return mock_optimization_template
-                elif prompt_key == "MEMORY_CONSOLIDATION":
-                    return mock_template
-                elif prompt_key == "CONTEXT_STRATEGY":
-                    return mock_template
-                return None
-
             mock_get_prompt.side_effect = get_prompt_side_effect
 
-            mock_llm = AsyncMock()
-            mock_llm.complete.return_value = mock_llm_result
-            mock_llm_client.return_value = mock_llm
-
-            proposal = await propose_optimization(metrics, db_pool=mock_db_pool)
+            proposal = await propose_optimization(
+                metrics, db_pool=mock_db_pool, llm_client=mock_llm_client
+            )
 
             assert proposal is not None
             assert proposal.prompt_key == "BASIC_RESPONSE"
@@ -170,111 +169,112 @@ class TestProposer:
             rendered_optimization_prompt="Optimize this: Old template",
         )
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
-            mock_pool.pool = mock_pool
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
 
-            result_id = await store_proposal(proposal, db_pool=mock_pool)
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire().__aexit__ = AsyncMock()
 
-            assert result_id == proposal.proposal_id
-            mock_conn.fetchrow.assert_called_once()
+        result_id = await store_proposal(proposal, db_pool=mock_pool)
+
+        assert result_id == proposal.proposal_id
+        mock_conn.fetchrow.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_approve_proposal_success(self) -> None:
         """Test approving a proposal."""
         proposal_id = uuid4()
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            mock_conn.fetchrow = AsyncMock(
-                return_value={
-                    "prompt_key": "BASIC_RESPONSE",
-                    "current_version": 1,
-                    "proposed_template": "New template",
-                    "proposed_version": 2,
-                    "temperature": 0.7,
-                }
-            )
-            mock_conn.execute = AsyncMock(return_value="UPDATE 1")
-            mock_conn.transaction = MagicMock()
-            mock_conn.transaction().__aenter__ = AsyncMock()
-            mock_conn.transaction().__aexit__ = AsyncMock()
-            mock_pool.pool = mock_pool
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(
+            return_value={
+                "prompt_key": "BASIC_RESPONSE",
+                "current_version": 1,
+                "proposed_template": "New template",
+                "proposed_version": 2,
+                "temperature": 0.7,
+            }
+        )
+        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
+        mock_conn.transaction = MagicMock()
+        mock_conn.transaction().__aenter__ = AsyncMock()
+        mock_conn.transaction().__aexit__ = AsyncMock()
 
-            success = await approve_proposal(
-                proposal_id, "user123", mock_pool, "Looks good"
-            )
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire().__aexit__ = AsyncMock()
 
-            assert success is True
-            assert (
-                mock_conn.execute.call_count == 2
-            )  # Insert new version + Update proposals
+        success = await approve_proposal(
+            proposal_id, "user123", mock_pool, "Looks good"
+        )
+
+        assert success is True
+        assert (
+            mock_conn.execute.call_count == 2
+        )  # Insert new version + Update proposals
 
     @pytest.mark.asyncio
     async def test_reject_proposal_success(self) -> None:
         """Test rejecting a proposal."""
         proposal_id = uuid4()
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            mock_conn.execute = AsyncMock(return_value="UPDATE 1")
-            mock_pool.pool = mock_pool
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
 
-            success = await reject_proposal(
-                proposal_id, "user123", mock_pool, "Not ready"
-            )
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire().__aexit__ = AsyncMock()
 
-            assert success is True
-            mock_conn.execute.assert_called_once()
+        success = await reject_proposal(proposal_id, "user123", mock_pool, "Not ready")
+
+        assert success is True
+        mock_conn.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reject_stale_proposals(self) -> None:
         """Test rejecting stale proposals when version has changed."""
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            # Mock current version lookup
-            mock_conn.fetchrow = AsyncMock(return_value={"version": 2})
-            # Mock rejection of stale proposals (3 proposals were stale)
-            mock_conn.execute = AsyncMock(return_value="UPDATE 3")
-            mock_pool.pool = mock_pool
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_conn = AsyncMock()
+        # Mock current version lookup
+        mock_conn.fetchrow = AsyncMock(return_value={"version": 2})
+        # Mock rejection of stale proposals (3 proposals were stale)
+        mock_conn.execute = AsyncMock(return_value="UPDATE 3")
 
-            rejected_count = await reject_stale_proposals(
-                "BASIC_RESPONSE", db_pool=mock_pool
-            )
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire().__aexit__ = AsyncMock()
 
-            assert rejected_count == 3
-            # Should fetch current version
-            mock_conn.fetchrow.assert_called_once()
-            # Should reject stale proposals
-            mock_conn.execute.assert_called_once()
+        rejected_count = await reject_stale_proposals(
+            "BASIC_RESPONSE", db_pool=mock_pool
+        )
+
+        assert rejected_count == 3
+        # Should fetch current version
+        mock_conn.fetchrow.assert_called_once()
+        # Should reject stale proposals
+        mock_conn.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reject_stale_proposals_prompt_not_found(self) -> None:
         """Test that reject_stale_proposals handles missing prompt gracefully."""
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_conn = AsyncMock()
-            # Prompt not found
-            mock_conn.fetchrow = AsyncMock(return_value=None)
-            mock_pool.pool = mock_pool
-            mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-            mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_conn = AsyncMock()
+        # Prompt not found
+        mock_conn.fetchrow = AsyncMock(return_value=None)
 
-            rejected_count = await reject_stale_proposals(
-                "NONEXISTENT", db_pool=mock_pool
-            )
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire().__aexit__ = AsyncMock()
 
-            assert rejected_count == 0
-            # Should not try to update proposals
-            mock_conn.execute.assert_not_called()
+        rejected_count = await reject_stale_proposals("NONEXISTENT", db_pool=mock_pool)
+
+        assert rejected_count == 0
+        # Should not try to update proposals
+        mock_conn.execute.assert_not_called()
 
 
 class TestValidateTemplate:
