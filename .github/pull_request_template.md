@@ -6,15 +6,20 @@ Related to #123
 -->
 
 ## Summary
-<!-- 1-2 sentence overview of what this PR does -->
+<!-- One-line description for squash commit title -->
 
 ## Changes
 <!-- Bullet list of key changes -->
 
 ## Impact
-<!-- Describe the effect on:
-- Performance
-- Architecture
-- Testing
-- Breaking changes
--->
+<!-- Describe effect on: Performance, Architecture, Testing, Breaking changes -->
+
+---
+
+**Squash merge format:**
+```
+<Summary> (#<PR number>)
+• Change 1
+• Change 2
+• Change 3
+```
