@@ -84,13 +84,14 @@ Extract important information from user messages as semantic triples.
 ## Guidelines
 - Ignore transient chatter, questions, hypotheticals, greetings, opinions
 - Select only the most salient user messages to extract from
-- If user says “I” or “my”, the subject is “User”
-- If user says “you”, the subject is “Assistant”
+- If user says "I" or "my", the subject is "User"
+- If user says "you", the subject is "Assistant"
 - Match to canonical forms when confident ("mom" → "Mother")
 - Proper nouns and people are capitalized (Mother, IKEA, etc.)
-- Predicates are space-separated common English phrases (“lives in”)
+- Predicates are space-separated common English phrases ("lives in")
 - Activities: "did activity", "lasted for" (n minutes), "at location"
 - Goals: "has goal", "due by" (ISO date), "has priority" (high/medium/low), "has status" (active/completed/someday/cancelled)
+- Location: "lives in city" or "lives in region" for cities/regions. If location clearly implies a specific timezone, also extract "lives in timezone" with IANA format (only for major cities/regions where confident)
 - Convert durations to minutes ("3 hours" → "180 minutes")
 - Extract dates as entities in ISO format
 - Use clarifications from conversation
@@ -114,6 +115,7 @@ Date resolution hints: Friday → 2026-01-09
 User: "Spent 2 hours at the gym this morning."
 User: "finally finished that report that was due friday."
 User: "my mom loves cooking."
+User: "I'm in New York right now."
 Output:
 {
   "triples": [
@@ -123,7 +125,9 @@ Output:
     {"subject": "User", "predicate": "has goal", "object": "finish report"},
     {"subject": "finish report", "predicate": "due by", "object": "2026-01-09"},
     {"subject": "finish report", "predicate": "has status", "object": "completed"},
-    {"subject": "Mother", "predicate": "likes", "object": "cooking"}
+    {"subject": "Mother", "predicate": "likes", "object": "cooking"},
+    {"subject": "User", "predicate": "lives in city", "object": "New York"},
+    {"subject": "User", "predicate": "lives in timezone", "object": "America/New_York"}
   ]
 }
 $TPL$, 0.2);
@@ -192,7 +196,6 @@ INSERT INTO system_health (metric_key, metric_value) VALUES
     ('scheduler_max_interval', '1440'),
     ('dreaming_min_uses', '10'),
     ('dreaming_enabled', 'true'),
-    ('user_timezone', 'UTC'),
     ('active_hours_start', '9'),
     ('active_hours_end', '21'),
     ('active_hours_confidence', '0.0'),

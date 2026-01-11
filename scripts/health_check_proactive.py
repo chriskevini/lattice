@@ -185,8 +185,11 @@ async def check_message_activity(conn: asyncpg.Connection) -> dict:
         print(f"  Preview:    {last_msg['content'][:50]}...")
 
     # Check message distribution by hour
-    user_tz = await conn.fetchval(
-        "SELECT value FROM system_health WHERE key = 'user_timezone'"
+    user_tz = (
+        await conn.fetchval(
+            "SELECT object FROM semantic_memories WHERE subject = 'User' AND predicate = 'lives in timezone' ORDER BY created_at DESC LIMIT 1"
+        )
+        or "UTC"
     )
     rows = await conn.fetch(
         """

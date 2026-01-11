@@ -14,7 +14,6 @@ from lattice.utils.database import (
     get_user_timezone,
     set_next_check_at,
     set_system_health,
-    set_user_timezone,
 )
 from lattice.utils.date_resolution import (
     DateRange,
@@ -288,9 +287,12 @@ class TestUserTimezoneFunctions:
     @pytest.mark.asyncio
     async def test_get_user_timezone_with_value(self) -> None:
         """Test get_user_timezone retrieves stored timezone."""
-        with patch(
-            "lattice.utils.database.get_system_health", return_value="America/New_York"
+        with (
+            patch("lattice.utils.database._user_timezone_cache", None),
+            patch("lattice.utils.database.db_pool") as mock_pool,
         ):
+            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+            mock_conn.fetchrow.return_value = {"object": "America/New_York"}
             result = await get_user_timezone()
 
             assert result == "America/New_York"
@@ -298,24 +300,15 @@ class TestUserTimezoneFunctions:
     @pytest.mark.asyncio
     async def test_get_user_timezone_defaults_to_utc(self) -> None:
         """Test get_user_timezone defaults to UTC when not set."""
-        with patch("lattice.utils.database.get_system_health", return_value=None):
+        with (
+            patch("lattice.utils.database._user_timezone_cache", None),
+            patch("lattice.utils.database.db_pool") as mock_pool,
+        ):
+            mock_conn = mock_pool.pool.acquire.return_value.__aenter__.return_value
+            mock_conn.fetchrow.return_value = None
             result = await get_user_timezone()
 
             assert result == "UTC"
-
-    @pytest.mark.asyncio
-    async def test_set_user_timezone_valid_timezone(self) -> None:
-        """Test set_user_timezone validates and stores valid timezone."""
-        with patch("lattice.utils.database.set_system_health") as mock_set:
-            await set_user_timezone("America/Los_Angeles")
-
-            mock_set.assert_called_once_with("user_timezone", "America/Los_Angeles")
-
-    @pytest.mark.asyncio
-    async def test_set_user_timezone_invalid_timezone(self) -> None:
-        """Test set_user_timezone raises ValueError for invalid timezone."""
-        with pytest.raises(ValueError, match="Invalid timezone: Invalid/Timezone"):
-            await set_user_timezone("Invalid/Timezone")
 
 
 @pytest.fixture
