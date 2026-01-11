@@ -37,24 +37,6 @@ MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
 DETAILED_SAMPLES_COUNT = 3  # Number of samples with full rendered prompts
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]:
     """Validate a prompt template before applying.
 
@@ -188,13 +170,10 @@ async def propose_optimization(
     Returns:
         OptimizationProposal if generated, None otherwise
     """
-    active_db_pool = _get_active_db_pool(db_pool)
     active_llm_client = llm_client or get_auditing_llm_client()
 
     # Get current template
-    prompt_template = await get_prompt(
-        db_pool=active_db_pool, prompt_key=metrics.prompt_key
-    )
+    prompt_template = await get_prompt(db_pool=db_pool, prompt_key=metrics.prompt_key)
     if not prompt_template:
         logger.warning(
             "Cannot propose optimization - prompt not found",
@@ -204,7 +183,7 @@ async def propose_optimization(
 
     # Get optimization prompt template from database
     optimization_prompt_template = await get_prompt(
-        db_pool=active_db_pool, prompt_key="PROMPT_OPTIMIZATION"
+        db_pool=db_pool, prompt_key="PROMPT_OPTIMIZATION"
     )
     if not optimization_prompt_template:
         logger.warning(
@@ -219,7 +198,7 @@ async def propose_optimization(
     feedback_samples = await get_feedback_with_context(
         prompt_key=metrics.prompt_key,
         limit=MAX_FEEDBACK_SAMPLES,
-        db_pool=active_db_pool,
+        db_pool=db_pool,
     )
 
     if not feedback_samples:
@@ -256,7 +235,7 @@ async def propose_optimization(
     try:
         result = await active_llm_client.complete(
             prompt=rendered_prompt,
-            db_pool=active_db_pool,
+            db_pool=db_pool,
             prompt_key="PROMPT_OPTIMIZATION",
             main_discord_message_id=0,
             temperature=optimization_prompt_template.temperature,
@@ -313,9 +292,7 @@ async def store_proposal(proposal: OptimizationProposal, db_pool: Any) -> UUID:
     Returns:
         UUID of the stored proposal
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO dreaming_proposals (
@@ -365,9 +342,9 @@ async def get_proposal_by_id(
     Returns:
         OptimizationProposal if found, None otherwise
     """
-    active_db_pool = _get_active_db_pool(db_pool)
+    # db_pool already passed via DI
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT
@@ -409,9 +386,9 @@ async def get_pending_proposals(db_pool: Any) -> list[OptimizationProposal]:
     Returns:
         List of pending proposals, ordered by created_at (newest first)
     """
-    active_db_pool = _get_active_db_pool(db_pool)
+    # db_pool already passed via DI
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT
@@ -461,9 +438,9 @@ async def approve_proposal(
     Returns:
         True if applied successfully, False otherwise
     """
-    active_db_pool = _get_active_db_pool(db_pool)
+    # db_pool already passed via DI
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         # Get proposal
         proposal_row = await conn.fetchrow(
             """
@@ -559,9 +536,9 @@ async def reject_proposal(
     Returns:
         True if rejected successfully, False if not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
+    # db_pool already passed via DI
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
             UPDATE dreaming_proposals
@@ -602,9 +579,9 @@ async def reject_stale_proposals(prompt_key: str, db_pool: Any) -> int:
     Returns:
         Number of stale proposals rejected
     """
-    active_db_pool = _get_active_db_pool(db_pool)
+    # db_pool already passed via DI
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         # Get current version from prompt_registry
         current_version_row = await conn.fetchrow(
             """

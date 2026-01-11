@@ -17,7 +17,6 @@ from lattice.memory.procedural import get_prompt
 from lattice.utils.config import get_config
 
 from lattice.utils.date_resolution import get_now
-from lattice.utils.llm import get_auditing_llm_client
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 logger = structlog.get_logger(__name__)
@@ -42,27 +41,6 @@ class NudgePlan:
     latency_ms: int | None = None
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = (
-            "Database pool not available. Pass db_pool as an argument "
-            "(dependency injection required)."
-        )
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 async def format_episodic_nudge_context(
     db_pool: Any, user_timezone: str = "UTC", limit: int = 20
 ) -> str:
@@ -79,9 +57,8 @@ async def format_episodic_nudge_context(
     from zoneinfo import ZoneInfo
 
     tz = ZoneInfo(user_timezone)
-    active_db_pool = _get_active_db_pool(db_pool)
 
-    messages = await get_recent_messages(limit=limit, db_pool=active_db_pool)
+    messages = await get_recent_messages(limit=limit, db_pool=db_pool)
 
     if not messages:
         return "No recent conversation history."
@@ -111,26 +88,28 @@ async def get_default_channel_id() -> int | None:
 
 
 async def prepare_contextual_nudge(
-    db_pool: Any, llm_client: Any | None = None
+    db_pool: Any, llm_client: Any | None = None, bot: Any | None = None
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 
     Args:
         db_pool: Database pool for dependency injection
         llm_client: LLM client for dependency injection
+        bot: Discord bot instance for dependency injection
 
     Returns:
         NudgePlan with content and reason
     """
     # Use injected db_pool if provided, otherwise fallback to global
 
-    active_db_pool = _get_active_db_pool(db_pool)
-    active_llm_client = llm_client or get_auditing_llm_client()
+    from lattice.utils.llm import get_auditing_llm_client as global_llm_client
+
+    active_llm_client = llm_client or global_llm_client()
 
     try:
-        # Fallback to global if active_db_pool doesn't have the method or fails
-        if hasattr(active_db_pool, "get_user_timezone"):
-            res = active_db_pool.get_user_timezone()
+        # Fallback to global if db_pool doesn't have the method or fails
+        if hasattr(db_pool, "get_user_timezone"):
+            res = db_pool.get_user_timezone()
             if asyncio.iscoroutine(res):
                 user_tz = await res
             else:
@@ -138,11 +117,11 @@ async def prepare_contextual_nudge(
         else:
             from lattice.utils.database import get_user_timezone as global_get_tz
 
-            user_tz = await global_get_tz(db_pool=active_db_pool)
+            user_tz = await global_get_tz(db_pool=db_pool)
     except (AttributeError, TypeError):
         from lattice.utils.database import get_user_timezone as global_get_tz
 
-        user_tz = await global_get_tz(db_pool=active_db_pool)
+        user_tz = await global_get_tz(db_pool=db_pool)
 
     if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
         user_tz = "UTC"
@@ -151,18 +130,18 @@ async def prepare_contextual_nudge(
         user_tz = "UTC"
 
     conversation = await format_episodic_nudge_context(
-        db_pool=active_db_pool, user_timezone=user_tz
+        db_pool=db_pool, user_timezone=user_tz
     )
 
     from lattice.core import response_generator
 
     # Retrieve goal and activity context
-    goals = await response_generator.get_goal_context(db_pool=active_db_pool)
+    goals = await response_generator.get_goal_context(db_pool=db_pool)
     # Fetch activity context from retrieve_context logic
     from lattice.core.context_strategy import retrieve_context
 
     context_result = await retrieve_context(
-        db_pool=active_db_pool, entities=[], context_flags=["activity_context"]
+        db_pool=db_pool, entities=[], context_flags=["activity_context"]
     )
     activity = context_result.get("activity_context", "No recent activity recorded.")
 
@@ -177,9 +156,7 @@ async def prepare_contextual_nudge(
 
     date_hints = resolve_relative_dates("", timezone_str=user_tz)
 
-    prompt_template = await get_prompt(
-        db_pool=active_db_pool, prompt_key="CONTEXTUAL_NUDGE"
-    )
+    prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXTUAL_NUDGE")
     if not prompt_template:
         logger.error("CONTEXTUAL_NUDGE prompt not found in database")
         return NudgePlan(
@@ -203,7 +180,7 @@ async def prepare_contextual_nudge(
     try:
         result = await active_llm_client.complete(
             prompt=prompt,
-            db_pool=active_db_pool,
+            db_pool=db_pool,
             prompt_key="CONTEXTUAL_NUDGE",
             template_version=prompt_template.version,
             main_discord_message_id=0,
@@ -212,6 +189,7 @@ async def prepare_contextual_nudge(
             audit_view_params={
                 "input_text": "Deterministic contextual nudge",
             },
+            bot=bot,
         )
     except (ValueError, ImportError, Exception) as e:
         logger.exception("LLM call failed")

@@ -39,24 +39,6 @@ class ActiveHoursResult(TypedDict):
     timezone: str  # IANA timezone used
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
     """Calculate user's active hours from message patterns.
 
@@ -77,9 +59,8 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
         5. Ensure window is at least 6 hours wide
         6. Return start/end hours with confidence score
     """
-    active_db_pool = _get_active_db_pool(db_pool)
     try:
-        res = active_db_pool.get_user_timezone()
+        res = db_pool.get_user_timezone()
         if asyncio.iscoroutine(res):
             user_tz = await res
         else:
@@ -88,7 +69,7 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
         # Fallback for MagicMock in tests
         from lattice.utils.database import get_user_timezone as global_get_tz
 
-        user_tz = await global_get_tz(db_pool=active_db_pool)
+        user_tz = await global_get_tz(db_pool=db_pool)
 
     if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
         user_tz = "UTC"
@@ -101,7 +82,7 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
     # Get messages from last 30 days
     cutoff = get_now(user_tz) - timedelta(days=ANALYSIS_WINDOW_DAYS)
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         # Get all user messages (not bot messages) from the analysis window
         rows = await conn.fetch(
             """
@@ -204,9 +185,8 @@ async def is_within_active_hours(
     Returns:
         True if within active hours, False otherwise
     """
-    active_db_pool = _get_active_db_pool(db_pool)
     try:
-        res = active_db_pool.get_user_timezone()
+        res = db_pool.get_user_timezone()
         if asyncio.iscoroutine(res):
             user_tz = await res
         else:
@@ -214,7 +194,7 @@ async def is_within_active_hours(
     except (AttributeError, TypeError):
         from lattice.utils.database import get_user_timezone as global_get_tz
 
-        user_tz = await global_get_tz(db_pool=active_db_pool)
+        user_tz = await global_get_tz(db_pool=db_pool)
 
     if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
         user_tz = "UTC"
@@ -224,7 +204,7 @@ async def is_within_active_hours(
 
     # Get stored active hours
     try:
-        res_start = active_db_pool.get_system_health("active_hours_start")
+        res_start = db_pool.get_system_health("active_hours_start")
         if asyncio.iscoroutine(res_start):
             start_hour_raw = await res_start
         else:
@@ -233,7 +213,7 @@ async def is_within_active_hours(
         if isinstance(start_hour_raw, MagicMock):
             start_hour_raw = None
 
-        res_end = active_db_pool.get_system_health("active_hours_end")
+        res_end = db_pool.get_system_health("active_hours_end")
         if asyncio.iscoroutine(res_end):
             end_hour_raw = await res_end
         else:
@@ -248,14 +228,12 @@ async def is_within_active_hours(
         # Fallback for MagicMock in tests or uninitialized pool
         from lattice.utils.database import get_system_health as global_get_health
 
-        start_raw = await global_get_health(
-            "active_hours_start", db_pool=active_db_pool
-        )
+        start_raw = await global_get_health("active_hours_start", db_pool=db_pool)
         if isinstance(start_raw, MagicMock):
             start_raw = None
         start_hour = int(start_raw or 9)
 
-        end_raw = await global_get_health("active_hours_end", db_pool=active_db_pool)
+        end_raw = await global_get_health("active_hours_end", db_pool=db_pool)
         if isinstance(end_raw, MagicMock):
             end_raw = None
         end_hour = int(end_raw or 21)
@@ -302,40 +280,35 @@ async def update_active_hours(db_pool: Any) -> ActiveHoursResult:
     Returns:
         ActiveHoursResult with updated hours
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-    result = await calculate_active_hours(db_pool=active_db_pool)
+    result = await calculate_active_hours(db_pool=db_pool)
 
     # Store in system_health
     try:
-        await active_db_pool.set_system_health(
-            "active_hours_start", str(result["start_hour"])
-        )
-        await active_db_pool.set_system_health(
-            "active_hours_end", str(result["end_hour"])
-        )
-        await active_db_pool.set_system_health(
+        await db_pool.set_system_health("active_hours_start", str(result["start_hour"]))
+        await db_pool.set_system_health("active_hours_end", str(result["end_hour"]))
+        await db_pool.set_system_health(
             "active_hours_confidence", str(result["confidence"])
         )
         # Use UTC for internal last_updated tracking
-        await active_db_pool.set_system_health(
+        await db_pool.set_system_health(
             "active_hours_last_updated", get_now("UTC").isoformat()
         )
     except (AttributeError, TypeError):
         from lattice.utils.database import set_system_health as global_set_health
 
         await global_set_health(
-            "active_hours_start", str(result["start_hour"]), db_pool=active_db_pool
+            "active_hours_start", str(result["start_hour"]), db_pool=db_pool
         )
         await global_set_health(
-            "active_hours_end", str(result["end_hour"]), db_pool=active_db_pool
+            "active_hours_end", str(result["end_hour"]), db_pool=db_pool
         )
         await global_set_health(
-            "active_hours_confidence", str(result["confidence"]), db_pool=active_db_pool
+            "active_hours_confidence", str(result["confidence"]), db_pool=db_pool
         )
         await global_set_health(
             "active_hours_last_updated",
             get_now("UTC").isoformat(),
-            db_pool=active_db_pool,
+            db_pool=db_pool,
         )
 
     logger.info(

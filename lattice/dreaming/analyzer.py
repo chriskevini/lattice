@@ -75,24 +75,6 @@ class PromptMetrics:
     priority_score: float
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 async def analyze_prompt_effectiveness(
     db_pool: Any,
     min_uses: int = 10,
@@ -110,9 +92,7 @@ async def analyze_prompt_effectiveness(
     Returns:
         List of prompt metrics, sorted by priority (highest first)
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
             WITH current_versions AS (
@@ -232,9 +212,7 @@ async def get_feedback_samples(
     Returns:
         List of feedback content strings
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         query = """
             SELECT uf.content
             FROM user_feedback uf
@@ -285,9 +263,7 @@ async def get_feedback_with_context(
     Returns:
         List of dicts containing message, rendered_prompt (if requested), response, and feedback
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         # Use separate queries based on whether we need rendered_prompt
         # This avoids dynamic SQL construction which triggers security warnings
         if include_rendered_prompt:

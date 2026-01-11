@@ -65,24 +65,6 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     return injector.validate_template(template)
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 async def fetch_goal_names(db_pool: Any) -> list[str]:
     """Fetch unique goal names from knowledge graph.
 
@@ -92,14 +74,12 @@ async def fetch_goal_names(db_pool: Any) -> list[str]:
     Returns:
         List of unique goal strings
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         logger.warning("Database pool not initialized, cannot fetch goal names")
         return []
 
     try:
-        async with active_db_pool.pool.acquire() as conn:
+        async with db_pool.pool.acquire() as conn:
             goals = await conn.fetch(
                 f"""
                 SELECT DISTINCT object FROM semantic_memories
@@ -132,10 +112,8 @@ async def get_goal_context(db_pool: Any, goal_names: list[str] | None = None) ->
     if not goal_names:
         return "No active goals."
 
-    active_db_pool = _get_active_db_pool(db_pool)
-
     try:
-        async with active_db_pool.pool.acquire() as conn:
+        async with db_pool.pool.acquire() as conn:
             placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
             query = f"SELECT subject, predicate, object FROM semantic_memories WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
             predicates = await conn.fetch(query, *goal_names)
@@ -178,6 +156,7 @@ async def generate_response(
     audit_view_params: dict[str, Any] | None = None,
     llm_client: Any | None = None,
     main_discord_message_id: int | None = None,
+    bot: Any | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any]]:
     """Generate a response using the unified prompt template.
 
@@ -192,16 +171,15 @@ async def generate_response(
         audit_view_params: Parameters for the AuditView
         llm_client: LLM client for dependency injection
         main_discord_message_id: Discord message ID for audit linkage
+        bot: Discord bot instance for dependency injection
 
     Returns:
         Tuple of (AuditResult, rendered_prompt, context_info)
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
     # Get unified response template
     template_name = "UNIFIED_RESPONSE"
     prompt_template = await procedural.get_prompt(
-        db_pool=active_db_pool, prompt_key=template_name
+        db_pool=db_pool, prompt_key=template_name
     )
 
     if not prompt_template:
@@ -262,13 +240,14 @@ async def generate_response(
     try:
         result = await client.complete(
             prompt=filled_prompt,
-            db_pool=active_db_pool,
+            db_pool=db_pool,
             prompt_key=template_name,
             template_version=prompt_template.version,
             main_discord_message_id=main_discord_message_id,
             temperature=temperature,
             audit_view=audit_view,
             audit_view_params=audit_view_params,
+            bot=bot,
         )
     except Exception as e:
         logger.error("LLM call failed", error=str(e), prompt_key=template_name)

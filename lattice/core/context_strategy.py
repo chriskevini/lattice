@@ -23,7 +23,6 @@ from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 from lattice.core.constants import CONTEXT_STRATEGY_WINDOW_SIZE
 from lattice.memory.procedural import get_prompt
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
-from lattice.utils.llm import get_discord_bot
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
@@ -54,27 +53,6 @@ class ContextStrategy:
     raw_response: str
     strategy_method: str
     created_at: datetime
-
-
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = (
-            "Database pool not available. Pass db_pool as an argument "
-            "(dependency injection required)."
-        )
-        raise RuntimeError(msg)
-    return db_pool_arg
 
 
 def build_smaller_episodic_context(
@@ -133,6 +111,7 @@ async def context_strategy(
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
     llm_client: Any | None = None,
+    bot: Any | None = None,
 ) -> ContextStrategy:
     """Perform context strategy analysis on conversation window.
 
@@ -155,6 +134,7 @@ async def context_strategy(
         audit_view: Whether to send an AuditView to the dream channel
         audit_view_params: Parameters for the AuditView
         llm_client: LLM client for dependency injection
+        bot: Discord bot instance for dependency injection
 
     Returns:
         ContextStrategy object with structured fields
@@ -166,17 +146,13 @@ async def context_strategy(
     from lattice.memory.canonical import get_canonical_entities_list
     from lattice.utils.date_resolution import get_now
 
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    prompt_template = await get_prompt(
-        db_pool=active_db_pool, prompt_key="CONTEXT_STRATEGY"
-    )
+    prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXT_STRATEGY")
     if not prompt_template:
         msg = "CONTEXT_STRATEGY prompt template not found in prompt_registry"
         raise ValueError(msg)
 
     user_tz = user_timezone or "UTC"
-    canonical_entities = await get_canonical_entities_list(db_pool=active_db_pool)
+    canonical_entities = await get_canonical_entities_list(db_pool=db_pool)
     canonical_entities_str = (
         ", ".join(canonical_entities) if canonical_entities else "(empty)"
     )
@@ -208,7 +184,6 @@ async def context_strategy(
     from lattice.utils.llm import get_auditing_llm_client as global_llm_client
 
     active_llm_client = llm_client or global_llm_client()
-    bot = get_discord_bot()
 
     complete_kwargs = {
         "prompt": rendered_prompt,
@@ -218,7 +193,8 @@ async def context_strategy(
         "temperature": prompt_template.temperature,
         "audit_view": audit_view,
         "audit_view_params": audit_view_params,
-        "db_pool": active_db_pool,
+        "db_pool": db_pool,
+        "bot": bot,
     }
 
     # Handle both real client and Mock objects
@@ -285,7 +261,7 @@ async def context_strategy(
     strategy_data["_strategy_method"] = strategy_method
     strategy_jsonb = json.dumps(strategy_data)
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         await conn.execute(
             """
             INSERT INTO context_strategies (
@@ -340,9 +316,7 @@ async def get_context_strategy(
     Returns:
         ContextStrategy object or None if not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT
@@ -401,9 +375,7 @@ async def get_context_strategy_by_message_id(
     Returns:
         ContextStrategy object or None if not found
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT
@@ -462,8 +434,6 @@ async def retrieve_context(
     """
     from lattice.memory.graph import GraphTraversal
 
-    active_db_pool = _get_active_db_pool(db_pool)
-
     context: dict[str, Any] = {
         "semantic_context": "",
         "goal_context": "",
@@ -476,8 +446,8 @@ async def retrieve_context(
     if "activity_context" in context_flags or "goal_context" in context_flags:
         additional_entities = []
 
-        if active_db_pool.is_initialized():
-            traverser = GraphTraversal(active_db_pool.pool, max_depth=1)
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=1)
 
             if "activity_context" in context_flags:
                 activity_memories = await traverser.find_semantic_memories(
@@ -534,8 +504,8 @@ async def retrieve_context(
             )
 
     if entities and memory_depth > 0:
-        if active_db_pool.is_initialized():
-            traverser = GraphTraversal(active_db_pool.pool, max_depth=memory_depth)
+        if db_pool.is_initialized():
+            traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
 
             traverse_tasks = [
                 traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
