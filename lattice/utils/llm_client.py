@@ -28,6 +28,13 @@ class GenerationResult:
     cost_usd: float | None
     latency_ms: int
     temperature: float
+    finish_reason: str | None = None
+    cache_discount_usd: float | None = None
+    native_tokens_cached: int | None = None
+    native_tokens_reasoning: int | None = None
+    upstream_id: str | None = None
+    cancelled: bool | None = None
+    moderation_latency_ms: int | None = None
 
 
 class _LLMClient:
@@ -191,6 +198,30 @@ class _LLMClient:
         usage = response.usage
         cost_usd = getattr(usage, "cost", None) if usage else None
 
+        finish_reason = None
+        cache_discount_usd = None
+        native_tokens_cached = None
+        native_tokens_reasoning = None
+        upstream_id = None
+        cancelled = None
+        moderation_latency_ms = None
+
+        if usage:
+            finish_reason = (
+                getattr(usage, "completion_details", {}).get("finish_reason")
+                if hasattr(usage, "completion_details")
+                else None
+            )
+            cache_discount_usd = getattr(usage, "cache_discount", None)
+            native_tokens_cached = getattr(usage, "native_tokens_cached", None)
+            native_tokens_reasoning = getattr(usage, "native_tokens_reasoning", None)
+            upstream_id = getattr(usage, "upstream_id", None)
+            cancelled = getattr(usage, "cancelled", None)
+            moderation_latency_ms = getattr(usage, "moderation_latency", None)
+
+            if response.choices:
+                finish_reason = getattr(response.choices[0], "finish_reason", None)
+
         if not response.choices:
             logger.error(
                 f"LLM returned empty choices list - model={response.model}, "
@@ -209,6 +240,13 @@ class _LLMClient:
                 cost_usd=float(cost_usd) if cost_usd else None,
                 latency_ms=latency_ms,
                 temperature=temperature,
+                finish_reason=finish_reason,
+                cache_discount_usd=cache_discount_usd,
+                native_tokens_cached=native_tokens_cached,
+                native_tokens_reasoning=native_tokens_reasoning,
+                upstream_id=upstream_id,
+                cancelled=cancelled,
+                moderation_latency_ms=moderation_latency_ms,
             )
 
         message_content = response.choices[0].message.content
@@ -235,4 +273,11 @@ class _LLMClient:
             cost_usd=float(cost_usd) if cost_usd else None,
             latency_ms=latency_ms,
             temperature=temperature,
+            finish_reason=finish_reason,
+            cache_discount_usd=cache_discount_usd,
+            native_tokens_cached=native_tokens_cached,
+            native_tokens_reasoning=native_tokens_reasoning,
+            upstream_id=upstream_id,
+            cancelled=cancelled,
+            moderation_latency_ms=moderation_latency_ms,
         )
