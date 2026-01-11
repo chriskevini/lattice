@@ -99,19 +99,27 @@ jobs:
           # pg_dump includes session-specific tokens that change on each run:
           # - \restrict/\unrestrict tokens
           # - Version comments (e.g., "Dumped by pg_dump version X.Y")
+          # - SET statements for session parameters (vary by pg_dump version)
           # Filter them out before comparison
           grep -v '^\\restrict' scripts/schema.sql | \
             grep -v '^\\unrestrict' | \
-            grep -v '^-- Dumped by pg_dump' > scripts/schema.sql.clean
+            grep -v '^-- Dumped by pg_dump' | \
+            grep -v '^SET ' | \
+            grep -v "^SELECT pg_catalog.set_config" > scripts/schema.sql.clean
 
           grep -v '^\\restrict' tmp_schema.sql | \
             grep -v '^\\unrestrict' | \
-            grep -v '^-- Dumped by pg_dump' > tmp_schema.sql.clean
+            grep -v '^-- Dumped by pg_dump' | \
+            grep -v '^SET ' | \
+            grep -v "^SELECT pg_catalog.set_config" > tmp_schema.sql.clean
 
           if ! diff -u scripts/schema.sql.clean tmp_schema.sql.clean; then
             echo "Schema drift detected! The schema.sql does not match the migration output."
             echo "Please update schema.sql by running migrations on a clean database and dumping the schema."
             rm -f scripts/schema.sql.clean tmp_schema.sql.clean
+            exit 1
+          fi
+          rm -f scripts/schema.sql.clean tmp_schema.sql.clean
             exit 1
           fi
           rm -f scripts/schema.sql.clean tmp_schema.sql.clean
