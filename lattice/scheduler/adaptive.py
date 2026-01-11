@@ -39,41 +39,32 @@ class ActiveHoursResult(TypedDict):
     timezone: str  # IANA timezone used
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
-async def calculate_active_hours(db_pool: Any = None) -> ActiveHoursResult:
+async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
     """Calculate user's active hours from message patterns.
 
     Analyzes messages from the last 30 days to determine peak activity hours.
     Falls back to default 9 AM - 9 PM if insufficient data.
 
     Args:
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         ActiveHoursResult with start_hour, end_hour, confidence, and sample_size
@@ -202,13 +193,13 @@ async def calculate_active_hours(db_pool: Any = None) -> ActiveHoursResult:
 
 
 async def is_within_active_hours(
-    check_time: datetime | None = None, db_pool: Any = None
+    db_pool: Any, check_time: datetime | None = None
 ) -> bool:
     """Check if the given time (or now) is within the user's active hours.
 
     Args:
+        db_pool: Database pool for dependency injection (required)
         check_time: Time to check. Defaults to current time in user's timezone.
-        db_pool: Database pool for dependency injection
 
     Returns:
         True if within active hours, False otherwise
@@ -300,13 +291,13 @@ async def is_within_active_hours(
     return within_hours
 
 
-async def update_active_hours(db_pool: Any = None) -> ActiveHoursResult:
+async def update_active_hours(db_pool: Any) -> ActiveHoursResult:
     """Recalculate and store user's active hours.
 
     This should be called periodically (e.g., daily) to keep active hours current.
 
     Args:
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         ActiveHoursResult with updated hours

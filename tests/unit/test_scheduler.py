@@ -526,7 +526,7 @@ class TestAdaptiveActiveHours:
             )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            result = await calculate_active_hours()
+            result = await calculate_active_hours(db_pool=mock_pool)
 
             assert result["start_hour"] == 9  # Default
             assert result["end_hour"] == 21  # Default
@@ -557,7 +557,7 @@ class TestAdaptiveActiveHours:
             )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            result = await calculate_active_hours()
+            result = await calculate_active_hours(db_pool=mock_pool)
 
             # Should detect evening activity window
             assert result["sample_size"] == 100
@@ -589,12 +589,15 @@ class TestAdaptiveActiveHours:
         ):
             # Test time within active hours (noon)
             within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(within_time, db_pool=mock_pool) is True
+            assert (
+                await is_within_active_hours(mock_pool, check_time=within_time) is True
+            )
 
             # Test time outside active hours (2 AM)
             outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert (
-                await is_within_active_hours(outside_time, db_pool=mock_pool) is False
+                await is_within_active_hours(mock_pool, check_time=outside_time)
+                is False
             )
 
     @pytest.mark.asyncio
@@ -629,16 +632,21 @@ class TestAdaptiveActiveHours:
         ):
             # Test time within active hours (midnight)
             within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(within_time, db_pool=mock_pool) is True
+            assert (
+                await is_within_active_hours(mock_pool, check_time=within_time) is True
+            )
 
             # Test time within active hours (6 AM)
             within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert await is_within_active_hours(within_time2, db_pool=mock_pool) is True
+            assert (
+                await is_within_active_hours(mock_pool, check_time=within_time2) is True
+            )
 
             # Test time outside active hours (noon)
             outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
             assert (
-                await is_within_active_hours(outside_time, db_pool=mock_pool) is False
+                await is_within_active_hours(mock_pool, check_time=outside_time)
+                is False
             )
 
     @pytest.mark.asyncio
