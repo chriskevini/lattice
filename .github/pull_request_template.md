@@ -11,6 +11,8 @@ Examples:
 - feat: add activity tracking support
 - fix: prevent null pointer in scheduler
 - refactor: consolidate timezone handling
+
+This will be used as the squash merge commit title.
 -->
 
 ## Changes

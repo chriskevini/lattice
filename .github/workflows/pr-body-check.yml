@@ -39,15 +39,4 @@ jobs:
             exit 1
           fi
           
-          # Validate Summary follows conventional commits format
-          echo "Checking Summary format..."
-          SUMMARY=$(echo "$PR_BODY" | sed -n '/## Summary/,/## /p' | sed '$d' | tail -n +2 | head -1 | xargs)
-          
-          if ! echo "$SUMMARY" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?: .+'; then
-            echo "❌ Summary must follow conventional commits format: 'type: description'"
-            echo "   Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert"
-            echo "   Found: '$SUMMARY'"
-            exit 1
-          fi
-          
           echo "✅ PR body structure is valid"
