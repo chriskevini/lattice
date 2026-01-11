@@ -6,11 +6,12 @@ that need optimization.
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from lattice.utils.database import db_pool
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -78,6 +79,7 @@ class PromptMetrics:
 
 
 async def analyze_prompt_effectiveness(
+    db_pool: "DatabasePool",
     min_uses: int = 10,
     lookback_days: int = 30,
     min_feedback: int = 10,
@@ -85,6 +87,7 @@ async def analyze_prompt_effectiveness(
     """Analyze prompt effectiveness from audit data.
 
     Args:
+        db_pool: Database pool for dependency injection (required)
         min_uses: Minimum number of uses to consider for analysis
         lookback_days: Number of days to look back for analysis
         min_feedback: Minimum number of feedback items to consider for analysis
@@ -194,6 +197,7 @@ async def analyze_prompt_effectiveness(
 
 async def get_feedback_samples(
     prompt_key: str,
+    db_pool: "DatabasePool",
     limit: int = 10,
     sentiment_filter: str | None = None,
 ) -> list[str]:
@@ -204,6 +208,7 @@ async def get_feedback_samples(
 
     Args:
         prompt_key: The prompt key to get feedback for
+        db_pool: Database pool for dependency injection (required)
         limit: Maximum number of samples to return
         sentiment_filter: Filter by sentiment ('positive', 'negative', 'neutral')
 
@@ -236,6 +241,7 @@ async def get_feedback_samples(
 
 async def get_feedback_with_context(
     prompt_key: str,
+    db_pool: "DatabasePool",
     limit: int = 10,
     include_rendered_prompt: bool = True,
     max_prompt_chars: int = 5000,
@@ -248,9 +254,11 @@ async def get_feedback_with_context(
     3. The bot's response
     4. The user's feedback
     5. Sentiment
+    6. Database pool for dependency injection
 
     Args:
         prompt_key: The prompt key to get feedback for
+        db_pool: Database pool for dependency injection (required)
         limit: Maximum number of samples to return
         include_rendered_prompt: Whether to include the rendered prompt (default True)
         max_prompt_chars: Maximum characters of rendered prompt to include (default 5000)

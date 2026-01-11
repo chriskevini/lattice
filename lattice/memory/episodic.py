@@ -11,12 +11,11 @@ from uuid import UUID
 
 import structlog
 
-from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import get_now
 
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -66,10 +65,11 @@ class EpisodicMessage:
         return "ASSISTANT" if self.is_bot else "USER"
 
 
-async def store_message(message: EpisodicMessage) -> UUID:
+async def store_message(db_pool: Any, message: EpisodicMessage) -> UUID:
     """Store a message in episodic memory.
 
     Args:
+        db_pool: Database pool for dependency injection
         message: The message to store
 
     Returns:
@@ -109,18 +109,18 @@ async def store_message(message: EpisodicMessage) -> UUID:
 
     from lattice.memory import batch_consolidation
 
-    asyncio.create_task(batch_consolidation.check_and_run_batch())
+    asyncio.create_task(batch_consolidation.check_and_run_batch(db_pool=db_pool))
 
     return message_id
 
 
 async def get_recent_messages(
-    channel_id: int | None = None,
-    limit: int = 10,
+    db_pool: "DatabasePool", channel_id: int | None = None, limit: int = 10
 ) -> list[EpisodicMessage]:
     """Get recent messages from a channel or all channels.
 
     Args:
+        db_pool: Database pool for dependency injection
         channel_id: Discord channel ID (None for all channels)
         limit: Maximum number of messages to return
 
@@ -167,7 +167,25 @@ async def get_recent_messages(
     ]
 
 
+def format_messages(messages: list[EpisodicMessage]) -> str:
+    """Format a list of episodic messages for LLM context.
+
+    Args:
+        messages: List of messages to format
+
+    Returns:
+        Formatted string of messages
+    """
+    formatted_lines = []
+    for msg in messages:
+        role = "Assistant" if msg.is_bot else "User"
+        formatted_lines.append(f"{role}: {msg.content}")
+
+    return "\n".join(formatted_lines)
+
+
 async def store_semantic_memories(
+    db_pool: "DatabasePool",
     message_id: UUID,
     memories: list[dict[str, str]],
     source_batch_id: str | None = None,
@@ -175,6 +193,7 @@ async def store_semantic_memories(
     """Store extracted memories in semantic_memories table.
 
     Args:
+        db_pool: Database pool for dependency injection
         message_id: UUID of origin message
         memories: List of {"subject": str, "predicate": str, "object": str}
         source_batch_id: Optional batch identifier for traceability

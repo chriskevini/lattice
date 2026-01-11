@@ -4,7 +4,7 @@ import json
 from lattice.utils.date_resolution import get_now
 from zoneinfo import ZoneInfo
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import asyncpg
@@ -26,22 +26,18 @@ def create_mock_pool_with_transaction() -> tuple[MagicMock, AsyncMock]:
     """
     mock_conn = AsyncMock()
 
-    # Create async context manager for conn.transaction()
     mock_transaction_cm = MagicMock()
     mock_transaction_cm.__aenter__ = AsyncMock(return_value=None)
     mock_transaction_cm.__aexit__ = AsyncMock(return_value=None)
 
-    # transaction() is a regular method that returns an async context manager
     mock_conn.transaction = MagicMock(return_value=mock_transaction_cm)
 
-    # Create async context manager for pool.acquire()
     mock_acquire_cm = MagicMock()
     mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
     mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
     mock_pool = MagicMock()
-    # acquire() is a regular method that returns an async context manager
-    mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
     return mock_pool, mock_conn
 
@@ -106,7 +102,6 @@ class TestEpisodicMessage:
         after = get_now()
 
         assert before <= msg.timestamp <= after
-        # Compare ZoneInfo objects if available, otherwise fallback to name comparison
         if isinstance(msg.timestamp.tzinfo, ZoneInfo):
             assert msg.timestamp.tzinfo == ZoneInfo("UTC")
         else:
@@ -165,21 +160,18 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        result = await store_message(db_pool=mock_pool, message=msg)
 
-            result = await store_message(msg)
-
-            assert result == message_id
-            mock_conn.fetchrow.assert_called_once()
-            call_args = mock_conn.fetchrow.call_args
-            assert "INSERT INTO raw_messages" in call_args[0][0]
-            assert call_args[0][1] == 12345  # discord_message_id
-            assert call_args[0][2] == 67890  # channel_id
-            assert call_args[0][3] == "Hello"  # content
-            assert call_args[0][4] is False  # is_bot
-            assert call_args[0][5] is False  # is_proactive
-            assert call_args[0][6] is None  # generation_metadata (None)
+        assert result == message_id
+        mock_conn.fetchrow.assert_called_once()
+        call_args = mock_conn.fetchrow.call_args
+        assert "INSERT INTO raw_messages" in call_args[0][0]
+        assert call_args[0][1] == 12345
+        assert call_args[0][2] == 67890
+        assert call_args[0][3] == "Hello"
+        assert call_args[0][4] is False
+        assert call_args[0][5] is False
+        assert call_args[0][6] is None
 
     @pytest.mark.asyncio
     async def test_store_message_with_full_metadata(self) -> None:
@@ -198,15 +190,11 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        result = await store_message(db_pool=mock_pool, message=msg)
 
-            result = await store_message(msg)
-
-            assert result == message_id
-            call_args = mock_conn.fetchrow.call_args
-            # Verify metadata was JSON serialized
-            assert call_args[0][6] == json.dumps(metadata)
+        assert result == message_id
+        call_args = mock_conn.fetchrow.call_args
+        assert call_args[0][6] == json.dumps(metadata)
 
     @pytest.mark.asyncio
     async def test_store_message_proactive_flag(self) -> None:
@@ -223,14 +211,11 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        result = await store_message(db_pool=mock_pool, message=msg)
 
-            result = await store_message(msg)
-
-            assert result == message_id
-            call_args = mock_conn.fetchrow.call_args
-            assert call_args[0][5] is True  # is_proactive
+        assert result == message_id
+        call_args = mock_conn.fetchrow.call_args
+        assert call_args[0][5] is True
 
     @pytest.mark.asyncio
     async def test_store_message_database_error(self) -> None:
@@ -245,11 +230,8 @@ class TestStoreMessage:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetchrow = AsyncMock(side_effect=Exception("DB connection failed"))
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-
-            with pytest.raises(Exception, match="DB connection failed"):
-                await store_message(msg)
+        with pytest.raises(Exception, match="DB connection failed"):
+            await store_message(db_pool=mock_pool, message=msg)
 
 
 class TestGetRecentMessages:
@@ -258,11 +240,10 @@ class TestGetRecentMessages:
     @pytest.mark.asyncio
     async def test_get_recent_messages_specific_channel(self) -> None:
         """Test retrieving recent messages from a specific channel."""
-        # Mock DB returns newest-first (DESC order)
         mock_rows = [
             {
                 "id": uuid4(),
-                "content": "Message 2",  # Newer message first
+                "content": "Message 2",
                 "discord_message_id": 2,
                 "channel_id": 123,
                 "is_bot": True,
@@ -273,7 +254,7 @@ class TestGetRecentMessages:
             },
             {
                 "id": uuid4(),
-                "content": "Message 1",  # Older message second
+                "content": "Message 1",
                 "discord_message_id": 1,
                 "channel_id": 123,
                 "is_bot": False,
@@ -287,19 +268,17 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        messages = await get_recent_messages(
+            db_pool=mock_pool, channel_id=123, limit=10
+        )
 
-            messages = await get_recent_messages(channel_id=123, limit=10)
-
-            # Function reverses, so oldest comes first after reversal
-            assert len(messages) == 2
-            assert messages[0].content == "Message 1"  # Oldest first
-            assert messages[1].content == "Message 2"  # Newest second
-            mock_conn.fetch.assert_called_once()
-            call_args = mock_conn.fetch.call_args
-            assert "WHERE channel_id = $1" in call_args[0][0]
-            assert call_args[0][1] == 123
+        assert len(messages) == 2
+        assert messages[0].content == "Message 1"
+        assert messages[1].content == "Message 2"
+        mock_conn.fetch.assert_called_once()
+        call_args = mock_conn.fetch.call_args
+        assert "WHERE channel_id = $1" in call_args[0][0]
+        assert call_args[0][1] == 123
 
     @pytest.mark.asyncio
     async def test_get_recent_messages_all_channels(self) -> None:
@@ -321,15 +300,13 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        messages = await get_recent_messages(
+            db_pool=mock_pool, channel_id=None, limit=5
+        )
 
-            messages = await get_recent_messages(channel_id=None, limit=5)
-
-            assert len(messages) == 1
-            call_args = mock_conn.fetch.call_args
-            # Should not have WHERE clause for channel_id when None
-            assert "WHERE channel_id" not in call_args[0][0]
+        assert len(messages) == 1
+        call_args = mock_conn.fetch.call_args
+        assert "WHERE channel_id" not in call_args[0][0]
 
     @pytest.mark.asyncio
     async def test_get_recent_messages_empty_result(self) -> None:
@@ -337,17 +314,15 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        messages = await get_recent_messages(
+            db_pool=mock_pool, channel_id=999, limit=10
+        )
 
-            messages = await get_recent_messages(channel_id=999, limit=10)
-
-            assert messages == []
+        assert messages == []
 
     @pytest.mark.asyncio
     async def test_get_recent_messages_ordering(self) -> None:
         """Test that messages are ordered oldest-first (reversed from DESC query)."""
-        # Simulate DB returning newest-first
         mock_rows = [
             {
                 "id": uuid4(),
@@ -376,14 +351,12 @@ class TestGetRecentMessages:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        messages = await get_recent_messages(
+            db_pool=mock_pool, channel_id=123, limit=10
+        )
 
-            messages = await get_recent_messages(channel_id=123, limit=10)
-
-            # Function should reverse the list, so oldest comes first
-            assert messages[0].content == "Oldest"
-            assert messages[1].content == "Newest"
+        assert messages[0].content == "Oldest"
+        assert messages[1].content == "Newest"
 
     @pytest.mark.asyncio
     async def test_get_recent_messages_null_timezone_defaults_to_utc(self) -> None:
@@ -398,19 +371,18 @@ class TestGetRecentMessages:
                 "is_proactive": False,
                 "timestamp": get_now(),
                 "generation_metadata": None,
-                "user_timezone": None,  # NULL from DB
+                "user_timezone": None,
             },
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        messages = await get_recent_messages(
+            db_pool=mock_pool, channel_id=123, limit=10
+        )
 
-            messages = await get_recent_messages(channel_id=123, limit=10)
-
-            assert messages[0].user_timezone == "UTC"
+        assert messages[0].user_timezone == "UTC"
 
 
 class TestStoreSemanticMemories:
@@ -419,109 +391,90 @@ class TestStoreSemanticMemories:
     @pytest.mark.asyncio
     async def test_store_semantic_memories_empty_list(self) -> None:
         """Test that empty memories list returns early without DB access."""
-        # result is None as it returns early
-        await store_semantic_memories(uuid4(), [])  # type: ignore[func-returns-value]
+        await store_semantic_memories(
+            db_pool=MagicMock(), message_id=uuid4(), memories=[]
+        )
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_valid_memory(self) -> None:
         """Test storing a valid semantic memory."""
         message_id = uuid4()
-
         memories = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        await store_semantic_memories(
+            db_pool=mock_pool, message_id=message_id, memories=memories
+        )
 
-            await store_semantic_memories(message_id, memories)
-
-            # Verify memory was inserted
-            mock_conn.execute.assert_called_once()
-            call_args = mock_conn.execute.call_args
-            assert "INSERT INTO semantic_memories" in call_args[0][0]
-            assert call_args[0][1] == "Alice"
-            assert call_args[0][2] == "likes"
-            assert call_args[0][3] == "Python"
-            assert call_args[0][4] is None  # source_batch_id
+        mock_conn.execute.assert_called_once()
+        call_args = mock_conn.execute.call_args
+        assert "INSERT INTO semantic_memories" in call_args[0][0]
+        assert call_args[0][1] == "Alice"
+        assert call_args[0][2] == "likes"
+        assert call_args[0][3] == "Python"
+        assert call_args[0][4] is None
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_skips_invalid(self) -> None:
         """Test that invalid memories (missing fields) are skipped with warning."""
         message_id = uuid4()
-
         invalid_memories = [
-            {"subject": "", "predicate": "likes", "object": "Python"},  # Empty subject
-            {
-                "subject": "Alice",
-                "predicate": "",
-                "object": "Python",
-            },  # Empty predicate
-            {"subject": "Alice", "predicate": "likes", "object": ""},  # Empty object
-            {"subject": "Alice", "predicate": "likes"},  # Missing object key
+            {"subject": "", "predicate": "likes", "object": "Python"},
+            {"subject": "Alice", "predicate": "", "object": "Python"},
+            {"subject": "Alice", "predicate": "likes", "object": ""},
+            {"subject": "Alice", "predicate": "likes"},
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        await store_semantic_memories(
+            db_pool=mock_pool, message_id=message_id, memories=invalid_memories
+        )
 
-            await store_semantic_memories(message_id, invalid_memories)
-
-            # Should not insert any memories (all invalid)
-            mock_conn.execute.assert_not_called()
+        mock_conn.execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_continues_on_error(self) -> None:
         """Test that errors executing INSERT don't stop other memories."""
         message_id = uuid4()
-
         memories = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
             {"subject": "Bob", "predicate": "uses", "object": "Java"},
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        # First execute succeeds, second fails
         mock_conn.execute = AsyncMock(
             side_effect=[None, asyncpg.PostgresError("DB error")]
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        await store_semantic_memories(
+            db_pool=mock_pool, message_id=message_id, memories=memories
+        )
 
-            # Should not raise exception, continues to process all memories
-            await store_semantic_memories(message_id, memories)
-
-            # Both memories attempted
-            assert mock_conn.execute.call_count == 2
+        assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_continues_on_execute_error(self) -> None:
         """Test that errors executing INSERT don't stop other memories."""
         message_id = uuid4()
-
         memories = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
             {"subject": "Bob", "predicate": "knows", "object": "Carol"},
         ]
 
         mock_pool, mock_conn = create_mock_pool_with_transaction()
-        # First execute succeeds, second fails
         mock_conn.execute = AsyncMock(
             side_effect=[None, asyncpg.PostgresError("DB error")]
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        await store_semantic_memories(
+            db_pool=mock_pool, message_id=message_id, memories=memories
+        )
 
-            # Should not raise exception, continues to process all memories
-            await store_semantic_memories(message_id, memories)
-
-            # Both memories attempted
-            assert mock_conn.execute.call_count == 2
+        assert mock_conn.execute.call_count == 2
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_uses_transaction(self) -> None:
@@ -532,10 +485,8 @@ class TestStoreSemanticMemories:
         mock_pool, mock_conn = create_mock_pool_with_transaction()
         mock_conn.execute = AsyncMock()
 
-        with patch("lattice.memory.episodic.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        await store_semantic_memories(
+            db_pool=mock_pool, message_id=message_id, memories=memories
+        )
 
-            await store_semantic_memories(message_id, memories)
-
-            # Verify transaction was used
-            mock_conn.transaction.assert_called_once()
+        mock_conn.transaction.assert_called_once()

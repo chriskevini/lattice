@@ -1,6 +1,5 @@
 """Unit tests for LLM client utilities."""
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,7 +8,6 @@ from lattice.utils.llm import (
     AuditResult,
     GenerationResult,
     _LLMClient,
-    _get_llm_client,
 )
 
 
@@ -24,16 +22,6 @@ def mock_config():
     config.openrouter_api_key = None
     config.openrouter_model = "nvidia/nemotron-3-nano-30b-a3b:free"
     yield config
-
-
-@pytest.fixture(autouse=True)
-def reset_llm_client(mock_config):
-    """Reset global LLM client before and after each test for isolation."""
-    import lattice.utils.llm
-
-    lattice.utils.llm._llm_client = None
-    yield
-    lattice.utils.llm._llm_client = None
 
 
 class TestGenerationResult:
@@ -164,9 +152,10 @@ class Test_LLMClientOpenRouter:
         """Test that OpenRouter mode raises ImportError if openai not installed."""
         client = _LLMClient(provider="openrouter")
 
-        with patch.dict("sys.modules", {"openai": None}):
-            with pytest.raises(ImportError, match="openai package not installed"):
-                await client._openrouter_complete("test", 0.7, None)
+        with patch.dict("os.environ", {"FORCE_OPENAI_IMPORT_ERROR": "1"}):
+            with patch.dict("sys.modules", {"openai": None}):
+                with pytest.raises(ImportError, match="openai package not installed"):
+                    await client._openrouter_complete("test", 0.7, None)
 
     @pytest.mark.asyncio
     async def test_openrouter_complete_missing_api_key(self, mock_config) -> None:
@@ -470,40 +459,6 @@ class Test_LLMClientComplete:
             assert result == mock_result
 
 
-class TestGet_LLMClient:
-    """Tests for the global LLM client getter."""
-
-    def test__get_llm_client_creates_instance(self, mock_config) -> None:
-        """Test that _get_llm_client creates a client instance."""
-        mock_config.llm_provider = "placeholder"
-        client = _get_llm_client()
-
-        assert isinstance(client, _LLMClient)
-        assert client.provider == "placeholder"
-
-    def test__get_llm_client_reuses_instance(self) -> None:
-        """Test that _get_llm_client returns same instance on subsequent calls."""
-        with patch.dict(os.environ, {"LLM_PROVIDER": "placeholder"}, clear=True):
-            client1 = _get_llm_client()
-            client2 = _get_llm_client()
-
-            assert client1 is client2
-
-    def test__get_llm_client_uses_env_var(self, mock_config) -> None:
-        """Test that _get_llm_client uses LLM_PROVIDER environment variable."""
-        mock_config.llm_provider = "openrouter"
-        client = _get_llm_client()
-
-        assert client.provider == "openrouter"
-
-    def test__get_llm_client_defaults_to_placeholder(self, mock_config) -> None:
-        """Test that _get_llm_client defaults to placeholder when env var not set."""
-        mock_config.llm_provider = "placeholder"
-        client = _get_llm_client()
-
-        assert client.provider == "placeholder"
-
-
 class TestAuditResult:
     """Tests for AuditResult dataclass."""
 
@@ -567,79 +522,3 @@ class TestAuditResult:
         assert result.cost_usd is None
         assert result.audit_id == audit_id
         assert result.prompt_key is None
-
-
-class TestAuditing_LLMClient:
-    """Tests for Auditing_LLMClient wrapper."""
-
-    @pytest.fixture(autouse=True)
-    def reset_auditing_client(self):
-        """Reset global auditing client before and after each test."""
-        import lattice.utils.llm
-
-        lattice.utils.llm._auditing_client = None
-        yield
-        lattice.utils.llm._auditing_client = None
-
-    @pytest.mark.asyncio
-    async def test_auditing_client_without_message_id(self) -> None:
-        """Test Auditing_LLMClient returns None audit_id when no message_id provided."""
-        from lattice.utils.llm import AuditResult, get_auditing_llm_client
-
-        client = get_auditing_llm_client()
-
-        result = await client.complete(
-            prompt="test prompt",
-            prompt_key="TEST_PROMPT",
-            template_version=1,
-            main_discord_message_id=None,
-            temperature=0.7,
-        )
-
-        assert isinstance(result, AuditResult)
-        assert result.audit_id is None
-        assert result.prompt_key == "TEST_PROMPT"
-
-    @pytest.mark.asyncio
-    async def test_auditing_client_with_message_id(self) -> None:
-        """Test Auditing_LLMClient stores audit and returns audit_id."""
-        from uuid import uuid4
-
-        from lattice.utils.llm import AuditResult, get_auditing_llm_client
-
-        mock_audit_id = uuid4()
-
-        with patch(
-            "lattice.memory.prompt_audits.store_prompt_audit",
-            new=AsyncMock(return_value=mock_audit_id),
-        ):
-            client = get_auditing_llm_client()
-
-            result = await client.complete(
-                prompt="test prompt",
-                prompt_key="TEST_PROMPT",
-                template_version=1,
-                main_discord_message_id=12345,
-                temperature=0.7,
-            )
-
-            assert isinstance(result, AuditResult)
-            assert result.audit_id == mock_audit_id
-            assert result.prompt_key == "TEST_PROMPT"
-
-    def test_get_auditing_client_creates_instance(self) -> None:
-        """Test that get_auditing_llm_client creates an Auditing_LLMClient."""
-        from lattice.utils.llm import AuditingLLMClient, get_auditing_llm_client
-
-        client = get_auditing_llm_client()
-
-        assert isinstance(client, AuditingLLMClient)
-
-    def test_get_auditing_client_reuses_instance(self) -> None:
-        """Test that get_auditing_llm_client returns same instance."""
-        from lattice.utils.llm import get_auditing_llm_client
-
-        client1 = get_auditing_llm_client()
-        client2 = get_auditing_llm_client()
-
-        assert client1 is client2

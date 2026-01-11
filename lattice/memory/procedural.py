@@ -3,11 +3,12 @@
 Stores evolving templates and strategies for bot behavior.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from lattice.utils.database import db_pool
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -74,10 +75,13 @@ class PromptTemplate:
         return escaped.format(**kwargs)
 
 
-async def get_prompt(prompt_key: str) -> PromptTemplate | None:
+async def get_prompt(
+    db_pool: "DatabasePool", *, prompt_key: str
+) -> PromptTemplate | None:
     """Retrieve the latest active prompt template by key.
 
     Args:
+        db_pool: Database pool for dependency injection
         prompt_key: The unique identifier for the template
 
     Returns:

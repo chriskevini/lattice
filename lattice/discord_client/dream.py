@@ -5,7 +5,7 @@ Every LLM call generates an audit entry displayed in the dream channel.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import discord
@@ -13,6 +13,9 @@ import structlog
 
 from lattice.memory import prompt_audits, user_feedback
 from lattice.utils.llm_client import GenerationResult
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -140,18 +143,26 @@ class PromptDetailView(discord.ui.DesignerView):
 class FeedbackModal(discord.ui.Modal):
     """Modal for submitting detailed feedback with pre-filled sentiment."""
 
-    def __init__(self, audit_id: UUID, message_id: int, bot_message_id: int) -> None:
+    def __init__(
+        self,
+        audit_id: UUID,
+        message_id: int,
+        bot_message_id: int,
+        db_pool: "DatabasePool",
+    ) -> None:
         """Initialize feedback modal.
 
         Args:
             audit_id: Prompt audit UUID
             message_id: Discord message ID this feedback is for
             bot_message_id: Discord message ID of the bot's message to react to
+            db_pool: Database pool for dependency injection
         """
         super().__init__(title="Give Feedback")
         self.audit_id = audit_id
         self.message_id = message_id
         self.bot_message_id = bot_message_id
+        self.db_pool = db_pool
 
         self.add_item(
             discord.ui.InputText(
@@ -213,11 +224,13 @@ class FeedbackModal(discord.ui.Modal):
             if interaction.message
             else None,
         )
-        feedback_id = await user_feedback.store_feedback(feedback)
+        feedback_id = await user_feedback.store_feedback(
+            db_pool=self.db_pool, feedback=feedback
+        )
 
         if self.audit_id:
             linked = await prompt_audits.link_feedback_to_audit_by_id(
-                self.audit_id, feedback_id
+                db_pool=self.db_pool, audit_id=self.audit_id, feedback_id=feedback_id
             )
             if not linked:
                 logger.warning(
@@ -256,6 +269,7 @@ class AuditView(discord.ui.DesignerView):
 
     def __init__(
         self,
+        db_pool: "DatabasePool",
         audit_id: UUID | None = None,
         message_id: int | None = None,
         prompt_key: str | None = None,
@@ -266,6 +280,7 @@ class AuditView(discord.ui.DesignerView):
         """Initialize audit view.
 
         Args:
+            db_pool: Database pool for dependency injection
             audit_id: Prompt audit UUID
             message_id: Discord message ID
             prompt_key: Prompt template key
@@ -274,6 +289,7 @@ class AuditView(discord.ui.DesignerView):
             raw_output: Raw LLM output
         """
         super().__init__(timeout=None)
+        self.db_pool = db_pool
         self.audit_id = audit_id
         self.message_id = message_id
         self.prompt_key = prompt_key
@@ -395,7 +411,9 @@ class AuditView(discord.ui.DesignerView):
             bot_message_id = (
                 interaction.message.id if interaction.message else self.message_id
             )
-            modal = FeedbackModal(self.audit_id, self.message_id, bot_message_id)
+            modal = FeedbackModal(
+                self.audit_id, self.message_id, bot_message_id, self.db_pool
+            )
             await interaction.response.send_modal(modal)
             logger.debug(
                 "Feedback modal shown",
@@ -425,11 +443,15 @@ class AuditView(discord.ui.DesignerView):
                     interaction.message.id if interaction.message is not None else None
                 ),
             )
-            feedback_id = await user_feedback.store_feedback(feedback)
+            feedback_id = await user_feedback.store_feedback(
+                db_pool=self.db_pool, feedback=feedback
+            )
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
-                    self.audit_id, feedback_id
+                    db_pool=self.db_pool,
+                    audit_id=self.audit_id,
+                    feedback_id=feedback_id,
                 )
                 if not linked:
                     logger.warning(
@@ -470,11 +492,15 @@ class AuditView(discord.ui.DesignerView):
                     interaction.message.id if interaction.message is not None else None
                 ),
             )
-            feedback_id = await user_feedback.store_feedback(feedback)
+            feedback_id = await user_feedback.store_feedback(
+                db_pool=self.db_pool, feedback=feedback
+            )
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
-                    self.audit_id, feedback_id
+                    db_pool=self.db_pool,
+                    audit_id=self.audit_id,
+                    feedback_id=feedback_id,
                 )
                 if not linked:
                     logger.warning(
@@ -535,6 +561,7 @@ class AuditViewBuilder:
         metadata_parts: list[str],
         audit_id: UUID | None,
         rendered_prompt: str,
+        db_pool: "DatabasePool",
         result: GenerationResult | None = None,
         message_id: int | None = None,
     ) -> tuple[discord.Embed, AuditView]:
@@ -548,6 +575,7 @@ class AuditViewBuilder:
             metadata_parts: List of metadata strings to be joined by " | "
             audit_id: Prompt audit UUID
             rendered_prompt: Full rendered prompt
+            db_pool: Database pool for dependency injection
             result: Optional full result for rich rendering
             message_id: Optional main Discord message ID for feedback
 
@@ -601,6 +629,7 @@ class AuditViewBuilder:
                 )
 
         view = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id,
             message_id=message_id,
             prompt_key=prompt_key,

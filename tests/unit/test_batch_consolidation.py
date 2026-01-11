@@ -28,7 +28,8 @@ def create_mock_pool_with_conn() -> tuple[MagicMock, AsyncMock]:
     mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
     mock_pool = MagicMock()
-    mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+    mock_pool.pool = mock_pool
+    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
     return mock_pool, mock_conn
 
@@ -55,14 +56,12 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.run_batch_consolidation"
-            ) as mock_run:
-                mock_run.return_value = None
-                await check_and_run_batch()
-                mock_run.assert_not_called()
+        with patch(
+            "lattice.memory.batch_consolidation.run_batch_consolidation"
+        ) as mock_run:
+            mock_run.return_value = None
+            await check_and_run_batch(db_pool=mock_pool)
+            mock_run.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_batch_ready_at_threshold(self) -> None:
@@ -75,14 +74,12 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.run_batch_consolidation"
-            ) as mock_run:
-                mock_run.return_value = None
-                await check_and_run_batch()
-                mock_run.assert_called_once()
+        with patch(
+            "lattice.memory.batch_consolidation.run_batch_consolidation"
+        ) as mock_run:
+            mock_run.return_value = None
+            await check_and_run_batch(db_pool=mock_pool)
+            mock_run.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_batch_ready_above_threshold(self) -> None:
@@ -95,14 +92,12 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.run_batch_consolidation"
-            ) as mock_run:
-                mock_run.return_value = None
-                await check_and_run_batch()
-                mock_run.assert_called_once()
+        with patch(
+            "lattice.memory.batch_consolidation.run_batch_consolidation"
+        ) as mock_run:
+            mock_run.return_value = None
+            await check_and_run_batch(db_pool=mock_pool)
+            mock_run.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_first_batch_initializes_from_zero(self) -> None:
@@ -115,17 +110,15 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.run_batch_consolidation"
-            ) as mock_run:
-                mock_run.return_value = None
-                await check_and_run_batch()
-                call_args = mock_conn.fetchrow.call_args_list[1]
-                assert "discord_message_id > $1" in call_args[0][0]
-                assert call_args[0][1] == 0
-                mock_run.assert_called_once()
+        with patch(
+            "lattice.memory.batch_consolidation.run_batch_consolidation"
+        ) as mock_run:
+            mock_run.return_value = None
+            await check_and_run_batch(db_pool=mock_pool)
+            call_args = mock_conn.fetchrow.call_args_list[1]
+            assert "discord_message_id > $1" in call_args[0][0]
+            assert call_args[0][1] == 0
+            mock_run.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_non_numeric_last_batch_id_handled(self) -> None:
@@ -138,15 +131,13 @@ class TestCheckAndRunBatch:
             ]
         )
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch(
-                "lattice.memory.batch_consolidation.run_batch_consolidation"
-            ) as mock_run:
-                mock_run.return_value = None
-                await check_and_run_batch()
-                call_args = mock_conn.fetchrow.call_args_list[1]
-                assert call_args[0][1] == 0
+        with patch(
+            "lattice.memory.batch_consolidation.run_batch_consolidation"
+        ) as mock_run:
+            mock_run.return_value = None
+            await check_and_run_batch(db_pool=mock_pool)
+            call_args = mock_conn.fetchrow.call_args_list[1]
+            assert call_args[0][1] == 0
 
 
 class TestRunBatchConsolidation:
@@ -169,13 +160,16 @@ class TestRunBatchConsolidation:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                await run_batch_consolidation()
-                mock_prompt.assert_not_called()
+        mock_bot = MagicMock()
+
+        with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+            await run_batch_consolidation(
+                db_pool=mock_pool, llm_client=MagicMock(), bot=mock_bot
+            )
+            mock_prompt.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_threshold_check_prevents_double_run(self) -> None:
@@ -193,13 +187,16 @@ class TestRunBatchConsolidation:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                await run_batch_consolidation()
-                mock_prompt.assert_not_called()
+        mock_bot = MagicMock()
+
+        with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+            await run_batch_consolidation(
+                db_pool=mock_pool, llm_client=MagicMock(), bot=mock_bot
+            )
+            mock_prompt.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_no_prompt_template_aborts(self) -> None:
@@ -229,21 +226,22 @@ class TestRunBatchConsolidation:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                mock_prompt.return_value = None
-                with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client"
-                ) as mock_llm:
-                    with patch(
-                        "lattice.memory.batch_consolidation.store_semantic_memories"
-                    ) as mock_store:
-                        await run_batch_consolidation()
-                        mock_llm.assert_not_called()
-                        mock_store.assert_not_called()
+        mock_llm_client = MagicMock()
+        mock_bot = MagicMock()
+
+        with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+            mock_prompt.return_value = None
+            with patch(
+                "lattice.memory.batch_consolidation.store_semantic_memories"
+            ) as mock_store:
+                await run_batch_consolidation(
+                    db_pool=mock_pool, llm_client=mock_llm_client, bot=mock_bot
+                )
+                mock_llm_client.assert_not_called()
+                mock_store.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extracts_and_stores_triples(self) -> None:
@@ -288,7 +286,10 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template with {bigger_episodic_context}"
@@ -312,78 +313,73 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.parse_llm_json_response",
+                return_value=[
+                    {
+                        "subject": "User",
+                        "predicate": "lives_in",
+                        "object": "Vancouver",
+                    }
+                ],
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
+                    "lattice.memory.batch_consolidation.store_semantic_memories"
+                ) as mock_store:
                     with patch(
-                        "lattice.memory.batch_consolidation.parse_llm_json_response",
-                        return_value=[
-                            {
-                                "subject": "User",
-                                "predicate": "lives_in",
-                                "object": "Vancouver",
-                            }
-                        ],
+                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                        return_value=[],
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.store_semantic_memories"
-                        ) as mock_store:
+                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                            return_value=[],
+                        ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                                return_value=[],
+                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                                return_value=set(),
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                                    return_value=[],
+                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                    return_value=set(),
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                        return_value=set(),
+                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                        return_value=(set(), set()),
                                     ):
                                         with patch(
-                                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                            return_value=set(),
+                                            "lattice.memory.batch_consolidation.store_canonical_forms",
+                                            return_value={
+                                                "entities": 0,
+                                                "predicates": 0,
+                                            },
                                         ):
-                                            with patch(
-                                                "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                                return_value=(set(), set()),
-                                            ):
-                                                with patch(
-                                                    "lattice.memory.batch_consolidation.store_canonical_forms",
-                                                    return_value={
-                                                        "entities": 0,
-                                                        "predicates": 0,
-                                                    },
-                                                ):
-                                                    await run_batch_consolidation()
-                                                    mock_store.assert_called_once()
-                                                    call_args = mock_store.call_args
-                                                    assert len(call_args[0][1]) == 1
-                                                    assert (
-                                                        call_args[0][1][0]["subject"]
-                                                        == "User"
-                                                    )
-                                                    assert (
-                                                        call_args[0][1][0]["predicate"]
-                                                        == "lives_in"
-                                                    )
-                                                    assert (
-                                                        call_args[0][1][0]["object"]
-                                                        == "Vancouver"
-                                                    )
-                                                    assert (
-                                                        call_args.kwargs[
-                                                            "source_batch_id"
-                                                        ]
-                                                        == "101"
-                                                    )
+                                            await run_batch_consolidation(
+                                                db_pool=mock_pool,
+                                                llm_client=mock_llm_client,
+                                                bot=mock_bot,
+                                            )
+                                        mock_store.assert_called_once()
+                                        call_kwargs = mock_store.call_args.kwargs
+                                        assert len(call_kwargs["memories"]) == 1
+                                        assert (
+                                            call_kwargs["memories"][0]["subject"]
+                                            == "User"
+                                        )
+                                        assert (
+                                            call_kwargs["memories"][0]["predicate"]
+                                            == "lives_in"
+                                        )
+                                        assert (
+                                            call_kwargs["memories"][0]["object"]
+                                            == "Vancouver"
+                                        )
+                                        assert call_kwargs["source_batch_id"] == "101"
 
     @pytest.mark.asyncio
     async def test_updates_last_batch_message_id(self) -> None:
@@ -420,7 +416,10 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template"
@@ -442,60 +441,60 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
+        mock_bot = MagicMock()
+
         from lattice.utils.json_parser import JSONParseError
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.parse_llm_json_response",
+                side_effect=JSONParseError(
+                    raw_content="not valid json",
+                    parse_error=json.JSONDecodeError("Expecting value", "", 0),
+                ),
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
+                    "lattice.memory.batch_consolidation.notify_parse_error_to_dream"
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.parse_llm_json_response",
-                        side_effect=JSONParseError(
-                            raw_content="not valid json",
-                            parse_error=json.JSONDecodeError("Expecting value", "", 0),
-                        ),
-                    ):
+                        "lattice.memory.batch_consolidation.store_semantic_memories"
+                    ) as mock_store:
                         with patch(
-                            "lattice.memory.batch_consolidation.notify_parse_error_to_dream"
+                            "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                            return_value=[],
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.store_semantic_memories"
-                            ) as mock_store:
+                                "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                                return_value=[],
+                            ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                                    return_value=[],
+                                    "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                                    return_value=set(),
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                                        return_value=[],
+                                        "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                        return_value=set(),
                                     ):
                                         with patch(
-                                            "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                            return_value=set(),
+                                            "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                            return_value=(set(), set()),
                                         ):
                                             with patch(
-                                                "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                                return_value=set(),
+                                                "lattice.memory.batch_consolidation.store_canonical_forms",
+                                                return_value={
+                                                    "entities": 0,
+                                                    "predicates": 0,
+                                                },
                                             ):
-                                                with patch(
-                                                    "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                                    return_value=(set(), set()),
-                                                ):
-                                                    with patch(
-                                                        "lattice.memory.batch_consolidation.store_canonical_forms",
-                                                        return_value={
-                                                            "entities": 0,
-                                                            "predicates": 0,
-                                                        },
-                                                    ):
-                                                        await run_batch_consolidation()
-                                                        mock_store.assert_not_called()
+                                                await run_batch_consolidation(
+                                                    db_pool=mock_pool,
+                                                    llm_client=mock_llm_client,
+                                                    bot=mock_bot,
+                                                )
+                                            mock_store.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_message_history_format(self) -> None:
@@ -540,7 +539,10 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{bigger_episodic_context}"
@@ -562,56 +564,49 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                return_value=[],
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
+                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                    return_value=[],
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                        return_value=[],
+                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                        return_value=set(),
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                            return_value=[],
+                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                            return_value=set(),
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                return_value=set(),
+                                "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                return_value=(set(), set()),
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                    return_value=set(),
+                                    "lattice.memory.batch_consolidation.store_canonical_forms",
+                                    return_value={
+                                        "entities": 0,
+                                        "predicates": 0,
+                                    },
                                 ):
-                                    with patch(
-                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                        return_value=(set(), set()),
-                                    ):
-                                        with patch(
-                                            "lattice.memory.batch_consolidation.store_canonical_forms",
-                                            return_value={
-                                                "entities": 0,
-                                                "predicates": 0,
-                                            },
-                                        ):
-                                            await run_batch_consolidation()
-                                            call_args = (
-                                                mock_prompt.safe_format.call_args
-                                            )
-                                            assert (
-                                                "bigger_episodic_context"
-                                                in call_args[1]
-                                            )
-                                            history = call_args[1][
-                                                "bigger_episodic_context"
-                                            ]
-                                            assert "User: Hello" in history
-                                            assert "Bot: Hi there!" in history
+                                    await run_batch_consolidation(
+                                        db_pool=mock_pool,
+                                        llm_client=mock_llm_client,
+                                        bot=mock_bot,
+                                    )
+                                    call_args = mock_prompt.safe_format.call_args
+                                    assert "bigger_episodic_context" in call_args[1]
+                                history = call_args[1]["bigger_episodic_context"]
+                                assert "User: Hello" in history
+                                assert "Bot: Hi there!" in history
 
     @pytest.mark.asyncio
     async def test_memory_context_format(self) -> None:
@@ -656,7 +651,10 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "No placeholders"
@@ -678,51 +676,47 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                return_value=[],
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
+                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                    return_value=[],
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                        return_value=[],
+                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                        return_value=set(),
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                            return_value=[],
+                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                            return_value=set(),
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                return_value=set(),
+                                "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                return_value=(set(), set()),
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                    return_value=set(),
+                                    "lattice.memory.batch_consolidation.store_canonical_forms",
+                                    return_value={
+                                        "entities": 0,
+                                        "predicates": 0,
+                                    },
                                 ):
-                                    with patch(
-                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                        return_value=(set(), set()),
-                                    ):
-                                        with patch(
-                                            "lattice.memory.batch_consolidation.store_canonical_forms",
-                                            return_value={
-                                                "entities": 0,
-                                                "predicates": 0,
-                                            },
-                                        ):
-                                            await run_batch_consolidation()
-                                            # semantic_context should NOT be in call_args anymore
-                                            call_args = (
-                                                mock_prompt.safe_format.call_args
-                                            )
-                                            assert (
-                                                "semantic_context" not in call_args[1]
-                                            )
+                                    await run_batch_consolidation(
+                                        db_pool=mock_pool,
+                                        llm_client=mock_llm_client,
+                                        bot=mock_bot,
+                                    )
+                                    # semantic_context should NOT be in call_args anymore
+                                    call_args = mock_prompt.safe_format.call_args
+                                    assert "semantic_context" not in call_args[1]
 
     @pytest.mark.asyncio
     async def test_empty_previous_memories_shows_placeholder(self) -> None:
@@ -759,7 +753,10 @@ class TestRunBatchConsolidation:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "No placeholders"
@@ -781,50 +778,46 @@ class TestRunBatchConsolidation:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                return_value=[],
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
+                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                    return_value=[],
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                        return_value=[],
+                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                        return_value=set(),
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                            return_value=[],
+                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                            return_value=set(),
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                return_value=set(),
+                                "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                return_value=(set(), set()),
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                    return_value=set(),
+                                    "lattice.memory.batch_consolidation.store_canonical_forms",
+                                    return_value={
+                                        "entities": 0,
+                                        "predicates": 0,
+                                    },
                                 ):
-                                    with patch(
-                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                        return_value=(set(), set()),
-                                    ):
-                                        with patch(
-                                            "lattice.memory.batch_consolidation.store_canonical_forms",
-                                            return_value={
-                                                "entities": 0,
-                                                "predicates": 0,
-                                            },
-                                        ):
-                                            await run_batch_consolidation()
-                                            call_args = (
-                                                mock_prompt.safe_format.call_args
-                                            )
-                                            assert (
-                                                "semantic_context" not in call_args[1]
-                                            )
+                                    await run_batch_consolidation(
+                                        db_pool=mock_pool,
+                                        llm_client=mock_llm_client,
+                                        bot=mock_bot,
+                                    )
+                                    call_args = mock_prompt.safe_format.call_args
+                                    assert "semantic_context" not in call_args[1]
 
 
 class TestRaceCondition:
@@ -890,13 +883,14 @@ class TestRaceCondition:
         mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(return_value=mock_acquire_cm)
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
-            with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
-                await run_batch_consolidation()
-                mock_prompt.assert_not_called()
+        with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+            await run_batch_consolidation(
+                db_pool=mock_pool, llm_client=MagicMock(), bot=MagicMock()
+            )
+            mock_prompt.assert_not_called()
 
 
 class TestCanonicalFormIntegration:
@@ -938,7 +932,10 @@ class TestCanonicalFormIntegration:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{canonical_entities} {canonical_predicates}"
@@ -960,89 +957,90 @@ class TestCanonicalFormIntegration:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.parse_llm_json_response",
+                return_value={
+                    "triples": [
+                        {
+                            "subject": "User",
+                            "predicate": "did activity",
+                            "object": "hanging out with boyfriend",
+                        },
+                        {
+                            "subject": "hanging out with boyfriend",
+                            "predicate": "at location",
+                            "object": "IKEA",
+                        },
+                    ]
+                },
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
+                    "lattice.memory.batch_consolidation.store_semantic_memories"
+                ) as mock_store:
                     with patch(
-                        "lattice.memory.batch_consolidation.parse_llm_json_response",
-                        return_value={
-                            "triples": [
-                                {
-                                    "subject": "User",
-                                    "predicate": "did activity",
-                                    "object": "hanging out with boyfriend",
-                                },
-                                {
-                                    "subject": "hanging out with boyfriend",
-                                    "predicate": "at location",
-                                    "object": "IKEA",
-                                },
-                            ]
-                        },
+                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                        return_value=["Mother"],
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.store_semantic_memories"
-                        ) as mock_store:
+                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                            return_value=["has goal"],
+                        ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                                return_value=["Mother"],
+                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                                return_value={"Mother", "User"},
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                                    return_value=["has goal"],
+                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                    return_value={"has goal"},
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                        return_value={"Mother", "User"},
+                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                        return_value=(
+                                            {
+                                                "IKEA",
+                                                "hanging out with boyfriend",
+                                            },
+                                            {"did activity", "at location"},
+                                        ),
                                     ):
                                         with patch(
-                                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                            return_value={"has goal"},
-                                        ):
-                                            with patch(
-                                                "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                                return_value=(
-                                                    {
-                                                        "IKEA",
-                                                        "hanging out with boyfriend",
-                                                    },
-                                                    {"did activity", "at location"},
-                                                ),
-                                            ):
-                                                with patch(
-                                                    "lattice.memory.batch_consolidation.store_canonical_forms",
-                                                    return_value={
-                                                        "entities": 2,
-                                                        "predicates": 2,
-                                                    },
-                                                ) as mock_store_canonical:
-                                                    await run_batch_consolidation()
+                                            "lattice.memory.batch_consolidation.store_canonical_forms",
+                                            return_value={
+                                                "entities": 2,
+                                                "predicates": 2,
+                                            },
+                                        ) as mock_store_canonical:
+                                            await run_batch_consolidation(
+                                                db_pool=mock_pool,
+                                                llm_client=mock_llm_client,
+                                                bot=mock_bot,
+                                            )
 
-                                                    mock_store.assert_called_once()
-                                                    call_args = mock_store.call_args
-                                                    assert len(call_args[0][1]) == 2
-                                                    assert (
-                                                        call_args[0][1][0]["predicate"]
-                                                        == "did activity"
-                                                    )
+                                            mock_store.assert_called_once()
+                                            store_kwargs = mock_store.call_args.kwargs
+                                            assert len(store_kwargs["memories"]) == 2
+                                            assert (
+                                                store_kwargs["memories"][0]["predicate"]
+                                                == "did activity"
+                                            )
 
-                                                    mock_store_canonical.assert_called_once()
-                                                    store_args = (
-                                                        mock_store_canonical.call_args[
-                                                            0
-                                                        ]
-                                                    )
-                                                    assert "IKEA" in store_args[0]
-                                                    assert (
-                                                        "did activity" in store_args[1]
-                                                    )
+                                            mock_store_canonical.assert_called_once()
+                                            store_kwargs = (
+                                                mock_store_canonical.call_args.kwargs
+                                            )
+                                            assert (
+                                                "IKEA" in store_kwargs["new_entities"]
+                                            )
+                                            assert (
+                                                "did activity"
+                                                in store_kwargs["new_predicates"]
+                                            )
 
     @pytest.mark.asyncio
     async def test_batch_prompt_includes_canonical_placeholders(self) -> None:
@@ -1080,7 +1078,10 @@ class TestCanonicalFormIntegration:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{canonical_entities} {canonical_predicates}"
@@ -1108,48 +1109,48 @@ class TestCanonicalFormIntegration:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.parse_llm_json_response",
+                return_value={"triples": []},
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
+                    "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                    return_value=["Mother", "Boyfriend"],
                 ):
                     with patch(
-                        "lattice.memory.batch_consolidation.parse_llm_json_response",
-                        return_value={"triples": []},
+                        "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                        return_value=["has goal", "due by"],
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                            return_value=["Mother", "Boyfriend"],
+                            "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                            return_value={"Mother", "Boyfriend"},
                         ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                                return_value=["has goal", "due by"],
+                                "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                return_value={"has goal", "due by"},
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                    return_value={"Mother", "Boyfriend"},
+                                    "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                    return_value=(set(), set()),
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                        return_value={"has goal", "due by"},
+                                        "lattice.memory.batch_consolidation.store_canonical_forms",
+                                        return_value={
+                                            "entities": 0,
+                                            "predicates": 0,
+                                        },
                                     ):
-                                        with patch(
-                                            "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                            return_value=(set(), set()),
-                                        ):
-                                            with patch(
-                                                "lattice.memory.batch_consolidation.store_canonical_forms",
-                                                return_value={
-                                                    "entities": 0,
-                                                    "predicates": 0,
-                                                },
-                                            ):
-                                                await run_batch_consolidation()
+                                        await run_batch_consolidation(
+                                            db_pool=mock_pool,
+                                            llm_client=mock_llm_client,
+                                            bot=mock_bot,
+                                        )
 
     @pytest.mark.asyncio
     async def test_batch_handles_dict_triples_format(self) -> None:
@@ -1187,7 +1188,10 @@ class TestCanonicalFormIntegration:
         mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
 
         mock_pool = MagicMock()
-        mock_pool.acquire = MagicMock(side_effect=[mock_acquire_cm1, mock_acquire_cm2])
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(
+            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
+        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template"
@@ -1209,67 +1213,67 @@ class TestCanonicalFormIntegration:
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
-        with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
-            mock_db_pool.pool = mock_pool
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt",
+            return_value=mock_prompt,
+        ):
             with patch(
-                "lattice.memory.batch_consolidation.get_prompt",
-                return_value=mock_prompt,
+                "lattice.memory.batch_consolidation.parse_llm_json_response",
+                return_value={
+                    "triples": [
+                        {
+                            "subject": "User",
+                            "predicate": "has goal",
+                            "object": "run a marathon",
+                        }
+                    ]
+                },
             ):
                 with patch(
-                    "lattice.memory.batch_consolidation.get_auditing_llm_client",
-                    return_value=mock_llm_client,
-                ):
+                    "lattice.memory.batch_consolidation.store_semantic_memories"
+                ) as mock_store:
                     with patch(
-                        "lattice.memory.batch_consolidation.parse_llm_json_response",
-                        return_value={
-                            "triples": [
-                                {
-                                    "subject": "User",
-                                    "predicate": "has goal",
-                                    "object": "run a marathon",
-                                }
-                            ]
-                        },
+                        "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                        return_value=[],
                     ):
                         with patch(
-                            "lattice.memory.batch_consolidation.store_semantic_memories"
-                        ) as mock_store:
+                            "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                            return_value=[],
+                        ):
                             with patch(
-                                "lattice.memory.batch_consolidation.get_canonical_entities_list",
-                                return_value=[],
+                                "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                                return_value=set(),
                             ):
                                 with patch(
-                                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
-                                    return_value=[],
+                                    "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                                    return_value=set(),
                                 ):
                                     with patch(
-                                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
-                                        return_value=set(),
+                                        "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                        return_value=(
+                                            {"run a marathon"},
+                                            {"has goal"},
+                                        ),
                                     ):
                                         with patch(
-                                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
-                                            return_value=set(),
+                                            "lattice.memory.batch_consolidation.store_canonical_forms",
+                                            return_value={
+                                                "entities": 1,
+                                                "predicates": 1,
+                                            },
                                         ):
-                                            with patch(
-                                                "lattice.memory.batch_consolidation.extract_canonical_forms",
-                                                return_value=(
-                                                    {"run a marathon"},
-                                                    {"has goal"},
-                                                ),
-                                            ):
-                                                with patch(
-                                                    "lattice.memory.batch_consolidation.store_canonical_forms",
-                                                    return_value={
-                                                        "entities": 1,
-                                                        "predicates": 1,
-                                                    },
-                                                ):
-                                                    await run_batch_consolidation()
+                                            await run_batch_consolidation(
+                                                db_pool=mock_pool,
+                                                llm_client=mock_llm_client,
+                                                bot=mock_bot,
+                                            )
 
-                                                    mock_store.assert_called_once()
-                                                    call_args = mock_store.call_args
-                                                    assert len(call_args[0][1]) == 1
-                                                    assert (
-                                                        call_args[0][1][0]["object"]
-                                                        == "run a marathon"
-                                                    )
+                                            mock_store.assert_called_once()
+                                            call_kwargs = mock_store.call_args.kwargs
+                                            assert len(call_kwargs["memories"]) == 1
+                                            assert (
+                                                call_kwargs["memories"][0]["object"]
+                                                == "run a marathon"
+                                            )

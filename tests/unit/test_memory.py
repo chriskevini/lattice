@@ -1,7 +1,7 @@
 """Unit tests for Lattice memory modules."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
@@ -65,23 +65,25 @@ class TestEpisodicMemoryFunctions:
             return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock()
 
-            message = EpisodicMessage(
-                content="Test message",
-                discord_message_id=12345,
-                channel_id=67890,
-                is_bot=False,
-            )
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-            result = await store_message(message)
+        message = EpisodicMessage(
+            content="Test message",
+            discord_message_id=12345,
+            channel_id=67890,
+            is_bot=False,
+        )
 
-            assert result == UUID("12345678-1234-5678-1234-567812345678")
-            mock_conn.fetchrow.assert_called_once()
+        result = await store_message(db_pool=mock_pool, message=message)
+
+        assert result == UUID("12345678-1234-5678-1234-567812345678")
+        mock_conn.fetchrow.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_recent_messages(self) -> None:
@@ -112,17 +114,21 @@ class TestEpisodicMemoryFunctions:
             ]
         )
 
-        with patch("lattice.memory.episodic.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock()
 
-            messages = await get_recent_messages(channel_id=67890, limit=10)
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-            assert len(messages) == 2
-            assert messages[0].content == "First message"
-            assert messages[0].timestamp < messages[1].timestamp
+        messages = await get_recent_messages(
+            db_pool=mock_pool, channel_id=67890, limit=10
+        )
+
+        assert len(messages) == 2
+        assert messages[0].content == "First message"
+        assert messages[0].timestamp < messages[1].timestamp
 
 
 class TestPromptTemplate:
@@ -234,17 +240,19 @@ class TestProceduralMemoryFunctions:
             }
         )
 
-        with patch("lattice.memory.procedural.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock()
 
-            result = await get_prompt("test_key")
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-            assert result is not None
-            assert result.prompt_key == "test_key"
-            assert result.template == "You are helpful."
+        result = await get_prompt(db_pool=mock_pool, prompt_key="test_key")
+
+        assert result is not None
+        assert result.prompt_key == "test_key"
+        assert result.template == "You are helpful."
 
     @pytest.mark.asyncio
     async def test_get_prompt_not_found(self) -> None:
@@ -252,15 +260,17 @@ class TestProceduralMemoryFunctions:
         mock_conn = MagicMock()
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
-        with patch("lattice.memory.procedural.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_acquire_cm = MagicMock()
+        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_acquire_cm.__aexit__ = AsyncMock()
 
-            result = await get_prompt("nonexistent")
+        mock_pool = MagicMock()
+        mock_pool.pool = mock_pool
+        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
-            assert result is None
+        result = await get_prompt(db_pool=mock_pool, prompt_key="nonexistent")
+
+        assert result is None
 
 
 class MockMessage:

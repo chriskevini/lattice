@@ -4,23 +4,22 @@ Uses LLM to analyze underperforming prompts and propose improvements
 based on feedback patterns and performance metrics.
 """
 
-import asyncio
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import structlog
 
-from lattice.core.response_generator import validate_template_placeholders
-from lattice.dreaming.analyzer import (
-    PromptMetrics,
-    get_feedback_with_context,
-)
+if TYPE_CHECKING:
+    from lattice.dreaming.analyzer import PromptMetrics
+    from lattice.utils.database import DatabasePool
+
+
 from lattice.memory.procedural import get_prompt
-from lattice.utils.database import db_pool
-from lattice.utils.llm import get_auditing_llm_client
+from lattice.dreaming.analyzer import get_feedback_with_context
 from lattice.utils.placeholder_injector import PlaceholderInjector
+from lattice.core.response_generator import validate_template_placeholders
 
 
 logger = structlog.get_logger(__name__)
@@ -159,18 +158,23 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
 
 
 async def propose_optimization(
-    metrics: PromptMetrics,
+    metrics: "PromptMetrics", db_pool: Any, llm_client: Any
 ) -> OptimizationProposal | None:
     """Generate optimization proposal for an underperforming prompt.
 
     Args:
         metrics: Prompt metrics indicating performance issues
+        db_pool: Database pool for dependency injection (required)
+        llm_client: LLM client for dependency injection (required)
 
     Returns:
         OptimizationProposal if generated, None otherwise
     """
+    if not llm_client:
+        raise ValueError("llm_client is required for propose_optimization")
+
     # Get current template
-    prompt_template = await get_prompt(metrics.prompt_key)
+    prompt_template = await get_prompt(db_pool=db_pool, prompt_key=metrics.prompt_key)
     if not prompt_template:
         logger.warning(
             "Cannot propose optimization - prompt not found",
@@ -179,7 +183,9 @@ async def propose_optimization(
         return None
 
     # Get optimization prompt template from database
-    optimization_prompt_template = await get_prompt("PROMPT_OPTIMIZATION")
+    optimization_prompt_template = await get_prompt(
+        db_pool=db_pool, prompt_key="PROMPT_OPTIMIZATION"
+    )
     if not optimization_prompt_template:
         logger.warning(
             "Cannot propose optimization - PROMPT_OPTIMIZATION template not found",
@@ -188,173 +194,101 @@ async def propose_optimization(
         return None
 
     # Get feedback samples using hybrid approach:
-    # - First 3 samples: Include full context (rendered prompt + response + feedback)
-    # - Remaining samples: Lightweight (just user message + response + feedback)
-    # This balances diagnostic depth with token efficiency
-    detailed_samples = await get_feedback_with_context(
-        metrics.prompt_key,
-        limit=DETAILED_SAMPLES_COUNT,
-        include_rendered_prompt=True,
-        max_prompt_chars=5000,
+    # 1. Recent samples with low sentiment
+    # 2. Detailed samples with full rendered prompts
+    feedback_samples = await get_feedback_with_context(
+        prompt_key=metrics.prompt_key,
+        limit=MAX_FEEDBACK_SAMPLES,
+        db_pool=db_pool,
     )
 
-    lightweight_samples = (
-        await get_feedback_with_context(
-            metrics.prompt_key,
-            limit=MAX_FEEDBACK_SAMPLES - DETAILED_SAMPLES_COUNT,
-            include_rendered_prompt=False,
+    if not feedback_samples:
+        logger.warning(
+            "Cannot propose optimization - no feedback with context found",
+            prompt_key=metrics.prompt_key,
         )
-        if MAX_FEEDBACK_SAMPLES > DETAILED_SAMPLES_COUNT
-        else []
-    )
+        return None
 
-    # Format samples into experience cases
-    experience_cases = _format_experience_cases(detailed_samples, lightweight_samples)
-
-    # Build context for the optimization prompt
-    feedback_samples = (
-        experience_cases
-        if experience_cases != "(none)"
-        else "No recent feedback samples."
-    )
-    metrics_context = (
-        f"Success rate: {metrics.success_rate:.1%} "
-        f"({metrics.positive_feedback} positive, {metrics.negative_feedback} negative). "
-        f"Total uses: {metrics.total_uses}. "
-        f"Feedback rate: {metrics.feedback_rate:.1%}."
-    )
+    # Format feedback samples for prompt
+    feedback_text = ""
+    for i, sample in enumerate(feedback_samples):
+        sentiment_label = (
+            "POSITIVE" if sample.get("sentiment") == "positive" else "NEGATIVE"
+        )
+        feedback_text += f"Sample {i + 1} ({sentiment_label}):\n"
+        feedback_text += f"Feedback: {sample['feedback_content']}\n"
+        if i < DETAILED_SAMPLES_COUNT and sample.get("rendered_prompt"):
+            feedback_text += f"Rendered Prompt: {sample['rendered_prompt']}\n"
+        feedback_text += f"Bot Response: {sample['response_content']}\n"
+        feedback_text += "---\n"
 
     injector = PlaceholderInjector()
     context = {
-        "feedback_samples": feedback_samples,
-        "metrics": metrics_context,
+        "prompt_key": metrics.prompt_key,
         "current_template": prompt_template.template,
+        "performance_summary": f"Success Rate: {metrics.success_rate:.2f}, Total Uses: {metrics.total_uses}",
+        "feedback_samples": feedback_text,
     }
-    optimization_prompt, injected = await injector.inject(
+    rendered_prompt, injected = await injector.inject(
         optimization_prompt_template, context
     )
 
-    # Call LLM to generate proposal with timeout
-    llm_client = get_auditing_llm_client()
     try:
-        result = await asyncio.wait_for(
-            llm_client.complete(
-                prompt=optimization_prompt,
-                temperature=0.7,
-                prompt_key="PROMPT_OPTIMIZATION",
-                main_discord_message_id=0,
-            ),
-            timeout=LLM_PROPOSAL_TIMEOUT,
+        result = await llm_client.complete(
+            prompt=rendered_prompt,
+            db_pool=db_pool,
+            prompt_key="PROMPT_OPTIMIZATION",
+            main_discord_message_id=0,
+            temperature=optimization_prompt_template.temperature,
+            audit_view=True,
+            audit_view_params={
+                "input_text": f"Optimizing {metrics.prompt_key}",
+            },
         )
-    except TimeoutError:
-        logger.exception(
-            "LLM timeout during proposal generation",
-            prompt_key=metrics.prompt_key,
-            timeout_seconds=LLM_PROPOSAL_TIMEOUT,
-        )
+    except Exception as e:
+        logger.exception("LLM call for optimization proposal failed", error=str(e))
         return None
 
-    # Parse LLM response
-    proposal_data, parse_error = _parse_llm_response(result.content, metrics.prompt_key)
-    if proposal_data is None:
+    # Parse and validate response
+    parsed_data, error = _parse_llm_response(result.content, metrics.prompt_key)
+    if error or not parsed_data:
+        logger.error("Failed to parse optimization proposal", error=error)
         return None
 
-    # Validate required fields and types
-    validation_error = _validate_proposal_fields(proposal_data)
-    if validation_error:
-        logger.warning(
-            "LLM response validation failed",
-            prompt_key=metrics.prompt_key,
+    # Validate the proposed template
+    is_valid, validation_error = validate_template(
+        parsed_data["proposed_template"], metrics.prompt_key
+    )
+    if not is_valid:
+        logger.error(
+            "Proposed template failed validation",
             error=validation_error,
-            response=result.content[:200],
+            prompt_key=metrics.prompt_key,
         )
         return None
 
-    # Store the LLM response as metadata
-    proposal_metadata = {
-        "pain_point": proposal_data["pain_point"],
-        "proposed_change": proposal_data["proposed_change"],
-        "justification": proposal_data["justification"],
-    }
-
-    # Create proposal object (store the exact prompt sent to LLM for auditability)
-    proposal = OptimizationProposal(
+    return OptimizationProposal(
         proposal_id=uuid4(),
         prompt_key=metrics.prompt_key,
-        current_version=metrics.version,
-        proposed_version=metrics.version + 1,
+        current_version=prompt_template.version,
+        proposed_version=prompt_template.version + 1,
         current_template=prompt_template.template,
-        proposed_template=proposal_data["proposed_template"],
-        proposal_metadata=proposal_metadata,
-        rendered_optimization_prompt=optimization_prompt,
+        proposed_template=parsed_data["proposed_template"],
+        proposal_metadata={
+            "pain_point": parsed_data["pain_point"],
+            "proposed_change": parsed_data["proposed_change"],
+            "justification": parsed_data["justification"],
+        },
+        rendered_optimization_prompt=rendered_prompt,
     )
 
-    logger.info(
-        "Generated optimization proposal",
-        prompt_key=metrics.prompt_key,
-        proposal_id=str(proposal.proposal_id),
-    )
 
-    return proposal
-
-
-def _format_experience_cases(
-    detailed_samples: list[dict[str, Any]], lightweight_samples: list[dict[str, Any]]
-) -> str:
-    """Format feedback with context into experience cases.
-
-    Uses hybrid sampling: first few samples include rendered prompt for deep analysis,
-    remaining samples are lightweight for breadth. This balances diagnostic value
-    with token efficiency.
-
-    Args:
-        detailed_samples: Samples with rendered_prompt included
-        lightweight_samples: Samples without rendered_prompt
-
-    Returns:
-        Formatted experience cases string
-    """
-    if not detailed_samples and not lightweight_samples:
-        return "(none)"
-
-    formatted = []
-
-    # Format detailed samples (with rendered prompt excerpts)
-    for i, s in enumerate(detailed_samples, 1):
-        user_msg = s.get("user_message") or "(proactive/no user message)"
-        rendered_prompt = s.get("rendered_prompt", "")
-
-        case = (
-            f"--- DETAILED EXPERIENCE #{i} ---\n"
-            f"SENTIMENT: {s['sentiment'].upper()}\n"
-            f"USER MESSAGE: {user_msg}\n"
-            f"RENDERED PROMPT EXCERPT:\n{rendered_prompt}\n"
-            f"BOT RESPONSE:\n{s['response_content']}\n"
-            f"FEEDBACK: {s['feedback_content']}\n"
-        )
-        formatted.append(case)
-
-    # Format lightweight samples (without rendered prompt)
-    for i, s in enumerate(lightweight_samples, len(detailed_samples) + 1):
-        user_msg = s.get("user_message") or "(proactive/no user message)"
-
-        case = (
-            f"--- EXPERIENCE #{i} ---\n"
-            f"SENTIMENT: {s['sentiment'].upper()}\n"
-            f"USER MESSAGE: {user_msg}\n"
-            f"BOT RESPONSE:\n{s['response_content']}\n"
-            f"FEEDBACK: {s['feedback_content']}\n"
-        )
-        formatted.append(case)
-
-    return "\n".join(formatted)
-
-
-async def store_proposal(proposal: OptimizationProposal) -> UUID:
+async def store_proposal(proposal: OptimizationProposal, db_pool: Any) -> UUID:
     """Store optimization proposal in database.
 
     Args:
         proposal: The proposal to store
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         UUID of the stored proposal
@@ -397,15 +331,20 @@ async def store_proposal(proposal: OptimizationProposal) -> UUID:
         return proposal_id
 
 
-async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
+async def get_proposal_by_id(
+    proposal_id: UUID, db_pool: Any
+) -> OptimizationProposal | None:
     """Fetch a proposal from the database by ID.
 
     Args:
         proposal_id: UUID of the proposal
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         OptimizationProposal if found, None otherwise
     """
+    # db_pool already passed via DI
+
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -439,12 +378,17 @@ async def get_proposal_by_id(proposal_id: UUID) -> OptimizationProposal | None:
         )
 
 
-async def get_pending_proposals() -> list[OptimizationProposal]:
+async def get_pending_proposals(db_pool: Any) -> list[OptimizationProposal]:
     """Get all pending optimization proposals.
+
+    Args:
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         List of pending proposals, ordered by created_at (newest first)
     """
+    # db_pool already passed via DI
+
     async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch(
             """
@@ -481,6 +425,7 @@ async def get_pending_proposals() -> list[OptimizationProposal]:
 async def approve_proposal(
     proposal_id: UUID,
     reviewed_by: str,
+    db_pool: "DatabasePool",
     feedback: str | None = None,
 ) -> bool:
     """Approve an optimization proposal and apply it to prompt_registry.
@@ -488,11 +433,14 @@ async def approve_proposal(
     Args:
         proposal_id: UUID of the proposal
         reviewed_by: Identifier of who approved (e.g., Discord user ID)
+        db_pool: Database pool for dependency injection (required)
         feedback: Optional feedback from reviewer
 
     Returns:
         True if applied successfully, False otherwise
     """
+    # db_pool already passed via DI
+
     async with db_pool.pool.acquire() as conn:
         # Get proposal
         proposal_row = await conn.fetchrow(
@@ -575,6 +523,7 @@ async def approve_proposal(
 async def reject_proposal(
     proposal_id: UUID,
     reviewed_by: str,
+    db_pool: "DatabasePool",
     feedback: str | None = None,
 ) -> bool:
     """Reject an optimization proposal.
@@ -582,11 +531,14 @@ async def reject_proposal(
     Args:
         proposal_id: UUID of the proposal
         reviewed_by: Identifier of who rejected
+        db_pool: Database pool for dependency injection (required)
         feedback: Optional feedback explaining rejection
 
     Returns:
         True if rejected successfully, False if not found
     """
+    # db_pool already passed via DI
+
     async with db_pool.pool.acquire() as conn:
         result = await conn.execute(
             """
@@ -615,7 +567,7 @@ async def reject_proposal(
         return bool(rejected)
 
 
-async def reject_stale_proposals(prompt_key: str) -> int:
+async def reject_stale_proposals(prompt_key: str, db_pool: Any) -> int:
     """Reject all pending proposals for a prompt that have outdated current_version.
 
     This cleans up proposals that are no longer applicable because the prompt
@@ -623,10 +575,13 @@ async def reject_stale_proposals(prompt_key: str) -> int:
 
     Args:
         prompt_key: The prompt key to check for stale proposals
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         Number of stale proposals rejected
     """
+    # db_pool already passed via DI
+
     async with db_pool.pool.acquire() as conn:
         # Get current version from prompt_registry
         current_version_row = await conn.fetchrow(
@@ -634,6 +589,7 @@ async def reject_stale_proposals(prompt_key: str) -> int:
             SELECT version
             FROM prompt_registry
             WHERE prompt_key = $1
+              AND active = true
             """,
             prompt_key,
         )

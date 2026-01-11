@@ -4,14 +4,15 @@ Stores feedback submitted via Discord buttons and modals in the dream channel.
 """
 
 from datetime import datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast, Any
 from uuid import UUID, uuid4
 
 import structlog
 
-from lattice.utils.database import db_pool
 from lattice.utils.date_resolution import get_now
 
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 logger = structlog.get_logger(__name__)
 
@@ -46,10 +47,11 @@ class UserFeedback:
         self.created_at = created_at or get_now("UTC")
 
 
-async def store_feedback(feedback: UserFeedback) -> UUID:
+async def store_feedback(db_pool: Any, feedback: UserFeedback) -> UUID:
     """Store user feedback in the database.
 
     Args:
+        db_pool: Database pool for dependency injection
         feedback: The feedback to store
 
     Returns:
@@ -83,11 +85,12 @@ async def store_feedback(feedback: UserFeedback) -> UUID:
 
 
 async def get_feedback_by_user_message(
-    user_discord_message_id: int,
+    db_pool: "DatabasePool", user_discord_message_id: int
 ) -> UserFeedback | None:
     """Get feedback by the user's Discord message ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         user_discord_message_id: The user's Discord message ID
 
     Returns:
@@ -116,10 +119,11 @@ async def get_feedback_by_user_message(
         )
 
 
-async def delete_feedback(feedback_id: UUID) -> bool:
+async def delete_feedback(db_pool: Any, feedback_id: UUID) -> bool:
     """Delete feedback by its UUID.
 
     Args:
+        db_pool: Database pool for dependency injection
         feedback_id: UUID of the feedback to delete
 
     Returns:
@@ -141,8 +145,11 @@ async def delete_feedback(feedback_id: UUID) -> bool:
         return deleted
 
 
-async def get_all_feedback() -> list[UserFeedback]:
+async def get_all_feedback(db_pool: Any) -> list[UserFeedback]:
     """Get all user feedback entries.
+
+    Args:
+        db_pool: Database pool for dependency injection
 
     Returns:
         List of all user feedback, ordered by creation time (newest first)

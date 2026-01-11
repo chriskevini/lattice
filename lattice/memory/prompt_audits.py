@@ -7,12 +7,13 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
 
-from lattice.utils.database import db_pool
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -60,6 +61,7 @@ class PromptAudit:
 
 
 async def store_prompt_audit(
+    db_pool: "DatabasePool",
     prompt_key: str,
     response_content: str,
     main_discord_message_id: int,
@@ -81,6 +83,7 @@ async def store_prompt_audit(
     """Store a prompt audit entry.
 
     Args:
+        db_pool: Database pool for dependency injection
         prompt_key: The prompt template key used
         response_content: The bot's response
         main_discord_message_id: Discord message ID in main channel
@@ -102,7 +105,6 @@ async def store_prompt_audit(
     Returns:
         UUID of the stored audit entry
     """
-    # Convert dicts to JSON strings for JSONB columns
     context_config_json = json.dumps(context_config) if context_config else None
     reasoning_json = json.dumps(reasoning) if reasoning else None
 
@@ -150,6 +152,11 @@ async def store_prompt_audit(
             dream_discord_message_id,
         )
 
+        if row is None:
+            # This should not happen with RETURNING, but for robustness
+            msg = "Failed to store prompt audit"
+            raise RuntimeError(msg)
+
         audit_id = row["id"]
 
         logger.info(
@@ -164,11 +171,12 @@ async def store_prompt_audit(
 
 
 async def update_audit_dream_message(
-    audit_id: UUID, dream_discord_message_id: int
+    db_pool: "DatabasePool", audit_id: UUID, dream_discord_message_id: int
 ) -> bool:
     """Update audit with dream channel message ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         audit_id: UUID of the audit entry
         dream_discord_message_id: Discord message ID in dream channel
 
@@ -199,11 +207,12 @@ async def update_audit_dream_message(
 
 
 async def link_feedback_to_audit(
-    dream_discord_message_id: int, feedback_id: UUID
+    db_pool: "DatabasePool", dream_discord_message_id: int, feedback_id: UUID
 ) -> bool:
     """Link feedback to prompt audit via dream channel message ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         dream_discord_message_id: Discord message ID in dream channel
         feedback_id: UUID of the feedback entry
 
@@ -233,7 +242,9 @@ async def link_feedback_to_audit(
         return updated
 
 
-async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> bool:
+async def link_feedback_to_audit_by_id(
+    db_pool: "DatabasePool", audit_id: UUID, feedback_id: UUID
+) -> bool:
     """Link feedback to prompt audit via audit UUID.
 
     Unlike link_feedback_to_audit(), this function looks up audits by their internal UUID
@@ -242,6 +253,7 @@ async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> boo
     so they may have NULL for dream_discord_message_id.
 
     Args:
+        db_pool: Database pool for dependency injection
         audit_id: UUID of the prompt audit entry
         feedback_id: UUID of the feedback entry
 
@@ -272,11 +284,12 @@ async def link_feedback_to_audit_by_id(audit_id: UUID, feedback_id: UUID) -> boo
 
 
 async def get_audit_by_dream_message(
-    dream_discord_message_id: int,
+    db_pool: "DatabasePool", dream_discord_message_id: int
 ) -> PromptAudit | None:
     """Get audit by dream channel message ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         dream_discord_message_id: Discord message ID in dream channel
 
     Returns:
@@ -328,11 +341,12 @@ async def get_audit_by_dream_message(
 
 
 async def get_audits_with_feedback(
-    limit: int = 100, offset: int = 0
+    db_pool: "DatabasePool", limit: int = 100, offset: int = 0
 ) -> list[PromptAudit]:
     """Get prompt audits that have feedback.
 
     Args:
+        db_pool: Database pool for dependency injection
         limit: Maximum number of audits to return
         offset: Offset for pagination
 

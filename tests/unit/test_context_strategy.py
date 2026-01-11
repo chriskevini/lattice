@@ -6,7 +6,7 @@ Renamed from test_query_extraction.py to match context_strategy.py module.
 import json
 import uuid
 from lattice.utils.date_resolution import get_now
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -63,6 +63,17 @@ def mock_generation_result(mock_llm_response: str) -> AuditResult:
     )
 
 
+def _create_mock_pool(mock_conn: AsyncMock) -> MagicMock:
+    """Create a mock database pool with the given connection."""
+    mock_pool = MagicMock()
+    mock_pool.pool = mock_pool
+    mock_acquire_cm = MagicMock()
+    mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_acquire_cm.__aexit__ = AsyncMock()
+    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
+    return mock_pool
+
+
 class TestContextStrategyFunction:
     """Tests for the context_strategy function."""
 
@@ -81,6 +92,9 @@ class TestContextStrategyFunction:
         }
         mock_generation_result.content = json.dumps(extraction_data)
 
+        mock_conn = AsyncMock()
+        mock_pool = _create_mock_pool(mock_conn)
+
         with (
             patch(
                 "lattice.core.context_strategy.get_prompt",
@@ -91,20 +105,12 @@ class TestContextStrategyFunction:
                 return_value=["Mother", "boyfriend"],
             ),
             patch(
-                "lattice.core.context_strategy.get_auditing_llm_client",
-            ) as mock_llm_client,
-            patch("lattice.core.context_strategy.db_pool") as mock_db_pool,
-            patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
                 return_value=extraction_data,
             ),
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=mock_generation_result)
-            mock_llm_client.return_value = mock_client
-
-            mock_conn = AsyncMock()
-            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
             recent_messages = [
                 EpisodicMessage(
@@ -116,9 +122,11 @@ class TestContextStrategyFunction:
             ]
 
             strategy = await context_strategy(
+                db_pool=mock_pool,
                 message_id=message_id,
                 user_message="I need to finish the lattice project by Friday",
                 recent_messages=recent_messages,
+                llm_client=mock_client,
             )
 
             assert strategy.message_id == message_id
@@ -131,12 +139,16 @@ class TestContextStrategyFunction:
         """Test context strategy with missing prompt template."""
         message_id = uuid.uuid4()
 
+        mock_conn = AsyncMock()
+        mock_pool = _create_mock_pool(mock_conn)
+
         with patch(
             "lattice.core.context_strategy.get_prompt",
             return_value=None,
         ):
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
                 await context_strategy(
+                    db_pool=mock_pool,
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
@@ -153,6 +165,9 @@ class TestContextStrategyFunction:
 
         from lattice.utils.json_parser import JSONParseError
 
+        mock_conn = AsyncMock()
+        mock_pool = _create_mock_pool(mock_conn)
+
         with (
             patch(
                 "lattice.core.context_strategy.get_prompt",
@@ -163,9 +178,6 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.core.context_strategy.get_auditing_llm_client",
-            ) as mock_llm_client,
-            patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
             ) as mock_parse,
             patch(
@@ -174,9 +186,7 @@ class TestContextStrategyFunction:
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=mock_generation_result)
-            mock_llm_client.return_value = mock_client
 
-            # Simulate parse error
             parse_error = JSONParseError(
                 raw_content="not json",
                 parse_error=json.JSONDecodeError("Expecting value", "", 0),
@@ -185,9 +195,11 @@ class TestContextStrategyFunction:
 
             with pytest.raises(JSONParseError):
                 await context_strategy(
+                    db_pool=mock_pool,
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    llm_client=mock_client,
                 )
 
     @pytest.mark.asyncio
@@ -211,6 +223,9 @@ class TestContextStrategyFunction:
             prompt_key="CONTEXT_STRATEGY",
         )
 
+        mock_conn = AsyncMock()
+        mock_pool = _create_mock_pool(mock_conn)
+
         with (
             patch(
                 "lattice.core.context_strategy.get_prompt",
@@ -221,24 +236,20 @@ class TestContextStrategyFunction:
                 return_value=[],
             ),
             patch(
-                "lattice.core.context_strategy.get_auditing_llm_client",
-            ) as mock_llm_client,
-            patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
-                return_value={
-                    "entities": []
-                },  # Missing context_flags and unresolved_entities
+                return_value={"entities": []},
             ),
         ):
             mock_client = AsyncMock()
             mock_client.complete = AsyncMock(return_value=mock_result)
-            mock_llm_client.return_value = mock_client
 
             with pytest.raises(ValueError, match="Missing required field"):
                 await context_strategy(
+                    db_pool=mock_pool,
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    llm_client=mock_client,
                 )
 
 
@@ -264,17 +275,18 @@ class TestGetContextStrategy:
             "created_at": get_now(timezone_str="UTC"),
         }
 
-        with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:
-            mock_conn = AsyncMock()
-            mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+        mock_pool = _create_mock_pool(mock_conn)
 
-            strategy = await get_context_strategy(strategy_id)
+        strategy = await get_context_strategy(
+            db_pool=mock_pool, strategy_id=strategy_id
+        )
 
-            assert strategy is not None
-            assert strategy.id == strategy_id
-            assert strategy.entities == ["Alice", "yesterday"]
-            assert strategy.context_flags == ["goal_context"]
+        assert strategy is not None
+        assert strategy.id == strategy_id
+        assert strategy.entities == ["Alice", "yesterday"]
+        assert strategy.context_flags == ["goal_context"]
 
     @pytest.mark.asyncio
     async def test_get_message_strategy_success(self) -> None:
@@ -295,16 +307,15 @@ class TestGetContextStrategy:
             "created_at": get_now(timezone_str="UTC"),
         }
 
-        with patch("lattice.core.context_strategy.db_pool") as mock_db_pool:
-            mock_conn = AsyncMock()
-            mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-            mock_db_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_conn = AsyncMock()
+        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
+        mock_pool = _create_mock_pool(mock_conn)
 
-            strategy = await get_message_strategy(message_id)
+        strategy = await get_message_strategy(db_pool=mock_pool, message_id=message_id)
 
-            assert strategy is not None
-            assert strategy.message_id == message_id
-            assert strategy.entities == ["marathon"]
+        assert strategy is not None
+        assert strategy.message_id == message_id
+        assert strategy.entities == ["marathon"]
 
 
 class TestBuildSmallerEpisodicContext:

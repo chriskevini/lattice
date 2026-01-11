@@ -1,5 +1,7 @@
 """Command handlers for LatticeBot."""
 
+from typing import TYPE_CHECKING, Any, Optional
+
 import discord
 import structlog
 from discord.ext import commands
@@ -7,6 +9,9 @@ from discord.ext import commands
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.date_resolution import get_now
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 logger = structlog.get_logger(__name__)
 
@@ -19,6 +24,8 @@ class CommandHandler:
         bot: commands.Bot,
         dream_channel_id: int,
         dreaming_scheduler: DreamingScheduler | None = None,
+        db_pool: Optional["DatabasePool"] = None,
+        llm_client: Any | None = None,
     ) -> None:
         """Initialize the command handler.
 
@@ -26,10 +33,14 @@ class CommandHandler:
             bot: The Discord bot instance
             dream_channel_id: ID of the dream channel
             dreaming_scheduler: The dreaming scheduler instance
+            db_pool: Database pool for dependency injection
+            llm_client: LLM client for dependency injection
         """
         self.bot = bot
         self.dream_channel_id = dream_channel_id
         self.dreaming_scheduler = dreaming_scheduler
+        self.db_pool = db_pool
+        self.llm_client = llm_client
 
     def setup(self) -> None:
         """Setup all bot commands."""
@@ -72,7 +83,6 @@ class CommandHandler:
                         force=True
                     )  # type: ignore
 
-                    # Create summary embed
                     if result["status"] == "success":
                         embed = discord.Embed(
                             title="🌙 DREAMING CYCLE COMPLETE",
@@ -140,13 +150,11 @@ class CommandHandler:
             await ctx.send("🔄 **Analyzing message patterns...**")
 
             try:
-                result = await update_active_hours()
+                result = await update_active_hours(db_pool=self.db_pool)
 
-                # Format hours for display
                 start_h = result["start_hour"]
                 end_h = result["end_hour"]
 
-                # Convert to 12-hour format
                 start_display, start_period = self._format_hour_12h(start_h)
                 end_display, end_period = self._format_hour_12h(end_h)
 

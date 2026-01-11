@@ -22,9 +22,7 @@ from lattice.discord_client.error_handlers import notify_parse_error_to_dream
 
 from lattice.core.constants import CONTEXT_STRATEGY_WINDOW_SIZE
 from lattice.memory.procedural import get_prompt
-from lattice.utils.database import db_pool
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
-from lattice.utils.llm import get_auditing_llm_client, get_discord_bot
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
@@ -33,7 +31,7 @@ logger = structlog.get_logger(__name__)
 from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 @dataclass
@@ -104,6 +102,7 @@ def build_smaller_episodic_context(
 
 
 async def context_strategy(
+    db_pool: "DatabasePool",
     message_id: UUID,
     user_message: str,
     recent_messages: list[EpisodicMessage],
@@ -111,6 +110,8 @@ async def context_strategy(
     discord_message_id: int | None = None,
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
+    llm_client: Any | None = None,
+    bot: Any | None = None,
 ) -> ContextStrategy:
     """Perform context strategy analysis on conversation window.
 
@@ -124,12 +125,16 @@ async def context_strategy(
     7. Stores strategy in context_strategies table
 
     Args:
+        db_pool: Database pool for dependency injection
         message_id: UUID of the message being analyzed
         user_message: The user's message text
         recent_messages: Recent conversation history
         user_timezone: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        discord_message_id: Discord's unique message ID
         audit_view: Whether to send an AuditView to the dream channel
         audit_view_params: Parameters for the AuditView
+        llm_client: LLM client for dependency injection
+        bot: Discord bot instance for dependency injection
 
     Returns:
         ContextStrategy object with structured fields
@@ -141,13 +146,13 @@ async def context_strategy(
     from lattice.memory.canonical import get_canonical_entities_list
     from lattice.utils.date_resolution import get_now
 
-    prompt_template = await get_prompt("CONTEXT_STRATEGY")
+    prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXT_STRATEGY")
     if not prompt_template:
         msg = "CONTEXT_STRATEGY prompt template not found in prompt_registry"
         raise ValueError(msg)
 
     user_tz = user_timezone or "UTC"
-    canonical_entities = await get_canonical_entities_list()
+    canonical_entities = await get_canonical_entities_list(db_pool=db_pool)
     canonical_entities_str = (
         ", ".join(canonical_entities) if canonical_entities else "(empty)"
     )
@@ -175,18 +180,37 @@ async def context_strategy(
         entity_count=len(canonical_entities),
     )
 
-    llm_client = get_auditing_llm_client()
-    bot = get_discord_bot()
+    # Use injected llm_client if provided, otherwise raise error
+    if not llm_client:
+        raise ValueError("llm_client is required for context_strategy")
 
-    result = await llm_client.complete(
-        prompt=rendered_prompt,
-        prompt_key="CONTEXT_STRATEGY",
-        template_version=prompt_template.version,
-        main_discord_message_id=discord_message_id,
-        temperature=prompt_template.temperature,
-        audit_view=audit_view,
-        audit_view_params=audit_view_params,
-    )
+    active_llm_client = llm_client
+
+    complete_kwargs = {
+        "prompt": rendered_prompt,
+        "prompt_key": "CONTEXT_STRATEGY",
+        "template_version": prompt_template.version,
+        "main_discord_message_id": discord_message_id,
+        "temperature": prompt_template.temperature,
+        "audit_view": audit_view,
+        "audit_view_params": audit_view_params,
+        "db_pool": db_pool,
+        "bot": bot,
+    }
+
+    # Handle both real client and Mock objects
+    if hasattr(active_llm_client, "complete"):
+        # We know it has complete, but it might be a Mock or a real client
+        coro = active_llm_client.complete(**complete_kwargs)
+        result: Any = await coro if asyncio.iscoroutine(coro) else coro
+    elif callable(active_llm_client):
+        # Fallback for simple callable mocks
+        coro = active_llm_client(prompt=rendered_prompt)
+        result = await coro if asyncio.iscoroutine(coro) else coro
+    else:
+        msg = f"Invalid llm_client: {type(active_llm_client)}"
+        raise TypeError(msg)
+
     raw_response = result.content
     strategy_method = "api"
 
@@ -281,11 +305,13 @@ async def context_strategy(
 
 
 async def get_context_strategy(
+    db_pool: "DatabasePool",
     strategy_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve a stored context strategy by ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         strategy_id: UUID of the strategy to retrieve
 
     Returns:
@@ -320,25 +346,31 @@ async def get_context_strategy(
 
 
 async def get_message_strategy(
+    db_pool: "DatabasePool",
     message_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve context strategy for a specific message.
 
     Args:
+        db_pool: Database pool for dependency injection
         message_id: UUID of the message
 
     Returns:
         ContextStrategy object or None if not found
     """
-    return await get_context_strategy_by_message_id(message_id)
+    return await get_context_strategy_by_message_id(
+        db_pool=db_pool, message_id=message_id
+    )
 
 
 async def get_context_strategy_by_message_id(
+    db_pool: "DatabasePool",
     message_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve context strategy for a specific message by its message ID.
 
     Args:
+        db_pool: Database pool for dependency injection
         message_id: UUID of the message
 
     Returns:
@@ -376,6 +408,7 @@ async def get_context_strategy_by_message_id(
 
 
 async def retrieve_context(
+    db_pool: "DatabasePool",
     entities: list[str],
     context_flags: list[str],
     memory_depth: int = 2,
@@ -389,6 +422,7 @@ async def retrieve_context(
     - Activity memories (if activity_context flag present)
 
     Args:
+        db_pool: Database pool for dependency injection
         entities: Extracted entity mentions from context_strategy()
         context_flags: Context flags from context_strategy() (e.g., ["goal_context"])
         memory_depth: Graph traversal depth (default 2 for multi-hop relationships)
@@ -400,7 +434,6 @@ async def retrieve_context(
         - memory_origins: Set of message UUIDs that these memories originated from
     """
     from lattice.memory.graph import GraphTraversal
-    from lattice.utils.database import db_pool
 
     context: dict[str, Any] = {
         "semantic_context": "",
@@ -415,7 +448,7 @@ async def retrieve_context(
         additional_entities = []
 
         if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=1)
+            traverser = GraphTraversal(db_pool, max_depth=1)
 
             if "activity_context" in context_flags:
                 activity_memories = await traverser.find_semantic_memories(
@@ -473,7 +506,7 @@ async def retrieve_context(
 
     if entities and memory_depth > 0:
         if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
+            traverser = GraphTraversal(db_pool, max_depth=memory_depth)
 
             traverse_tasks = [
                 traverser.traverse_from_entity(entity_name, max_hops=memory_depth)

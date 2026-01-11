@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from lattice.memory import procedural
-from lattice.utils.llm import AuditResult, get_auditing_llm_client
-from lattice.utils.database import db_pool
+from lattice.utils.llm import AuditResult
+
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -65,8 +65,11 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     return injector.validate_template(template)
 
 
-async def fetch_goal_names() -> list[str]:
+async def fetch_goal_names(db_pool: Any) -> list[str]:
     """Fetch unique goal names from knowledge graph.
+
+    Args:
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         List of unique goal strings
@@ -92,10 +95,11 @@ async def fetch_goal_names() -> list[str]:
     return [g["object"] for g in goals]
 
 
-async def get_goal_context(goal_names: list[str] | None = None) -> str:
+async def get_goal_context(db_pool: Any, goal_names: list[str] | None = None) -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
     Args:
+        db_pool: Database pool for dependency injection (required)
         goal_names: Optional pre-fetched goal names to avoid duplicate DB call.
                     If None, fetches from database.
 
@@ -103,7 +107,7 @@ async def get_goal_context(goal_names: list[str] | None = None) -> str:
         Formatted goals string showing goals and their predicates
     """
     if goal_names is None:
-        goal_names = await fetch_goal_names()
+        goal_names = await fetch_goal_names(db_pool=db_pool)
 
     if not goal_names:
         return "No active goals."
@@ -145,10 +149,14 @@ async def generate_response(
     user_message: str,
     episodic_context: str,
     semantic_context: str,
+    db_pool: "DatabasePool",
     unresolved_entities: list[str] | None = None,
     user_tz: str = "UTC",
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
+    llm_client: Any | None = None,
+    main_discord_message_id: int | None = None,
+    bot: Any | None = None,
 ) -> tuple[AuditResult, str, dict[str, Any]]:
     """Generate a response using the unified prompt template.
 
@@ -156,17 +164,23 @@ async def generate_response(
         user_message: The user's message
         episodic_context: Recent conversation history pre-formatted
         semantic_context: Relevant facts from graph pre-formatted
+        db_pool: Database pool for dependency injection
         unresolved_entities: Entities requiring clarification
         user_tz: IANA timezone string for date resolution
         audit_view: Whether to send an AuditView to the dream channel
         audit_view_params: Parameters for the AuditView
+        llm_client: LLM client for dependency injection
+        main_discord_message_id: Discord message ID for audit linkage
+        bot: Discord bot instance for dependency injection
 
     Returns:
         Tuple of (AuditResult, rendered_prompt, context_info)
     """
     # Get unified response template
     template_name = "UNIFIED_RESPONSE"
-    prompt_template = await procedural.get_prompt(template_name)
+    prompt_template = await procedural.get_prompt(
+        db_pool=db_pool, prompt_key=template_name
+    )
 
     if not prompt_template:
         logger.warning("Template not found", requested_template=template_name)
@@ -222,15 +236,36 @@ async def generate_response(
         prompt_length=len(filled_prompt),
     )
 
-    client = get_auditing_llm_client()
-    result = await client.complete(
-        prompt=filled_prompt,
-        prompt_key=template_name,
-        template_version=prompt_template.version,
-        temperature=temperature,
-        audit_view=audit_view,
-        audit_view_params=audit_view_params,
-    )
+    if llm_client is None:
+        raise ValueError("llm_client is required for generate_response")
+
+    try:
+        result = await llm_client.complete(
+            prompt=filled_prompt,
+            db_pool=db_pool,
+            prompt_key=template_name,
+            template_version=prompt_template.version,
+            main_discord_message_id=main_discord_message_id,
+            temperature=temperature,
+            audit_view=audit_view,
+            audit_view_params=audit_view_params,
+            bot=bot,
+        )
+    except Exception as e:
+        logger.error("LLM call failed", error=str(e), prompt_key=template_name)
+        result = AuditResult(
+            content="I'm having trouble connecting to my brain right now.",
+            model="FAILED",
+            provider=None,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            cost_usd=None,
+            latency_ms=0,
+            temperature=temperature,
+            prompt_key=template_name,
+            audit_id=None,
+        )
 
     logger.info(
         "LLM response received",

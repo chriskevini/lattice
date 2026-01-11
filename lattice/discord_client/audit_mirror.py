@@ -1,7 +1,7 @@
 """Audit mirroring for LatticeBot."""
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import discord
@@ -9,21 +9,26 @@ import structlog
 
 from lattice.discord_client.dream import AuditViewBuilder
 
+if TYPE_CHECKING:
+    pass
+
 logger = structlog.get_logger(__name__)
 
 
 class AuditMirror:
     """Mirrors LLM audits to the dream channel."""
 
-    def __init__(self, bot: discord.Bot, dream_channel_id: int) -> None:
+    def __init__(self, bot: discord.Bot, dream_channel_id: int, db_pool: Any) -> None:
         """Initialize the audit mirror.
 
         Args:
             bot: The Discord bot instance
             dream_channel_id: ID of the dream channel for audit mirroring
+            db_pool: Database pool for dependency injection
         """
         self.bot = bot
         self.dream_channel_id = dream_channel_id
+        self.db_pool = db_pool
         self._active_views: dict[int, Any] = {}
 
     async def get_active_view_count(self) -> int:
@@ -78,6 +83,7 @@ class AuditMirror:
             metadata_parts=metadata,
             audit_id=audit_id,
             rendered_prompt=rendered_prompt,
+            db_pool=self.db_pool,
         )
 
         try:
@@ -89,6 +95,7 @@ class AuditMirror:
                 from lattice.memory import prompt_audits
 
                 await prompt_audits.update_audit_dream_message(
+                    db_pool=self.db_pool,
                     audit_id=audit_id,
                     dream_discord_message_id=dream_msg.id,
                 )

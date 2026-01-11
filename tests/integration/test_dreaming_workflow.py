@@ -1,6 +1,7 @@
 """Integration tests for dreaming cycle workflow."""
 
 from decimal import Decimal
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,8 +14,27 @@ from lattice.dreaming.proposer import (
 )
 
 
+@pytest.fixture
+async def db_pool():
+    """Create a database pool for tests."""
+    from lattice.utils.database import DatabasePool
+    from lattice.utils.config import config
+    from unittest import mock
+    import os
+
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        pytest.skip("DATABASE_URL not set")
+
+    with mock.patch.object(config, "database_url", database_url):
+        pool = DatabasePool()
+        await pool.initialize()
+        yield pool
+        await pool.close()
+
+
 @pytest.mark.asyncio
-async def test_full_dreaming_cycle_workflow() -> None:
+async def test_full_dreaming_cycle_workflow(db_pool) -> None:
     """Test the complete dreaming cycle: analyze → propose → store → approve."""
 
     mock_analysis_rows = [
@@ -34,13 +54,15 @@ async def test_full_dreaming_cycle_workflow() -> None:
         }
     ]
 
-    with patch("lattice.dreaming.analyzer.db_pool") as mock_pool:
-        mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=mock_analysis_rows)
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
+    mock_conn = AsyncMock()
+    mock_conn.fetch = AsyncMock(return_value=mock_analysis_rows)
+    # Mock the whole pool since asyncpg.Pool is read-only
+    mock_internal_pool = MagicMock()
+    mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
+    mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        metrics = await analyze_prompt_effectiveness(min_uses=10)
+    with patch.object(db_pool, "_pool", mock_internal_pool):
+        metrics = await analyze_prompt_effectiveness(min_uses=10, db_pool=db_pool)
 
         assert len(metrics) == 1
         assert metrics[0].prompt_key == "BASIC_RESPONSE"
@@ -48,12 +70,12 @@ async def test_full_dreaming_cycle_workflow() -> None:
 
     mock_template = MagicMock()
     mock_template.template = "You are a helpful Discord bot."
+    mock_template.version = 1
 
     mock_optimization_template = MagicMock()
     mock_optimization_template.template = "Optimize this: {current_template}"
-    mock_optimization_template.safe_format = MagicMock(
-        return_value="Optimize this: You are a helpful Discord bot."
-    )
+    mock_optimization_template.version = 1
+    mock_optimization_template.temperature = 0.7
 
     mock_llm_result = MagicMock()
     mock_llm_result.content = """{
@@ -63,13 +85,15 @@ async def test_full_dreaming_cycle_workflow() -> None:
         "justification": "Will address negative feedback about verbosity"
     }"""
 
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value=mock_llm_result)
+
     with (
         patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
         patch("lattice.dreaming.proposer.get_feedback_with_context") as mock_feedback,
-        patch("lattice.dreaming.proposer.get_auditing_llm_client") as mock_llm_client,
     ):
 
-        def get_prompt_side_effect(prompt_key: str):
+        def get_prompt_side_effect(prompt_key: str, **kwargs: Any) -> Any:
             if prompt_key == "BASIC_RESPONSE":
                 return mock_template
             elif prompt_key == "PROMPT_OPTIMIZATION":
@@ -92,49 +116,52 @@ async def test_full_dreaming_cycle_workflow() -> None:
             },
         ]
 
-        mock_llm = AsyncMock()
-        mock_llm.complete = AsyncMock(return_value=mock_llm_result)
-        mock_llm_client.return_value = mock_llm
-
-        proposal = await propose_optimization(metrics[0])
+        proposal = await propose_optimization(
+            metrics[0], db_pool=db_pool, llm_client=mock_llm
+        )
 
         assert proposal is not None
         assert proposal.current_version == 1
         assert proposal.proposed_version == 2
         assert "concise" in proposal.proposed_template.lower()
 
-    with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
+    mock_conn = AsyncMock()
+    mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
+    # Mock internal pool again for store_proposal
+    mock_internal_pool = MagicMock()
+    mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
+    mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        stored_id = await store_proposal(proposal)
+    with patch.object(db_pool, "_pool", mock_internal_pool):
+        stored_id = await store_proposal(proposal, db_pool=db_pool)
 
         assert stored_id == proposal.proposal_id
 
-    with patch("lattice.dreaming.proposer.db_pool") as mock_pool:
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={
-                "prompt_key": proposal.prompt_key,
-                "current_version": proposal.current_version,
-                "proposed_template": proposal.proposed_template,
-                "proposed_version": proposal.proposed_version,
-                "temperature": 0.7,
-            }
-        )
-        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
-        mock_conn.transaction = MagicMock()
-        mock_conn.transaction().__aenter__ = AsyncMock()
-        mock_conn.transaction().__aexit__ = AsyncMock()
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
+    mock_conn = AsyncMock()
+    mock_conn.fetchrow = AsyncMock(
+        return_value={
+            "prompt_key": proposal.prompt_key,
+            "current_version": proposal.current_version,
+            "proposed_template": proposal.proposed_template,
+            "proposed_version": proposal.proposed_version,
+            "temperature": 0.7,
+        }
+    )
+    mock_conn.execute = AsyncMock(return_value="UPDATE 1")
+    mock_conn.transaction = MagicMock()
+    mock_conn.transaction().__aenter__ = AsyncMock()
+    mock_conn.transaction().__aexit__ = AsyncMock()
+    # Mock internal pool again for approve_proposal
+    mock_internal_pool = MagicMock()
+    mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
+    mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+    with patch.object(db_pool, "_pool", mock_internal_pool):
         success = await approve_proposal(
             proposal_id=proposal.proposal_id,
             reviewed_by="user123",
             feedback="Great improvement, approved!",
+            db_pool=db_pool,
         )
 
         assert success is True
@@ -144,7 +171,7 @@ async def test_full_dreaming_cycle_workflow() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dreaming_cycle_no_proposals_when_performing_well() -> None:
+async def test_dreaming_cycle_no_proposals_when_performing_well(db_pool) -> None:
     """Test that no proposals are generated when prompts are performing well."""
 
     mock_rows = [
@@ -164,13 +191,15 @@ async def test_dreaming_cycle_no_proposals_when_performing_well() -> None:
         }
     ]
 
-    with patch("lattice.dreaming.analyzer.db_pool") as mock_pool:
-        mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=mock_rows)
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
+    mock_conn = AsyncMock()
+    mock_conn.fetch = AsyncMock(return_value=mock_rows)
+    # Mock internal pool
+    mock_internal_pool = MagicMock()
+    mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
+    mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        metrics = await analyze_prompt_effectiveness()
+    with patch.object(db_pool, "_pool", mock_internal_pool):
+        metrics = await analyze_prompt_effectiveness(db_pool=db_pool)
 
         assert len(metrics) == 1
         assert metrics[0].success_rate == 0.99
