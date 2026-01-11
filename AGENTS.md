@@ -42,6 +42,7 @@ make install    # Deps + pre-commit hooks
 make test       # Run test suite
 make check-all  # Lint, type-check, and test
 make run        # Run bot locally
+make view-logs  # View logs
 ```
 
 ### Standards

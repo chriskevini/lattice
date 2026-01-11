@@ -15,9 +15,6 @@ from lattice.utils.config import config
 def setup_logging() -> None:
     """Configure structured logging."""
     log_level = config.log_level
-    log_file = config.log_file
-
-    Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
     structlog.configure(
         processors=[
@@ -42,10 +39,7 @@ def setup_logging() -> None:
     logging.basicConfig(
         format="%(message)s",
         level=getattr(logging, log_level),
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler(sys.stdout),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
 
 

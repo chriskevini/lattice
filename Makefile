@@ -19,10 +19,13 @@ docker-down: ## Stop all services
 docker-logs: ## Show logs from all services
 	docker compose logs -f
 
-docker-logs-bot: ## Show logs from bot service only
+docker-logs-bot: ## Show logs from bot service only (follows, blocking)
 	docker compose logs -f bot
 
-docker-logs-db: ## Show logs from database service only
+view-logs: ## View recent bot logs (non-blocking)
+	docker compose logs --tail 500 bot
+
+docker-logs-db: ## Show logs from database service only (follows, blocking)
 	docker compose logs -f postgres
 
 docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
@@ -134,7 +137,7 @@ clean: ## Clean up cache and build files
 	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".uv" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf dist/ build/ htmlcov/ .coverage
+	rm -rf dist/ build/ htmlcov/ .coverage logs/*.log
 
 # ============================================================================
 # Git Helpers

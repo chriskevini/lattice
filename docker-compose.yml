@@ -19,6 +19,12 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    # Log rotation to prevent disk bloat
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Lattice bot application
   bot:
@@ -55,6 +61,12 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
+    # Log rotation to prevent disk bloat
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
