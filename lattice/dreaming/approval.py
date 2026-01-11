@@ -167,6 +167,11 @@ class MemoryReviewView(discord.ui.DesignerView):  # type: ignore[name-defined]
                         f"✗ Failed to apply conflict {conflict_index + 1}"
                     )
             except Exception:
+                logger.exception(
+                    "Memory review approve callback failed",
+                    proposal_id=str(self.proposal_uuid),
+                    conflict_index=conflict_index,
+                )
                 await interaction.response.send_message(
                     f"✗ Error applying conflict {conflict_index + 1}"
                 )

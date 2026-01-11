@@ -161,9 +161,7 @@ Return ONLY valid JSON array:
     "superseded_memories": [
       {"subject": "...", "predicate": "...", "object": "...", "created_at": "ISO-8601"}
     ],
-    "canonical_memory": {
-      "subject": "...", "predicate": "...", "object": "...", "created_at": "ISO-8601"
-    },
+    "canonical_memory": {"subject": "...", "predicate": "...", "object": "...", "created_at": "ISO-8601"},
     "reason": "brief explanation"
   }
 ]
@@ -184,9 +182,7 @@ Output:
     "superseded_memories": [
       {"subject": "User", "predicate": "likes", "object": "pizza", "created_at": "2026-01-10T10:00:00Z"}
     ],
-    "canonical_memory": {
-      "subject": "User", "predicate": "likes", "object": "pizza", "created_at": "2026-01-11T10:00:00Z"
-    },
+    "canonical_memory": {"subject": "User", "predicate": "likes", "object": "pizza", "created_at": "2026-01-11T10:00:00Z"},
     "reason": "Multiple memories with same subject/predicate, keeping most recent"
   },
   {
@@ -194,9 +190,7 @@ Output:
     "superseded_memories": [
       {"subject": "User", "predicate": "lives in city", "object": "Portland", "created_at": "2026-01-01T10:00:00Z"}
     ],
-    "canonical_memory": {
-      "subject": "User", "predicate": "lives in city", "object": "Seattle", "created_at": "2026-01-15T10:00:00Z"}
-    },
+    "canonical_memory": {"subject": "User", "predicate": "lives in city", "object": "Seattle", "created_at": "2026-01-15T10:00:00Z"},
     "reason": "Location changed, keeping most recent information"
   }
 ]
