@@ -207,9 +207,7 @@ class TestSystemHealthFunctions:
 
         await set_system_health("test_key", "test_value", db_pool=mock_db_pool)
 
-        mock_db_pool.set_system_health.assert_called_once_with(
-            "test_key", "test_value"
-        )
+        mock_db_pool.set_system_health.assert_called_once_with("test_key", "test_value")
 
 
 class TestNextCheckAtFunctions:
@@ -260,7 +258,9 @@ class TestNextCheckAtFunctions:
     async def test_get_next_check_at_invalid_format(self) -> None:
         """Test get_next_check_at raises ValueError for invalid datetime format."""
         mock_db_pool = AsyncMock()
-        mock_db_pool.get_next_check_at = AsyncMock(side_effect=ValueError("Invalid isoformat string"))
+        mock_db_pool.get_next_check_at = AsyncMock(
+            side_effect=ValueError("Invalid isoformat string")
+        )
 
         with pytest.raises(ValueError, match="Invalid isoformat string"):
             await get_next_check_at(db_pool=mock_db_pool)

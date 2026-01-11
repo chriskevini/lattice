@@ -234,11 +234,11 @@ class TestRunBatchConsolidation:
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
-                with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
+                with patch(
+                    "lattice.memory.batch_consolidation.get_prompt"
+                ) as mock_prompt:
                     mock_prompt.return_value = None
-                    with patch(
-                        "lattice.utils.llm.get_auditing_llm_client"
-                    ) as mock_llm:
+                    with patch("lattice.utils.llm.get_auditing_llm_client") as mock_llm:
                         with patch(
                             "lattice.memory.batch_consolidation.store_semantic_memories"
                         ) as mock_store:
@@ -316,7 +316,10 @@ class TestRunBatchConsolidation:
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
-                with patch("lattice.utils.llm.get_auditing_llm_client", return_value=mock_llm_client):
+                with patch(
+                    "lattice.utils.llm.get_auditing_llm_client",
+                    return_value=mock_llm_client,
+                ):
                     with patch(
                         "lattice.memory.batch_consolidation.get_prompt",
                         return_value=mock_prompt,
@@ -564,7 +567,10 @@ class TestRunBatchConsolidation:
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
-                with patch("lattice.utils.llm.get_auditing_llm_client", return_value=mock_llm_client):
+                with patch(
+                    "lattice.utils.llm.get_auditing_llm_client",
+                    return_value=mock_llm_client,
+                ):
                     with patch(
                         "lattice.memory.batch_consolidation.get_prompt",
                         return_value=mock_prompt,
@@ -601,9 +607,9 @@ class TestRunBatchConsolidation:
                                                     mock_prompt.safe_format.call_args
                                                 )
                                                 assert (
-                                                "bigger_episodic_context"
-                                                in call_args[1]
-                                            )
+                                                    "bigger_episodic_context"
+                                                    in call_args[1]
+                                                )
                                             history = call_args[1][
                                                 "bigger_episodic_context"
                                             ]
@@ -781,7 +787,10 @@ class TestRunBatchConsolidation:
         with patch("lattice.memory.batch_consolidation.db_pool") as mock_db_pool:
             mock_db_pool.pool = mock_pool
             with patch("lattice.utils.database.db_pool", mock_db_pool):
-                with patch("lattice.utils.llm.get_auditing_llm_client", return_value=mock_llm_client):
+                with patch(
+                    "lattice.utils.llm.get_auditing_llm_client",
+                    return_value=mock_llm_client,
+                ):
                     with patch(
                         "lattice.memory.batch_consolidation.get_prompt",
                         return_value=mock_prompt,
@@ -818,8 +827,9 @@ class TestRunBatchConsolidation:
                                                     mock_prompt.safe_format.call_args
                                                 )
                                                 assert (
-                                                "semantic_context" not in call_args[1]
-                                            )
+                                                    "semantic_context"
+                                                    not in call_args[1]
+                                                )
 
 
 class TestRaceCondition:
