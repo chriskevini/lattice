@@ -14,23 +14,23 @@ from lattice.scheduler.adaptive import (
     is_within_active_hours,
     update_active_hours,
 )
-from lattice.scheduler.triggers import (
-    ProactiveDecision,
-    decide_proactive,
-    get_conversation_context,
-    get_current_interval,
+from lattice.scheduler.nudges import (
+    NudgePlan,
+    prepare_contextual_nudge,
+    format_episodic_nudge_context,
     get_default_channel_id,
-    set_current_interval,
 )
 from lattice.core.response_generator import get_goal_context
 
 
-class TestGetConversationContext:
-    """Tests for get_conversation_context helper."""
+class TestFormatEpisodicNudgeContext:
+    """Tests for format_episodic_nudge_context helper."""
 
     @pytest.mark.asyncio
-    @patch("lattice.scheduler.triggers.get_recent_messages")
-    async def test_get_conversation_context(self, mock_get_recent: MagicMock) -> None:
+    @patch("lattice.scheduler.nudges.get_recent_messages")
+    async def test_format_episodic_nudge_context(
+        self, mock_get_recent: MagicMock
+    ) -> None:
         mock_get_recent.return_value = [
             EpisodicMessage(
                 content="Hello",
@@ -48,28 +48,26 @@ class TestGetConversationContext:
             ),
         ]
 
-        # UTC
-        result = await get_conversation_context(user_timezone="UTC")
+        result = await format_episodic_nudge_context(user_timezone="UTC")
         assert "[2024-01-01 10:00] USER: Hello" in result
         assert "[2024-01-01 10:01] ASSISTANT: Hi there" in result
 
-        # America/Vancouver (UTC-8)
-        result = await get_conversation_context(user_timezone="America/Vancouver")
+        result = await format_episodic_nudge_context(user_timezone="America/Vancouver")
         assert "[2024-01-01 02:00] USER: Hello" in result
         assert "[2024-01-01 02:01] ASSISTANT: Hi there" in result
 
     @pytest.mark.asyncio
-    async def test_get_conversation_context_with_no_messages(self) -> None:
+    async def test_format_episodic_nudge_context_with_no_messages(self) -> None:
         """Test conversation context when no messages exist."""
         with patch(
-            "lattice.scheduler.triggers.get_recent_messages",
+            "lattice.scheduler.nudges.get_recent_messages",
             return_value=[],
         ):
-            result = await get_conversation_context()
+            result = await format_episodic_nudge_context()
             assert result == "No recent conversation history."
 
     @pytest.mark.asyncio
-    async def test_get_conversation_context_with_messages(self) -> None:
+    async def test_format_episodic_nudge_context_with_messages(self) -> None:
         """Test conversation context with messages."""
         messages = [
             EpisodicMessage(
@@ -88,19 +86,19 @@ class TestGetConversationContext:
             ),
         ]
         with patch(
-            "lattice.scheduler.triggers.get_recent_messages",
+            "lattice.scheduler.nudges.get_recent_messages",
             return_value=messages,
         ):
-            result = await get_conversation_context()
+            result = await format_episodic_nudge_context()
             assert "[2024-01-01 10:00] USER: Hello!" in result
             assert "[2024-01-01 10:01] ASSISTANT: Hi there!" in result
 
 
-class TestProactiveDecision:
-    """Tests for ProactiveDecision dataclass."""
+class TestNudgePlan:
+    """Tests for NudgePlan dataclass."""
 
     def test_message_decision(self) -> None:
-        decision = ProactiveDecision(
+        decision = NudgePlan(
             action="message",
             content="Hey! How's it going?",
             reason="User has been active",
@@ -111,7 +109,7 @@ class TestProactiveDecision:
         assert decision.channel_id == 12345
 
     def test_wait_decision(self) -> None:
-        decision = ProactiveDecision(
+        decision = NudgePlan(
             action="wait",
             content=None,
             reason="User just responded",
@@ -120,56 +118,49 @@ class TestProactiveDecision:
         assert decision.content is None
 
 
-class TestDecideProactive:
-    """Tests for decide_proactive function."""
+class TestPrepareContextualNudge:
+    """Tests for prepare_contextual_nudge function."""
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_missing_prompt(self) -> None:
-        """Test that missing PROACTIVE_CHECKIN prompt returns wait."""
+    async def test_prepare_contextual_nudge_with_missing_prompt(self) -> None:
+        """Test that missing CONTEXTUAL_NUDGE prompt returns wait."""
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock()
 
         with (
             patch(
-                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
-            ),
-            patch("lattice.scheduler.triggers.get_prompt", return_value=None),
-            patch(
-                "lattice.scheduler.triggers.get_conversation_context",
+                "lattice.scheduler.nudges.format_episodic_nudge_context",
                 return_value="No recent conversation history.",
             ),
+            patch("lattice.scheduler.nudges.get_prompt", return_value=None),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+                "lattice.core.context_strategy.retrieve_context",
+                AsyncMock(
+                    return_value={"activity_context": "No recent activity recorded."}
+                ),
             ),
-            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
-                "lattice.scheduler.triggers.get_user_timezone",
+                "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
+            ),
+            patch(
+                "lattice.scheduler.nudges.get_user_timezone",
                 new_callable=AsyncMock,
                 return_value="UTC",
-            ),
-            patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_auditing_llm_client",
-                return_value=mock_llm,
             ),
         ):
-            result = await decide_proactive()
+            result = await prepare_contextual_nudge()
             assert result.action == "wait"
             assert "prompt not found" in result.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_llm_exception(self) -> None:
+    async def test_prepare_contextual_nudge_with_llm_exception(self) -> None:
         """Test that LLM exceptions are handled gracefully."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
+        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\n{activity_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -178,46 +169,43 @@ class TestDecideProactive:
 
         with (
             patch(
-                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
-            ),
-            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
-            patch(
-                "lattice.scheduler.triggers.get_conversation_context",
+                "lattice.scheduler.nudges.format_episodic_nudge_context",
                 return_value="No recent conversation history.",
             ),
+            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+                "lattice.core.context_strategy.retrieve_context",
+                AsyncMock(
+                    return_value={"activity_context": "No recent activity recorded."}
+                ),
             ),
-            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
-                "lattice.scheduler.triggers.get_user_timezone",
+                "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
+            ),
+            patch(
+                "lattice.scheduler.nudges.get_user_timezone",
                 new_callable=AsyncMock,
                 return_value="UTC",
             ),
             patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_auditing_llm_client",
+                "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await decide_proactive()
+            result = await prepare_contextual_nudge()
             assert result.action == "wait"
             assert "LLM call failed" in result.reason
             assert result.channel_id == 12345
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_json_parse_error(self) -> None:
+    async def test_prepare_contextual_nudge_with_json_parse_error(self) -> None:
         """Test that invalid JSON from LLM is handled gracefully."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
+        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\n{activity_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -235,104 +223,43 @@ class TestDecideProactive:
 
         with (
             patch(
-                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
-            ),
-            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
-            patch(
-                "lattice.scheduler.triggers.get_conversation_context",
+                "lattice.scheduler.nudges.format_episodic_nudge_context",
                 return_value="No recent conversation history.",
             ),
+            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+                "lattice.core.context_strategy.retrieve_context",
+                AsyncMock(
+                    return_value={"activity_context": "No recent activity recorded."}
+                ),
             ),
-            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
-                "lattice.scheduler.triggers.get_user_timezone",
+                "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
+            ),
+            patch(
+                "lattice.scheduler.nudges.get_user_timezone",
                 new_callable=AsyncMock,
                 return_value="UTC",
             ),
             patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_auditing_llm_client",
+                "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await decide_proactive()
+            result = await prepare_contextual_nudge()
             assert result.action == "wait"
             assert "Failed to parse AI response" in result.reason
             assert result.channel_id == 12345
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_invalid_action(self) -> None:
-        """Test that invalid action from LLM defaults to wait."""
-        mock_prompt = MagicMock()
-        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
-        mock_prompt.temperature = 0.7
-        mock_prompt.version = 1
-
-        mock_result = MagicMock()
-        mock_result.content = (
-            '{"action": "invalid_action", "reason": "Testing invalid action"}'
-        )
-        mock_result.model = "gpt-4"
-        mock_result.provider = "openai"
-        mock_result.prompt_tokens = 100
-        mock_result.completion_tokens = 50
-        mock_result.cost_usd = 0.01
-        mock_result.latency_ms = 500
-
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(return_value=mock_result)
-
-        with (
-            patch(
-                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
-            ),
-            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
-            patch(
-                "lattice.scheduler.triggers.get_conversation_context",
-                return_value="No recent conversation history.",
-            ),
-            patch(
-                "lattice.core.response_generator.get_goal_context",
-                return_value="No active objectives.",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
-            ),
-            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
-            patch(
-                "lattice.scheduler.triggers.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_auditing_llm_client",
-                return_value=mock_llm,
-            ),
-        ):
-            result = await decide_proactive()
-            assert result.action == "wait"
-            assert result.reason == "Testing invalid action"
-
-    @pytest.mark.asyncio
-    async def test_decide_proactive_with_empty_content(self) -> None:
+    async def test_prepare_contextual_nudge_with_empty_content(self) -> None:
         """Test that empty content in message action defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
+        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\n{activity_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -352,45 +279,42 @@ class TestDecideProactive:
 
         with (
             patch(
-                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
-            ),
-            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
-            patch(
-                "lattice.scheduler.triggers.get_conversation_context",
+                "lattice.scheduler.nudges.format_episodic_nudge_context",
                 return_value="No recent conversation history.",
             ),
+            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+                "lattice.core.context_strategy.retrieve_context",
+                AsyncMock(
+                    return_value={"activity_context": "No recent activity recorded."}
+                ),
             ),
-            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
-                "lattice.scheduler.triggers.get_user_timezone",
+                "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
+            ),
+            patch(
+                "lattice.scheduler.nudges.get_user_timezone",
                 new_callable=AsyncMock,
                 return_value="UTC",
             ),
             patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_auditing_llm_client",
+                "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await decide_proactive()
+            result = await prepare_contextual_nudge()
             assert result.action == "wait"
             assert result.content is None
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_literal_empty_string(self) -> None:
+    async def test_prepare_contextual_nudge_with_literal_empty_string(self) -> None:
         """Test that literal empty string content defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
+        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\n{activity_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -408,45 +332,42 @@ class TestDecideProactive:
 
         with (
             patch(
-                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
-            ),
-            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
-            patch(
-                "lattice.scheduler.triggers.get_conversation_context",
+                "lattice.scheduler.nudges.format_episodic_nudge_context",
                 return_value="No recent conversation history.",
             ),
+            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+                "lattice.core.context_strategy.retrieve_context",
+                AsyncMock(
+                    return_value={"activity_context": "No recent activity recorded."}
+                ),
             ),
-            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
-                "lattice.scheduler.triggers.get_user_timezone",
+                "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
+            ),
+            patch(
+                "lattice.scheduler.nudges.get_user_timezone",
                 new_callable=AsyncMock,
                 return_value="UTC",
             ),
             patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_auditing_llm_client",
+                "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await decide_proactive()
+            result = await prepare_contextual_nudge()
             assert result.action == "wait"
             assert result.content is None
 
     @pytest.mark.asyncio
-    async def test_decide_proactive_with_missing_content(self) -> None:
+    async def test_prepare_contextual_nudge_with_missing_content(self) -> None:
         """Test that missing content field defaults to wait."""
         mock_prompt = MagicMock()
-        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\nWait {scheduler_current_interval} minutes"
+        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\n{activity_context}"
         mock_prompt.temperature = 0.7
         mock_prompt.version = 1
 
@@ -466,77 +387,36 @@ class TestDecideProactive:
 
         with (
             patch(
-                "lattice.scheduler.triggers.is_within_active_hours", return_value=True
-            ),
-            patch("lattice.scheduler.triggers.get_prompt", return_value=mock_prompt),
-            patch(
-                "lattice.scheduler.triggers.get_conversation_context",
+                "lattice.scheduler.nudges.format_episodic_nudge_context",
                 return_value="No recent conversation history.",
             ),
+            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
             ),
             patch(
-                "lattice.scheduler.triggers.get_default_channel_id", return_value=12345
+                "lattice.core.context_strategy.retrieve_context",
+                AsyncMock(
+                    return_value={"activity_context": "No recent activity recorded."}
+                ),
             ),
-            patch("lattice.scheduler.triggers.get_current_interval", return_value=15),
             patch(
-                "lattice.scheduler.triggers.get_user_timezone",
+                "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
+            ),
+            patch(
+                "lattice.scheduler.nudges.get_user_timezone",
                 new_callable=AsyncMock,
                 return_value="UTC",
             ),
             patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.triggers.get_auditing_llm_client",
+                "lattice.scheduler.nudges.get_auditing_llm_client",
                 return_value=mock_llm,
             ),
         ):
-            result = await decide_proactive()
+            result = await prepare_contextual_nudge()
             assert result.action == "wait"
             assert result.content is None
-
-
-class TestGetCurrentInterval:
-    """Tests for get_current_interval function."""
-
-    @pytest.mark.asyncio
-    async def test_get_current_interval_with_value_set(self) -> None:
-        """Test retrieving current interval when set in system_health."""
-        with patch(
-            "lattice.scheduler.triggers.get_system_health",
-            side_effect=lambda key: {"scheduler_current_interval": "30"}.get(key),
-        ):
-            result = await get_current_interval()
-            assert result == 30
-
-    @pytest.mark.asyncio
-    async def test_get_current_interval_with_no_value(self) -> None:
-        """Test retrieving current interval falls back to base when not set."""
-        with patch(
-            "lattice.scheduler.triggers.get_system_health",
-            side_effect=lambda key: {
-                "scheduler_base_interval": "20",
-                "scheduler_current_interval": None,
-            }.get(key),
-        ):
-            result = await get_current_interval()
-            assert result == 20
-
-
-class TestSetCurrentInterval:
-    """Tests for set_current_interval function."""
-
-    @pytest.mark.asyncio
-    async def test_set_current_interval(self) -> None:
-        """Test setting current interval in system_health."""
-        with patch("lattice.scheduler.triggers.set_system_health") as mock_set_health:
-            await set_current_interval(45)
-            mock_set_health.assert_called_once_with("scheduler_current_interval", "45")
 
 
 class TestGetGoalContext:
@@ -791,17 +671,6 @@ class TestAdaptiveActiveHours:
             assert result == mock_result
             # Verify system_health was updated
             assert mock_set.call_count >= 4  # start, end, confidence, last_updated
-
-    @pytest.mark.asyncio
-    async def test_decide_proactive_respects_active_hours(self) -> None:
-        """Test that decide_proactive checks active hours first."""
-        with patch(
-            "lattice.scheduler.triggers.is_within_active_hours", return_value=False
-        ):
-            result = await decide_proactive()
-
-            assert result.action == "wait"
-            assert "active hours" in result.reason.lower()
 
 
 if __name__ == "__main__":

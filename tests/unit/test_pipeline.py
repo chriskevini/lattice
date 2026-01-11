@@ -75,8 +75,8 @@ class TestUnifiedPipeline:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_send_proactive_message_success(self) -> None:
-        """Test successful proactive message sending."""
+    async def test_dispatch_autonomous_nudge_success(self) -> None:
+        """Test successful autonomous nudge sending."""
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
         mock_channel = MagicMock()
@@ -88,8 +88,8 @@ class TestUnifiedPipeline:
 
         pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
 
-        result = await pipeline.send_proactive_message(
-            content="Proactive reminder: Don't forget your meeting!",
+        result = await pipeline.dispatch_autonomous_nudge(
+            content="Nudge reminder: Don't forget your meeting!",
             channel_id=123456789,
         )
 
@@ -98,15 +98,15 @@ class TestUnifiedPipeline:
 
         # Verify message was sent
         mock_channel.send.assert_called_once_with(
-            "Proactive reminder: Don't forget your meeting!"
+            "Nudge reminder: Don't forget your meeting!"
         )
 
         # Verify result is the sent message
         assert result is mock_message
 
     @pytest.mark.asyncio
-    async def test_send_proactive_message_channel_not_found(self) -> None:
-        """Test send_proactive_message when channel doesn't exist."""
+    async def test_dispatch_autonomous_nudge_channel_not_found(self) -> None:
+        """Test dispatch_autonomous_nudge when channel doesn't exist."""
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
 
@@ -115,8 +115,8 @@ class TestUnifiedPipeline:
 
         pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
 
-        result = await pipeline.send_proactive_message(
-            content="Proactive message",
+        result = await pipeline.dispatch_autonomous_nudge(
+            content="Nudge message",
             channel_id=999999999,
         )
 
