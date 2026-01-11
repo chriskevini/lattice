@@ -13,6 +13,7 @@ import structlog
 
 if TYPE_CHECKING:
     from lattice.dreaming.analyzer import PromptMetrics
+    from lattice.utils.database import DatabasePool
 
 
 from lattice.memory.procedural import get_prompt
@@ -424,7 +425,7 @@ async def get_pending_proposals(db_pool: Any) -> list[OptimizationProposal]:
 async def approve_proposal(
     proposal_id: UUID,
     reviewed_by: str,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     feedback: str | None = None,
 ) -> bool:
     """Approve an optimization proposal and apply it to prompt_registry.
@@ -522,7 +523,7 @@ async def approve_proposal(
 async def reject_proposal(
     proposal_id: UUID,
     reviewed_by: str,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     feedback: str | None = None,
 ) -> bool:
     """Reject an optimization proposal.

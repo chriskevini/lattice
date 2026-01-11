@@ -4,12 +4,15 @@ Stores feedback submitted via Discord buttons and modals in the dream channel.
 """
 
 from datetime import datetime
-from typing import cast, Any
+from typing import TYPE_CHECKING, cast, Any
 from uuid import UUID, uuid4
 
 import structlog
 
 from lattice.utils.date_resolution import get_now
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 logger = structlog.get_logger(__name__)
 
@@ -82,7 +85,7 @@ async def store_feedback(db_pool: Any, feedback: UserFeedback) -> UUID:
 
 
 async def get_feedback_by_user_message(
-    db_pool: Any, user_discord_message_id: int
+    db_pool: "DatabasePool", user_discord_message_id: int
 ) -> UserFeedback | None:
     """Get feedback by the user's Discord message ID.
 

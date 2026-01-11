@@ -15,7 +15,7 @@ from lattice.utils.date_resolution import get_now
 
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -115,7 +115,7 @@ async def store_message(db_pool: Any, message: EpisodicMessage) -> UUID:
 
 
 async def get_recent_messages(
-    db_pool: Any, channel_id: int | None = None, limit: int = 10
+    db_pool: "DatabasePool", channel_id: int | None = None, limit: int = 10
 ) -> list[EpisodicMessage]:
     """Get recent messages from a channel or all channels.
 
@@ -185,7 +185,7 @@ def format_messages(messages: list[EpisodicMessage]) -> str:
 
 
 async def store_semantic_memories(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     message_id: UUID,
     memories: list[dict[str, str]],
     source_batch_id: str | None = None,

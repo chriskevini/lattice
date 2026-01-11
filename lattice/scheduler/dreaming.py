@@ -26,7 +26,7 @@ from lattice.utils.date_resolution import get_now
 
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -61,7 +61,7 @@ class DreamingScheduler:
         bot: Any,
         dream_channel_id: int | None = None,
         dream_time: time = DEFAULT_DREAM_TIME,
-        db_pool: Any | None = None,
+        db_pool: "DatabasePool | None" = None,
         llm_client: Any | None = None,
     ) -> None:
         """Initialize the dreaming scheduler.
@@ -417,7 +417,7 @@ async def trigger_dreaming_cycle_manually(
     bot: Any,
     dream_channel_id: int | None = None,
     force: bool = True,
-    db_pool: Any | None = None,
+    db_pool: "DatabasePool | None" = None,
     llm_client: Any | None = None,
 ) -> None:
     """Manually trigger the dreaming cycle (for testing or manual invocation).

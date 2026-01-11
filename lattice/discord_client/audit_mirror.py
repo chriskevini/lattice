@@ -1,13 +1,16 @@
 """Audit mirroring for LatticeBot."""
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import discord
 import structlog
 
 from lattice.discord_client.dream import AuditViewBuilder
+
+if TYPE_CHECKING:
+    pass
 
 logger = structlog.get_logger(__name__)
 

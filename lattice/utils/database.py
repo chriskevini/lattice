@@ -4,7 +4,7 @@ Provides async PostgreSQL connection pooling.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfoNotFoundError
 
 import asyncpg
@@ -138,7 +138,7 @@ class DatabasePool:
         await self.set_system_health("next_check_at", dt.isoformat())
 
 
-async def get_user_timezone(db_pool: Any) -> str:
+async def get_user_timezone(db_pool: DatabasePool) -> str:
     """Get user timezone from semantic memory or cache.
 
     Args:
@@ -170,7 +170,7 @@ async def get_user_timezone(db_pool: Any) -> str:
     return "UTC"
 
 
-async def get_system_health(key: str, db_pool: Any) -> str | None:
+async def get_system_health(key: str, db_pool: DatabasePool) -> str | None:
     """Get a value from the system_health table.
 
     Args:
@@ -183,7 +183,7 @@ async def get_system_health(key: str, db_pool: Any) -> str | None:
     return await db_pool.get_system_health(key)
 
 
-async def set_system_health(key: str, value: str, db_pool: Any) -> None:
+async def set_system_health(key: str, value: str, db_pool: DatabasePool) -> None:
     """Set a value in the system_health table.
 
     Args:
@@ -194,7 +194,7 @@ async def set_system_health(key: str, value: str, db_pool: Any) -> None:
     await db_pool.set_system_health(key, value)
 
 
-async def get_next_check_at(db_pool: Any) -> datetime | None:
+async def get_next_check_at(db_pool: DatabasePool) -> datetime | None:
     """Get the next proactive check timestamp.
 
     Args:
@@ -206,7 +206,7 @@ async def get_next_check_at(db_pool: Any) -> datetime | None:
     return await db_pool.get_next_check_at()
 
 
-async def set_next_check_at(dt: datetime, db_pool: Any) -> None:
+async def set_next_check_at(dt: datetime, db_pool: DatabasePool) -> None:
     """Set the next proactive check timestamp.
 
     Args:

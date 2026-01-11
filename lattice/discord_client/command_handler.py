@@ -1,6 +1,6 @@
 """Command handlers for LatticeBot."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import discord
 import structlog
@@ -9,6 +9,9 @@ from discord.ext import commands
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.date_resolution import get_now
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 logger = structlog.get_logger(__name__)
 
@@ -21,7 +24,7 @@ class CommandHandler:
         bot: commands.Bot,
         dream_channel_id: int,
         dreaming_scheduler: DreamingScheduler | None = None,
-        db_pool: Any | None = None,
+        db_pool: Optional["DatabasePool"] = None,
         llm_client: Any | None = None,
     ) -> None:
         """Initialize the command handler.

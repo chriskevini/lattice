@@ -21,8 +21,11 @@ Tables:
 """
 
 import structlog
+from typing import TYPE_CHECKING, Any
 
-from typing import Any
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -415,7 +418,7 @@ def extract_canonical_forms(
 
 
 async def store_canonical_forms(
-    db_pool: Any, new_entities: list[str], new_predicates: list[str]
+    db_pool: "DatabasePool", new_entities: list[str], new_predicates: list[str]
 ) -> dict[str, int]:
     """Store new canonical entities and predicates in database.
 

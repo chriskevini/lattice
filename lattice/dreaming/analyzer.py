@@ -6,9 +6,12 @@ that need optimization.
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -76,7 +79,7 @@ class PromptMetrics:
 
 
 async def analyze_prompt_effectiveness(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     min_uses: int = 10,
     lookback_days: int = 30,
     min_feedback: int = 10,
@@ -194,7 +197,7 @@ async def analyze_prompt_effectiveness(
 
 async def get_feedback_samples(
     prompt_key: str,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     limit: int = 10,
     sentiment_filter: str | None = None,
 ) -> list[str]:
@@ -238,7 +241,7 @@ async def get_feedback_samples(
 
 async def get_feedback_with_context(
     prompt_key: str,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     limit: int = 10,
     include_rendered_prompt: bool = True,
     max_prompt_chars: int = 5000,

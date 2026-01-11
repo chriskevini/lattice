@@ -18,7 +18,7 @@ import structlog
 
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -35,7 +35,7 @@ class GraphTraversal:
     related entities across multiple hops.
     """
 
-    def __init__(self, db_pool: Any, max_depth: int = 3) -> None:
+    def __init__(self, db_pool: "DatabasePool", max_depth: int = 3) -> None:
         """Initialize graph traverser.
 
         Args:
@@ -76,7 +76,7 @@ class GraphTraversal:
         seen_memories: set[tuple[str, str, str]] = set()
         predicates = list(predicate_filter) if predicate_filter else []
 
-        async with self.db_pool.acquire() as conn:
+        async with self.db_pool.pool.acquire() as conn:
             for depth in range(1, max_hops + 1):
                 if not frontier:
                     break
@@ -195,7 +195,7 @@ class GraphTraversal:
             limit=limit,
         )
         try:
-            async with self.db_pool.acquire() as conn:
+            async with self.db_pool.pool.acquire() as conn:
                 query = """
                     SELECT
                         subject,

@@ -6,7 +6,7 @@ Uses LLM to decide whether to initiate contact based on conversation context.
 import asyncio
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 from uuid import UUID
 
@@ -18,6 +18,9 @@ from lattice.utils.config import get_config
 
 from lattice.utils.date_resolution import get_now
 from lattice.utils.placeholder_injector import PlaceholderInjector
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 logger = structlog.get_logger(__name__)
 
@@ -42,7 +45,7 @@ class NudgePlan:
 
 
 async def format_episodic_nudge_context(
-    db_pool: Any, user_timezone: str = "UTC", limit: int = 20
+    db_pool: "DatabasePool", user_timezone: str = "UTC", limit: int = 20
 ) -> str:
     """Build conversation context in USER/ASSISTANT format.
 
@@ -88,7 +91,7 @@ async def get_default_channel_id() -> int | None:
 
 
 async def prepare_contextual_nudge(
-    db_pool: Any, llm_client: Any, bot: Any | None = None
+    db_pool: "DatabasePool", llm_client: Any, bot: Any | None = None
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 

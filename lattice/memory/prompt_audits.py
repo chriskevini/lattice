@@ -7,10 +7,13 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -58,7 +61,7 @@ class PromptAudit:
 
 
 async def store_prompt_audit(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     prompt_key: str,
     response_content: str,
     main_discord_message_id: int,
@@ -168,7 +171,7 @@ async def store_prompt_audit(
 
 
 async def update_audit_dream_message(
-    db_pool: Any, audit_id: UUID, dream_discord_message_id: int
+    db_pool: "DatabasePool", audit_id: UUID, dream_discord_message_id: int
 ) -> bool:
     """Update audit with dream channel message ID.
 
@@ -204,7 +207,7 @@ async def update_audit_dream_message(
 
 
 async def link_feedback_to_audit(
-    db_pool: Any, dream_discord_message_id: int, feedback_id: UUID
+    db_pool: "DatabasePool", dream_discord_message_id: int, feedback_id: UUID
 ) -> bool:
     """Link feedback to prompt audit via dream channel message ID.
 
@@ -240,7 +243,7 @@ async def link_feedback_to_audit(
 
 
 async def link_feedback_to_audit_by_id(
-    db_pool: Any, audit_id: UUID, feedback_id: UUID
+    db_pool: "DatabasePool", audit_id: UUID, feedback_id: UUID
 ) -> bool:
     """Link feedback to prompt audit via audit UUID.
 
@@ -281,7 +284,7 @@ async def link_feedback_to_audit_by_id(
 
 
 async def get_audit_by_dream_message(
-    db_pool: Any, dream_discord_message_id: int
+    db_pool: "DatabasePool", dream_discord_message_id: int
 ) -> PromptAudit | None:
     """Get audit by dream channel message ID.
 
@@ -338,7 +341,7 @@ async def get_audit_by_dream_message(
 
 
 async def get_audits_with_feedback(
-    db_pool: Any, limit: int = 100, offset: int = 0
+    db_pool: "DatabasePool", limit: int = 100, offset: int = 0
 ) -> list[PromptAudit]:
     """Get prompt audits that have feedback.
 

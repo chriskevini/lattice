@@ -10,13 +10,16 @@ proper dependency injection. See: https://github.com/chriskevini/lattice/issues/
 """
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 import os
 import structlog
 
 from lattice.utils.llm_client import GenerationResult
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -52,7 +55,7 @@ class AuditingLLMClient:
     async def complete(
         self,
         prompt: str,
-        db_pool: Any = None,
+        db_pool: Optional["DatabasePool"] = None,
         prompt_key: str | None = None,
         template_version: int | None = None,
         main_discord_message_id: int | None = None,

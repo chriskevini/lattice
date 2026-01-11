@@ -17,13 +17,12 @@ Concurrency:
       with created_at timestamps, and query logic uses recency for "current truth"
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from lattice.core.constants import CONSOLIDATION_BATCH_SIZE
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
-
 from lattice.memory.canonical import (
     extract_canonical_forms,
     get_canonical_entities_list,
@@ -36,6 +35,9 @@ from lattice.memory.episodic import store_semantic_memories
 from lattice.memory.procedural import get_prompt
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.placeholder_injector import PlaceholderInjector
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -121,7 +123,7 @@ async def check_and_run_batch(db_pool: Any) -> None:
 
 
 async def run_batch_consolidation(
-    db_pool: Any, llm_client: Any = None, bot: Any = None
+    db_pool: "DatabasePool", llm_client: Any = None, bot: Any = None
 ) -> None:
     """Run memory consolidation: fetch messages, extract memories, store them.
 

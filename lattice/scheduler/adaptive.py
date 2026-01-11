@@ -6,13 +6,16 @@ enabling respectful proactive messaging that aligns with their natural schedule.
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 import structlog
 
 from lattice.utils.date_resolution import get_now
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -174,7 +177,7 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
 
 
 async def is_within_active_hours(
-    db_pool: Any, check_time: datetime | None = None
+    db_pool: "DatabasePool", check_time: datetime | None = None
 ) -> bool:
     """Check if the given time (or now) is within the user's active hours.
 
@@ -185,16 +188,9 @@ async def is_within_active_hours(
     Returns:
         True if within active hours, False otherwise
     """
-    try:
-        res = db_pool.get_user_timezone()
-        if asyncio.iscoroutine(res):
-            user_tz = await res
-        else:
-            user_tz = res
-    except (AttributeError, TypeError):
-        from lattice.utils.database import get_user_timezone as global_get_tz
+    from lattice.utils.database import get_user_timezone
 
-        user_tz = await global_get_tz(db_pool=db_pool)
+    user_tz = await get_user_timezone(db_pool=db_pool)
 
     if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
         user_tz = "UTC"

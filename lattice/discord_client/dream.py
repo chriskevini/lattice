@@ -5,7 +5,7 @@ Every LLM call generates an audit entry displayed in the dream channel.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import discord
@@ -13,6 +13,9 @@ import structlog
 
 from lattice.memory import prompt_audits, user_feedback
 from lattice.utils.llm_client import GenerationResult
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -145,7 +148,7 @@ class FeedbackModal(discord.ui.Modal):
         audit_id: UUID,
         message_id: int,
         bot_message_id: int,
-        db_pool: Any,
+        db_pool: "DatabasePool",
     ) -> None:
         """Initialize feedback modal.
 
@@ -266,7 +269,7 @@ class AuditView(discord.ui.DesignerView):
 
     def __init__(
         self,
-        db_pool: Any,
+        db_pool: "DatabasePool",
         audit_id: UUID | None = None,
         message_id: int | None = None,
         prompt_key: str | None = None,
@@ -558,7 +561,7 @@ class AuditViewBuilder:
         metadata_parts: list[str],
         audit_id: UUID | None,
         rendered_prompt: str,
-        db_pool: Any,
+        db_pool: "DatabasePool",
         result: GenerationResult | None = None,
         message_id: int | None = None,
     ) -> tuple[discord.Embed, AuditView]:

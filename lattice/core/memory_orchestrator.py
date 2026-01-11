@@ -4,7 +4,7 @@ Handles storing and retrieving from episodic memory and semantic memories.
 """
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
@@ -12,6 +12,9 @@ import structlog
 from lattice.core.constants import DEFAULT_EPISODIC_LIMIT
 from lattice.memory import episodic
 from lattice.memory.graph import GraphTraversal
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -21,7 +24,7 @@ async def store_user_message(
     content: str,
     discord_message_id: int,
     channel_id: int,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     timezone: str = "UTC",
 ) -> UUID:
     """Store a user message in episodic memory.
@@ -59,7 +62,7 @@ async def store_bot_message(
     content: str,
     discord_message_id: int,
     channel_id: int,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     is_proactive: bool = False,
     generation_metadata: dict[str, Any] | None = None,
     timezone: str = "UTC",
@@ -95,7 +98,7 @@ async def store_bot_message(
 async def retrieve_context(
     query: str,
     channel_id: int,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     episodic_limit: int = DEFAULT_EPISODIC_LIMIT,
     memory_depth: int = 1,
     entity_names: list[str] | None = None,

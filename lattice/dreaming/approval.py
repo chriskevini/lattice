@@ -4,10 +4,13 @@ Provides Discord buttons and modals for human-in-the-loop approval workflow with
 persistence support (buttons work after bot restart).
 """
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import discord
 import structlog
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 # Import compatibility layer first to ensure DesignerView exists
 from lattice.discord_client import dream  # noqa: F401
@@ -33,7 +36,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
     def __init__(
         self,
         proposal: OptimizationProposal,
-        db_pool: Any,
+        db_pool: "DatabasePool",
         llm_client: Any = None,
     ) -> None:
         """Initialize template comparison view.

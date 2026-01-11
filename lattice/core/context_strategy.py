@@ -31,7 +31,7 @@ logger = structlog.get_logger(__name__)
 from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 @dataclass
@@ -102,7 +102,7 @@ def build_smaller_episodic_context(
 
 
 async def context_strategy(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     message_id: UUID,
     user_message: str,
     recent_messages: list[EpisodicMessage],
@@ -305,7 +305,7 @@ async def context_strategy(
 
 
 async def get_context_strategy(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     strategy_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve a stored context strategy by ID.
@@ -346,7 +346,7 @@ async def get_context_strategy(
 
 
 async def get_message_strategy(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     message_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve context strategy for a specific message.
@@ -364,7 +364,7 @@ async def get_message_strategy(
 
 
 async def get_context_strategy_by_message_id(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     message_id: uuid.UUID,
 ) -> ContextStrategy | None:
     """Retrieve context strategy for a specific message by its message ID.
@@ -408,7 +408,7 @@ async def get_context_strategy_by_message_id(
 
 
 async def retrieve_context(
-    db_pool: Any,
+    db_pool: "DatabasePool",
     entities: list[str],
     context_flags: list[str],
     memory_depth: int = 2,

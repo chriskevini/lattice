@@ -1,5 +1,9 @@
 import structlog
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -16,7 +20,7 @@ class UnifiedPipeline:
 
     def __init__(
         self,
-        db_pool: Any,
+        db_pool: "DatabasePool",
         bot: Any,
         llm_client: Any = None,
     ) -> None:

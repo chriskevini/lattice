@@ -12,7 +12,7 @@ from lattice.utils.llm import AuditResult
 
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -149,7 +149,7 @@ async def generate_response(
     user_message: str,
     episodic_context: str,
     semantic_context: str,
-    db_pool: Any,
+    db_pool: "DatabasePool",
     unresolved_entities: list[str] | None = None,
     user_tz: str = "UTC",
     audit_view: bool = False,
