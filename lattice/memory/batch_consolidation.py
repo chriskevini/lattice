@@ -243,14 +243,17 @@ async def run_batch_consolidation(
     }
     rendered_prompt, injected = await injector.inject(prompt_template, context)
 
-    # Use injected llm_client if provided, otherwise fallback to global
-    from lattice.utils.llm import get_auditing_llm_client as global_llm_client
+    # Use injected llm_client if provided, otherwise raise error
+    if not llm_client:
+        raise ValueError("llm_client is required for run_batch_consolidation")
 
-    active_llm_client = llm_client or global_llm_client()
+    active_llm_client = llm_client
 
-    from lattice.utils.llm import get_discord_bot as global_get_discord_bot
+    # Use injected bot if provided, otherwise raise error
+    if not bot:
+        raise ValueError("bot is required for run_batch_consolidation")
 
-    active_bot = bot or global_get_discord_bot()
+    active_bot = bot
 
     # Call LLM
     result = await active_llm_client.complete(

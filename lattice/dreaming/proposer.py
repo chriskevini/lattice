@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 from lattice.memory.procedural import get_prompt
 from lattice.dreaming.analyzer import get_feedback_with_context
-from lattice.utils.llm import get_auditing_llm_client
 from lattice.utils.placeholder_injector import PlaceholderInjector
 from lattice.core.response_generator import validate_template_placeholders
 
@@ -158,19 +157,20 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
 
 
 async def propose_optimization(
-    metrics: "PromptMetrics", db_pool: Any, llm_client: Any = None
+    metrics: "PromptMetrics", db_pool: Any, llm_client: Any
 ) -> OptimizationProposal | None:
     """Generate optimization proposal for an underperforming prompt.
 
     Args:
         metrics: Prompt metrics indicating performance issues
         db_pool: Database pool for dependency injection (required)
-        llm_client: LLM client for dependency injection
+        llm_client: LLM client for dependency injection (required)
 
     Returns:
         OptimizationProposal if generated, None otherwise
     """
-    active_llm_client = llm_client or get_auditing_llm_client()
+    if not llm_client:
+        raise ValueError("llm_client is required for propose_optimization")
 
     # Get current template
     prompt_template = await get_prompt(db_pool=db_pool, prompt_key=metrics.prompt_key)

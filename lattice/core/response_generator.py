@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from lattice.memory import procedural
-from lattice.utils.llm import AuditResult, get_auditing_llm_client
+from lattice.utils.llm import AuditResult
 
 
 if TYPE_CHECKING:

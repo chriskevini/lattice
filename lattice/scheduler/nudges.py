@@ -88,23 +88,22 @@ async def get_default_channel_id() -> int | None:
 
 
 async def prepare_contextual_nudge(
-    db_pool: Any, llm_client: Any | None = None, bot: Any | None = None
+    db_pool: Any, llm_client: Any, bot: Any | None = None
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 
     Args:
         db_pool: Database pool for dependency injection
-        llm_client: LLM client for dependency injection
+        llm_client: LLM client for dependency injection (required)
         bot: Discord bot instance for dependency injection
 
     Returns:
         NudgePlan with content and reason
     """
-    # Use injected db_pool if provided, otherwise fallback to global
+    if not llm_client:
+        raise ValueError("llm_client is required for prepare_contextual_nudge")
 
-    from lattice.utils.llm import get_auditing_llm_client as global_llm_client
-
-    active_llm_client = llm_client or global_llm_client()
+    active_llm_client = llm_client
 
     try:
         # Fallback to global if db_pool doesn't have the method or fails

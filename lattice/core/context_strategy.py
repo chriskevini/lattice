@@ -180,10 +180,11 @@ async def context_strategy(
         entity_count=len(canonical_entities),
     )
 
-    # Use injected llm_client if provided, otherwise fallback to global
-    from lattice.utils.llm import get_auditing_llm_client as global_llm_client
+    # Use injected llm_client if provided, otherwise raise error
+    if not llm_client:
+        raise ValueError("llm_client is required for context_strategy")
 
-    active_llm_client = llm_client or global_llm_client()
+    active_llm_client = llm_client
 
     complete_kwargs = {
         "prompt": rendered_prompt,
