@@ -2,13 +2,14 @@
 None
 
 ## Summary
-<!-- One-line description following conventional commits format
+<!-- One-line description in natural language
 Examples:
-- feat: add activity tracking support
-- fix: prevent null pointer in scheduler
-- refactor: consolidate timezone handling
+- Add activity tracking support
+- Prevent null pointer in scheduler
+- Consolidate timezone handling
 
 This will be used as the squash merge commit title.
+Maintainer will prefix with conventional commit type (feat:, fix:, etc.) when merging.
 -->
 
 ## Changes
