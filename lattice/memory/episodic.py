@@ -21,31 +21,25 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = (
+            "Database pool not available. Pass db_pool as an argument "
+            "(dependency injection required)."
+        )
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 class EpisodicMessage:
@@ -92,12 +86,12 @@ class EpisodicMessage:
         return "ASSISTANT" if self.is_bot else "USER"
 
 
-async def store_message(message: EpisodicMessage, db_pool: Any = None) -> UUID:
+async def store_message(db_pool: Any, message: EpisodicMessage) -> UUID:
     """Store a message in episodic memory.
 
     Args:
-        message: The message to store
         db_pool: Database pool for dependency injection
+        message: The message to store
 
     Returns:
         UUID of the stored message
@@ -144,16 +138,14 @@ async def store_message(message: EpisodicMessage, db_pool: Any = None) -> UUID:
 
 
 async def get_recent_messages(
-    channel_id: int | None = None,
-    limit: int = 10,
-    db_pool: Any = None,
+    db_pool: Any, channel_id: int | None = None, limit: int = 10
 ) -> list[EpisodicMessage]:
     """Get recent messages from a channel or all channels.
 
     Args:
+        db_pool: Database pool for dependency injection
         channel_id: Discord channel ID (None for all channels)
         limit: Maximum number of messages to return
-        db_pool: Database pool for dependency injection
 
     Returns:
         List of recent messages, ordered by timestamp (oldest first)
@@ -218,18 +210,18 @@ def format_messages(messages: list[EpisodicMessage]) -> str:
 
 
 async def store_semantic_memories(
+    db_pool: Any,
     message_id: UUID,
     memories: list[dict[str, str]],
     source_batch_id: str | None = None,
-    db_pool: Any = None,
 ) -> None:
     """Store extracted memories in semantic_memories table.
 
     Args:
+        db_pool: Database pool for dependency injection
         message_id: UUID of origin message
         memories: List of {"subject": str, "predicate": str, "object": str}
         source_batch_id: Optional batch identifier for traceability
-        db_pool: Database pool for dependency injection
 
     Raises:
         Exception: If database operation fails

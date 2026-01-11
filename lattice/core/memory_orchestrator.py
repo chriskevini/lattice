@@ -69,14 +69,14 @@ async def store_user_message(
         Consolidation runs every 18 messages.
     """
     user_message_id = await episodic.store_message(
-        episodic.EpisodicMessage(
+        db_pool=db_pool,
+        message=episodic.EpisodicMessage(
             content=content,
             discord_message_id=discord_message_id,
             channel_id=channel_id,
             is_bot=False,
             user_timezone=timezone,
         ),
-        db_pool=db_pool,
     )
 
     return user_message_id
@@ -106,7 +106,8 @@ async def store_bot_message(
         UUID of the stored episodic message
     """
     return await episodic.store_message(
-        episodic.EpisodicMessage(
+        db_pool=db_pool,
+        message=episodic.EpisodicMessage(
             content=content,
             discord_message_id=discord_message_id,
             channel_id=channel_id,
@@ -115,7 +116,6 @@ async def store_bot_message(
             generation_metadata=generation_metadata,
             user_timezone=timezone,
         ),
-        db_pool=db_pool,
     )
 
 

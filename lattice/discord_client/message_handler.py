@@ -106,7 +106,8 @@ class MessageHandler:
                     )
                     # Store in episodic memory
                     message_id = await episodic.store_message(
-                        episodic.EpisodicMessage(
+                        db_pool=self.db_pool,
+                        message=episodic.EpisodicMessage(
                             content=result.content,
                             discord_message_id=result.id,
                             channel_id=result.channel.id,
@@ -114,7 +115,6 @@ class MessageHandler:
                             is_proactive=True,
                             user_timezone=self.user_timezone,
                         ),
-                        db_pool=self.db_pool,
                     )
 
                     # Audit trail

@@ -366,24 +366,33 @@ class TestRunBatchConsolidation:
                                                     ):
                                                         await run_batch_consolidation()
                                                     mock_store.assert_called_once()
-                                                    call_args = mock_store.call_args
-                                                    assert len(call_args[0][1]) == 1
+                                                    call_kwargs = (
+                                                        mock_store.call_args.kwargs
+                                                    )
                                                     assert (
-                                                        call_args[0][1][0]["subject"]
+                                                        len(call_kwargs["memories"])
+                                                        == 1
+                                                    )
+                                                    assert (
+                                                        call_kwargs["memories"][0][
+                                                            "subject"
+                                                        ]
                                                         == "User"
                                                     )
                                                     assert (
-                                                        call_args[0][1][0]["predicate"]
+                                                        call_kwargs["memories"][0][
+                                                            "predicate"
+                                                        ]
                                                         == "lives_in"
                                                     )
                                                     assert (
-                                                        call_args[0][1][0]["object"]
+                                                        call_kwargs["memories"][0][
+                                                            "object"
+                                                        ]
                                                         == "Vancouver"
                                                     )
                                                     assert (
-                                                        call_args.kwargs[
-                                                            "source_batch_id"
-                                                        ]
+                                                        call_kwargs["source_batch_id"]
                                                         == "101"
                                                     )
 
@@ -1031,10 +1040,17 @@ class TestCanonicalFormIntegration:
                                                     await run_batch_consolidation()
 
                                                     mock_store.assert_called_once()
-                                                    call_args = mock_store.call_args
-                                                    assert len(call_args[0][1]) == 2
+                                                    store_kwargs = (
+                                                        mock_store.call_args.kwargs
+                                                    )
                                                     assert (
-                                                        call_args[0][1][0]["predicate"]
+                                                        len(store_kwargs["memories"])
+                                                        == 2
+                                                    )
+                                                    assert (
+                                                        store_kwargs["memories"][0][
+                                                            "predicate"
+                                                        ]
                                                         == "did activity"
                                                     )
 
@@ -1274,9 +1290,16 @@ class TestCanonicalFormIntegration:
                                                     await run_batch_consolidation()
 
                                                     mock_store.assert_called_once()
-                                                    call_args = mock_store.call_args
-                                                    assert len(call_args[0][1]) == 1
+                                                    call_kwargs = (
+                                                        mock_store.call_args.kwargs
+                                                    )
                                                     assert (
-                                                        call_args[0][1][0]["object"]
+                                                        len(call_kwargs["memories"])
+                                                        == 1
+                                                    )
+                                                    assert (
+                                                        call_kwargs["memories"][0][
+                                                            "object"
+                                                        ]
                                                         == "run a marathon"
                                                     )
