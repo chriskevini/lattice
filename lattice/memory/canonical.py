@@ -34,27 +34,6 @@ class CanonicalRegistryError(Exception):
     pass
 
 
-def _get_active_db_pool(db_pool_arg: Any) -> Any:
-    """Resolve active database pool.
-
-    Args:
-        db_pool_arg: Database pool passed via DI (required)
-
-    Returns:
-        The active database pool instance
-
-    Raises:
-        RuntimeError: If pool is None
-    """
-    if db_pool_arg is None:
-        msg = (
-            "Database pool not available. Pass db_pool as an argument "
-            "(dependency injection required)."
-        )
-        raise RuntimeError(msg)
-    return db_pool_arg
-
-
 async def get_canonical_entities_list(db_pool: Any) -> list[str]:
     """Fetch all canonical entity names from database.
 
@@ -64,18 +43,16 @@ async def get_canonical_entities_list(db_pool: Any) -> list[str]:
     Returns:
         List of entity names sorted by creation date (newest first)
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -87,7 +64,7 @@ async def get_canonical_entities_list(db_pool: Any) -> list[str]:
             )
             return []
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch("SELECT name FROM entities ORDER BY created_at DESC")
         return [row["name"] for row in rows]
 
@@ -101,18 +78,16 @@ async def get_canonical_predicates_list(db_pool: Any) -> list[str]:
     Returns:
         List of predicate names sorted by creation date (newest first)
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -124,7 +99,7 @@ async def get_canonical_predicates_list(db_pool: Any) -> list[str]:
             )
             return []
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch("SELECT name FROM predicates ORDER BY created_at DESC")
         return [row["name"] for row in rows]
 
@@ -138,18 +113,16 @@ async def get_canonical_entities_set(db_pool: Any) -> set[str]:
     Returns:
         Set of entity names for fast membership testing
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -161,7 +134,7 @@ async def get_canonical_entities_set(db_pool: Any) -> set[str]:
             )
             return set()
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch("SELECT name FROM entities")
         return {row["name"] for row in rows}
 
@@ -175,18 +148,16 @@ async def get_canonical_predicates_set(db_pool: Any) -> set[str]:
     Returns:
         Set of predicate names for fast membership testing
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -198,7 +169,7 @@ async def get_canonical_predicates_set(db_pool: Any) -> set[str]:
             )
             return set()
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         rows = await conn.fetch("SELECT name FROM predicates")
         return {row["name"] for row in rows}
 
@@ -216,18 +187,16 @@ async def store_canonical_entities(db_pool: Any, names: list[str]) -> int:
     if not names:
         return 0
 
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -239,7 +208,7 @@ async def store_canonical_entities(db_pool: Any, names: list[str]) -> int:
             )
             return 0
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         await conn.executemany(
             "INSERT INTO entities (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
             [(name,) for name in names],
@@ -262,18 +231,16 @@ async def store_canonical_predicates(db_pool: Any, names: list[str]) -> int:
     if not names:
         return 0
 
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -285,7 +252,7 @@ async def store_canonical_predicates(db_pool: Any, names: list[str]) -> int:
             )
             return 0
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         await conn.executemany(
             "INSERT INTO predicates (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
             [(name,) for name in names],
@@ -305,18 +272,16 @@ async def entity_exists(db_pool: Any, name: str) -> bool:
     Returns:
         True if entity exists
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -328,7 +293,7 @@ async def entity_exists(db_pool: Any, name: str) -> bool:
             )
             return False
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         result = await conn.fetchval(
             "SELECT 1 FROM entities WHERE name = $1 LIMIT 1", name
         )
@@ -345,18 +310,16 @@ async def predicate_exists(db_pool: Any, name: str) -> bool:
     Returns:
         True if predicate exists
     """
-    active_db_pool = _get_active_db_pool(db_pool)
-
-    if not active_db_pool.is_initialized():
+    if not db_pool.is_initialized():
         import os
 
         if os.getenv("PYTEST_CURRENT_TEST"):
             is_mock = (
-                hasattr(active_db_pool, "pool")
-                or hasattr(active_db_pool, "acquire")
-                or "MagicMock" in str(type(active_db_pool))
-                or "Mock" in str(type(active_db_pool))
-                or "AsyncMock" in str(type(active_db_pool))
+                hasattr(db_pool, "pool")
+                or hasattr(db_pool, "acquire")
+                or "MagicMock" in str(type(db_pool))
+                or "Mock" in str(type(db_pool))
+                or "AsyncMock" in str(type(db_pool))
             )
             if is_mock:
                 pass
@@ -368,7 +331,7 @@ async def predicate_exists(db_pool: Any, name: str) -> bool:
             )
             return False
 
-    async with active_db_pool.pool.acquire() as conn:
+    async with db_pool.pool.acquire() as conn:
         result = await conn.fetchval(
             "SELECT 1 FROM predicates WHERE name = $1 LIMIT 1", name
         )
