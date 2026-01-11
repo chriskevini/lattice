@@ -18,8 +18,22 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          # Check for required sections in PR body
           echo "Checking PR body for required sections..."
+          
+          # Check for required sections in correct order
+          if [[ "$PR_BODY" != *"## Related"* ]]; then
+            echo "❌ Missing required section: ## Related"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          # Verify Related section contains "None"
+          RELATED=$(echo "$PR_BODY" | sed -n '/## Related/,/## Summary/p' | tail -n +2)
+          if [[ "$RELATED" != *"None"* ]]; then
+            echo "❌ ## Related section must contain 'None' or a related issue reference"
+            echo "   Found: '$RELATED'"
+            exit 1
+          fi
           
           if [[ "$PR_BODY" != *"## Summary"* ]]; then
             echo "❌ Missing required section: ## Summary"
@@ -36,6 +50,13 @@ jobs:
           if [[ "$PR_BODY" != *"## Impact"* ]]; then
             echo "❌ Missing required section: ## Impact"
             echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          # Check sections appear in order: Related → Summary → Changes → Impact
+          if [[ "$PR_BODY" != *"## Related"*"## Summary"*"## Changes"*"## Impact"* ]]; then
+            echo "❌ Sections must be in order: ## Related, ## Summary, ## Changes, ## Impact"
+            echo "   Please use the PR template."
             exit 1
           fi
           
