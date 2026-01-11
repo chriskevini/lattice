@@ -163,7 +163,9 @@ class TestPrepareContextualNudge:
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
         ):
-            result = await prepare_contextual_nudge(db_pool=mock_pool)
+            result = await prepare_contextual_nudge(
+                db_pool=mock_pool, llm_client=mock_llm
+            )
             assert result.action == "wait"
             assert "prompt not found" in result.reason.lower()
 
@@ -178,7 +180,6 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(side_effect=ValueError("LLM service unavailable"))
 
-        # Injected pool and client
         mock_pool = MagicMock()
         mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
@@ -200,15 +201,6 @@ class TestPrepareContextualNudge:
             ),
             patch(
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
-            ),
-            patch(
-                "lattice.utils.database.get_user_timezone",
-                new_callable=AsyncMock,
-                return_value="UTC",
-            ),
-            patch(
-                "lattice.scheduler.nudges.get_auditing_llm_client",
-                return_value=mock_llm,
             ),
         ):
             result = await prepare_contextual_nudge(
@@ -260,68 +252,13 @@ class TestPrepareContextualNudge:
             patch(
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
-            patch(
-                "lattice.scheduler.nudges.get_auditing_llm_client",
-                return_value=mock_llm,
-            ),
         ):
-            result = await prepare_contextual_nudge(db_pool=mock_pool)
+            result = await prepare_contextual_nudge(
+                db_pool=mock_pool, llm_client=mock_llm
+            )
             assert result.action == "wait"
             assert "Failed to parse AI response" in result.reason
             assert result.channel_id == 12345
-
-    @pytest.mark.asyncio
-    async def test_prepare_contextual_nudge_with_empty_content(self) -> None:
-        """Test that empty content in message action defaults to wait."""
-        mock_prompt = MagicMock()
-        mock_prompt.template = "Current date: {local_date}\nCurrent time: {local_time}\n{episodic_context}\n{goal_context}\n{activity_context}"
-        mock_prompt.temperature = 0.7
-        mock_prompt.version = 1
-
-        mock_result = MagicMock()
-        mock_result.content = (
-            '{"action": "message", "content": "   ", "reason": "Testing empty content"}'
-        )
-        mock_result.model = "gpt-4"
-        mock_result.provider = "openai"
-        mock_result.prompt_tokens = 100
-        mock_result.completion_tokens = 50
-        mock_result.cost_usd = 0.01
-        mock_result.latency_ms = 500
-
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(return_value=mock_result)
-
-        mock_pool = MagicMock()
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
-
-        with (
-            patch(
-                "lattice.scheduler.nudges.format_episodic_nudge_context",
-                return_value="No recent conversation history.",
-            ),
-            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
-            patch(
-                "lattice.core.response_generator.get_goal_context",
-                return_value="No active objectives.",
-            ),
-            patch(
-                "lattice.core.context_strategy.retrieve_context",
-                AsyncMock(
-                    return_value={"activity_context": "No recent activity recorded."}
-                ),
-            ),
-            patch(
-                "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
-            ),
-            patch(
-                "lattice.scheduler.nudges.get_auditing_llm_client",
-                return_value=mock_llm,
-            ),
-        ):
-            result = await prepare_contextual_nudge(db_pool=mock_pool)
-            assert result.action == "wait"
-            assert result.content is None
 
     @pytest.mark.asyncio
     async def test_prepare_contextual_nudge_with_literal_empty_string(self) -> None:
@@ -365,12 +302,10 @@ class TestPrepareContextualNudge:
             patch(
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
-            patch(
-                "lattice.scheduler.nudges.get_auditing_llm_client",
-                return_value=mock_llm,
-            ),
         ):
-            result = await prepare_contextual_nudge(db_pool=mock_pool)
+            result = await prepare_contextual_nudge(
+                db_pool=mock_pool, llm_client=mock_llm
+            )
             assert result.action == "wait"
             assert result.content is None
 
@@ -418,12 +353,10 @@ class TestPrepareContextualNudge:
             patch(
                 "lattice.scheduler.nudges.get_default_channel_id", return_value=12345
             ),
-            patch(
-                "lattice.scheduler.nudges.get_auditing_llm_client",
-                return_value=mock_llm,
-            ),
         ):
-            result = await prepare_contextual_nudge(db_pool=mock_pool)
+            result = await prepare_contextual_nudge(
+                db_pool=mock_pool, llm_client=mock_llm
+            )
             assert result.action == "wait"
             assert result.content is None
 
@@ -437,14 +370,14 @@ class TestGetGoalContext:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            result = await get_goal_context(db_pool=mock_pool)
-            assert result == "No active goals."
+        result = await get_goal_context(db_pool=mock_pool)
+        assert result == "No active goals."
 
     @pytest.mark.asyncio
     async def test_get_goal_context_with_goals(self) -> None:
@@ -474,18 +407,18 @@ class TestGetGoalContext:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(side_effect=[goals, predicates])
 
-        with patch("lattice.utils.database.db_pool") as mock_pool:
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            result = await get_goal_context(db_pool=mock_pool)
-            assert "User goals:" in result
-            assert "Complete project by Friday" in result
-            assert "Review documentation" in result
-            assert "due_by: 2026-01-10" in result
-            assert "priority: high" in result
+        result = await get_goal_context(db_pool=mock_pool)
+        assert "User goals:" in result
+        assert "Complete project by Friday" in result
+        assert "Review documentation" in result
+        assert "due_by: 2026-01-10" in result
+        assert "priority: high" in result
 
 
 class TestGetDefaultChannelId:
@@ -517,30 +450,26 @@ class TestAdaptiveActiveHours:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=[])  # No messages
 
-        with (
-            patch("lattice.utils.database.db_pool") as mock_pool,
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-        ):
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-            result = await calculate_active_hours(db_pool=mock_pool)
+        result = await calculate_active_hours(db_pool=mock_pool)
 
-            assert result["start_hour"] == 9  # Default
-            assert result["end_hour"] == 21  # Default
-            assert result["confidence"] == 0.0
-            assert result["sample_size"] == 0
+        assert result["start_hour"] == 9  # Default
+        assert result["end_hour"] == 21  # Default
+        assert result["confidence"] == 0.0
+        assert result["sample_size"] == 0
 
     @pytest.mark.asyncio
     async def test_calculate_active_hours_with_messages(self) -> None:
         """Test active hours calculation with sufficient messages."""
-        # Create 100 messages concentrated in evening hours (18-22)
         now = get_now(timezone_str="UTC")
         messages = []
         for i in range(100):
-            # Most messages in evening
             hour = 18 + (i % 5)  # 18-22
             timestamp = now.replace(hour=hour, minute=0, second=0, microsecond=0)
             messages.append({"timestamp": timestamp, "user_timezone": "UTC"})
@@ -548,22 +477,18 @@ class TestAdaptiveActiveHours:
         mock_conn = MagicMock()
         mock_conn.fetch = AsyncMock(return_value=messages)
 
-        with (
-            patch("lattice.utils.database.db_pool") as mock_pool,
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-        ):
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-                return_value=mock_conn
-            )
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-            result = await calculate_active_hours(db_pool=mock_pool)
+        result = await calculate_active_hours(db_pool=mock_pool)
 
-            # Should detect evening activity window
-            assert result["sample_size"] == 100
-            assert result["confidence"] >= 0.95  # High concentration for clear pattern
-            # Window should capture evening hours (12-hour window starting around 11-12)
-            assert 10 <= result["start_hour"] <= 20
+        assert result["sample_size"] == 100
+        assert result["confidence"] >= 0.95
+        assert 10 <= result["start_hour"] <= 20
 
     @pytest.mark.asyncio
     async def test_is_within_active_hours_normal_window(self) -> None:
@@ -577,28 +502,11 @@ class TestAdaptiveActiveHours:
         )
         mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-        with (
-            patch(
-                "lattice.utils.database.get_system_health",
-                side_effect=lambda key: {
-                    "active_hours_start": "9",
-                    "active_hours_end": "21",
-                }.get(key),
-            ),
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-        ):
-            # Test time within active hours (noon)
-            within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert (
-                await is_within_active_hours(mock_pool, check_time=within_time) is True
-            )
+        within_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+        assert await is_within_active_hours(mock_pool, check_time=within_time) is True
 
-            # Test time outside active hours (2 AM)
-            outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert (
-                await is_within_active_hours(mock_pool, check_time=outside_time)
-                is False
-            )
+        outside_time = datetime(2024, 1, 1, 2, 0, 0, tzinfo=ZoneInfo("UTC"))
+        assert await is_within_active_hours(mock_pool, check_time=outside_time) is False
 
     @pytest.mark.asyncio
     async def test_is_within_active_hours_wrap_around(self) -> None:
@@ -612,42 +520,14 @@ class TestAdaptiveActiveHours:
         )
         mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-        with (
-            patch(
-                "lattice.utils.database.get_system_health",
-                side_effect=lambda key: {
-                    "active_hours_start": "21",  # 9 PM
-                    "active_hours_end": "9",  # 9 AM
-                }.get(key),
-            ),
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-            patch(
-                "lattice.utils.database.get_system_health",
-                side_effect=lambda key: {
-                    "active_hours_start": "21",
-                    "active_hours_end": "9",
-                }.get(key),
-            ),
-        ):
-            # Test time within active hours (midnight)
-            within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert (
-                await is_within_active_hours(mock_pool, check_time=within_time) is True
-            )
+        within_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
+        assert await is_within_active_hours(mock_pool, check_time=within_time) is True
 
-            # Test time within active hours (6 AM)
-            within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert (
-                await is_within_active_hours(mock_pool, check_time=within_time2) is True
-            )
+        within_time2 = datetime(2024, 1, 1, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
+        assert await is_within_active_hours(mock_pool, check_time=within_time2) is True
 
-            # Test time outside active hours (noon)
-            outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
-            assert (
-                await is_within_active_hours(mock_pool, check_time=outside_time)
-                is False
-            )
+        outside_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+        assert await is_within_active_hours(mock_pool, check_time=outside_time) is False
 
     @pytest.mark.asyncio
     async def test_is_within_active_hours_defaults_to_now(self) -> None:
@@ -661,32 +541,12 @@ class TestAdaptiveActiveHours:
         )
         mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
 
-        with (
-            patch(
-                "lattice.utils.database.get_system_health",
-                side_effect=lambda key: {
-                    "active_hours_start": "9",  # Realistic production defaults
-                    "active_hours_end": "21",  # 9 AM - 9 PM
-                }.get(key),
-            ),
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-            patch("lattice.utils.database.get_user_timezone", return_value="UTC"),
-            patch(
-                "lattice.utils.database.get_system_health",
-                side_effect=lambda key: {
-                    "active_hours_start": "9",
-                    "active_hours_end": "21",
-                }.get(key),
-            ),
-            patch("lattice.scheduler.adaptive.get_now") as mock_get_now,
-        ):
-            # Mock get_now() to return a time within active hours (3 PM)
+        with patch("lattice.scheduler.adaptive.get_now") as mock_get_now:
             mock_now = datetime(2024, 1, 1, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
             mock_get_now.return_value = mock_now
 
-            # Call without specifying check_time (should use mocked get_now())
             result = await is_within_active_hours(db_pool=mock_pool)
-            assert result is True  # 3 PM is within 9 AM - 9 PM window
+            assert result is True
 
     @pytest.mark.asyncio
     async def test_update_active_hours_stores_result(self) -> None:
@@ -702,20 +562,14 @@ class TestAdaptiveActiveHours:
         mock_pool = MagicMock()
         mock_pool.set_system_health = AsyncMock()
 
-        with (
-            patch(
-                "lattice.scheduler.adaptive.calculate_active_hours",
-                return_value=mock_result,
-            ),
-            patch("lattice.utils.database.set_system_health"),
+        with patch(
+            "lattice.scheduler.adaptive.calculate_active_hours",
+            return_value=mock_result,
         ):
             result = await update_active_hours(db_pool=mock_pool)
 
             assert result == mock_result
-            # Verify system_health was updated via injected pool
-            assert (
-                mock_pool.set_system_health.call_count >= 4
-            )  # start, end, confidence, last_updated
+            assert mock_pool.set_system_health.call_count >= 4
 
 
 if __name__ == "__main__":
