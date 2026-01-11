@@ -25,7 +25,8 @@ from lattice.utils.source_links import build_source_map, inject_source_links
 logger = structlog.get_logger(__name__)
 
 MAX_CONSECUTIVE_FAILURES = 5
-SCHEDULER_BASE_INTERVAL_DEFAULT = 15  # minutes
+NUDGE_DELAY_MIN_MINUTES = 10
+NUDGE_DELAY_MAX_MINUTES = 20
 
 
 class MessageHandler:
@@ -59,7 +60,9 @@ class MessageHandler:
         """Wait for silence then send a contextual nudge."""
         try:
             # Random delay between 10 and 20 minutes
-            delay_minutes = random.randint(10, 20)
+            delay_minutes = random.randint(
+                NUDGE_DELAY_MIN_MINUTES, NUDGE_DELAY_MAX_MINUTES
+            )
             logger.info("Scheduling contextual nudge", delay_minutes=delay_minutes)
             await asyncio.sleep(delay_minutes * 60)
 
