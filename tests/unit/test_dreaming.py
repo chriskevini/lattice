@@ -121,8 +121,9 @@ class TestProposer:
             patch(
                 "lattice.dreaming.proposer.get_auditing_llm_client"
             ) as mock_llm_client,
-            patch("lattice.utils.database.db_pool"),
+            patch("lattice.utils.database.db_pool") as mock_db_pool,
         ):
+            mock_db_pool.pool = mock_db_pool
 
             def get_prompt_side_effect(prompt_key: str, db_pool: Any = None):
                 if prompt_key == "BASIC_RESPONSE":
@@ -141,7 +142,7 @@ class TestProposer:
             mock_llm.complete.return_value = mock_llm_result
             mock_llm_client.return_value = mock_llm
 
-            proposal = await propose_optimization(metrics)
+            proposal = await propose_optimization(metrics, db_pool=mock_db_pool)
 
             assert proposal is not None
             assert proposal.prompt_key == "BASIC_RESPONSE"
@@ -170,10 +171,11 @@ class TestProposer:
         with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
+            mock_pool.pool = mock_pool
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-            result_id = await store_proposal(proposal)
+            result_id = await store_proposal(proposal, db_pool=mock_pool)
 
             assert result_id == proposal.proposal_id
             mock_conn.fetchrow.assert_called_once()
@@ -198,10 +200,13 @@ class TestProposer:
             mock_conn.transaction = MagicMock()
             mock_conn.transaction().__aenter__ = AsyncMock()
             mock_conn.transaction().__aexit__ = AsyncMock()
+            mock_pool.pool = mock_pool
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-            success = await approve_proposal(proposal_id, "user123", "Looks good")
+            success = await approve_proposal(
+                proposal_id, "user123", mock_pool, "Looks good"
+            )
 
             assert success is True
             assert (
@@ -216,10 +221,13 @@ class TestProposer:
         with patch("lattice.utils.database.db_pool") as mock_pool:
             mock_conn = AsyncMock()
             mock_conn.execute = AsyncMock(return_value="UPDATE 1")
+            mock_pool.pool = mock_pool
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-            success = await reject_proposal(proposal_id, "user123", "Not ready")
+            success = await reject_proposal(
+                proposal_id, "user123", mock_pool, "Not ready"
+            )
 
             assert success is True
             mock_conn.execute.assert_called_once()
@@ -233,10 +241,13 @@ class TestProposer:
             mock_conn.fetchrow = AsyncMock(return_value={"version": 2})
             # Mock rejection of stale proposals (3 proposals were stale)
             mock_conn.execute = AsyncMock(return_value="UPDATE 3")
+            mock_pool.pool = mock_pool
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-            rejected_count = await reject_stale_proposals("BASIC_RESPONSE")
+            rejected_count = await reject_stale_proposals(
+                "BASIC_RESPONSE", db_pool=mock_pool
+            )
 
             assert rejected_count == 3
             # Should fetch current version
@@ -251,10 +262,13 @@ class TestProposer:
             mock_conn = AsyncMock()
             # Prompt not found
             mock_conn.fetchrow = AsyncMock(return_value=None)
+            mock_pool.pool = mock_pool
             mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
             mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-            rejected_count = await reject_stale_proposals("NONEXISTENT")
+            rejected_count = await reject_stale_proposals(
+                "NONEXISTENT", db_pool=mock_pool
+            )
 
             assert rejected_count == 0
             # Should not try to update proposals

@@ -226,8 +226,8 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
             success = await approve_proposal(
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
-                feedback="Approved via Discord button",
                 db_pool=self.db_pool,
+                feedback="Approved via Discord button",
             )
 
             if success:
@@ -263,8 +263,8 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
             success = await reject_proposal(
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
-                feedback="Rejected via Discord button",
                 db_pool=self.db_pool,
+                feedback="Rejected via Discord button",
             )
 
             if success:

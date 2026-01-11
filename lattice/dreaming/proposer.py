@@ -37,31 +37,22 @@ MAX_FEEDBACK_SAMPLES = 20  # Cap to avoid excessive tokens
 DETAILED_SAMPLES_COUNT = 3  # Number of samples with full rendered prompts
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 def validate_template(template: str, prompt_key: str) -> tuple[bool, str | None]:
@@ -185,13 +176,13 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
 
 
 async def propose_optimization(
-    metrics: "PromptMetrics", db_pool: Any = None, llm_client: Any = None
+    metrics: "PromptMetrics", db_pool: Any, llm_client: Any = None
 ) -> OptimizationProposal | None:
     """Generate optimization proposal for an underperforming prompt.
 
     Args:
         metrics: Prompt metrics indicating performance issues
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
         llm_client: LLM client for dependency injection
 
     Returns:
@@ -312,12 +303,12 @@ async def propose_optimization(
     )
 
 
-async def store_proposal(proposal: OptimizationProposal, db_pool: Any = None) -> UUID:
+async def store_proposal(proposal: OptimizationProposal, db_pool: Any) -> UUID:
     """Store optimization proposal in database.
 
     Args:
         proposal: The proposal to store
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         UUID of the stored proposal
@@ -363,13 +354,13 @@ async def store_proposal(proposal: OptimizationProposal, db_pool: Any = None) ->
 
 
 async def get_proposal_by_id(
-    proposal_id: UUID, db_pool: Any = None
+    proposal_id: UUID, db_pool: Any
 ) -> OptimizationProposal | None:
     """Fetch a proposal from the database by ID.
 
     Args:
         proposal_id: UUID of the proposal
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         OptimizationProposal if found, None otherwise
@@ -409,11 +400,11 @@ async def get_proposal_by_id(
         )
 
 
-async def get_pending_proposals(db_pool: Any = None) -> list[OptimizationProposal]:
+async def get_pending_proposals(db_pool: Any) -> list[OptimizationProposal]:
     """Get all pending optimization proposals.
 
     Args:
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         List of pending proposals, ordered by created_at (newest first)
@@ -456,16 +447,16 @@ async def get_pending_proposals(db_pool: Any = None) -> list[OptimizationProposa
 async def approve_proposal(
     proposal_id: UUID,
     reviewed_by: str,
+    db_pool: Any,
     feedback: str | None = None,
-    db_pool: Any = None,
 ) -> bool:
     """Approve an optimization proposal and apply it to prompt_registry.
 
     Args:
         proposal_id: UUID of the proposal
         reviewed_by: Identifier of who approved (e.g., Discord user ID)
+        db_pool: Database pool for dependency injection (required)
         feedback: Optional feedback from reviewer
-        db_pool: Database pool for dependency injection
 
     Returns:
         True if applied successfully, False otherwise
@@ -554,16 +545,16 @@ async def approve_proposal(
 async def reject_proposal(
     proposal_id: UUID,
     reviewed_by: str,
+    db_pool: Any,
     feedback: str | None = None,
-    db_pool: Any = None,
 ) -> bool:
     """Reject an optimization proposal.
 
     Args:
         proposal_id: UUID of the proposal
         reviewed_by: Identifier of who rejected
+        db_pool: Database pool for dependency injection (required)
         feedback: Optional feedback explaining rejection
-        db_pool: Database pool for dependency injection
 
     Returns:
         True if rejected successfully, False if not found
@@ -598,7 +589,7 @@ async def reject_proposal(
         return bool(rejected)
 
 
-async def reject_stale_proposals(prompt_key: str, db_pool: Any = None) -> int:
+async def reject_stale_proposals(prompt_key: str, db_pool: Any) -> int:
     """Reject all pending proposals for a prompt that have outdated current_version.
 
     This cleans up proposals that are no longer applicable because the prompt
@@ -606,7 +597,7 @@ async def reject_stale_proposals(prompt_key: str, db_pool: Any = None) -> int:
 
     Args:
         prompt_key: The prompt key to check for stale proposals
-        db_pool: Database pool for dependency injection
+        db_pool: Database pool for dependency injection (required)
 
     Returns:
         Number of stale proposals rejected
