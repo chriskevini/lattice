@@ -59,16 +59,12 @@ make view-logs SERVICE=postgres  # View postgres logs
 make view-logs TAIL=500         # View 500 lines
 ```
 
-### Pull Requests
-
-Always follow the [pull request template](.github/pull_request_template.md) when creating PRs.
-
 ### Standards
 - **Strict Typing**: Mandatory for all functions.
 - **Docs**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff and Mypy.
 - **LLM**: All calls must use `AuditingLLMClient` for observability.
-- **PRs**: Follow [pull request template](.github/pull_request_template.md) when creating PRs.
+- **PRs**: ALWAYS follow the [pull request template](.github/pull_request_template.md) when creating PRs.
 
 ## ⚙️ Key Concepts
 - **Dream Channel**: Meta-discussion and prompt approval. Messages here are never ingested.
