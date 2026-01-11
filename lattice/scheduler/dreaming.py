@@ -70,25 +70,21 @@ class DreamingScheduler:
             bot: Discord bot instance for sending messages
             dream_channel_id: Dream channel ID for posting proposals
             dream_time: Time of day to run dreaming cycle (default: 3:00 AM UTC)
-            db_pool: Database pool for dependency injection
+            db_pool: Database pool for dependency injection (required)
             llm_client: LLM client for dependency injection
         """
+        if db_pool is None:
+            msg = "db_pool is required for DreamingScheduler"
+            raise TypeError(msg)
+        if llm_client is None:
+            msg = "llm_client is required for DreamingScheduler"
+            raise TypeError(msg)
+
         self.bot = bot
         self.dream_channel_id = dream_channel_id
         self.dream_time = dream_time
-        if db_pool is None:
-            from lattice.utils.database import db_pool as global_db_pool
-
-            self.db_pool = global_db_pool
-        else:
-            self.db_pool = db_pool
-
-        if llm_client is None:
-            from lattice.utils.llm import get_auditing_llm_client
-
-            self.llm_client = get_auditing_llm_client()
-        else:
-            self.llm_client = llm_client
+        self.db_pool = db_pool
+        self.llm_client = llm_client
 
         self._running: bool = False
         self._scheduler_task: asyncio.Task[None] | None = None

@@ -80,6 +80,7 @@ class AuditMirror:
             metadata_parts=metadata,
             audit_id=audit_id,
             rendered_prompt=rendered_prompt,
+            db_pool=self.db_pool,
         )
 
         try:

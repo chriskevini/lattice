@@ -11,8 +11,12 @@ from lattice.discord_client.dream import AuditViewBuilder, PromptDetailView, Aud
 class TestAuditViewBuilder:
     """Tests for AuditViewBuilder class."""
 
+    @pytest.fixture
+    def db_pool(self) -> AsyncMock:
+        return AsyncMock()
+
     @pytest.mark.asyncio
-    async def test_build_reactive_audit(self) -> None:
+    async def test_build_reactive_audit(self, db_pool: AsyncMock) -> None:
         """Test building a reactive audit embed."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
@@ -23,6 +27,7 @@ class TestAuditViewBuilder:
             metadata_parts=["245ms", "$0.0012", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="System: Track goals\nUser: I'm planning to ship v2...",
+            db_pool=db_pool,
         )
 
         assert isinstance(embed, discord.Embed)
@@ -42,7 +47,7 @@ class TestAuditViewBuilder:
         assert "[LINK]" in embed.fields[2].value
 
     @pytest.mark.asyncio
-    async def test_build_standard_audit_no_cost(self) -> None:
+    async def test_build_standard_audit_no_cost(self, db_pool: AsyncMock) -> None:
         """Test standard audit without cost info."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
@@ -53,6 +58,7 @@ class TestAuditViewBuilder:
             metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="User: Hello!",
+            db_pool=db_pool,
         )
 
         assert embed.fields[2].name == "METADATA"
@@ -60,7 +66,7 @@ class TestAuditViewBuilder:
         assert "$" not in embed.fields[2].value
 
     @pytest.mark.asyncio
-    async def test_build_proactive_audit(self) -> None:
+    async def test_build_proactive_audit(self, db_pool: AsyncMock) -> None:
         """Test building a proactive audit embed."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
@@ -71,6 +77,7 @@ class TestAuditViewBuilder:
             metadata_parts=["confidence: 82%", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="Context: deadline approaching...",
+            db_pool=db_pool,
         )
 
         assert isinstance(embed, discord.Embed)
@@ -88,7 +95,7 @@ class TestAuditViewBuilder:
         assert "confidence: 82%" in embed.fields[2].value
 
     @pytest.mark.asyncio
-    async def test_build_extraction_audit(self) -> None:
+    async def test_build_extraction_audit(self, db_pool: AsyncMock) -> None:
         """Test building an extraction audit embed."""
         audit_id = uuid4()
         memories = [
@@ -112,6 +119,7 @@ class TestAuditViewBuilder:
             metadata_parts=["2 memories", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="Extract memory from: I'm planning to ship v2...",
+            db_pool=db_pool,
         )
 
         assert isinstance(embed, discord.Embed)
@@ -130,7 +138,7 @@ class TestAuditViewBuilder:
         assert "2 memories" in embed.fields[2].value
 
     @pytest.mark.asyncio
-    async def test_build_extraction_audit_empty(self) -> None:
+    async def test_build_extraction_audit_empty(self, db_pool: AsyncMock) -> None:
         """Test extraction audit with no memories."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
@@ -141,6 +149,7 @@ class TestAuditViewBuilder:
             metadata_parts=["0 memories", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="Extract memory from: Hello!",
+            db_pool=db_pool,
         )
 
         assert isinstance(embed, discord.Embed)
@@ -150,7 +159,7 @@ class TestAuditViewBuilder:
         assert embed.fields[1].value == "Nothing extracted"
 
     @pytest.mark.asyncio
-    async def test_build_reasoning_audit(self) -> None:
+    async def test_build_reasoning_audit(self, db_pool: AsyncMock) -> None:
         """Test building a reasoning audit embed."""
         audit_id = uuid4()
         embed, _ = AuditViewBuilder.build_standard_audit(
@@ -161,6 +170,7 @@ class TestAuditViewBuilder:
             metadata_parts=["confidence: 80%", "180ms"],
             audit_id=audit_id,
             rendered_prompt="Analyze: deadline proximity, activity patterns...",
+            db_pool=db_pool,
         )
 
         assert isinstance(embed, discord.Embed)
@@ -180,7 +190,7 @@ class TestAuditViewBuilder:
         assert "180ms" in embed.fields[2].value
 
     @pytest.mark.asyncio
-    async def test_emoji_mapping(self) -> None:
+    async def test_emoji_mapping(self, db_pool: AsyncMock) -> None:
         """Test that correct emojis are used for different template types."""
         audit_id = uuid4()
 
@@ -192,6 +202,7 @@ class TestAuditViewBuilder:
             metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
         assert reactive_embed.title is not None
         assert reactive_embed.title.startswith("💬")
@@ -204,6 +215,7 @@ class TestAuditViewBuilder:
             metadata_parts=["confidence: 50%", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
         assert proactive_embed.title is not None
         assert proactive_embed.title.startswith("🌟")
@@ -216,6 +228,7 @@ class TestAuditViewBuilder:
             metadata_parts=["0 memories", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
         assert extraction_embed.title is not None
         assert extraction_embed.title.startswith("🧠")
@@ -228,12 +241,13 @@ class TestAuditViewBuilder:
             metadata_parts=["confidence: 50%", "100ms"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
         assert reasoning_embed.title is not None
         assert reasoning_embed.title.startswith("🌟")
 
     @pytest.mark.asyncio
-    async def test_color_mapping(self) -> None:
+    async def test_color_mapping(self, db_pool: AsyncMock) -> None:
         """Test that correct colors are used for different template types."""
         audit_id = uuid4()
 
@@ -245,6 +259,7 @@ class TestAuditViewBuilder:
             metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
         assert reactive_embed.color == discord.Color.blurple()
 
@@ -256,6 +271,7 @@ class TestAuditViewBuilder:
             metadata_parts=["confidence: 50%", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
         assert proactive_embed.color == discord.Color.gold()
 
@@ -267,11 +283,12 @@ class TestAuditViewBuilder:
             metadata_parts=["0 triples", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
         assert extraction_embed.color == discord.Color.purple()
 
     @pytest.mark.asyncio
-    async def test_truncation_for_long_content(self) -> None:
+    async def test_truncation_for_long_content(self, db_pool: AsyncMock) -> None:
         """Test that very long content is truncated for Discord limits."""
         audit_id = uuid4()
         long_message = "x" * 2000
@@ -284,6 +301,7 @@ class TestAuditViewBuilder:
             metadata_parts=["100ms", "[LINK]"],
             audit_id=audit_id,
             rendered_prompt="test",
+            db_pool=db_pool,
         )
 
         assert embed.fields[0].name == "📥"
@@ -382,11 +400,18 @@ class TestPromptDetailView:
 class TestAuditViewCustomIds:
     """Tests for AuditView custom ID uniqueness (fix #2)."""
 
+    @pytest.fixture
+    def db_pool(self) -> AsyncMock:
+        return AsyncMock()
+
     @pytest.mark.asyncio
-    async def test_audit_view_custom_ids_include_audit_id(self) -> None:
+    async def test_audit_view_custom_ids_include_audit_id(
+        self, db_pool: AsyncMock
+    ) -> None:
         """Test that AuditView includes audit_id in button custom_ids."""
         audit_id = uuid4()
         view = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id,
             message_id=12345,
             prompt_key="TEST_PROMPT",
@@ -406,10 +431,13 @@ class TestAuditViewCustomIds:
         assert all(f"{audit_id}" in custom_id for custom_id in custom_ids)
 
     @pytest.mark.asyncio
-    async def test_audit_view_make_custom_id_with_audit_id(self) -> None:
+    async def test_audit_view_make_custom_id_with_audit_id(
+        self, db_pool: AsyncMock
+    ) -> None:
         """Test _make_custom_id helper method with audit_id."""
         audit_id = uuid4()
         view = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id,
             message_id=12345,
             prompt_key="TEST_PROMPT",
@@ -423,9 +451,12 @@ class TestAuditViewCustomIds:
         assert view._make_custom_id("feedback") == f"audit:feedback:{audit_id}"
 
     @pytest.mark.asyncio
-    async def test_audit_view_make_custom_id_without_audit_id(self) -> None:
+    async def test_audit_view_make_custom_id_without_audit_id(
+        self, db_pool: AsyncMock
+    ) -> None:
         """Test _make_custom_id helper method without audit_id."""
         view = AuditView(
+            db_pool=db_pool,
             audit_id=None,
             message_id=12345,
             prompt_key="TEST_PROMPT",
@@ -439,12 +470,15 @@ class TestAuditViewCustomIds:
         assert view._make_custom_id("feedback") == "audit:feedback"
 
     @pytest.mark.asyncio
-    async def test_audit_view_custom_ids_are_unique_per_instance(self) -> None:
+    async def test_audit_view_custom_ids_are_unique_per_instance(
+        self, db_pool: AsyncMock
+    ) -> None:
         """Test that different AuditViews have different custom_ids."""
         audit_id_1 = uuid4()
         audit_id_2 = uuid4()
 
         view1 = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id_1,
             message_id=11111,
             prompt_key="TEST_PROMPT",
@@ -454,6 +488,7 @@ class TestAuditViewCustomIds:
         )
 
         view2 = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id_2,
             message_id=22222,
             prompt_key="TEST_PROMPT",
@@ -473,9 +508,12 @@ class TestAuditViewCustomIds:
         assert not any(cid in custom_ids_2 for cid in custom_ids_1)
 
     @pytest.mark.asyncio
-    async def test_audit_view_fallback_custom_ids_when_no_audit_id(self) -> None:
+    async def test_audit_view_fallback_custom_ids_when_no_audit_id(
+        self, db_pool: AsyncMock
+    ) -> None:
         """Test AuditView uses fallback custom_ids when audit_id is None."""
         view = AuditView(
+            db_pool=db_pool,
             audit_id=None,
             message_id=12345,
             prompt_key="TEST_PROMPT",
@@ -499,11 +537,16 @@ class TestAuditViewCustomIds:
 class TestAuditViewCallbacks:
     """Integration tests for AuditView button callbacks."""
 
+    @pytest.fixture
+    def db_pool(self) -> AsyncMock:
+        return AsyncMock()
+
     @pytest.mark.asyncio
-    async def test_view_prompt_callback_executes(self) -> None:
+    async def test_view_prompt_callback_executes(self, db_pool: AsyncMock) -> None:
         """Test that view prompt callback executes correctly."""
         audit_id = uuid4()
         view = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id,
             message_id=12345,
             prompt_key="TEST_PROMPT",
@@ -530,10 +573,11 @@ class TestAuditViewCallbacks:
         assert "view" in mock_interaction.followup.send.call_args[1]
 
     @pytest.mark.asyncio
-    async def test_view_raw_callback_executes(self) -> None:
+    async def test_view_raw_callback_executes(self, db_pool: AsyncMock) -> None:
         """Test that view raw callback executes correctly."""
         audit_id = uuid4()
         view = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id,
             message_id=12345,
             prompt_key="TEST_PROMPT",
@@ -559,10 +603,13 @@ class TestAuditViewCallbacks:
         assert mock_interaction.followup.send.call_args[1]["ephemeral"] is True
 
     @pytest.mark.asyncio
-    async def test_view_prompt_callback_handles_empty_content(self) -> None:
+    async def test_view_prompt_callback_handles_empty_content(
+        self, db_pool: AsyncMock
+    ) -> None:
         """Test that view prompt callback handles empty content gracefully."""
         audit_id = uuid4()
         view = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id,
             message_id=12345,
             prompt_key="TEST_PROMPT",
@@ -586,10 +633,13 @@ class TestAuditViewCallbacks:
         assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
 
     @pytest.mark.asyncio
-    async def test_view_raw_callback_handles_empty_content(self) -> None:
+    async def test_view_raw_callback_handles_empty_content(
+        self, db_pool: AsyncMock
+    ) -> None:
         """Test that view raw callback handles empty content gracefully."""
         audit_id = uuid4()
         view = AuditView(
+            db_pool=db_pool,
             audit_id=audit_id,
             message_id=12345,
             prompt_key="TEST_PROMPT",

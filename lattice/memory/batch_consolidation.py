@@ -260,6 +260,7 @@ async def run_batch_consolidation(
         main_discord_message_id=int(batch_id),
         temperature=prompt_template.temperature,
         audit_view=True,
+        bot=active_bot,
     )
 
     # Parse JSON response

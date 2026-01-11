@@ -82,7 +82,7 @@ class MessageHandler:
             from lattice.scheduler.nudges import prepare_contextual_nudge
 
             decision = await prepare_contextual_nudge(
-                db_pool=self.db_pool, llm_client=self.llm_client
+                db_pool=self.db_pool, llm_client=self.llm_client, bot=self.bot
             )
 
             if (
@@ -258,6 +258,7 @@ class MessageHandler:
                         "main_message_url": message.jump_url,
                     },
                     llm_client=self.llm_client,
+                    bot=self.bot,
                 )
 
                 if strategy:
@@ -354,6 +355,7 @@ class MessageHandler:
                     "metadata": audit_metadata,
                 },
                 llm_client=self.llm_client,
+                bot=self.bot,
             )
 
             # Split response for Discord length limits

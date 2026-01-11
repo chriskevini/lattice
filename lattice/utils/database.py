@@ -234,16 +234,3 @@ async def set_next_check_at(dt: datetime, db_pool: Any) -> None:
         db_pool: Database pool (required for DI)
     """
     await db_pool.set_next_check_at(dt)
-
-
-# Compatibility shim for global access while refactoring
-db_pool = DatabasePool()
-
-
-def get_db_pool() -> DatabasePool:
-    """Get the global database pool.
-
-    Returns:
-        The global database pool instance
-    """
-    return db_pool

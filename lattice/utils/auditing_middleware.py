@@ -39,18 +39,20 @@ class AuditingLLMClient:
     - Unified mirror/display generation
     """
 
-    def __init__(self, llm_client: Any) -> None:
+    def __init__(self, llm_client: Any, db_pool: Any = None) -> None:
         """Initialize the auditing client with underlying LLM client.
 
         Args:
             llm_client: The underlying LLM client to wrap.
+            db_pool: Optional database pool for auditing.
         """
         self._client = llm_client
+        self.db_pool = db_pool
 
     async def complete(
         self,
         prompt: str,
-        db_pool: Any,
+        db_pool: Any = None,
         prompt_key: str | None = None,
         template_version: int | None = None,
         main_discord_message_id: int | None = None,
@@ -83,6 +85,11 @@ class AuditingLLMClient:
         Returns:
             AuditResult with content, metadata, and audit_id
         """
+        effective_db_pool = db_pool or self.db_pool
+        if effective_db_pool is None:
+            msg = "db_pool must be provided either at initialization or in complete()"
+            raise ValueError(msg)
+
         try:
             result = await self._client.complete(
                 prompt=prompt,
@@ -90,34 +97,31 @@ class AuditingLLMClient:
                 max_tokens=max_tokens,
             )
 
-            audit_id: UUID | None = None
-            if main_discord_message_id is not None:
-                from lattice.memory import prompt_audits
+            from lattice.memory import prompt_audits
 
-                audit_id = await prompt_audits.store_prompt_audit(
-                    db_pool=db_pool,
-                    prompt_key=prompt_key or "UNKNOWN",
-                    rendered_prompt=prompt,
-                    response_content=result.content,
-                    main_discord_message_id=main_discord_message_id,
-                    template_version=template_version,
-                    model=result.model,
-                    provider=result.provider,
-                    prompt_tokens=result.prompt_tokens,
-                    completion_tokens=result.completion_tokens,
-                    cost_usd=result.cost_usd,
-                    latency_ms=result.latency_ms,
-                )
-                logger.info(
-                    "Audited LLM call",
-                    audit_id=str(audit_id),
-                    prompt_key=prompt_key,
-                    model=result.model,
-                )
+            audit_id = await prompt_audits.store_prompt_audit(
+                db_pool=effective_db_pool,
+                prompt_key=prompt_key or "UNKNOWN",
+                response_content=result.content,
+                main_discord_message_id=main_discord_message_id or 0,
+                rendered_prompt=prompt,
+                template_version=template_version,
+                model=result.model,
+                provider=result.provider,
+                prompt_tokens=result.prompt_tokens,
+                completion_tokens=result.completion_tokens,
+                cost_usd=result.cost_usd,
+                latency_ms=result.latency_ms,
+            )
+
+            logger.info(
+                "Audited LLM call",
+                audit_id=str(audit_id),
+                prompt_key=prompt_key,
+                model=result.model,
+            )
 
             # Post to dream channel if requested or if it's a tracked message.
-            # This is the unified entry point for all LLM auditing UI.
-            bot = bot or get_discord_bot()
             dream_channel_id_str = os.getenv("DISCORD_DREAM_CHANNEL_ID")
 
             should_post = audit_view or (
@@ -139,12 +143,13 @@ class AuditingLLMClient:
                     logger.warning("Invalid dream channel ID configuration")
 
                 if effective_dream_channel_id:
-                    params = audit_view_params or {}
                     from lattice.discord_client.dream import AuditViewBuilder
 
-                    # Standardize metadata
-                    metadata = params.get(
-                        "metadata",
+                    params = audit_view_params or {}
+                    metadata = params.get("metadata", [])
+                    if result.cost_usd is not None:
+                        metadata.append(f"Cost: ${result.cost_usd:.4f}")
+                    metadata.extend(
                         [
                             f"Model: {result.model}",
                             f"Tokens: {result.total_tokens}",
@@ -163,6 +168,7 @@ class AuditingLLMClient:
                             metadata_parts=metadata,
                             audit_id=audit_id,
                             rendered_prompt=prompt,
+                            db_pool=effective_db_pool,
                             result=result,
                             message_id=main_discord_message_id,
                         )
@@ -202,16 +208,15 @@ class AuditingLLMClient:
 
             from lattice.discord_client.error_notifier import mirror_llm_error
 
-            effective_bot = bot if bot is not None else _get_discord_bot()
             effective_dream_channel_id = (
                 dream_channel_id
                 if dream_channel_id
-                else (effective_bot.dream_channel_id if effective_bot else None)
+                else (bot.dream_channel_id if bot else None)
             )
 
-            if effective_dream_channel_id and effective_bot:
+            if effective_dream_channel_id and bot:
                 await mirror_llm_error(
-                    bot=effective_bot,
+                    bot=bot,
                     dream_channel_id=effective_dream_channel_id,
                     prompt_key=prompt_key or "UNKNOWN",
                     error_type=type(e).__name__,
@@ -222,7 +227,7 @@ class AuditingLLMClient:
             from lattice.memory import prompt_audits
 
             failed_audit_id = await prompt_audits.store_prompt_audit(
-                db_pool=db_pool,
+                db_pool=effective_db_pool,
                 prompt_key=prompt_key or "UNKNOWN",
                 rendered_prompt=prompt,
                 response_content=f"ERROR: {type(e).__name__}: {str(e)}",
@@ -257,6 +262,8 @@ _discord_bot: Any | None = None
 def set_discord_bot(bot: Any) -> None:
     """Set the global Discord bot instance for error mirroring.
 
+    DEPRECATED: Use dependency injection instead.
+
     Args:
         bot: Discord bot instance
     """
@@ -267,14 +274,7 @@ def set_discord_bot(bot: Any) -> None:
 def get_discord_bot() -> Any | None:
     """Get the global Discord bot instance.
 
-    Returns:
-        Discord bot instance or None if not set
-    """
-    return _discord_bot
-
-
-def _get_discord_bot() -> Any | None:
-    """Internal getter for Discord bot instance.
+    DEPRECATED: Use dependency injection instead.
 
     Returns:
         Discord bot instance or None if not set
