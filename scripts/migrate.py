@@ -115,6 +115,7 @@ async def apply_migration(conn: asyncpg.Connection, migration: Migration) -> boo
     async with conn.transaction():
         table_exists = await schema_migrations_exists(conn)
 
+        applied_by_us = False
         if table_exists:
             result = await conn.execute(
                 """
@@ -129,19 +130,23 @@ async def apply_migration(conn: asyncpg.Connection, migration: Migration) -> boo
             if result == "INSERT 0 0":
                 print(f"  ⊘ Already applied (version {migration.version})")
                 return False
+            applied_by_us = True
+        else:
+            applied_by_us = True
 
-        sql = migration.path.read_text()
-        await conn.execute(sql)
+        if applied_by_us:
+            sql = migration.path.read_text()
+            await conn.execute(sql)
 
-        if not table_exists:
-            await conn.execute(
-                """
-                INSERT INTO schema_migrations (version, name)
-                VALUES ($1, $2)
-                """,
-                migration.version,
-                migration.name,
-            )
+            if not table_exists:
+                await conn.execute(
+                    """
+                    INSERT INTO schema_migrations (version, name)
+                    VALUES ($1, $2)
+                    """,
+                    migration.version,
+                    migration.name,
+                )
 
     print(f"  ✓ Applied: {migration_id}")
     return True
@@ -177,10 +182,10 @@ async def load_prompts(conn: asyncpg.Connection, prompts: list[Prompt]) -> None:
             )
 
             if has_custom_versions:
-                print(f"    ⊘ Skipping (user has custom versions)")
+                print("    ⊘ Skipping (user has custom versions)")
                 continue
 
-            result = await conn.execute(
+            await conn.execute(
                 """
                 INSERT INTO prompt_registry (prompt_key, version, template, temperature)
                 VALUES ($1, 1, $2, $3)
@@ -193,24 +198,24 @@ async def load_prompts(conn: asyncpg.Connection, prompts: list[Prompt]) -> None:
                 extract_temperature(sql),
             )
 
-            print(f"    ✓ Updated v1")
+            print("    ✓ Updated v1")
 
     print(f"  ✓ Loaded {len(prompts)} prompt template(s)")
 
 
+TEMPLATE_PATTERN = re.compile(r"\$TPL\$\s*(.+?)\s*\$TPL\$", re.DOTALL)
+TEMP_PATTERN = re.compile(r",\s*([0-9.]+)\s*\)\s*ON CONFLICT")
+
+
 def extract_template_body(sql: str) -> str:
     """Extract template body from SQL INSERT statement."""
-    import re
-
-    match = re.search(r"\$TPL\$\s*(.+?)\s*\$TPL\$", sql, re.DOTALL)
+    match = TEMPLATE_PATTERN.search(sql)
     return match.group(1).strip() if match else ""
 
 
 def extract_temperature(sql: str) -> float:
     """Extract temperature value from SQL INSERT statement."""
-    import re
-
-    match = re.search(r",\s*([0-9.]+)\s*\)\s*ON CONFLICT", sql)
+    match = TEMP_PATTERN.search(sql)
     return float(match.group(1)) if match else 0.2
 
 
@@ -228,7 +233,7 @@ async def run_migrations() -> None:
         print("No migration files found in scripts/migrations/")
         return
 
-    print(f"Connecting to database...")
+    print("Connecting to database...")
     try:
         conn = await asyncpg.connect(database_url)
         print("Connected successfully\n")

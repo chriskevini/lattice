@@ -49,6 +49,9 @@ exclude = [
     "__pycache__",
     "dist",
     "build",
+    "scripts/schema.sql",
+    "scripts/migrations/*.sql",
+    "scripts/prompts/*.sql",
 ]
 
 [tool.ruff.lint]

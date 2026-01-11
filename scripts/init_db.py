@@ -4,7 +4,6 @@ Runs all migrations to set up the database schema and seed data.
 Migrations are the source of truth for schema evolution.
 """
 
-import asyncio
 import os
 import subprocess
 import sys
