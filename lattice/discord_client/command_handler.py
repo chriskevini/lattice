@@ -9,6 +9,7 @@ from discord.ext import commands
 from lattice.scheduler.adaptive import update_active_hours
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.date_resolution import get_now
+from lattice.utils.database import set_user_timezone
 
 logger = structlog.get_logger(__name__)
 
@@ -80,7 +81,6 @@ class CommandHandler:
                         force=True
                     )  # type: ignore
 
-                    # Create summary embed
                     if result["status"] == "success":
                         embed = discord.Embed(
                             title="🌙 DREAMING CYCLE COMPLETE",
@@ -125,11 +125,8 @@ class CommandHandler:
                 timezone: IANA timezone identifier (e.g., America/New_York, Europe/London)
             """
             try:
-                from lattice.utils.database import set_user_timezone
-
                 await set_user_timezone(timezone, db_pool=self.db_pool)
                 if hasattr(self.bot, "set_user_timezone"):
-                    # Use getattr to avoid type checking issues with dynamic attributes
                     set_tz = getattr(self.bot, "set_user_timezone")
                     set_tz(timezone)
                 await ctx.send(f"✅ Timezone set to: {timezone}")
@@ -159,11 +156,9 @@ class CommandHandler:
             try:
                 result = await update_active_hours(db_pool=self.db_pool)
 
-                # Format hours for display
                 start_h = result["start_hour"]
                 end_h = result["end_hour"]
 
-                # Convert to 12-hour format
                 start_display, start_period = self._format_hour_12h(start_h)
                 end_display, end_period = self._format_hour_12h(end_h)
 

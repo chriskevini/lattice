@@ -36,6 +36,10 @@ NUDGE_DELAY_MIN_MINUTES = 10
 NUDGE_DELAY_MAX_MINUTES = 20
 
 
+TYPING_DELAY_MS_PER_CHAR = 10
+MAX_TYPING_DELAY_SECONDS = 3.0
+
+
 class MessageHandler:
     """Handles incoming Discord messages for LatticeBot."""
 
@@ -153,6 +157,23 @@ class MessageHandler:
         """Set the memory health status."""
         self._memory_healthy = value
 
+    async def _delayed_typing(
+        self, channel: discord.abc.Messageable, delay: float
+    ) -> None:
+        """Wait for delay, then show typing indicator until cancelled.
+
+        Args:
+            channel: The channel to show typing in
+            delay: Delay in seconds before showing typing
+        """
+        try:
+            if delay > 0:
+                await asyncio.sleep(delay)
+            async with channel.typing():
+                await asyncio.Future()
+        except asyncio.CancelledError:
+            pass
+
     @property
     def consecutive_failures(self) -> int:
         """Get the consecutive failures count for testing."""
@@ -223,6 +244,14 @@ class MessageHandler:
             "Received message",
             author=message.author.name,
             content_preview=message.content[:50],
+        )
+
+        typing_delay = min(
+            len(message.content) * TYPING_DELAY_MS_PER_CHAR / 1000,
+            MAX_TYPING_DELAY_SECONDS,
+        )
+        typing_task = asyncio.create_task(
+            self._delayed_typing(message.channel, typing_delay)
         )
 
         try:
@@ -411,3 +440,6 @@ class MessageHandler:
             await message.channel.send(
                 "Sorry, I encountered an error processing your message."
             )
+        finally:
+            if typing_task is not None:
+                typing_task.cancel()

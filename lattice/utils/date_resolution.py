@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 
 from zoneinfo import ZoneInfo
 
+import lattice.utils.database
+
 WEEKDAYS = {
     "monday": 0,
     "tuesday": 1,
@@ -277,12 +279,14 @@ def resolve_relative_dates(message: str, timezone_str: str | None = None) -> str
 
     Args:
         message: The user message containing potential relative dates
-        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to user's timezone from memory.
 
     Returns:
         A hint string like "Friday → 2026-01-10, tomorrow → 2026-01-09"
         or empty string if no relative dates found
     """
+    if timezone_str is None:
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     user_dt = _get_user_datetime(timezone_str)
     hints: list[str] = []
 
@@ -398,11 +402,13 @@ def format_current_date(timezone_str: str | None = None) -> str:
     """Format current date with day of week for prompt context.
 
     Args:
-        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to user's timezone from memory.
 
     Returns:
         Formatted string like "2026/01/08, Thursday"
     """
+    if timezone_str is None:
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     return _get_user_datetime(timezone_str).now.strftime("%Y/%m/%d, %A")
 
 
@@ -410,11 +416,13 @@ def format_current_time(timezone_str: str | None = None) -> str:
     """Format current time for time-sensitive proactive decisions.
 
     Args:
-        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to user's timezone from memory.
 
     Returns:
         Formatted string like "14:30"
     """
+    if timezone_str is None:
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     return _get_user_datetime(timezone_str).now.strftime("%H:%M")
 
 
@@ -464,11 +472,13 @@ def parse_relative_date_range(
 
     Args:
         message: The user message containing relative date expressions
-        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to 'UTC'.
+        timezone_str: IANA timezone string (e.g., 'America/New_York'). Defaults to user's timezone from memory.
 
     Returns:
         DateRange object with start and end datetimes, or None if no date range detected
     """
+    if timezone_str is None:
+        timezone_str = lattice.utils.database._user_timezone_cache or "UTC"
     user_dt = _get_user_datetime(timezone_str)
     now = user_dt.now
     message_lower = message.lower()

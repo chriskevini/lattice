@@ -8,13 +8,13 @@ from zoneinfo import ZoneInfo
 
 from lattice.utils.config import get_config
 from lattice.utils.database import (
+    set_user_timezone,
     DatabasePool,
     get_next_check_at,
     get_system_health,
     get_user_timezone,
     set_next_check_at,
     set_system_health,
-    set_user_timezone,
 )
 from lattice.utils.date_resolution import (
     DateRange,
@@ -305,8 +305,6 @@ class TestUserTimezoneFunctions:
         mock_db_pool = AsyncMock()
         mock_db_pool.set_user_timezone = AsyncMock()
 
-        # The module-level function doesn't validate - validation happens in DatabasePool.set_user_timezone
-        # So we just verify the function calls through to the db_pool
         await set_user_timezone("Invalid/Timezone", db_pool=mock_db_pool)
         mock_db_pool.set_user_timezone.assert_called_once_with("Invalid/Timezone")
 

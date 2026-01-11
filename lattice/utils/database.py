@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+_user_timezone_cache: str | None = None
+
 
 class DatabasePool:
     """Manages asyncpg connection pool for the database."""
@@ -154,7 +156,6 @@ class DatabasePool:
         """
         from zoneinfo import ZoneInfo
 
-        # Validate timezone
         try:
             ZoneInfo(timezone)
         except ZoneInfoNotFoundError as e:
