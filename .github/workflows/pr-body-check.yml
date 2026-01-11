@@ -13,11 +13,25 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
-      - name: Check PR body structure
+      - name: Check PR title and body structure
         shell: bash
         env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
+          echo "Checking PR title for conventional commits format..."
+          
+          # Validate PR title follows conventional commits format
+          # Format: type: description or type(scope): description
+          if ! [[ "$PR_TITLE" =~ ^(feat|fix|chore|docs|style|refactor|perf|test|ci|build|revert)(\([a-z]+\))?:\ .+ ]]; then
+            echo "❌ PR title must follow conventional commits with standard type"
+            echo "   Allowed types: feat, fix, chore, docs, style, refactor, perf, test, ci, build, revert"
+            echo "   Found: '$PR_TITLE'"
+            echo "   Examples: 'feat: add new feature', 'fix(auth): resolve login bug', 'chore: update deps'"
+            exit 1
+          fi
+          
+          echo "✅ PR title is valid"
           echo "Checking PR body for required sections..."
           
           # Check for required sections in correct order
