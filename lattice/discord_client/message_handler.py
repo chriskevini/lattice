@@ -246,6 +246,7 @@ class MessageHandler:
                 )
 
                 strategy = await context_strategy(
+                    db_pool=self.db_pool,
                     message_id=user_message_id,
                     user_message=message.content,
                     recent_messages=recent_msgs_for_strategy,
@@ -257,7 +258,6 @@ class MessageHandler:
                         "main_message_url": message.jump_url,
                     },
                     llm_client=self.llm_client,
-                    db_pool=self.db_pool,
                 )
 
                 if strategy:

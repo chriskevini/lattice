@@ -56,31 +56,25 @@ class ContextStrategy:
     created_at: datetime
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = (
+            "Database pool not available. Pass db_pool as an argument "
+            "(dependency injection required)."
+        )
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 def build_smaller_episodic_context(
@@ -130,6 +124,7 @@ def build_smaller_episodic_context(
 
 
 async def context_strategy(
+    db_pool: Any,
     message_id: UUID,
     user_message: str,
     recent_messages: list[EpisodicMessage],
@@ -138,7 +133,6 @@ async def context_strategy(
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
     llm_client: Any | None = None,
-    db_pool: Any | None = None,
 ) -> ContextStrategy:
     """Perform context strategy analysis on conversation window.
 
@@ -152,6 +146,7 @@ async def context_strategy(
     7. Stores strategy in context_strategies table
 
     Args:
+        db_pool: Database pool for dependency injection
         message_id: UUID of the message being analyzed
         user_message: The user's message text
         recent_messages: Recent conversation history
@@ -160,7 +155,6 @@ async def context_strategy(
         audit_view: Whether to send an AuditView to the dream channel
         audit_view_params: Parameters for the AuditView
         llm_client: LLM client for dependency injection
-        db_pool: Database pool for dependency injection
 
     Returns:
         ContextStrategy object with structured fields
@@ -334,14 +328,14 @@ async def context_strategy(
 
 
 async def get_context_strategy(
+    db_pool: Any,
     strategy_id: uuid.UUID,
-    db_pool: Any | None = None,
 ) -> ContextStrategy | None:
     """Retrieve a stored context strategy by ID.
 
     Args:
-        strategy_id: UUID of the strategy to retrieve
         db_pool: Database pool for dependency injection
+        strategy_id: UUID of the strategy to retrieve
 
     Returns:
         ContextStrategy object or None if not found
@@ -377,30 +371,32 @@ async def get_context_strategy(
 
 
 async def get_message_strategy(
+    db_pool: Any,
     message_id: uuid.UUID,
-    db_pool: Any | None = None,
 ) -> ContextStrategy | None:
     """Retrieve context strategy for a specific message.
 
     Args:
-        message_id: UUID of the message
         db_pool: Database pool for dependency injection
+        message_id: UUID of the message
 
     Returns:
         ContextStrategy object or None if not found
     """
-    return await get_context_strategy_by_message_id(message_id, db_pool=db_pool)
+    return await get_context_strategy_by_message_id(
+        db_pool=db_pool, message_id=message_id
+    )
 
 
 async def get_context_strategy_by_message_id(
+    db_pool: Any,
     message_id: uuid.UUID,
-    db_pool: Any | None = None,
 ) -> ContextStrategy | None:
     """Retrieve context strategy for a specific message by its message ID.
 
     Args:
-        message_id: UUID of the message
         db_pool: Database pool for dependency injection
+        message_id: UUID of the message
 
     Returns:
         ContextStrategy object or None if not found
@@ -439,10 +435,10 @@ async def get_context_strategy_by_message_id(
 
 
 async def retrieve_context(
+    db_pool: Any,
     entities: list[str],
     context_flags: list[str],
     memory_depth: int = 2,
-    db_pool: Any | None = None,
 ) -> dict[str, Any]:
     """Retrieve context based on entities and context flags.
 
@@ -453,10 +449,10 @@ async def retrieve_context(
     - Activity memories (if activity_context flag present)
 
     Args:
+        db_pool: Database pool for dependency injection
         entities: Extracted entity mentions from context_strategy()
         context_flags: Context flags from context_strategy() (e.g., ["goal_context"])
         memory_depth: Graph traversal depth (default 2 for multi-hop relationships)
-        db_pool: Database pool for dependency injection
 
     Returns:
         Dictionary with context strings and metadata:

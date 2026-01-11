@@ -76,20 +76,20 @@ class UnifiedPipeline:
         history = [m for m in recent_messages if m.message_id != message_id]
 
         strategy = await context_strategy(
+            db_pool=self.db_pool,
             message_id=message_id,
             user_message=content,
             recent_messages=history,
             user_timezone=timezone,
             discord_message_id=discord_message_id,
             llm_client=self.llm_client,
-            db_pool=self.db_pool,
         )
 
         # 3. Retrieve
         context = await retrieve_context(
+            db_pool=self.db_pool,
             entities=strategy.entities,
             context_flags=strategy.context_flags,
-            db_pool=self.db_pool,
         )
 
         # 4. Generate
