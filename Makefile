@@ -137,7 +137,7 @@ clean: ## Clean up cache and build files
 	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".uv" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf dist/ build/ htmlcov/ .coverage logs/*.log
+	rm -rf dist/ build/ htmlcov/ .coverage
 
 # ============================================================================
 # Git Helpers
