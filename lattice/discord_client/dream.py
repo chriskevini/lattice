@@ -146,8 +146,8 @@ class FeedbackModal(discord.ui.Modal):
     def __init__(
         self,
         audit_id: UUID,
-        message_id: int,
-        bot_message_id: int,
+        message_id: int | None,
+        bot_message_id: int | None,
         db_pool: "DatabasePool",
     ) -> None:
         """Initialize feedback modal.
@@ -243,7 +243,11 @@ class FeedbackModal(discord.ui.Modal):
         emoji = {"positive": "👍", "negative": "👎"}[sentiment]
         try:
             channel = interaction.channel
-            if channel and hasattr(channel, "fetch_message"):
+            if (
+                channel
+                and hasattr(channel, "fetch_message")
+                and self.bot_message_id is not None
+            ):
                 bot_message = await cast("discord.TextChannel", channel).fetch_message(
                     self.bot_message_id
                 )
@@ -410,12 +414,10 @@ class AuditView(discord.ui.DesignerView):
                 return
 
             bot_message_id = (
-                interaction.message.id
-                if interaction.message
-                else (self.message_id or 0)
+                interaction.message.id if interaction.message else self.message_id
             )
             modal = FeedbackModal(
-                self.audit_id, self.message_id or 0, bot_message_id, self.db_pool
+                self.audit_id, self.message_id, bot_message_id, self.db_pool
             )
             await interaction.response.send_modal(modal)
             logger.debug(
