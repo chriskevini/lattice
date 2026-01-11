@@ -100,9 +100,9 @@ jobs:
           # - \restrict/\unrestrict tokens
           # - Version comments (e.g., "Dumped by pg_dump version X.Y")
           # - SET statements for session parameters (vary by pg_dump version)
-          # Filter them out before comparison using sed for better performance
-          sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' -e '/^-- Dumped by pg_dump/d' -e '/^SET /d' -e "/^SELECT pg_catalog.set_config/d" scripts/schema.sql > scripts/schema.sql.clean
-          sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' -e '/^-- Dumped by pg_dump/d' -e '/^SET /d' -e "/^SELECT pg_catalog.set_config/d" tmp_schema.sql > tmp_schema.sql.clean
+          # Filter them out before comparison using awk for better reliability
+          awk '!/^\\restrict/ && !/^\\unrestrict/ && !/^-- Dumped by pg_dump/ && !/^SET / && !/^SELECT pg_catalog.set_config/' scripts/schema.sql > scripts/schema.sql.clean
+          awk '!/^\\restrict/ && !/^\\unrestrict/ && !/^-- Dumped by pg_dump/ && !/^SET / && !/^SELECT pg_catalog.set_config/' tmp_schema.sql > tmp_schema.sql.clean
 
           if ! diff -u scripts/schema.sql.clean tmp_schema.sql.clean; then
             echo "Schema drift detected! The schema.sql does not match the migration output."
