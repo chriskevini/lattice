@@ -1,0 +1,42 @@
+name: PR Body Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  pr-body-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PR body structure
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Check for required sections in PR body
+          echo "Checking PR body for required sections..."
+          
+          if [[ "$PR_BODY" != *"## Summary"* ]]; then
+            echo "❌ Missing required section: ## Summary"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          if [[ "$PR_BODY" != *"## Changes"* ]]; then
+            echo "❌ Missing required section: ## Changes"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          if [[ "$PR_BODY" != *"## Impact"* ]]; then
+            echo "❌ Missing required section: ## Impact"
+            echo "Please use the PR template and include all required sections."
+            exit 1
+          fi
+          
+          echo "✅ PR body structure is valid"
