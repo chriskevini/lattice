@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
+      - uses: actions/checkout@v4
       - name: Check PR body structure
         run: |
           BODY="${{ github.event.pull_request.body }}"
