@@ -17,39 +17,30 @@ from lattice.memory.graph import GraphTraversal
 logger = structlog.get_logger(__name__)
 
 
-def _get_active_db_pool(db_pool_arg: Any = None) -> Any:
+def _get_active_db_pool(db_pool_arg: Any) -> Any:
     """Resolve active database pool.
 
     Args:
-        db_pool_arg: Database pool passed via DI (if provided, used directly)
+        db_pool_arg: Database pool passed via DI (required)
 
     Returns:
         The active database pool instance
 
     Raises:
-        RuntimeError: If no pool is available
+        RuntimeError: If pool is None
     """
-    if db_pool_arg is not None:
-        return db_pool_arg
-
-    from lattice.utils.database import db_pool as global_db_pool
-
-    if global_db_pool is not None:
-        return global_db_pool
-
-    msg = (
-        "Database pool not available. Either pass db_pool as an argument "
-        "or ensure the global db_pool is initialized."
-    )
-    raise RuntimeError(msg)
+    if db_pool_arg is None:
+        msg = "Database pool not available. Pass db_pool as an argument (dependency injection required)."
+        raise RuntimeError(msg)
+    return db_pool_arg
 
 
 async def store_user_message(
     content: str,
     discord_message_id: int,
     channel_id: int,
+    db_pool: Any,
     timezone: str = "UTC",
-    db_pool: Any = None,
 ) -> UUID:
     """Store a user message in episodic memory.
 
@@ -57,8 +48,8 @@ async def store_user_message(
         content: Message content
         discord_message_id: Discord's unique message ID
         channel_id: Discord channel ID
+        db_pool: Database pool for dependency injection (required)
         timezone: IANA timezone string (e.g., 'America/New_York')
-        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored episodic message
@@ -86,10 +77,10 @@ async def store_bot_message(
     content: str,
     discord_message_id: int,
     channel_id: int,
+    db_pool: Any,
     is_proactive: bool = False,
     generation_metadata: dict[str, Any] | None = None,
     timezone: str = "UTC",
-    db_pool: Any = None,
 ) -> UUID:
     """Store a bot message in episodic memory.
 
@@ -97,10 +88,10 @@ async def store_bot_message(
         content: Message content
         discord_message_id: Discord's unique message ID
         channel_id: Discord channel ID
+        db_pool: Database pool for dependency injection (required)
         is_proactive: Whether the bot initiated this message
         generation_metadata: LLM generation metadata
         timezone: IANA timezone string (e.g., 'America/New_York')
-        db_pool: Database pool for dependency injection
 
     Returns:
         UUID of the stored episodic message
@@ -122,10 +113,10 @@ async def store_bot_message(
 async def retrieve_context(
     query: str,
     channel_id: int,
+    db_pool: Any,
     episodic_limit: int = DEFAULT_EPISODIC_LIMIT,
     memory_depth: int = 1,
     entity_names: list[str] | None = None,
-    db_pool: Any = None,
 ) -> tuple[
     list[episodic.EpisodicMessage],
     list[dict[str, Any]],
@@ -137,10 +128,10 @@ async def retrieve_context(
     Args:
         query: Query text (used for logging)
         channel_id: Discord channel ID for episodic search
+        db_pool: Database pool for dependency injection (required)
         episodic_limit: Maximum recent messages to retrieve (default from DEFAULT_EPISODIC_LIMIT)
         memory_depth: Maximum depth for graph traversal (0 = disabled)
         entity_names: Entity names to traverse graph from (from entity extraction)
-        db_pool: Database pool for dependency injection
 
     Returns:
         Tuple of (recent_messages, semantic_context)
