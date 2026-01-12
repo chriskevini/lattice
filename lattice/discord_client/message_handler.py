@@ -112,13 +112,14 @@ class MessageHandler:
                         "Sent contextual nudge", content_preview=nudge_plan.content[:50]
                     )
 
-                    message_id = await self.memory_orchestrator.store_bot_message(
-                        content=nudge_plan.content,
-                        discord_message_id=result.id,
-                        channel_id=result.channel.id,
-                        is_bot=True,
-                        is_proactive=True,
-                        user_timezone=self.user_timezone,
+                    message_id = await memory_orchestrator.store_bot_message(
+                        nudge_plan.content,
+                        result.id,
+                        result.channel.id,
+                        self.db_pool,
+                        True,
+                        None,
+                        self.user_timezone,
                     )
 
                     # Audit trail
@@ -140,58 +141,8 @@ class MessageHandler:
                             cost_usd=nudge_plan.cost_usd,
                             latency_ms=nudge_plan.latency_ms,
                         )
-
-            if nudge.content and nudge.channel_id:
-                from lattice.core.pipeline import UnifiedPipeline
-
-                pipeline = UnifiedPipeline(
-                    db_pool=self.db_pool,
-                    bot=self.bot,
-                    context_cache=self.context_cache,
-                    llm_client=self.llm_client,
-                )
-                result = await pipeline.dispatch_autonomous_nudge(
-                    content=nudge.content,
-                    channel_id=nudge.channel_id,
-                )
-
-                if result:
-                    logger.info(
-                        "Sent contextual nudge", content_preview=nudge.content[:50]
-                    )
-                    # Store in episodic memory
-                    message_id = await episodic.store_message(
-                        db_pool=self.db_pool,
-                        message=episodic.EpisodicMessage(
-                            content=result.content,
-                            discord_message_id=result.id,
-                            channel_id=result.channel.id,
-                            is_bot=True,
-                            is_proactive=True,
-                            user_timezone=self.user_timezone,
-                        ),
-                    )
-
-                    # Audit trail
-                    if nudge.rendered_prompt:
-                        from lattice.memory import prompt_audits
-
-                        await prompt_audits.store_prompt_audit(
-                            db_pool=self.db_pool,
-                            prompt_key="CONTEXTUAL_NUDGE",
-                            rendered_prompt=nudge.rendered_prompt,
-                            response_content=result.content,
-                            main_discord_message_id=result.id,
-                            template_version=nudge.template_version,
-                            message_id=message_id,
-                            model=nudge.model,
-                            provider=nudge.provider,
-                            prompt_tokens=nudge.prompt_tokens,
-                            completion_tokens=nudge.completion_tokens,
-                            cost_usd=nudge.cost_usd,
-                            latency_ms=nudge.latency_ms,
-                        )
             else:
+                logger.info("Silence strategy: wait")
                 logger.info("Silence strategy: wait")
         except asyncio.CancelledError:
             logger.debug("Contextual nudge cancelled by new user message")
@@ -365,7 +316,7 @@ class MessageHandler:
                     message_preview=message.content[:50],
                 )
 
-            # Schedule/Reset contextual nudge
+            # Schedule/Reset contextual nudge_plan
             if self._nudge_task:
                 self._nudge_task.cancel()
             self._nudge_task = asyncio.create_task(self._await_silence_then_nudge())
