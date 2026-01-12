@@ -40,6 +40,15 @@ class PromptAudit:
     completion_tokens: int | None
     cost_usd: Decimal | None
     latency_ms: int | None
+    finish_reason: str | None
+
+    # OpenRouter telemetry
+    cache_discount_usd: Decimal | None
+    native_tokens_cached: int | None
+    native_tokens_reasoning: int | None
+    upstream_id: str | None
+    cancelled: bool | None
+    moderation_latency_ms: int | None
 
     # Context configuration
     context_config: dict[str, Any] | None
@@ -74,6 +83,13 @@ async def store_prompt_audit(
     completion_tokens: int | None = None,
     cost_usd: float | None = None,
     latency_ms: int | None = None,
+    finish_reason: str | None = None,
+    cache_discount_usd: float | None = None,
+    native_tokens_cached: int | None = None,
+    native_tokens_reasoning: int | None = None,
+    upstream_id: str | None = None,
+    cancelled: bool | None = None,
+    moderation_latency_ms: int | None = None,
     context_config: dict[str, Any] | None = None,
     archetype_matched: str | None = None,
     archetype_confidence: float | None = None,
@@ -96,6 +112,13 @@ async def store_prompt_audit(
         completion_tokens: Number of completion tokens
         cost_usd: Cost in USD
         latency_ms: Response latency in milliseconds
+        finish_reason: Why generation stopped (stop, length, content_filter)
+        cache_discount_usd: Cost savings from prompt caching
+        native_tokens_cached: Number of tokens served from cache
+        native_tokens_reasoning: Reasoning tokens for o1-style models
+        upstream_id: Traceability to underlying provider
+        cancelled: Whether the request was cancelled
+        moderation_latency_ms: Content moderation overhead
         context_config: Context configuration used
         archetype_matched: Archetype that was matched
         archetype_confidence: Confidence score for archetype match
@@ -123,6 +146,13 @@ async def store_prompt_audit(
                 completion_tokens,
                 cost_usd,
                 latency_ms,
+                finish_reason,
+                cache_discount_usd,
+                native_tokens_cached,
+                native_tokens_reasoning,
+                upstream_id,
+                cancelled,
+                moderation_latency_ms,
                 context_config,
                 archetype_matched,
                 archetype_confidence,
@@ -130,7 +160,7 @@ async def store_prompt_audit(
                 main_discord_message_id,
                 dream_discord_message_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
             RETURNING id
             """,
             prompt_key,
@@ -144,6 +174,13 @@ async def store_prompt_audit(
             completion_tokens,
             cost_usd,
             latency_ms,
+            finish_reason,
+            cache_discount_usd,
+            native_tokens_cached,
+            native_tokens_reasoning,
+            upstream_id,
+            cancelled,
+            moderation_latency_ms,
             context_config_json,
             archetype_matched,
             archetype_confidence,
@@ -303,6 +340,8 @@ async def get_audit_by_dream_message(
                 rendered_prompt, response_content,
                 model, provider, prompt_tokens, completion_tokens,
                 cost_usd, latency_ms,
+                finish_reason, cache_discount_usd, native_tokens_cached,
+                native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
                 context_config, archetype_matched, archetype_confidence,
                 reasoning,
                 main_discord_message_id, dream_discord_message_id,
@@ -329,6 +368,13 @@ async def get_audit_by_dream_message(
             completion_tokens=row["completion_tokens"],
             cost_usd=row["cost_usd"],
             latency_ms=row["latency_ms"],
+            finish_reason=row["finish_reason"],
+            cache_discount_usd=row["cache_discount_usd"],
+            native_tokens_cached=row["native_tokens_cached"],
+            native_tokens_reasoning=row["native_tokens_reasoning"],
+            upstream_id=row["upstream_id"],
+            cancelled=row["cancelled"],
+            moderation_latency_ms=row["moderation_latency_ms"],
             context_config=row["context_config"],
             archetype_matched=row["archetype_matched"],
             archetype_confidence=row["archetype_confidence"],
@@ -361,6 +407,8 @@ async def get_audits_with_feedback(
                 rendered_prompt, response_content,
                 model, provider, prompt_tokens, completion_tokens,
                 cost_usd, latency_ms,
+                finish_reason, cache_discount_usd, native_tokens_cached,
+                native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
                 context_config, archetype_matched, archetype_confidence,
                 reasoning,
                 main_discord_message_id, dream_discord_message_id,
@@ -388,6 +436,13 @@ async def get_audits_with_feedback(
                 completion_tokens=row["completion_tokens"],
                 cost_usd=row["cost_usd"],
                 latency_ms=row["latency_ms"],
+                finish_reason=row["finish_reason"],
+                cache_discount_usd=row["cache_discount_usd"],
+                native_tokens_cached=row["native_tokens_cached"],
+                native_tokens_reasoning=row["native_tokens_reasoning"],
+                upstream_id=row["upstream_id"],
+                cancelled=row["cancelled"],
+                moderation_latency_ms=row["moderation_latency_ms"],
                 context_config=row["context_config"],
                 archetype_matched=row["archetype_matched"],
                 archetype_confidence=row["archetype_confidence"],

@@ -12,41 +12,43 @@ help: ## Show this help message
 
 SERVICE ?= bot
 TAIL ?= 100
+LIMIT ?= 50
+KEY ?=
 
 docker-up: ## Start all services with Docker Compose
-	docker compose up -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d
 
 docker-down: ## Stop all services
-	docker compose down
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down
 
 view-logs: ## View recent logs (use: make view-logs SERVICE=postgres TAIL=1000)
-	docker compose logs --tail $(TAIL) $(SERVICE)
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml logs --tail $(TAIL) $(SERVICE)
 
 docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
-	docker compose down
-	docker compose build
-	docker compose up -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml build
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d
 
 docker-restart: ## Restart all services
-	docker compose restart
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml restart
 	@echo "All services restarted. View logs with: make view-logs"
 
 restart: docker-restart ## Short alias
 
 docker-reload-env: ## Recreate containers to reload .env changes
-	docker compose up --force-recreate -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up --force-recreate -d
 	@echo "Containers recreated with updated .env. View logs with: make view-logs"
 
 docker-shell: ## Open shell in bot container
-	docker compose exec bot /bin/bash
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml exec bot /bin/bash
 
 docker-db-shell: ## Open PostgreSQL shell (interactive)
-	docker compose exec postgres psql -U lattice -d lattice
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml exec postgres psql -U lattice -d lattice
 
 db-shell: docker-db-shell ## Short alias
 
 docker-clean: ## Remove all containers, volumes, and images
-	docker compose down -v
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down -v
 	docker system prune -f
 
 # ============================================================================
@@ -74,6 +76,24 @@ db-feedback: ## Show recent feedback (default: 10 rows)
 db-dump: ## Dump table to CSV (use: make db-dump table=user_feedback)
 	@docker compose exec -T postgres psql -U lattice -d lattice -c "COPY (SELECT * FROM $(table) ORDER BY created_at DESC LIMIT 100) TO STDOUT WITH CSV HEADER" > $(table).csv
 	@echo "Exported to $(table).csv"
+
+db-llm-stats: ## Show all LLM calls with telemetry (use: LIMIT=50 to limit rows)
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "SELECT prompt_key, model, prompt_tokens, completion_tokens, (prompt_tokens + completion_tokens) as total_tokens, cost_usd, latency_ms, finish_reason, cache_discount_usd, native_tokens_cached, native_tokens_reasoning, created_at FROM prompt_audits ORDER BY created_at DESC LIMIT $(LIMIT);"
+
+db-llm-summary: ## Show aggregate LLM statistics including cache savings
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "SELECT COUNT(*) as total_calls, SUM(prompt_tokens + completion_tokens) as total_tokens, AVG(prompt_tokens + completion_tokens) as avg_tokens, SUM(cost_usd) as total_cost, SUM(cache_discount_usd) as total_cache_savings, AVG(native_tokens_cached) as avg_cached_tokens, AVG(native_tokens_reasoning) as avg_reasoning_tokens FROM prompt_audits;"
+
+db-llm-by-key: ## Show LLM calls filtered by prompt_key (use: make db-llm-by-key KEY=CONTEXT_STRATEGY)
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "SELECT prompt_key, model, prompt_tokens, completion_tokens, (prompt_tokens + completion_tokens) as total_tokens, cost_usd, latency_ms, finish_reason, cache_discount_usd, native_tokens_cached, created_at FROM prompt_audits WHERE prompt_key = '$(KEY)' ORDER BY created_at DESC;"
+
+db-llm-cache-stats: ## Show cache performance statistics
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "SELECT COUNT(*) as total_cached_calls, SUM(native_tokens_cached) as total_cached_tokens, AVG(native_tokens_cached) as avg_cached_per_call, SUM(cache_discount_usd) as total_cache_savings FROM prompt_audits WHERE native_tokens_cached > 0;"
+
+db-llm-failures: ## Show failed or truncated LLM calls (finish_reason != 'stop' or NULL)
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "SELECT prompt_key, model, finish_reason, prompt_tokens, completion_tokens, (prompt_tokens + completion_tokens) as total_tokens, cost_usd, created_at FROM prompt_audits WHERE finish_reason IS NULL OR finish_reason != 'stop' ORDER BY created_at DESC;"
+
+db-llm-reasoning: ## Show LLM calls with reasoning tokens (o1-style models)
+	@docker compose exec -T postgres psql -U lattice -d lattice -c "SELECT prompt_key, model, native_tokens_reasoning, prompt_tokens, completion_tokens, (prompt_tokens + completion_tokens) as total_tokens, cost_usd, created_at FROM prompt_audits WHERE native_tokens_reasoning IS NOT NULL AND native_tokens_reasoning > 0 ORDER BY created_at DESC;"
 
 db-backup: ## Create a database backup
 	docker compose exec postgres pg_dump -U lattice lattice > backup_$(shell date +%Y%m%d_%H%M%S).sql

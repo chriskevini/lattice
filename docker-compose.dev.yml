@@ -1,0 +1,14 @@
+# Development override - builds from source with hot reload
+# Usage: docker compose -f docker-compose.base.yml -f docker-compose.dev.yml
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount source code for hot reload
+      - ./lattice:/app/lattice
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+      - ./logs:/app/logs
