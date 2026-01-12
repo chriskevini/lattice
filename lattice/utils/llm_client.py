@@ -207,6 +207,11 @@ class _LLMClient:
         moderation_latency_ms = None
 
         if usage:
+            finish_reason = (
+                getattr(usage, "completion_details", {}).get("finish_reason")
+                if hasattr(usage, "completion_details")
+                else None
+            )
             cache_discount_usd = getattr(usage, "cache_discount", None)
             native_tokens_cached = getattr(usage, "native_tokens_cached", None)
             native_tokens_reasoning = getattr(usage, "native_tokens_reasoning", None)
