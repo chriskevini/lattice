@@ -183,6 +183,27 @@ class TestPostgresRepositoryBase:
             async def get_entities_list(self) -> list[str]:
                 return []
 
+            async def get_predicates_list(self) -> list[str]:
+                return []
+
+            async def get_entities_set(self) -> set[str]:
+                return set()
+
+            async def get_predicates_set(self) -> set[str]:
+                return set()
+
+            async def store_entities(self, names: list[str]) -> int:
+                return 0
+
+            async def store_predicates(self, names: list[str]) -> int:
+                return 0
+
+            async def entity_exists(self, name: str) -> bool:
+                return False
+
+            async def predicate_exists(self, name: str) -> bool:
+                return False
+
         mock_pool = MagicMock()
 
         repo = ConcreteRepository(mock_pool)
