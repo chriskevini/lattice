@@ -5,7 +5,6 @@ Extracted entities are used as starting points for multi-hop memory retrieval.
 """
 
 import asyncio
-import uuid
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -86,7 +85,6 @@ async def context_strategy(
     from lattice.utils.date_resolution import get_now
 
     channel_id = _get_channel_id(recent_messages, discord_message_id)
-    cached_strategy = context_cache.get_active(channel_id)
 
     prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXT_STRATEGY")
     if not prompt_template:

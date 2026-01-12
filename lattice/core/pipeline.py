@@ -62,7 +62,6 @@ class UnifiedPipeline:
             The sent response message, or None if failed
         """
         from lattice.core import memory_orchestrator, response_generator
-        from lattice.core.context import ContextStrategy
         from lattice.core.context_strategy import context_strategy, retrieve_context
 
         # 1. Ingest

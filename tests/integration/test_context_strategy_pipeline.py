@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lattice.core import response_generator
-from lattice.core.context import ContextCache
+from lattice.core.context import ContextStrategy, ContextCache
 from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.memory import episodic
 from lattice.utils.date_resolution import get_now
@@ -21,6 +21,14 @@ def context_cache() -> ContextCache:
     """Create a fresh context cache for each test."""
     cache = ContextCache(ttl=10)
     return cache
+
+
+@pytest.fixture(autouse=True)
+def reset_cache(context_cache):
+    """Reset context cache before each test."""
+    context_cache.clear()
+    yield
+    context_cache.clear()
 
 
 @pytest.fixture
@@ -52,6 +60,7 @@ class TestContextStrategyPipeline:
         """Test complete pipeline flow for a declaration message."""
         message_id = uuid.uuid4()
         message_content = "I need to finish the lattice project by Friday"
+        channel_id = 67890
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -76,7 +85,7 @@ class TestContextStrategyPipeline:
 
             extraction_llm = AsyncMock()
             extraction_result = AuditResult(
-                content='{"entities":["lattice project","Friday"], "context_flags":[]}',
+                content='{"entities":["lattice project","Friday"], "context_flags":[], "unresolved_entities":[]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=100,
@@ -114,7 +123,7 @@ class TestContextStrategyPipeline:
                         message_id,
                         message_content,
                         12345,
-                        67890,
+                        channel_id,
                         False,
                     )
                 response_template = PromptTemplate(
@@ -145,10 +154,10 @@ class TestContextStrategyPipeline:
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=[],
-                    discord_message_id=12345,
                     llm_client=extraction_llm,
                     db_pool=db_pool,
                     context_cache=context_cache,
+                    discord_message_id=channel_id,
                 )
 
                 assert extraction is not None
@@ -181,6 +190,7 @@ class TestContextStrategyPipeline:
         """Test context strategy detects activity queries."""
         message_id = uuid.uuid4()
         message_content = "What did I do last week?"
+        channel_id = 67890
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -206,7 +216,7 @@ class TestContextStrategyPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": [], "context_flags": ["activity_context"]}',
+                content='{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=60,
@@ -227,10 +237,11 @@ class TestContextStrategyPipeline:
                 "extraction": {
                     "entities": [],
                     "context_flags": ["activity_context"],
+                    "unresolved_entities": [],
                     "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": [], "context_flags": ["activity_context"]}',
+                "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
                 "created_at": get_now("UTC"),
             }
             mock_pool = MagicMock()
@@ -246,7 +257,7 @@ class TestContextStrategyPipeline:
                         message_id,
                         message_content,
                         12345,
-                        67890,
+                        channel_id,
                         False,
                     )
                 recent_messages: list[episodic.EpisodicMessage] = []
@@ -254,10 +265,10 @@ class TestContextStrategyPipeline:
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=recent_messages,
-                    discord_message_id=12345,
                     llm_client=planning_llm,
                     db_pool=db_pool,
                     context_cache=context_cache,
+                    discord_message_id=channel_id,
                 )
 
             assert planning is not None
@@ -296,7 +307,7 @@ class TestContextStrategyPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": [], "context_flags": []}',
+                content='{"entities": [], "context_flags": [], "unresolved_entities": []}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=50,
@@ -317,10 +328,11 @@ class TestContextStrategyPipeline:
                 "extraction": {
                     "entities": [],
                     "context_flags": [],
+                    "unresolved_entities": [],
                     "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": [], "context_flags": []}',
+                "raw_response": '{"entities": [], "context_flags": [], "unresolved_entities": []}',
                 "created_at": get_now("UTC"),
             }
             mock_pool = MagicMock()
@@ -387,17 +399,18 @@ class TestContextStrategyPipeline:
                     message_id=uuid.uuid4(),
                     user_message="Test message",
                     recent_messages=[],
-                    discord_message_id=12345,
                     db_pool=AsyncMock(),
                     context_cache=context_cache,
+                    discord_message_id=123,
                 )
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_fields(
         self, context_cache: ContextCache
     ) -> None:
-        """Test context strategy validates required fields."""
+        """Test context strategy handles missing fields gracefully."""
         message_id = uuid.uuid4()
+        channel_id = 67890
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -419,8 +432,9 @@ class TestContextStrategyPipeline:
             mock_canonical.return_value = []
 
             planning_llm = AsyncMock()
+            # Only entities provided, flags and unresolved missing
             planning_result = AuditResult(
-                content='{"entities": [], "context_flags": []}',
+                content='{"entities": ["test"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=50,
@@ -434,28 +448,20 @@ class TestContextStrategyPipeline:
             )
             planning_llm.complete.return_value = planning_result
 
-            # Should no longer raise ValueError as we don't strictly validate missing optional fields anymore
-            # since parse_llm_json_response is more lenient.
-            # But wait, if we WANT to test validation, we should check what's expected.
-            # Actually, let's just fix the test to match current behavior or update behavior.
-
-            # The previous test expected ValueError, but currently it doesn't raise it.
-            # Let's check why it doesn't raise it.
-            # parse_llm_json_response just returns the dict.
-
-            # I will update the test to verify it handles it gracefully instead of raising.
             planning = await context_strategy(
                 message_id=message_id,
                 user_message="Test message",
                 recent_messages=[],
-                discord_message_id=12345,
                 llm_client=planning_llm,
                 db_pool=AsyncMock(),
                 context_cache=context_cache,
+                discord_message_id=channel_id,
             )
+
             assert planning is not None
-            assert planning.entities == []
+            assert planning.entities == ["test"]
             assert planning.context_flags == []
+            assert planning.unresolved_entities == ["test"]
 
 
 class TestRetrieveContext:

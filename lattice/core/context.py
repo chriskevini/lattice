@@ -5,13 +5,8 @@ Extracted entities, context flags, and unresolved entities are stored in RAM
 and optionally pre-warmed on bot restart.
 """
 
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Tuple
-
-if TYPE_CHECKING:
-    from lattice.memory.episodic import EpisodicMessage
 
 
 @dataclass
@@ -109,67 +104,6 @@ class ContextCache:
         ctx.entities = {
             e: idx for e, idx in ctx.entities.items() if e in active_entities
         }
-        ctx.context_flags = {
-            f: idx for f, idx in ctx.context_flags.items() if f in active_flags
-        }
-        ctx.unresolved_entities = {
-            u: idx
-            for u, idx in ctx.unresolved_entities.items()
-            if u in active_unresolved
-        }
-
-        if not any([active_entities, active_flags, active_unresolved]):
-            del self._cache[channel_id]
-            return ContextStrategy()
-
-        return ContextStrategy(
-            entities=active_entities,
-            context_flags=active_flags,
-            unresolved_entities=active_unresolved,
-            created_at=ctx.created_at,
-        )
-
-    def clear(self) -> None:
-        """Clear all cached context."""
-        self._cache.clear()
-        self._message_counter = 0
-
-    def get_stats(self) -> dict[str, int]:
-        """Get cache statistics for debugging/monitoring."""
-        return {
-            "cached_channels": len(self._cache),
-            "total_entities": sum(len(ctx.entities) for ctx in self._cache.values()),
-            "total_flags": sum(len(ctx.context_flags) for ctx in self._cache.values()),
-            "message_counter": self._message_counter,
-        }
-
-        ctx.unresolved_entities = {
-            u: ts for u, ts in ctx.unresolved_entities.items() if u in active_unresolved
-        }
-
-        if not any([active_entities, active_flags, active_unresolved]):
-            del self._cache[channel_id]
-            return ContextStrategy()
-
-        return ContextStrategy(
-            entities=active_entities,
-            context_flags=active_flags,
-            unresolved_entities=active_unresolved,
-            created_at=ctx.created_at,
-        )
-
-    def clear(self) -> None:
-        """Clear all cached context."""
-        self._cache.clear()
-
-    def get_stats(self) -> dict[str, int]:
-        """Get cache statistics for debugging/monitoring."""
-        return {
-            "cached_channels": len(self._cache),
-            "total_entities": sum(len(ctx.entities) for ctx in self._cache.values()),
-            "total_flags": sum(len(ctx.context_flags) for ctx in self._cache.values()),
-        }
-
         ctx.context_flags = {
             f: idx for f, idx in ctx.context_flags.items() if f in active_flags
         }
