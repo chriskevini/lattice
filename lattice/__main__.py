@@ -75,11 +75,11 @@ async def main() -> None:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
     from lattice.utils.llm_client import _LLMClient
-    from lattice.core.context import ContextCache, UserContextCache
+    from lattice.core.context import ChannelContextCache, UserContextCache
 
     db_pool = DatabasePool()
     await db_pool.initialize()
-    context_cache = ContextCache(ttl=10)
+    context_cache = ChannelContextCache(ttl=10)
     user_context_cache = UserContextCache(ttl_minutes=30)
 
     bot = LatticeBot(
