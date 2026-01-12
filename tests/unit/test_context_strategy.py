@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from lattice.core.context import ContextCache, ContextStrategy
+from lattice.core.context import ContextCache, ContextStrategy, UserContextCache
 from lattice.core.context_strategy import (
     build_smaller_episodic_context,
     context_strategy,
@@ -386,3 +386,131 @@ class TestContextCacheDirect:
 
         assert cache.get_active(1).entities == []
         assert cache.get_stats()["cached_channels"] == 0
+
+
+class TestUserContextCache:
+    """Unit tests for UserContextCache TTL and basic operations."""
+
+    def test_get_set_goals(self) -> None:
+        """Test basic goals get/set operations."""
+        cache = UserContextCache(ttl_minutes=30)
+
+        assert cache.get_goals("user") is None
+
+        cache.set_goals("user", "Finish project by Friday")
+        assert cache.get_goals("user") == "Finish project by Friday"
+
+    def test_get_set_activities(self) -> None:
+        """Test basic activities get/set operations."""
+        cache = UserContextCache(ttl_minutes=30)
+
+        assert cache.get_activities("user") is None
+
+        cache.set_activities("user", "Working on mobile app")
+        assert cache.get_activities("user") == "Working on mobile app"
+
+    def test_missing_user_returns_none(self) -> None:
+        """Test that missing users return None for both goals and activities."""
+        cache = UserContextCache(ttl_minutes=30)
+
+        assert cache.get_goals("unknown_user") is None
+        assert cache.get_activities("unknown_user") is None
+
+    def test_goals_ttl_expiration(self) -> None:
+        """Test that goals expire after TTL."""
+        cache = UserContextCache(ttl_minutes=1)
+
+        cache.set_goals("user", "Test goals")
+        assert cache.get_goals("user") == "Test goals"
+
+        import time
+
+        time.sleep(0.1)
+
+        assert cache.get_goals("user") == "Test goals"
+
+    def test_activities_ttl_expiration(self) -> None:
+        """Test that activities expire after TTL."""
+        cache = UserContextCache(ttl_minutes=1)
+
+        cache.set_activities("user", "Test activities")
+        assert cache.get_activities("user") == "Test activities"
+
+        import time
+
+        time.sleep(0.1)
+
+        assert cache.get_activities("user") == "Test activities"
+
+    def test_cache_clear(self) -> None:
+        """Test that clear removes all cached data."""
+        cache = UserContextCache(ttl_minutes=30)
+
+        cache.set_goals("user1", "Goals 1")
+        cache.set_goals("user2", "Goals 2")
+        cache.set_activities("user1", "Activities 1")
+
+        assert cache.get_goals("user1") == "Goals 1"
+        assert cache.get_goals("user2") == "Goals 2"
+        assert cache.get_activities("user1") == "Activities 1"
+
+        cache.clear()
+
+        assert cache.get_goals("user1") is None
+        assert cache.get_goals("user2") is None
+        assert cache.get_activities("user1") is None
+        assert cache.get_stats()["cached_users"] == 0
+        assert cache.get_stats()["cached_goals"] == 0
+        assert cache.get_stats()["cached_activities"] == 0
+
+    def test_get_stats(self) -> None:
+        """Test cache statistics."""
+        cache = UserContextCache(ttl_minutes=30)
+
+        assert cache.get_stats() == {
+            "cached_users": 0,
+            "cached_goals": 0,
+            "cached_activities": 0,
+        }
+
+        cache.set_goals("user1", "Goals 1")
+        cache.set_activities("user1", "Activities 1")
+
+        assert cache.get_stats() == {
+            "cached_users": 1,
+            "cached_goals": 1,
+            "cached_activities": 1,
+        }
+
+        cache.set_goals("user2", "Goals 2")
+
+        assert cache.get_stats() == {
+            "cached_users": 2,
+            "cached_goals": 2,
+            "cached_activities": 1,
+        }
+
+    def test_concurrent_users(self) -> None:
+        """Test cache handles multiple users independently."""
+        cache = UserContextCache(ttl_minutes=30)
+
+        cache.set_goals("user1", "User1 goals")
+        cache.set_goals("user2", "User2 goals")
+        cache.set_activities("user1", "User1 activities")
+
+        assert cache.get_goals("user1") == "User1 goals"
+        assert cache.get_goals("user2") == "User2 goals"
+        assert cache.get_activities("user1") == "User1 activities"
+        assert cache.get_activities("user2") is None
+
+    def test_update_goals_replaces_existing(self) -> None:
+        """Test that setting goals replaces previous value."""
+        cache = UserContextCache(ttl_minutes=30)
+
+        cache.set_goals("user", "Original goals")
+        assert cache.get_goals("user") == "Original goals"
+
+        cache.set_goals("user", "Updated goals")
+        assert cache.get_goals("user") == "Updated goals"
+
+        assert cache.get_stats()["cached_goals"] == 1
