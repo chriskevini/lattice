@@ -6,9 +6,13 @@ and persisted to the database for durability across restarts.
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -176,21 +180,32 @@ class ChannelContextCache(ContextCacheBase):
             "message_counter": ctx.message_counter,
             "created_at": ctx.created_at.isoformat(),
         }
+        ctx_after = self._cache.get(channel_id)
+        if ctx_after is not ctx:
+            return
         await self._save(db_pool, str(channel_id), data)
 
     async def load_from_db(self, db_pool: Any) -> None:
         """Load all channel context from database."""
         rows = await self._load_type(db_pool)
         for row in rows:
-            channel_id = int(row["target_id"])
-            data = json.loads(row["data"])
-            self._cache[channel_id] = ChannelContext(
-                entities=data["entities"],
-                context_flags=data["context_flags"],
-                unresolved_entities=data["unresolved_entities"],
-                message_counter=data["message_counter"],
-                created_at=datetime.fromisoformat(data["created_at"]),
-            )
+            try:
+                channel_id = int(row["target_id"])
+                data = json.loads(row["data"])
+                self._cache[channel_id] = ChannelContext(
+                    entities=data["entities"],
+                    context_flags=data["context_flags"],
+                    unresolved_entities=data["unresolved_entities"],
+                    message_counter=data["message_counter"],
+                    created_at=datetime.fromisoformat(data["created_at"]),
+                )
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+                target_id = row.get("target_id", "unknown")
+                logger.warning(
+                    "Failed to load channel context from DB: target_id=%s, error=%s",
+                    target_id,
+                    e,
+                )
 
     def clear(self) -> None:
         """Clear all cached context."""
@@ -268,17 +283,25 @@ class UserContextCache(ContextCacheBase):
         """Load all user context from database."""
         rows = await self._load_type(db_pool)
         for row in rows:
-            user_id = row["target_id"]
-            data = json.loads(row["data"])
-            if data.get("goals"):
-                self._goals[user_id] = (
-                    data["goals"][0],
-                    datetime.fromisoformat(data["goals"][1]),
-                )
-            if data.get("activities"):
-                self._activities[user_id] = (
-                    data["activities"][0],
-                    datetime.fromisoformat(data["activities"][1]),
+            try:
+                user_id = row["target_id"]
+                data = json.loads(row["data"])
+                if data.get("goals"):
+                    self._goals[user_id] = (
+                        data["goals"][0],
+                        datetime.fromisoformat(data["goals"][1]),
+                    )
+                if data.get("activities"):
+                    self._activities[user_id] = (
+                        data["activities"][0],
+                        datetime.fromisoformat(data["activities"][1]),
+                    )
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+                target_id = row.get("target_id", "unknown")
+                logger.warning(
+                    "Failed to load user context from DB: target_id=%s, error=%s",
+                    target_id,
+                    e,
                 )
 
     def clear(self) -> None:
