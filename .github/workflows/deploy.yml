@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  packages: write
+
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}/lattice-bot
   IMAGE_TAG: ${{ github.sha }}
