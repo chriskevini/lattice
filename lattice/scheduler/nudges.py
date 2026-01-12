@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+SYSTEM_USER_ID = "user"
+
 
 @dataclass
 class NudgePlan:
@@ -94,16 +96,16 @@ async def prepare_contextual_nudge(
 
     from lattice.core import response_generator
 
-    goals = user_context_cache.get_goals("user")
+    goals = user_context_cache.get_goals(SYSTEM_USER_ID)
     if goals is None:
         from lattice.core import response_generator
 
         goals = await response_generator.get_goal_context(db_pool=db_pool)
-        await user_context_cache.set_goals(db_pool, "user", goals)
+        await user_context_cache.set_goals(db_pool, SYSTEM_USER_ID, goals)
 
     from lattice.core.context_strategy import retrieve_context
 
-    activity = user_context_cache.get_activities("user")
+    activity = user_context_cache.get_activities(SYSTEM_USER_ID)
     if activity is None:
         context_result = await retrieve_context(
             db_pool=db_pool, entities=[], context_flags=["activity_context"]
@@ -111,7 +113,7 @@ async def prepare_contextual_nudge(
         activity = context_result.get(
             "activity_context", "No recent activity recorded."
         )
-        await user_context_cache.set_activities(db_pool, "user", activity)
+        await user_context_cache.set_activities(db_pool, SYSTEM_USER_ID, activity)
 
     channel_id = await get_default_channel_id()
 
