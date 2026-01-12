@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
+    from lattice.core.context import ContextCache
 
 
 logger = structlog.get_logger(__name__)
@@ -22,10 +23,12 @@ class UnifiedPipeline:
         self,
         db_pool: "DatabasePool",
         bot: Any,
+        context_cache: "ContextCache",
         llm_client: Any = None,
     ) -> None:
         self.db_pool = db_pool
         self.bot = bot
+        self.context_cache = context_cache
         self.llm_client = llm_client
 
     async def send_response(
@@ -84,6 +87,8 @@ class UnifiedPipeline:
             message_id=message_id,
             user_message=content,
             recent_messages=history,
+            context_cache=self.context_cache,
+            channel_id=channel_id,
             user_timezone=timezone,
             discord_message_id=discord_message_id,
             llm_client=self.llm_client,
@@ -125,6 +130,8 @@ class UnifiedPipeline:
                 timezone=timezone,
                 db_pool=self.db_pool,
             )
+            # Persist context cache after each message
+            await self.context_cache.save_to_db(self.db_pool)
 
         return sent_msg
 

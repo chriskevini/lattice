@@ -20,6 +20,9 @@ from lattice.discord_client.message_handler import MessageHandler
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
 from lattice.utils.database import get_user_timezone
+from lattice.core.context import ContextCache
+
+# from lattice.core.context import ContextStrategy # temporarily commented for test
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -41,6 +44,7 @@ class LatticeBot(commands.Bot):
         self,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
+        context_cache: ContextCache,
     ) -> None:
         """Initialize the Lattice bot."""
         intents = discord.Intents.default()
@@ -56,6 +60,7 @@ class LatticeBot(commands.Bot):
 
         self.db_pool = db_pool
         self.llm_client = llm_client
+        self.context_cache = context_cache
 
         self.main_channel_id = config.discord_main_channel_id
         if not self.main_channel_id:
@@ -71,6 +76,7 @@ class LatticeBot(commands.Bot):
         self._user_timezone: str = "UTC"
 
         # Initialize handlers
+        logger.debug("Initializing handlers")
         self._message_handler = MessageHandler(
             bot=self,
             main_channel_id=self.main_channel_id,
@@ -78,6 +84,7 @@ class LatticeBot(commands.Bot):
             db_pool=self.db_pool,
             llm_client=self.llm_client,
             user_timezone=self._user_timezone,
+            context_cache=self.context_cache,
         )
 
         self._error_manager = ErrorManager(
@@ -144,6 +151,9 @@ class LatticeBot(commands.Bot):
             logger.info("User timezone loaded", timezone=self._user_timezone)
             self._message_handler.user_timezone = self._user_timezone
 
+            # Pre-warm context cache
+            await self._pre_warm_context_cache()
+
             # Start dreaming cycle scheduler
             self._dreaming_scheduler = DreamingScheduler(
                 bot=self,
@@ -198,6 +208,18 @@ class LatticeBot(commands.Bot):
             result=result,
             params=params,
         )
+
+    async def _pre_warm_context_cache(self) -> None:
+        """Pre-warm the context cache from database persistence."""
+        logger.info("Pre-warming context cache from DB")
+        try:
+            await self.context_cache.load_from_db(self.db_pool)
+            logger.info(
+                "Context cache pre-warmed from DB",
+                stats=self.context_cache.get_stats(),
+            )
+        except Exception:
+            logger.exception("Failed to pre-warm context cache from DB")
 
     async def close(self) -> None:
         """Clean up resources when shutting down."""

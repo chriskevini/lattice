@@ -30,24 +30,36 @@ Analyze the conversation window to extract active entities and determine which c
 
 ## Output Format
 Return ONLY valid JSON.
-{"entities": [], "context_flags": [], "unresolved_entities": []}
+{"entities": [], "context_flags": []}
 
 ## Examples
-Date resolution hints: Friday → 2026-01-09
-User: "Spent 2 hours at the gym this morning."
-User: "finally finished that report that was due friday."
-User: "What shows do you like?"
-User: "bf and I hung out at ikea today."
-User: "my mom loves cooking."
+**Date resolution hints:**
+Friday → 2026-01-09
+**Canonical entities:**
+User, Assistant, Mother
+**Messages to analyze:**
+[2026-01-09 09:15] USER: "finally finished that report that was due friday."
 Output:
-{"entities": ["gym", "report", "2026-01-09", "Assistant", "IKEA", "Mother", "cooking"], "context_flags": [], "unresolved_entities": ["bf"]}
+{"entities": ["report", "2026-01-09"], "context_flags": []}
 
-User: "what do i need to do this week?"
+[2026-01-09 10:00] USER: "my mom loves cooking."
 Output:
-{"entities": [], "context_flags": ["goal_context"], "unresolved_entities": []}
+{"entities": ["Mother", "cooking"], "context_flags": []}
 
-User: "How much sleep did I get last night?"
+[2026-01-09 10:00] USER: "bf and i hung out at ikea today"
 Output:
-{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}
+{"entities": ["bf", "IKEA"], "context_flags": []}
+
+[2026-01-09 14:00] USER: "What shows do you like?"
+Output:
+{"entities": ["shows", "Assistant"], "context_flags": []}
+
+[2026-01-09 14:30] USER: "what do i need to do this week?"
+Output:
+{"entities": [], "context_flags": ["goal_context"]}
+
+[2026-01-09 10:00] USER: "How much sleep did I get last night?"
+Output:
+{"entities": [], "context_flags": ["activity_context"]}
 $TPL$, 0.2)
 ON CONFLICT (prompt_key, version) DO NOTHING;

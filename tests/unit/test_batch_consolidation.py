@@ -856,7 +856,7 @@ class TestRaceCondition:
         await _update_last_batch_id(mock_conn, "99999")
         mock_conn.execute.assert_called_once()
         call_args = mock_conn.execute.call_args
-        assert "UPDATE system_health" in call_args[0][0]
+        assert "UPDATE system_metrics" in call_args[0][0]
         assert call_args[0][1] == "99999"
 
     @pytest.mark.asyncio

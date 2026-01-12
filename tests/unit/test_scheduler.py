@@ -494,7 +494,7 @@ class TestAdaptiveActiveHours:
     async def test_is_within_active_hours_normal_window(self) -> None:
         """Test active hours check for normal window (9 AM - 9 PM)."""
         mock_pool = MagicMock()
-        mock_pool.get_system_health = AsyncMock(
+        mock_pool.get_system_metrics = AsyncMock(
             side_effect=lambda key: {
                 "active_hours_start": "9",
                 "active_hours_end": "21",
@@ -517,7 +517,7 @@ class TestAdaptiveActiveHours:
     async def test_is_within_active_hours_wrap_around(self) -> None:
         """Test active hours check for window wrapping midnight (9 PM - 9 AM)."""
         mock_pool = MagicMock()
-        mock_pool.get_system_health = AsyncMock(
+        mock_pool.get_system_metrics = AsyncMock(
             side_effect=lambda key: {
                 "active_hours_start": "21",
                 "active_hours_end": "9",
@@ -545,7 +545,7 @@ class TestAdaptiveActiveHours:
     async def test_is_within_active_hours_defaults_to_now(self) -> None:
         """Test active hours check defaults to current time when not specified."""
         mock_pool = MagicMock()
-        mock_pool.get_system_health = AsyncMock(
+        mock_pool.get_system_metrics = AsyncMock(
             side_effect=lambda key: {
                 "active_hours_start": "9",
                 "active_hours_end": "21",
@@ -572,7 +572,7 @@ class TestAdaptiveActiveHours:
         }
 
         mock_pool = MagicMock()
-        mock_pool.set_system_health = AsyncMock()
+        mock_pool.set_system_metrics = AsyncMock()
 
         with patch(
             "lattice.scheduler.adaptive.calculate_active_hours",
@@ -581,7 +581,7 @@ class TestAdaptiveActiveHours:
             result = await update_active_hours(db_pool=mock_pool)
 
             assert result == mock_result
-            assert mock_pool.set_system_health.call_count >= 4
+            assert mock_pool.set_system_metrics.call_count >= 4
 
 
 if __name__ == "__main__":
