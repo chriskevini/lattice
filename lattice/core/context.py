@@ -27,7 +27,7 @@ class ContextStrategy:
     entities: list[str] = field(default_factory=list)
     context_flags: list[str] = field(default_factory=list)
     unresolved_entities: list[str] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=datetime.now)
 
 
 @dataclass

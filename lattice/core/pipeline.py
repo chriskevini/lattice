@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
-    from lattice.utils.context import InMemoryContextCache
+    from lattice.core.context import ContextCache
 
 
 logger = structlog.get_logger(__name__)
@@ -23,7 +23,7 @@ class UnifiedPipeline:
         self,
         db_pool: "DatabasePool",
         bot: Any,
-        context_cache: "InMemoryContextCache",
+        context_cache: "ContextCache",
         llm_client: Any = None,
     ) -> None:
         self.db_pool = db_pool
