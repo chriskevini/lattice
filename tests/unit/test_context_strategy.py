@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lattice.core.context_strategy import (
+    _merge_deduplicate,
     build_smaller_episodic_context,
     context_strategy,
     get_context_strategy,
@@ -18,6 +19,7 @@ from lattice.core.context_strategy import (
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
+from lattice.utils.context import reset_context_cache
 from lattice.utils.llm import AuditResult
 
 
@@ -31,6 +33,12 @@ def mock_prompt_template() -> PromptTemplate:
         version=3,
         active=True,
     )
+
+
+@pytest.fixture(autouse=True)
+def reset_cache() -> None:
+    """Reset context cache before each test."""
+    reset_context_cache()
 
 
 @pytest.fixture
@@ -360,3 +368,128 @@ class TestBuildSmallerEpisodicContext:
         )
 
         assert "USER: Hello there" in context
+
+
+class TestMergeDeduplicate:
+    """Tests for the _merge_deduplicate function."""
+
+    def test_merge_deduplicate_empty(self) -> None:
+        """Test merging empty lists."""
+        result = _merge_deduplicate([], [])
+        assert result == []
+
+    def test_merge_deduplicate_cached_only(self) -> None:
+        """Test with only cached items."""
+        result = _merge_deduplicate(["a", "b", "c"], [])
+        assert result == ["a", "b", "c"]
+
+    def test_merge_deduplicate_fresh_only(self) -> None:
+        """Test with only fresh items."""
+        result = _merge_deduplicate([], ["x", "y"])
+        assert result == ["x", "y"]
+
+    def test_merge_deduplicate_no_overlap(self) -> None:
+        """Test merging with no overlap."""
+        result = _merge_deduplicate(["a", "b"], ["x", "y"])
+        assert result == ["a", "b", "x", "y"]
+
+    def test_merge_deduplicate_with_overlap(self) -> None:
+        """Test merging with overlapping items."""
+        result = _merge_deduplicate(["a", "b", "c"], ["b", "d"])
+        assert result == ["a", "b", "c", "d"]
+
+    def test_merge_deduplicate_order_preserved(self) -> None:
+        """Test that order is preserved with cached first."""
+        result = _merge_deduplicate(["z", "a", "m"], ["a", "z", "b"])
+        assert result == ["z", "a", "m", "b"]
+
+
+class TestInMemoryContextCache:
+    """Tests for in-memory context cache integration via context_strategy."""
+
+    @pytest.mark.asyncio
+    async def test_context_strategy_with_cache(
+        self,
+        mock_prompt_template: PromptTemplate,
+        mock_generation_result: AuditResult,
+    ) -> None:
+        """Test that context strategy merges with cached context."""
+        from lattice.utils.context import get_context_cache, reset_context_cache
+
+        reset_context_cache()
+        cache = get_context_cache()
+
+        message_id = uuid.uuid4()
+        extraction_data = {
+            "entities": ["project", "Friday"],
+            "context_flags": ["goal_context"],
+            "unresolved_entities": [],
+        }
+        mock_generation_result.content = json.dumps(extraction_data)
+
+        mock_conn = AsyncMock()
+        mock_pool = _create_mock_pool(mock_conn)
+
+        with (
+            patch(
+                "lattice.core.context_strategy.get_prompt",
+                return_value=mock_prompt_template,
+            ),
+            patch(
+                "lattice.memory.canonical.get_canonical_entities_list",
+                return_value=[],
+            ),
+            patch(
+                "lattice.core.context_strategy.parse_llm_json_response",
+                return_value=extraction_data,
+            ),
+        ):
+            mock_client = AsyncMock()
+            mock_client.complete = AsyncMock(return_value=mock_generation_result)
+
+            recent_messages = [
+                EpisodicMessage(
+                    content="Working on something",
+                    discord_message_id=1,
+                    channel_id=123,
+                    is_bot=False,
+                    timestamp=get_now("UTC"),
+                ),
+            ]
+
+            strategy = await context_strategy(
+                db_pool=mock_pool,
+                message_id=message_id,
+                user_message="I need to finish by Friday",
+                recent_messages=recent_messages,
+                llm_client=mock_client,
+            )
+
+            assert strategy.entities == ["project", "Friday"]
+            assert strategy.context_flags == ["goal_context"]
+
+            second_extraction = {
+                "entities": ["weekend"],
+                "context_flags": [],
+                "unresolved_entities": ["meeting"],
+            }
+            mock_generation_result.content = json.dumps(second_extraction)
+
+            with patch(
+                "lattice.core.context_strategy.parse_llm_json_response",
+                return_value=second_extraction,
+            ):
+                message_id_2 = uuid.uuid4()
+                strategy_2 = await context_strategy(
+                    db_pool=mock_pool,
+                    message_id=message_id_2,
+                    user_message="Planning for weekend",
+                    recent_messages=recent_messages,
+                    llm_client=mock_client,
+                )
+
+                assert "project" in strategy_2.entities
+                assert "Friday" in strategy_2.entities
+                assert "weekend" in strategy_2.entities
+
+            reset_context_cache()
