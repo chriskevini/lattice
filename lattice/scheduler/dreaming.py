@@ -156,7 +156,7 @@ class DreamingScheduler:
         Returns:
             True if dreaming is enabled, False otherwise
         """
-        enabled_str = await self.db_pool.get_system_health("dreaming_enabled")
+        enabled_str = await self.db_pool.get_system_metrics("dreaming_enabled")
         return enabled_str != "false"
 
     async def _get_dreaming_config(self) -> DreamingConfig:
@@ -166,14 +166,14 @@ class DreamingScheduler:
             DreamingConfig with loaded settings
         """
         min_uses = int(
-            await self.db_pool.get_system_health("dreaming_min_uses")
+            await self.db_pool.get_system_metrics("dreaming_min_uses")
             or DREAMING_MIN_USES_DEFAULT
         )
         lookback_days = int(
-            await self.db_pool.get_system_health("dreaming_lookback_days")
+            await self.db_pool.get_system_metrics("dreaming_lookback_days")
             or DREAMING_LOOKBACK_DAYS_DEFAULT
         )
-        enabled_str = await self.db_pool.get_system_health("dreaming_enabled")
+        enabled_str = await self.db_pool.get_system_metrics("dreaming_enabled")
         enabled = enabled_str != "false"
 
         return DreamingConfig(

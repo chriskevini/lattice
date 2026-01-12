@@ -46,7 +46,7 @@ async def check_database_connection() -> asyncpg.Connection:
 
 
 async def check_scheduler_config(conn: asyncpg.Connection) -> dict:
-    """Check scheduler configuration in system_health."""
+    """Check scheduler configuration in system_metrics."""
     print("\n" + "=" * 80)
     print("2. SCHEDULER CONFIGURATION")
     print("=" * 80)
@@ -61,7 +61,7 @@ async def check_scheduler_config(conn: asyncpg.Connection) -> dict:
     config = {}
     for key in keys:
         value = await conn.fetchval(
-            "SELECT value FROM system_health WHERE key = $1", key
+            "SELECT metric_value FROM system_metrics WHERE metric_key = $1", key
         )
         config[key] = value
         print(f"{key:30} = {value}")
@@ -104,7 +104,7 @@ async def check_active_hours(conn: asyncpg.Connection) -> dict:
     config = {}
     for key in keys:
         value = await conn.fetchval(
-            "SELECT value FROM system_health WHERE key = $1", key
+            "SELECT metric_value FROM system_metrics WHERE metric_key = $1", key
         )
         config[key] = value
         print(f"{key:30} = {value}")
@@ -334,11 +334,13 @@ async def generate_diagnosis() -> None:
     print("docker logs <container> --tail 100")
     print("")
     print("# Force next check to run now")
-    print("UPDATE system_health SET value = NOW()::TEXT WHERE key = 'next_check_at';")
+    print(
+        "UPDATE system_metrics SET metric_value = NOW()::TEXT WHERE metric_key = 'next_check_at';"
+    )
     print("")
     print("# Reset scheduler interval")
     print(
-        "UPDATE system_health SET value = '15' WHERE key = 'scheduler_current_interval';"
+        "UPDATE system_metrics SET metric_value = '15' WHERE metric_key = 'scheduler_current_interval';"
     )
     print("")
     print("# Recalculate active hours (if bot is running)")

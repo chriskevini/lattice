@@ -53,7 +53,7 @@ async def _get_last_batch_id(conn: Any) -> str:
         The last batch message ID as a string, or "0" if not set
     """
     row = await conn.fetchrow(
-        "SELECT metric_value FROM system_health WHERE metric_key = 'last_batch_message_id'"
+        "SELECT metric_value FROM system_metrics WHERE metric_key = 'last_batch_message_id'"
     )
     return row["metric_value"] if row else "0"
 
@@ -66,7 +66,7 @@ async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
         batch_id: The new batch ID to set
     """
     await conn.execute(
-        "UPDATE system_health SET metric_value = $1 WHERE metric_key = 'last_batch_message_id'",
+        "UPDATE system_metrics SET metric_value = $1 WHERE metric_key = 'last_batch_message_id'",
         batch_id,
     )
 

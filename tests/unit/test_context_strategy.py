@@ -10,16 +10,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from lattice.core.context import ContextCache, ContextStrategy
 from lattice.core.context_strategy import (
-    _merge_deduplicate,
     build_smaller_episodic_context,
     context_strategy,
-    get_context_strategy,
-    get_message_strategy,
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
-from lattice.utils.context import InMemoryContextCache
 from lattice.utils.llm import AuditResult
 
 
@@ -36,9 +33,9 @@ def mock_prompt_template() -> PromptTemplate:
 
 
 @pytest.fixture
-def context_cache() -> InMemoryContextCache:
+def context_cache() -> ContextCache:
     """Create a fresh context cache for each test."""
-    cache = InMemoryContextCache(ttl=10)
+    cache = ContextCache(ttl=10)
     return cache
 
 
@@ -90,7 +87,7 @@ class TestContextStrategyFunction:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-        context_cache: InMemoryContextCache,
+        context_cache: ContextCache,
     ) -> None:
         """Test successful context strategy."""
         message_id = uuid.uuid4()
@@ -138,14 +135,12 @@ class TestContextStrategyFunction:
                 context_cache=context_cache,
             )
 
-            assert strategy.message_id == message_id
             assert strategy.entities == ["lattice project", "Friday"]
             assert strategy.context_flags == ["goal_context"]
-            assert strategy.strategy_method == "api"
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_prompt_template(
-        self, context_cache: InMemoryContextCache
+        self, context_cache: ContextCache
     ) -> None:
         """Test context strategy with missing prompt template."""
         message_id = uuid.uuid4()
@@ -165,6 +160,7 @@ class TestContextStrategyFunction:
                     recent_messages=[],
                     discord_message_id=12345,
                     context_cache=context_cache,
+                    llm_client=AsyncMock(),
                 )
 
     @pytest.mark.asyncio
@@ -172,7 +168,7 @@ class TestContextStrategyFunction:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-        context_cache: InMemoryContextCache,
+        context_cache: ContextCache,
     ) -> None:
         """Test context strategy with invalid JSON response."""
         message_id = uuid.uuid4()
@@ -217,124 +213,6 @@ class TestContextStrategyFunction:
                     llm_client=mock_client,
                     context_cache=context_cache,
                 )
-
-    @pytest.mark.asyncio
-    async def test_context_strategy_missing_required_fields(
-        self,
-        mock_prompt_template: PromptTemplate,
-        context_cache: InMemoryContextCache,
-    ) -> None:
-        """Test context strategy with missing required fields."""
-        message_id = uuid.uuid4()
-        mock_result = AuditResult(
-            content="{}",
-            model="test",
-            provider=None,
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
-            cost_usd=None,
-            latency_ms=0,
-            temperature=0.0,
-            audit_id=None,
-            prompt_key="CONTEXT_STRATEGY",
-        )
-
-        mock_conn = AsyncMock()
-        mock_pool = _create_mock_pool(mock_conn)
-
-        with (
-            patch(
-                "lattice.core.context_strategy.get_prompt",
-                return_value=mock_prompt_template,
-            ),
-            patch(
-                "lattice.memory.canonical.get_canonical_entities_list",
-                return_value=[],
-            ),
-            patch(
-                "lattice.core.context_strategy.parse_llm_json_response",
-                return_value={"entities": []},
-            ),
-        ):
-            mock_client = AsyncMock()
-            mock_client.complete = AsyncMock(return_value=mock_result)
-
-            with pytest.raises(ValueError, match="Missing required field"):
-                await context_strategy(
-                    db_pool=mock_pool,
-                    message_id=message_id,
-                    user_message="Test message",
-                    recent_messages=[],
-                    discord_message_id=12345,
-                    llm_client=mock_client,
-                    context_cache=context_cache,
-                )
-
-
-class TestGetContextStrategy:
-    """Tests for the get_context_strategy function."""
-
-    @pytest.mark.asyncio
-    async def test_get_context_strategy_success(self) -> None:
-        """Test retrieving a context strategy by ID."""
-        strategy_id = uuid.uuid4()
-        message_id = uuid.uuid4()
-
-        mock_row = {
-            "id": strategy_id,
-            "message_id": message_id,
-            "strategy": {
-                "entities": ["Alice", "yesterday"],
-                "context_flags": ["goal_context"],
-                "unresolved_entities": [],
-            },
-            "rendered_prompt": "test prompt",
-            "raw_response": "test response",
-            "created_at": get_now(timezone_str="UTC"),
-        }
-
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-        mock_pool = _create_mock_pool(mock_conn)
-
-        strategy = await get_context_strategy(
-            db_pool=mock_pool, strategy_id=strategy_id
-        )
-
-        assert strategy is not None
-        assert strategy.id == strategy_id
-        assert strategy.entities == ["Alice", "yesterday"]
-        assert strategy.context_flags == ["goal_context"]
-
-    @pytest.mark.asyncio
-    async def test_get_message_strategy_success(self) -> None:
-        """Test retrieving a strategy by message ID."""
-        strategy_id = uuid.uuid4()
-        message_id = uuid.uuid4()
-
-        mock_row = {
-            "id": strategy_id,
-            "message_id": message_id,
-            "strategy": {
-                "entities": ["marathon"],
-                "context_flags": [],
-                "unresolved_entities": [],
-            },
-            "rendered_prompt": "test prompt",
-            "raw_response": "test response",
-            "created_at": get_now(timezone_str="UTC"),
-        }
-
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-        mock_pool = _create_mock_pool(mock_conn)
-
-        strategy = await get_message_strategy(db_pool=mock_pool, message_id=message_id)
-
-        assert strategy is not None
-        assert strategy.message_id == message_id
-        assert strategy.entities == ["marathon"]
 
 
 class TestBuildSmallerEpisodicContext:
@@ -381,41 +259,7 @@ class TestBuildSmallerEpisodicContext:
         assert "USER: Hello there" in context
 
 
-class TestMergeDeduplicate:
-    """Tests for the _merge_deduplicate function."""
-
-    def test_merge_deduplicate_empty(self) -> None:
-        """Test merging empty lists."""
-        result = _merge_deduplicate([], [])
-        assert result == []
-
-    def test_merge_deduplicate_cached_only(self) -> None:
-        """Test with only cached items."""
-        result = _merge_deduplicate(["a", "b", "c"], [])
-        assert result == ["a", "b", "c"]
-
-    def test_merge_deduplicate_fresh_only(self) -> None:
-        """Test with only fresh items."""
-        result = _merge_deduplicate([], ["x", "y"])
-        assert result == ["x", "y"]
-
-    def test_merge_deduplicate_no_overlap(self) -> None:
-        """Test merging with no overlap."""
-        result = _merge_deduplicate(["a", "b"], ["x", "y"])
-        assert result == ["a", "b", "x", "y"]
-
-    def test_merge_deduplicate_with_overlap(self) -> None:
-        """Test merging with overlapping items."""
-        result = _merge_deduplicate(["a", "b", "c"], ["b", "d"])
-        assert result == ["a", "b", "c", "d"]
-
-    def test_merge_deduplicate_order_preserved(self) -> None:
-        """Test that order is preserved with cached first."""
-        result = _merge_deduplicate(["z", "a", "m"], ["a", "z", "b"])
-        assert result == ["z", "a", "m", "b"]
-
-
-class TestInMemoryContextCache:
+class TestContextCacheIntegration:
     """Tests for in-memory context cache integration via context_strategy."""
 
     @pytest.mark.asyncio
@@ -423,7 +267,7 @@ class TestInMemoryContextCache:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-        context_cache: InMemoryContextCache,
+        context_cache: ContextCache,
     ) -> None:
         """Test that context strategy merges with cached context."""
         message_id = uuid.uuid4()
@@ -500,70 +344,40 @@ class TestInMemoryContextCache:
                 assert "weekend" in strategy_2.entities
 
 
-class TestInMemoryContextCacheDirect:
-    """Unit tests for InMemoryContextCache TTL and basic operations."""
+class TestContextCacheDirect:
+    """Unit tests for ContextCache TTL and basic operations."""
 
     def test_cache_ttl_expiration(self) -> None:
         """Test that entries expire after TTL advances."""
-        cache = InMemoryContextCache(ttl=2)
+        cache = ContextCache(ttl=2)
 
         cache.advance()
-        cache.add(1, ["entity1"], ["flag1"], [])
+        cache.update(1, ContextStrategy(entities=["entity1"], context_flags=["flag1"]))
 
-        entities, flags, unresolved = cache.get_active(1)
-        assert entities == ["entity1"]
-        assert flags == ["flag1"]
-
-        cache.advance()
-        entities, flags, unresolved = cache.get_active(1)
-        assert entities == ["entity1"]
-        assert flags == ["flag1"]
+        strategy = cache.get_active(1)
+        assert strategy.entities == ["entity1"]
+        assert strategy.context_flags == ["flag1"]
 
         cache.advance()
-        cache.advance()
-        entities, flags, unresolved = cache.get_active(1)
-        assert entities == []
-        assert flags == []
-
-    def test_cache_prune_expired(self) -> None:
-        """Test that prune_expired removes expired entries."""
-        cache = InMemoryContextCache(ttl=2)
-
-        cache.advance()
-        cache.add(1, ["entity1"], [], [])
-        cache.advance()
-        cache.add(2, ["entity2"], [], [])
-
-        assert cache.get_active(1)[0] == ["entity1"]
-        assert cache.get_active(2)[0] == ["entity2"]
+        strategy = cache.get_active(1)
+        assert strategy.entities == ["entity1"]
+        assert strategy.context_flags == ["flag1"]
 
         cache.advance()
         cache.advance()
-        cache.advance()
-        cache.prune_expired()
-
-        assert cache.get_active(1) == ([], [], [])
-        assert cache.get_active(2) == ([], [], [])
+        strategy = cache.get_active(1)
+        assert strategy.entities == []
+        assert strategy.context_flags == []
 
     def test_cache_clear(self) -> None:
         """Test that clear resets cache and counter."""
-        cache = InMemoryContextCache(ttl=10)
+        cache = ContextCache(ttl=10)
 
         cache.advance()
         cache.advance()
-        cache.add(1, ["entity"], [], [])
+        cache.update(1, ContextStrategy(entities=["entity"]))
 
         cache.clear()
 
-        assert cache.get_active(1) == ([], [], [])
+        assert cache.get_active(1).entities == []
         assert cache.get_stats()["message_counter"] == 0
-
-    def test_cache_get_entities_convenience(self) -> None:
-        """Test the get_entities convenience method."""
-        cache = InMemoryContextCache(ttl=10)
-
-        cache.advance()
-        cache.add(1, ["entity1", "entity2"], [], [])
-
-        entities = cache.get_entities(1)
-        assert entities == ["entity1", "entity2"]

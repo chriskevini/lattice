@@ -262,6 +262,9 @@ class MessageHandler:
         )
 
         try:
+            # Increment global message counter for context TTL
+            self.context_cache.advance()
+
             # Store user message in memory
             user_message_id = await memory_orchestrator.store_user_message(
                 content=message.content,

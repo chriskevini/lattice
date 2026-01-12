@@ -10,10 +10,10 @@ from lattice.utils.config import get_config
 from lattice.utils.database import (
     DatabasePool,
     get_next_check_at,
-    get_system_health,
+    get_system_metrics,
     get_user_timezone,
     set_next_check_at,
-    set_system_health,
+    set_system_metrics,
 )
 from lattice.utils.date_resolution import (
     DateRange,
@@ -170,43 +170,45 @@ class TestDatabasePool:
         assert result == mock_pool
 
 
-class TestSystemHealthFunctions:
-    """Tests for system health database functions."""
+class TestSystemMetricsFunctions:
+    """Tests for system metrics database functions."""
 
     @pytest.mark.asyncio
-    async def test_get_system_health_success(self) -> None:
-        """Test get_system_health retrieves value from database."""
+    async def test_get_system_metrics_success(self) -> None:
+        """Test get_system_metrics retrieves value from database."""
         mock_conn = AsyncMock()
         mock_conn.fetchval = AsyncMock(return_value="test_value")
         mock_pool = AsyncMock()
         mock_pool.pool.acquire.return_value.__aenter__.return_value = mock_conn
 
         mock_db_pool = AsyncMock()
-        mock_db_pool.get_system_health = AsyncMock(return_value="test_value")
+        mock_db_pool.get_system_metrics = AsyncMock(return_value="test_value")
 
-        result = await get_system_health("test_key", db_pool=mock_db_pool)
+        result = await get_system_metrics("test_key", db_pool=mock_db_pool)
 
         assert result == "test_value"
 
     @pytest.mark.asyncio
-    async def test_get_system_health_not_found(self) -> None:
-        """Test get_system_health returns None when key not found."""
+    async def test_get_system_metrics_not_found(self) -> None:
+        """Test get_system_metrics returns None when key not found."""
         mock_db_pool = AsyncMock()
-        mock_db_pool.get_system_health = AsyncMock(return_value=None)
+        mock_db_pool.get_system_metrics = AsyncMock(return_value=None)
 
-        result = await get_system_health("nonexistent_key", db_pool=mock_db_pool)
+        result = await get_system_metrics("nonexistent_key", db_pool=mock_db_pool)
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_set_system_health_success(self) -> None:
-        """Test set_system_health inserts or updates value in database."""
+    async def test_set_system_metrics_success(self) -> None:
+        """Test set_system_metrics inserts or updates value in database."""
         mock_db_pool = AsyncMock()
-        mock_db_pool.set_system_health = AsyncMock()
+        mock_db_pool.set_system_metrics = AsyncMock()
 
-        await set_system_health("test_key", "test_value", db_pool=mock_db_pool)
+        await set_system_metrics("test_key", "test_value", db_pool=mock_db_pool)
 
-        mock_db_pool.set_system_health.assert_called_once_with("test_key", "test_value")
+        mock_db_pool.set_system_metrics.assert_called_once_with(
+            "test_key", "test_value"
+        )
 
 
 class TestNextCheckAtFunctions:

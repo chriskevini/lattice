@@ -21,6 +21,8 @@ from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
 from lattice.utils.database import get_user_timezone
 from lattice.core.context import ContextCache
+
+# from lattice.core.context import ContextStrategy # temporarily commented for test
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -74,6 +76,7 @@ class LatticeBot(commands.Bot):
         self._user_timezone: str = "UTC"
 
         # Initialize handlers
+        logger.debug("Initializing handlers")
         self._message_handler = MessageHandler(
             bot=self,
             main_channel_id=self.main_channel_id,
@@ -212,10 +215,11 @@ class LatticeBot(commands.Bot):
         from lattice.memory import episodic
         from lattice.core.context_strategy import context_strategy
 
-        # Get recent messages from main channel
+        # Get recent messages from main channel to rebuild context cache
+        # We take a slightly larger window than the strategy window to ensure we have history
         recent_msgs = await episodic.get_recent_messages(
             channel_id=self.main_channel_id,
-            limit=5,
+            limit=10,
             db_pool=self.db_pool,
         )
 
@@ -223,21 +227,37 @@ class LatticeBot(commands.Bot):
             logger.info("No recent messages found for pre-warming")
             return
 
-        # Use the most recent message to run a catch-up strategy
-        # This will populate entities from the last window into RAM
-        last_msg = recent_msgs[0]
+        # Ensure database pool is initialized before starting pre-warming
+        if not self.db_pool.is_initialized():
+            logger.warning("Database pool not initialized during pre-warming, skipping")
+            return
+
         try:
-            await context_strategy(
-                db_pool=self.db_pool,
-                message_id=last_msg.message_id,
-                user_message=last_msg.content,
-                recent_messages=recent_msgs[1:],  # history
-                context_cache=self.context_cache,
-                user_timezone=self._user_timezone,
-                discord_message_id=last_msg.discord_message_id,
-                llm_client=self.llm_client,
-                bot=self,
-            )
+            # Replay the last few messages sequentially to populate the cache
+            # This simulates the bot having been online for these messages
+            # get_recent_messages returns oldest first (already chronological)
+
+            # We want to process them in a way that building up the cache
+            # For each message, we treat it as a new incoming message
+            for i in range(1, len(recent_msgs)):
+                history = recent_msgs[:i]
+                current = recent_msgs[i]
+
+                if current.message_id is None:
+                    continue
+
+                await context_strategy(
+                    db_pool=self.db_pool,
+                    message_id=current.message_id,
+                    user_message=current.content,
+                    recent_messages=history,
+                    context_cache=self.context_cache,
+                    user_timezone=self._user_timezone,
+                    discord_message_id=current.discord_message_id,
+                    llm_client=self.llm_client,
+                    bot=self,
+                )
+
             logger.info(
                 "Context cache pre-warmed",
                 cached_stats=self.context_cache.get_stats()

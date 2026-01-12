@@ -544,7 +544,7 @@ After processing this single message:
 **objectives**: 1 upserted objective
 - "Build AI projects using Python" (saliency: 0.7)
 
-**system_health**: 1 updated metric
+**system_metrics**: 1 updated metric
 - `scheduled_next_proactive` = "2025-01-15T13:30:00Z" (3 hours from now)
 
 ### In-Memory State:
