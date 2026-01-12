@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
-    from lattice.core.context import ContextCache
+    from lattice.core.context import ContextCache, UserContextCache
 
 from lattice.core import memory_orchestrator, response_generator
 
@@ -52,6 +52,7 @@ class MessageHandler:
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
         context_cache: "ContextCache",
+        user_context_cache: "UserContextCache",
         user_timezone: str = "UTC",
     ) -> None:
         """Initialize the message handler.
@@ -62,8 +63,9 @@ class MessageHandler:
             dream_channel_id: ID of the dream channel (meta discussions)
             db_pool: Database pool for dependency injection
             llm_client: LLM client for dependency injection
-            user_timezone: The user's timezone
             context_cache: In-memory context cache for dependency injection
+            user_context_cache: User-level cache for goals/activities
+            user_timezone: The user's timezone
         """
         self.bot = bot
         self.main_channel_id = main_channel_id
@@ -72,6 +74,7 @@ class MessageHandler:
         self.llm_client = llm_client
         self.user_timezone = user_timezone
         self.context_cache = context_cache
+        self.user_context_cache = user_context_cache
         self._memory_healthy = False
         self._consecutive_failures = 0
         self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
@@ -90,7 +93,10 @@ class MessageHandler:
             from lattice.scheduler.nudges import prepare_contextual_nudge
 
             nudge_plan = await prepare_contextual_nudge(
-                db_pool=self.db_pool, llm_client=self.llm_client, bot=self.bot
+                db_pool=self.db_pool,
+                llm_client=self.llm_client,
+                user_context_cache=self.user_context_cache,
+                bot=self.bot,
             )
 
             if nudge_plan.content and nudge_plan.channel_id:

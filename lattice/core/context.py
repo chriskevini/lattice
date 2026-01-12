@@ -190,3 +190,56 @@ class ContextCache:
                 ctx.message_counter for ctx in self._cache.values()
             ),
         }
+
+
+@dataclass
+class UserContextCache:
+    """User-level cache for goals and activities with time-based TTL."""
+
+    def __init__(self, ttl_minutes: int = 30) -> None:
+        self.ttl = ttl_minutes
+        self._goals: dict[str, tuple[str, datetime]] = {}
+        self._activities: dict[str, tuple[str, datetime]] = {}
+
+    def get_goals(self, user_id: str) -> str | None:
+        """Get cached goals for user, or None if expired/missing."""
+        if user_id not in self._goals:
+            return None
+        content, cached_at = self._goals[user_id]
+        if self._is_expired(cached_at):
+            del self._goals[user_id]
+            return None
+        return content
+
+    def set_goals(self, user_id: str, content: str) -> None:
+        """Cache goals for user."""
+        self._goals[user_id] = (content, datetime.now())
+
+    def get_activities(self, user_id: str) -> str | None:
+        """Get cached activities for user, or None if expired/missing."""
+        if user_id not in self._activities:
+            return None
+        content, cached_at = self._activities[user_id]
+        if self._is_expired(cached_at):
+            del self._activities[user_id]
+            return None
+        return content
+
+    def set_activities(self, user_id: str, content: str) -> None:
+        """Cache activities for user."""
+        self._activities[user_id] = (content, datetime.now())
+
+    def _is_expired(self, cached_at: datetime) -> bool:
+        return (datetime.now() - cached_at).total_seconds() > self.ttl * 60
+
+    def clear(self) -> None:
+        """Clear all cached user context."""
+        self._goals.clear()
+        self._activities.clear()
+
+    def get_stats(self) -> dict[str, int]:
+        return {
+            "cached_users": len(set(self._goals.keys()) | set(self._activities.keys())),
+            "cached_goals": len(self._goals),
+            "cached_activities": len(self._activities),
+        }
