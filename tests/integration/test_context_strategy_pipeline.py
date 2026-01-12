@@ -151,13 +151,14 @@ class TestContextStrategyPipeline:
                 )
 
                 extraction = await context_strategy(
+                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=[],
-                    llm_client=extraction_llm,
-                    db_pool=db_pool,
                     context_cache=context_cache,
-                    discord_message_id=channel_id,
+                    channel_id=channel_id,
+                    discord_message_id=12345,
+                    llm_client=extraction_llm,
                 )
 
                 assert extraction is not None
@@ -262,13 +263,14 @@ class TestContextStrategyPipeline:
                     )
                 recent_messages: list[episodic.EpisodicMessage] = []
                 planning = await context_strategy(
+                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=recent_messages,
-                    llm_client=planning_llm,
-                    db_pool=db_pool,
                     context_cache=context_cache,
+                    channel_id=channel_id,
                     discord_message_id=channel_id,
+                    llm_client=planning_llm,
                 )
 
             assert planning is not None
@@ -371,12 +373,13 @@ class TestContextStrategyPipeline:
                 ]
 
                 planning = await context_strategy(
+                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=recent_messages,
-                    llm_client=planning_llm,
-                    db_pool=db_pool,
                     context_cache=context_cache,
+                    channel_id=67890,
+                    llm_client=planning_llm,
                 )
 
             assert planning is not None
@@ -396,11 +399,12 @@ class TestContextStrategyPipeline:
 
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
                 await context_strategy(
+                    db_pool=AsyncMock(),
                     message_id=uuid.uuid4(),
                     user_message="Test message",
                     recent_messages=[],
-                    db_pool=AsyncMock(),
                     context_cache=context_cache,
+                    channel_id=123,
                     discord_message_id=123,
                 )
 
@@ -449,13 +453,14 @@ class TestContextStrategyPipeline:
             planning_llm.complete.return_value = planning_result
 
             planning = await context_strategy(
+                db_pool=AsyncMock(),
                 message_id=message_id,
                 user_message="Test message",
                 recent_messages=[],
-                llm_client=planning_llm,
-                db_pool=AsyncMock(),
                 context_cache=context_cache,
+                channel_id=channel_id,
                 discord_message_id=channel_id,
+                llm_client=planning_llm,
             )
 
             assert planning is not None
