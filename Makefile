@@ -177,11 +177,11 @@ bump-version: ## Bump version using commitizen
 # ============================================================================
 
 init-db: ## Initialize database schema and seed data
-	docker compose -f docker-compose.base.yml exec bot python scripts/init_db.py
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml exec bot python scripts/init_db.py
 
 nuke-db: ## Nuke and reinitialize the database (removes all data)
-	docker compose -f docker-compose.base.yml down -v
-	docker compose -f docker-compose.base.yml up -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d
 	$(MAKE) init-db
 
 migrate: ## Run database migrations

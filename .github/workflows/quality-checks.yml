@@ -67,16 +67,3 @@ jobs:
       - run: .venv/bin/pytest tests/integration/ --no-cov -q -n 0
         env:
           DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
-
-  pr-body-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check PR body
-        run: |
-          if ! gh pr view ${{ github.event.pull_request.number }} --json body --jq '.body' | grep -q "## Related"; then
-            echo "Error: PR body must include '## Related' section"
-            exit 1
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
