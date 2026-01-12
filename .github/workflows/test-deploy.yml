@@ -37,6 +37,24 @@ jobs:
           echo "✓ Dockerfile builds successfully"
           docker images test-build:latest
 
+      - name: Create test .env file for validation
+        run: |
+          echo "Creating test .env file..."
+          cat > .env <<EOF
+          BOT_IMAGE=test-build:latest
+          POSTGRES_USER=test_user
+          POSTGRES_PASSWORD=test_password
+          POSTGRES_DB=test_db
+          POSTGRES_PORT=5432
+          DISCORD_TOKEN=test_token
+          DISCORD_GUILD_ID=test_guild
+          DISCORD_MAIN_CHANNEL_ID=test_channel
+          DISCORD_DREAM_CHANNEL_ID=test_dream_channel
+          OPENROUTER_API_KEY=test_key
+          LLM_PROVIDER=placeholder
+          EOF
+          echo "✓ Test .env file created"
+
       - name: Verify image size
         run: |
           SIZE=$(docker images test-build:latest --format "{{.Size}}")
