@@ -89,15 +89,11 @@ class MessageHandler:
 
             from lattice.scheduler.nudges import prepare_contextual_nudge
 
-            decision = await prepare_contextual_nudge(
+            nudge_plan = await prepare_contextual_nudge(
                 db_pool=self.db_pool, llm_client=self.llm_client, bot=self.bot
             )
 
-            if (
-                decision.action == "message"
-                and decision.content
-                and decision.channel_id
-            ):
+            if nudge_plan.content and nudge_plan.channel_id:
                 from lattice.core.pipeline import UnifiedPipeline
 
                 pipeline = UnifiedPipeline(
@@ -107,13 +103,61 @@ class MessageHandler:
                     llm_client=self.llm_client,
                 )
                 result = await pipeline.dispatch_autonomous_nudge(
-                    content=decision.content,
-                    channel_id=decision.channel_id,
+                    content=nudge_plan.content,
+                    channel_id=nudge_plan.channel_id,
                 )
 
                 if result:
                     logger.info(
-                        "Sent contextual nudge", content_preview=decision.content[:50]
+                        "Sent contextual nudge", content_preview=nudge_plan.content[:50]
+                    )
+
+                    message_id = await self.memory_orchestrator.store_bot_message(
+                        content=nudge_plan.content,
+                        discord_message_id=result.id,
+                        channel_id=result.channel.id,
+                        is_bot=True,
+                        is_proactive=True,
+                        user_timezone=self.user_timezone,
+                    )
+
+                    # Audit trail
+                    if nudge_plan.rendered_prompt:
+                        from lattice.memory import prompt_audits
+
+                        await prompt_audits.store_prompt_audit(
+                            db_pool=self.db_pool,
+                            prompt_key="CONTEXTUAL_NUDGE",
+                            rendered_prompt=nudge_plan.rendered_prompt,
+                            response_content=result.content,
+                            main_discord_message_id=result.id,
+                            template_version=nudge_plan.template_version,
+                            message_id=message_id,
+                            model=nudge_plan.model,
+                            provider=nudge_plan.provider,
+                            prompt_tokens=nudge_plan.prompt_tokens,
+                            completion_tokens=nudge_plan.completion_tokens,
+                            cost_usd=nudge_plan.cost_usd,
+                            latency_ms=nudge_plan.latency_ms,
+                        )
+
+            if nudge.content and nudge.channel_id:
+                from lattice.core.pipeline import UnifiedPipeline
+
+                pipeline = UnifiedPipeline(
+                    db_pool=self.db_pool,
+                    bot=self.bot,
+                    context_cache=self.context_cache,
+                    llm_client=self.llm_client,
+                )
+                result = await pipeline.dispatch_autonomous_nudge(
+                    content=nudge.content,
+                    channel_id=nudge.channel_id,
+                )
+
+                if result:
+                    logger.info(
+                        "Sent contextual nudge", content_preview=nudge.content[:50]
                     )
                     # Store in episodic memory
                     message_id = await episodic.store_message(
@@ -129,26 +173,26 @@ class MessageHandler:
                     )
 
                     # Audit trail
-                    if decision.rendered_prompt:
+                    if nudge.rendered_prompt:
                         from lattice.memory import prompt_audits
 
                         await prompt_audits.store_prompt_audit(
                             db_pool=self.db_pool,
                             prompt_key="CONTEXTUAL_NUDGE",
-                            rendered_prompt=decision.rendered_prompt,
+                            rendered_prompt=nudge.rendered_prompt,
                             response_content=result.content,
                             main_discord_message_id=result.id,
-                            template_version=decision.template_version,
+                            template_version=nudge.template_version,
                             message_id=message_id,
-                            model=decision.model,
-                            provider=decision.provider,
-                            prompt_tokens=decision.prompt_tokens,
-                            completion_tokens=decision.completion_tokens,
-                            cost_usd=decision.cost_usd,
-                            latency_ms=decision.latency_ms,
+                            model=nudge.model,
+                            provider=nudge.provider,
+                            prompt_tokens=nudge.prompt_tokens,
+                            completion_tokens=nudge.completion_tokens,
+                            cost_usd=nudge.cost_usd,
+                            latency_ms=nudge.latency_ms,
                         )
             else:
-                logger.info("Silence strategy: wait", reason=decision.reason)
+                logger.info("Silence strategy: wait")
         except asyncio.CancelledError:
             logger.debug("Contextual nudge cancelled by new user message")
         except Exception:
