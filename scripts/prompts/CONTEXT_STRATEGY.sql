@@ -36,6 +36,10 @@ Return ONLY valid JSON.
 Output:
 {"entities": ["report", "2026-01-09"], "context_flags": [], "unresolved_entities": []}
 
+[2026-01-09 10:00] USER: "my mom loves cooking."
+Output:
+{"entities": ["Mother", "cooking"], "context_flags": [], "unresolved_entities": []}
+
 [2026-01-09 14:30] USER: "what do i need to do this week?"
 Output:
 {"entities": [], "context_flags": ["goal_context"], "unresolved_entities": []}
