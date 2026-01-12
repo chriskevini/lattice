@@ -5,6 +5,7 @@ Renamed from test_query_extraction.py to match context_strategy.py module.
 
 import json
 import uuid
+from datetime import datetime
 from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -352,6 +353,62 @@ class TestChannelContextCacheDirect:
         assert context_cache.get_stats()["cached_channels"] == 0
 
 
+class TestChannelContextCachePersistence:
+    """Tests for ChannelContextCache persistence roundtrip."""
+
+    @pytest.mark.asyncio
+    async def test_persistence_roundtrip(self, context_cache) -> None:
+        """Test that cache data survives clear and reload."""
+        context_cache.ttl = 10
+        mock_pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        mock_conn.fetch.return_value = [
+            {
+                "target_id": "123",
+                "data": json.dumps(
+                    {
+                        "entities": {"test_entity": 1},
+                        "context_flags": {"test_flag": 1},
+                        "unresolved_entities": {},
+                        "message_counter": 1,
+                        "created_at": "2026-01-12T00:00:00",
+                    }
+                ),
+                "updated_at": datetime.now(),
+            }
+        ]
+
+        stats_before = context_cache.get_stats()
+        assert stats_before["cached_channels"] == 0
+
+        with patch.object(ChannelContextCache, "_persist", new_callable=AsyncMock):
+            await context_cache.update(
+                mock_pool,
+                123,
+                ContextStrategy(entities=["test_entity"], context_flags=["test_flag"]),
+            )
+            await context_cache.advance(mock_pool, 123)
+
+        stats_after_update = context_cache.get_stats()
+        assert stats_after_update["cached_channels"] == 1
+
+        context_cache.clear()
+        assert context_cache.get_stats()["cached_channels"] == 0
+
+        await context_cache.load_from_db(mock_pool)
+        stats_reloaded = context_cache.get_stats()
+        assert stats_reloaded["cached_channels"] == 1
+
+        strategy = context_cache.get_active(123)
+        assert "test_entity" in strategy.entities
+        assert "test_flag" in strategy.context_flags
+
+
 class TestUserContextCache:
     """Unit tests for UserContextCache TTL and basic operations."""
 
@@ -387,7 +444,7 @@ class TestUserContextCache:
     @pytest.mark.asyncio
     async def test_goals_ttl_expiration(self, user_context_cache) -> None:
         """Test that goals expire after TTL."""
-        user_context_cache.ttl = 1 / 60  # 1 second
+        user_context_cache.ttl = 1.0 / 60.0  # 1 second (TTL is in minutes)
         mock_pool = MagicMock()
 
         with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
@@ -403,7 +460,7 @@ class TestUserContextCache:
     @pytest.mark.asyncio
     async def test_activities_ttl_expiration(self, user_context_cache) -> None:
         """Test that activities expire after TTL."""
-        user_context_cache.ttl = 1 / 60  # 1 second
+        user_context_cache.ttl = 1.0 / 60.0  # 1 second (TTL is in minutes)
         mock_pool = MagicMock()
 
         with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
