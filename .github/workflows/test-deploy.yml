@@ -40,10 +40,13 @@ jobs:
       - name: Verify image size
         run: |
           SIZE=$(docker images test-build:latest --format "{{.Size}}")
-          echo "Image size: $SIZE bytes"
+          echo "Image size: $SIZE"
+          # Parse human-readable size to bytes (e.g., "500MB" -> 524288000)
+          SIZE_BYTES=$(echo "$SIZE" | sed 's/GB/*1024*1024*1024/;s/MB/*1024*1024/;s/KB/*1024/;s/B//' | bc)
+          echo "Image size: $SIZE_BYTES bytes"
           # Check if under 500MB (reasonable limit)
-          if [ "$SIZE" -gt 524288000 ]; then
-            echo "❌ Image too large: $(echo "scale=1; $SIZE/1048576" | bc) MB"
+          if [ "$SIZE_BYTES" -gt 524288000 ]; then
+            echo "❌ Image too large: $SIZE"
             exit 1
           fi
           echo "✓ Image size acceptable"
