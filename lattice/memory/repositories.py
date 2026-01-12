@@ -10,13 +10,10 @@ The repository pattern abstracts database access behind clean async interfaces,
 enabling dependency injection and future database portability.
 """
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, AsyncIterator, Protocol, TypeVar
+from typing import Any, Protocol
 from uuid import UUID
-
-
-T = TypeVar("T")
 
 
 class MessageRepository(Protocol):
@@ -233,3 +230,12 @@ class PostgresRepository(ABC):
             db_pool: asyncpg connection pool
         """
         self._db_pool = db_pool
+
+    @abstractmethod
+    async def get_entities_list(self) -> list[str]:
+        """Fetch all canonical entity names.
+
+        Returns:
+            List of entity names sorted by creation date (newest first)
+        """
+        ...
