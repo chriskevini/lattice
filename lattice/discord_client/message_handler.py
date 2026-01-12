@@ -143,7 +143,6 @@ class MessageHandler:
                         )
             else:
                 logger.info("Silence strategy: wait")
-                logger.info("Silence strategy: wait")
         except asyncio.CancelledError:
             logger.debug("Contextual nudge cancelled by new user message")
         except Exception:
