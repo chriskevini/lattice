@@ -59,6 +59,7 @@ class _LLMClient:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        timeout: int | None = None,
     ) -> GenerationResult:
         """Complete a prompt with the LLM.
 
@@ -66,6 +67,7 @@ class _LLMClient:
             prompt: The prompt to complete
             temperature: Sampling temperature (0.0-1.0)
             max_tokens: Maximum tokens to generate
+            timeout: Request timeout in seconds (default: config.openrouter_timeout)
 
         Returns:
             GenerationResult with content and metadata
@@ -73,7 +75,9 @@ class _LLMClient:
         if self.provider == "placeholder":
             return self._placeholder_complete(prompt, temperature)
         elif self.provider == "openrouter":
-            return await self._openrouter_complete(prompt, temperature, max_tokens)
+            return await self._openrouter_complete(
+                prompt, temperature, max_tokens, timeout
+            )
         else:
             msg = (
                 f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
@@ -144,6 +148,7 @@ class _LLMClient:
         prompt: str,
         temperature: float,
         max_tokens: int | None,
+        timeout: int | None,
     ) -> GenerationResult:
         """Complete using OpenRouter API.
 
@@ -151,6 +156,7 @@ class _LLMClient:
             prompt: The prompt to complete
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
+            timeout: Request timeout in seconds (default: config.openrouter_timeout)
 
         Returns:
             GenerationResult with content and metadata
@@ -178,7 +184,10 @@ class _LLMClient:
             msg = "OPENROUTER_API_KEY not set in environment"
             raise ValueError(msg)
 
-        model = config.openrouter_model
+        model_str = config.openrouter_model
+        model_list = [m.strip() for m in model_str.split(",") if m.strip()]
+        primary_model = model_list[0] if model_list else model_str
+        fallback_models = model_list[1:] if len(model_list) > 1 else []
 
         if self._client is None:
             self._client = openai.AsyncOpenAI(
@@ -186,13 +195,31 @@ class _LLMClient:
                 api_key=api_key,
             )
 
-        start_time = time.monotonic()
-        response = await self._client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens,
+        effective_timeout = (
+            timeout if timeout is not None else config.openrouter_timeout
         )
+
+        extra_body = None
+        if fallback_models:
+            extra_body = {
+                "models": [
+                    {"model": primary_model, "weight": 1},
+                    *[{"model": m, "weight": 0.5} for m in fallback_models],
+                ]
+            }
+
+        start_time = time.monotonic()
+        create_kwargs: dict[str, Any] = {
+            "model": primary_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "timeout": effective_timeout,
+        }
+        if extra_body:
+            create_kwargs["extra_body"] = extra_body
+
+        response = await self._client.chat.completions.create(**create_kwargs)
         latency_ms = int((time.monotonic() - start_time) * 1000)
 
         usage = response.usage
