@@ -30,17 +30,7 @@ class UserFeedback:
         audit_id: UUID | None = None,
         created_at: datetime | None = None,
     ) -> None:
-        """Initialize user feedback.
-
-        Args:
-            content: The feedback content
-            feedback_id: UUID of the feedback (auto-generated if None)
-            sentiment: Sentiment of feedback (positive/negative/neutral)
-            referenced_discord_message_id: ID of the bot message being replied to/quoted
-            user_discord_message_id: ID of the user's message containing the feedback
-            audit_id: UUID of the associated prompt audit
-            created_at: Timestamp (defaults to now)
-        """
+        """Initialize user feedback."""
         self.content = content
         self.feedback_id = feedback_id or uuid4()
         self.sentiment = sentiment
@@ -51,15 +41,7 @@ class UserFeedback:
 
 
 async def store_feedback(db_pool: Any, feedback: UserFeedback) -> UUID:
-    """Store user feedback in the database.
-
-    Args:
-        db_pool: Database pool for dependency injection
-        feedback: The feedback to store
-
-    Returns:
-        UUID of the stored feedback
-    """
+    """Store user feedback in the database."""
     async with db_pool.pool.acquire() as conn:
         row = await conn.fetchrow(
             """

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
-    from lattice.utils.context import InMemoryContextCache
+    from lattice.core.context import ContextCache
 
 from lattice.core import memory_orchestrator, response_generator
 
@@ -22,8 +22,8 @@ from lattice.core.constants import (
     CONTEXT_STRATEGY_WINDOW_SIZE,
     RESPONSE_EPISODIC_LIMIT,
 )
+from lattice.core.context import ContextStrategy
 from lattice.core.context_strategy import (
-    ContextStrategy,
     context_strategy,
     retrieve_context,
 )
@@ -51,7 +51,7 @@ class MessageHandler:
         dream_channel_id: int,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
-        context_cache: "InMemoryContextCache",
+        context_cache: "ContextCache",
         user_timezone: str = "UTC",
     ) -> None:
         """Initialize the message handler.
@@ -304,7 +304,6 @@ class MessageHandler:
                         entity_count=len(strategy.entities),
                         context_flags=strategy.context_flags,
                         unresolved_entities=strategy.unresolved_entities,
-                        strategy_id=str(strategy.id),
                     )
                 else:
                     logger.warning("Context strategy returned None")

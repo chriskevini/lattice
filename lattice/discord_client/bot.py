@@ -20,7 +20,7 @@ from lattice.discord_client.message_handler import MessageHandler
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
 from lattice.utils.database import get_user_timezone
-from lattice.utils.context import InMemoryContextCache
+from lattice.core.context import ContextCache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ class LatticeBot(commands.Bot):
         self,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
-        context_cache: InMemoryContextCache,
+        context_cache: ContextCache,
     ) -> None:
         """Initialize the Lattice bot."""
         intents = discord.Intents.default()
@@ -148,6 +148,9 @@ class LatticeBot(commands.Bot):
             logger.info("User timezone loaded", timezone=self._user_timezone)
             self._message_handler.user_timezone = self._user_timezone
 
+            # Pre-warm context cache
+            await self._pre_warm_context_cache()
+
             # Start dreaming cycle scheduler
             self._dreaming_scheduler = DreamingScheduler(
                 bot=self,
@@ -202,6 +205,47 @@ class LatticeBot(commands.Bot):
             result=result,
             params=params,
         )
+
+    async def _pre_warm_context_cache(self) -> None:
+        """Pre-warm the context cache from recent messages."""
+        logger.info("Pre-warming context cache")
+        from lattice.memory import episodic
+        from lattice.core.context_strategy import context_strategy
+
+        # Get recent messages from main channel
+        recent_msgs = await episodic.get_recent_messages(
+            channel_id=self.main_channel_id,
+            limit=5,
+            db_pool=self.db_pool,
+        )
+
+        if not recent_msgs:
+            logger.info("No recent messages found for pre-warming")
+            return
+
+        # Use the most recent message to run a catch-up strategy
+        # This will populate entities from the last window into RAM
+        last_msg = recent_msgs[0]
+        try:
+            await context_strategy(
+                db_pool=self.db_pool,
+                message_id=last_msg.message_id,
+                user_message=last_msg.content,
+                recent_messages=recent_msgs[1:],  # history
+                context_cache=self.context_cache,
+                user_timezone=self._user_timezone,
+                discord_message_id=last_msg.discord_message_id,
+                llm_client=self.llm_client,
+                bot=self,
+            )
+            logger.info(
+                "Context cache pre-warmed",
+                cached_stats=self.context_cache.get_stats()
+                if hasattr(self.context_cache, "get_stats")
+                else "done",
+            )
+        except Exception:
+            logger.exception("Failed to pre-warm context cache")
 
     async def close(self) -> None:
         """Clean up resources when shutting down."""
