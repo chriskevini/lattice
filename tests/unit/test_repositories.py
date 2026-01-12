@@ -118,7 +118,7 @@ class TestRepositoryImplementations:
                 generation_metadata: dict[str, Any] | None = None,
                 user_timezone: str | None = None,
             ) -> UUID:
-                return UUID("test-uuid")
+                return UUID("12345678-1234-1234-1234-123456789abc")
 
             async def get_recent_messages(
                 self,
@@ -146,6 +146,7 @@ class TestRepositoryImplementations:
             is_bot=False,
         )
         assert isinstance(result, UUID)
+        assert str(result) == "12345678-1234-1234-1234-123456789abc"
 
     @pytest.mark.asyncio
     async def test_canonical_repository_implementation(self) -> None:
