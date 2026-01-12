@@ -38,7 +38,7 @@ jobs:
               echo "Rollback health check passed!"
               exit 0
             fi
-              echo "Retrying health check ($i/10)..."
+            echo "Retrying health check ($i/10)..."
             sleep 5
           done
           echo "Rollback health check failed!"
