@@ -25,8 +25,16 @@ jobs:
           # Update .env with rollback image tag
           sed -i "s|BOT_IMAGE=.*|BOT_IMAGE=ghcr.io/${{ github.repository }}/lattice-bot:${{ github.event.inputs.image_tag }}|g" .env
 
-          # Pull specified image
-          docker compose -f docker-compose.base.yml -f docker-compose.prod.yml pull
+          # Pull specified image, but continue if it fails (image may exist locally)
+          if ! docker compose -f docker-compose.base.yml -f docker-compose.prod.yml pull; then
+            echo "Warning: Pull failed, checking if image exists locally..."
+            IMAGE=$(grep "^BOT_IMAGE=" .env | cut -d'=' -f2)
+            if ! docker image inspect "$IMAGE" > /dev/null 2>&1; then
+              echo "Error: Image $IMAGE not found locally and pull failed"
+              exit 1
+            fi
+            echo "Image $IMAGE exists locally, continuing..."
+          fi
 
           # Restart with rolled back image
           docker compose -f docker-compose.base.yml -f docker-compose.prod.yml up -d --remove-orphans
