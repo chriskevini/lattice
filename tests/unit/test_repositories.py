@@ -4,7 +4,6 @@ Validates that repository protocols are correctly defined and that
 implementations can satisfy the protocol interfaces.
 """
 
-from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock
 from uuid import UUID
