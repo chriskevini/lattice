@@ -21,27 +21,13 @@ class TestMessageRepositoryProtocol:
 
         assert MessageRepository is not None
 
-    def test_protocol_has_store_message_method(self) -> None:
-        """Verify MessageRepository has store_message in protocol."""
+    def test_protocol_has_required_methods(self) -> None:
+        """Verify MessageRepository has all required methods."""
         from lattice.memory.repositories import MessageRepository
 
-        assert hasattr(MessageRepository, "__protocol_attrs__")
-        attrs = MessageRepository.__protocol_attrs__
-        assert "store_message" in attrs
-
-    def test_protocol_has_get_recent_messages_method(self) -> None:
-        """Verify MessageRepository has get_recent_messages in protocol."""
-        from lattice.memory.repositories import MessageRepository
-
-        attrs = MessageRepository.__protocol_attrs__
-        assert "get_recent_messages" in attrs
-
-    def test_protocol_has_store_semantic_memories_method(self) -> None:
-        """Verify MessageRepository has store_semantic_memories in protocol."""
-        from lattice.memory.repositories import MessageRepository
-
-        attrs = MessageRepository.__protocol_attrs__
-        assert "store_semantic_memories" in attrs
+        required = {"store_message", "get_recent_messages", "store_semantic_memories"}
+        for method in required:
+            assert hasattr(MessageRepository, method), f"Missing method: {method}"
 
 
 class TestSemanticMemoryRepositoryProtocol:
@@ -53,19 +39,15 @@ class TestSemanticMemoryRepositoryProtocol:
 
         assert SemanticMemoryRepository is not None
 
-    def test_protocol_has_find_memories_method(self) -> None:
-        """Verify SemanticMemoryRepository has find_memories in protocol."""
+    def test_protocol_has_required_methods(self) -> None:
+        """Verify SemanticMemoryRepository has all required methods."""
         from lattice.memory.repositories import SemanticMemoryRepository
 
-        attrs = SemanticMemoryRepository.__protocol_attrs__
-        assert "find_memories" in attrs
-
-    def test_protocol_has_traverse_from_entity_method(self) -> None:
-        """Verify SemanticMemoryRepository has traverse_from_entity in protocol."""
-        from lattice.memory.repositories import SemanticMemoryRepository
-
-        attrs = SemanticMemoryRepository.__protocol_attrs__
-        assert "traverse_from_entity" in attrs
+        required = {"find_memories", "traverse_from_entity"}
+        for method in required:
+            assert hasattr(SemanticMemoryRepository, method), (
+                f"Missing method: {method}"
+            )
 
 
 class TestCanonicalRepositoryProtocol:
@@ -91,9 +73,8 @@ class TestCanonicalRepositoryProtocol:
             "entity_exists",
             "predicate_exists",
         }
-        attrs = CanonicalRepository.__protocol_attrs__
         for method in required_methods:
-            assert method in attrs, f"Missing method: {method}"
+            assert hasattr(CanonicalRepository, method), f"Missing method: {method}"
 
 
 class TestRepositoryImplementations:
