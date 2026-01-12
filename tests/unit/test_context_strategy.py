@@ -19,7 +19,7 @@ from lattice.core.context_strategy import (
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
-from lattice.utils.context import reset_context_cache
+from lattice.utils.context import InMemoryContextCache
 from lattice.utils.llm import AuditResult
 
 
@@ -35,10 +35,11 @@ def mock_prompt_template() -> PromptTemplate:
     )
 
 
-@pytest.fixture(autouse=True)
-def reset_cache() -> None:
-    """Reset context cache before each test."""
-    reset_context_cache()
+@pytest.fixture
+def context_cache() -> InMemoryContextCache:
+    """Create a fresh context cache for each test."""
+    cache = InMemoryContextCache(ttl=10)
+    return cache
 
 
 @pytest.fixture
@@ -90,6 +91,7 @@ class TestContextStrategyFunction:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
+        context_cache: InMemoryContextCache,
     ) -> None:
         """Test successful context strategy."""
         message_id = uuid.uuid4()
@@ -135,6 +137,7 @@ class TestContextStrategyFunction:
                 user_message="I need to finish the lattice project by Friday",
                 recent_messages=recent_messages,
                 llm_client=mock_client,
+                context_cache=context_cache,
             )
 
             assert strategy.message_id == message_id
@@ -143,7 +146,9 @@ class TestContextStrategyFunction:
             assert strategy.strategy_method == "api"
 
     @pytest.mark.asyncio
-    async def test_context_strategy_missing_prompt_template(self) -> None:
+    async def test_context_strategy_missing_prompt_template(
+        self, context_cache: InMemoryContextCache
+    ) -> None:
         """Test context strategy with missing prompt template."""
         message_id = uuid.uuid4()
 
@@ -160,6 +165,7 @@ class TestContextStrategyFunction:
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    context_cache=context_cache,
                 )
 
     @pytest.mark.asyncio
@@ -167,6 +173,7 @@ class TestContextStrategyFunction:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
+        context_cache: InMemoryContextCache,
     ) -> None:
         """Test context strategy with invalid JSON response."""
         message_id = uuid.uuid4()
@@ -208,12 +215,14 @@ class TestContextStrategyFunction:
                     user_message="Test message",
                     recent_messages=[],
                     llm_client=mock_client,
+                    context_cache=context_cache,
                 )
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_required_fields(
         self,
         mock_prompt_template: PromptTemplate,
+        context_cache: InMemoryContextCache,
     ) -> None:
         """Test context strategy with missing required fields."""
         message_id = uuid.uuid4()
@@ -258,6 +267,7 @@ class TestContextStrategyFunction:
                     user_message="Test message",
                     recent_messages=[],
                     llm_client=mock_client,
+                    context_cache=context_cache,
                 )
 
 
@@ -412,13 +422,9 @@ class TestInMemoryContextCache:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
+        context_cache: InMemoryContextCache,
     ) -> None:
         """Test that context strategy merges with cached context."""
-        from lattice.utils.context import get_context_cache, reset_context_cache
-
-        reset_context_cache()
-        get_context_cache()
-
         message_id = uuid.uuid4()
         extraction_data = {
             "entities": ["project", "Friday"],
@@ -463,6 +469,7 @@ class TestInMemoryContextCache:
                 user_message="I need to finish by Friday",
                 recent_messages=recent_messages,
                 llm_client=mock_client,
+                context_cache=context_cache,
             )
 
             assert strategy.entities == ["project", "Friday"]
@@ -486,10 +493,9 @@ class TestInMemoryContextCache:
                     user_message="Planning for weekend",
                     recent_messages=recent_messages,
                     llm_client=mock_client,
+                    context_cache=context_cache,
                 )
 
                 assert "project" in strategy_2.entities
                 assert "Friday" in strategy_2.entities
                 assert "weekend" in strategy_2.entities
-
-            reset_context_cache()

@@ -47,16 +47,22 @@ class InMemoryContextCache:
         context_flags: list[str],
         unresolved_entities: list[str],
     ) -> None:
-        """Add extracted context for a channel, deduplicating existing entries."""
+        """Add extracted context for a channel, deduplicating against existing and within batch."""
         ctx = self._cache.setdefault(channel_id, ChannelContext())
+        seen_entities: set[str] = set(ctx.entities)
         for entity in entities:
-            if entity not in ctx.entities:
+            if entity not in seen_entities:
+                seen_entities.add(entity)
                 ctx.entities.append(entity)
+        seen_flags: set[str] = set(ctx.context_flags)
         for flag in context_flags:
-            if flag not in ctx.context_flags:
+            if flag not in seen_flags:
+                seen_flags.add(flag)
                 ctx.context_flags.append(flag)
+        seen_unresolved: set[str] = set(ctx.unresolved_entities)
         for entity in unresolved_entities:
-            if entity not in ctx.unresolved_entities:
+            if entity not in seen_unresolved:
+                seen_unresolved.add(entity)
                 ctx.unresolved_entities.append(entity)
         ctx.last_message_idx = self._message_counter
 
@@ -100,29 +106,6 @@ class InMemoryContextCache:
             "total_flags": sum(len(ctx.context_flags) for ctx in self._cache.values()),
             "message_counter": self._message_counter,
         }
-
-
-_context_cache: InMemoryContextCache | None = None
-
-
-def get_context_cache() -> InMemoryContextCache:
-    """Get the global context cache instance."""
-    global _context_cache
-    if _context_cache is None:
-        _context_cache = InMemoryContextCache(ttl=10)
-    return _context_cache
-
-
-def set_context_cache(cache: InMemoryContextCache) -> None:
-    """Set the global context cache instance (for testing)."""
-    global _context_cache
-    _context_cache = cache
-
-
-def reset_context_cache() -> None:
-    """Reset the global context cache (for testing)."""
-    global _context_cache
-    _context_cache = None
 
 
 def format_episodic_messages(messages: list["EpisodicMessage"]) -> str:

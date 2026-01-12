@@ -8,6 +8,7 @@ import pytest
 
 from lattice.discord_client.bot import LatticeBot
 from lattice.utils.config import get_config
+from lattice.utils.context import InMemoryContextCache
 
 
 class TestLatticeBot:
@@ -30,19 +31,33 @@ class TestLatticeBot:
         return MagicMock()
 
     @pytest.fixture
-    def bot(self, mock_db_pool, mock_llm_client) -> LatticeBot:
+    def mock_context_cache(self) -> InMemoryContextCache:
+        return InMemoryContextCache(ttl=10)
+
+    @pytest.fixture
+    def bot(self, mock_db_pool, mock_llm_client, mock_context_cache) -> LatticeBot:
         config = get_config()
         config.discord_main_channel_id = 123
         config.discord_dream_channel_id = 456
-        return LatticeBot(db_pool=mock_db_pool, llm_client=mock_llm_client)
+        return LatticeBot(
+            db_pool=mock_db_pool,
+            llm_client=mock_llm_client,
+            context_cache=mock_context_cache,
+        )
 
-    def test_bot_initialization(self, mock_db_pool, mock_llm_client) -> None:
+    def test_bot_initialization(
+        self, mock_db_pool, mock_llm_client, mock_context_cache
+    ) -> None:
         """Test bot initialization with default settings."""
         config = get_config()
         config.discord_main_channel_id = 123
         config.discord_dream_channel_id = 456
 
-        bot = LatticeBot(db_pool=mock_db_pool, llm_client=mock_llm_client)
+        bot = LatticeBot(
+            db_pool=mock_db_pool,
+            llm_client=mock_llm_client,
+            context_cache=mock_context_cache,
+        )
 
         assert bot.main_channel_id == 123
         assert bot.dream_channel_id == 456
@@ -51,13 +66,17 @@ class TestLatticeBot:
         assert bot._dreaming_scheduler is None
 
     def test_bot_initialization_missing_channels(
-        self, bot, mock_db_pool, mock_llm_client
+        self, bot, mock_db_pool, mock_llm_client, mock_context_cache
     ) -> None:
         """Test bot initialization with missing channel IDs logs warnings."""
         config = get_config()
         config.discord_main_channel_id = 0
         config.discord_dream_channel_id = 0
-        bot = LatticeBot(db_pool=mock_db_pool, llm_client=mock_llm_client)
+        bot = LatticeBot(
+            db_pool=mock_db_pool,
+            llm_client=mock_llm_client,
+            context_cache=mock_context_cache,
+        )
 
         assert bot.main_channel_id == 0
         assert bot.dream_channel_id == 0

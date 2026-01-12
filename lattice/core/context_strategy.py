@@ -36,6 +36,7 @@ from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
+    from lattice.utils.context import InMemoryContextCache
 
 
 def _get_channel_id(
@@ -128,6 +129,7 @@ async def context_strategy(
     audit_view_params: dict[str, Any] | None = None,
     llm_client: Any | None = None,
     bot: Any | None = None,
+    context_cache: "InMemoryContextCache | None" = None,
 ) -> ContextStrategy:
     """Perform context strategy analysis on conversation window.
 
@@ -154,6 +156,7 @@ async def context_strategy(
         audit_view_params: Parameters for the AuditView
         llm_client: LLM client for dependency injection
         bot: Discord bot instance for dependency injection
+        context_cache: In-memory context cache for dependency injection
 
     Returns:
         ContextStrategy object with structured fields (merged with cache)
@@ -163,11 +166,13 @@ async def context_strategy(
         json.JSONDecodeError: If LLM response is not valid JSON
     """
     from lattice.memory.canonical import get_canonical_entities_list
-    from lattice.utils.context import get_context_cache
     from lattice.utils.date_resolution import get_now
 
+    if context_cache is None:
+        raise ValueError("context_cache is required for context_strategy")
+
     channel_id = _get_channel_id(recent_messages, discord_message_id)
-    cache = get_context_cache()
+    cache = context_cache
 
     cached_entities, cached_flags, cached_unresolved = cache.get_active(channel_id)
 

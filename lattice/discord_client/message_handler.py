@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
+    from lattice.utils.context import InMemoryContextCache
 
 from lattice.core import memory_orchestrator, response_generator
 
@@ -51,6 +52,7 @@ class MessageHandler:
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
         user_timezone: str = "UTC",
+        context_cache: "InMemoryContextCache | None" = None,
     ) -> None:
         """Initialize the message handler.
 
@@ -61,6 +63,7 @@ class MessageHandler:
             db_pool: Database pool for dependency injection
             llm_client: LLM client for dependency injection
             user_timezone: The user's timezone
+            context_cache: In-memory context cache for dependency injection
         """
         self.bot = bot
         self.main_channel_id = main_channel_id
@@ -68,6 +71,7 @@ class MessageHandler:
         self.db_pool = db_pool
         self.llm_client = llm_client
         self.user_timezone = user_timezone
+        self.context_cache = context_cache
         self._memory_healthy = False
         self._consecutive_failures = 0
         self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
@@ -288,6 +292,7 @@ class MessageHandler:
                     },
                     llm_client=self.llm_client,
                     bot=self.bot,
+                    context_cache=self.context_cache,
                 )
 
                 if strategy:

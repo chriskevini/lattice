@@ -20,6 +20,7 @@ from lattice.discord_client.message_handler import MessageHandler
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
 from lattice.utils.database import get_user_timezone
+from lattice.utils.context import InMemoryContextCache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class LatticeBot(commands.Bot):
         self,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
+        context_cache: InMemoryContextCache,
     ) -> None:
         """Initialize the Lattice bot."""
         intents = discord.Intents.default()
@@ -56,6 +58,7 @@ class LatticeBot(commands.Bot):
 
         self.db_pool = db_pool
         self.llm_client = llm_client
+        self.context_cache = context_cache
 
         self.main_channel_id = config.discord_main_channel_id
         if not self.main_channel_id:
@@ -78,6 +81,7 @@ class LatticeBot(commands.Bot):
             db_pool=self.db_pool,
             llm_client=self.llm_client,
             user_timezone=self._user_timezone,
+            context_cache=self.context_cache,
         )
 
         self._error_manager = ErrorManager(

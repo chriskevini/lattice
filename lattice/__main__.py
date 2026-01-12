@@ -75,11 +75,17 @@ async def main() -> None:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
     from lattice.utils.llm_client import _LLMClient
+    from lattice.utils.context import InMemoryContextCache
 
     db_pool = DatabasePool()
     await db_pool.initialize()
+    context_cache = InMemoryContextCache(ttl=10)
 
-    bot = LatticeBot(db_pool=db_pool, llm_client=AuditingLLMClient(_LLMClient()))
+    bot = LatticeBot(
+        db_pool=db_pool,
+        llm_client=AuditingLLMClient(_LLMClient()),
+        context_cache=context_cache,
+    )
     health_server = HealthServer(port=config.health_port)
 
     try:
