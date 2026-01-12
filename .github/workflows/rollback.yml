@@ -8,6 +8,9 @@ on:
         required: true
         default: 'latest'
 
+permissions:
+  packages: write
+
 jobs:
   rollback:
     runs-on: ubuntu-latest
