@@ -134,7 +134,7 @@ async def prepare_contextual_nudge(
             },
             bot=bot,
         )
-    except (ValueError, ImportError, Exception) :
+    except (ValueError, ImportError, Exception):
         logger.exception("LLM call failed")
         return NudgePlan(content=None, channel_id=channel_id)
 
