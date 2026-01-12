@@ -125,6 +125,22 @@ make init-db        # Initialize fresh schema and seed data
 make run            # Start the bot
 ```
 
+**Docker Compose Structure:**
+
+Development builds from source with hot reload:
+```bash
+# Uses: docker-compose.base.yml + docker-compose.dev.yml
+docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up
+# or simply:
+make run
+```
+
+Production uses pre-built images (deployed via CI/CD):
+```bash
+# Uses: docker-compose.base.yml + docker-compose.prod.yml
+docker compose -f docker-compose.base.yml -f docker-compose.prod.yml up -d
+```
+
 **Note:** No migrations needed for fresh setup. This branch uses a fresh database schema. All prompt templates are in `scripts/seed.sql`.
 
 **Lattice**: Building adaptive AI through conversation. 🧠✨

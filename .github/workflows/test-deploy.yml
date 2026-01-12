@@ -1,0 +1,89 @@
+# Test Workflow for Deployment
+
+name: Test Deploy Workflow
+
+on:
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/lattice-bot
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test Dockerfile build
+        run: |
+          echo "Testing Dockerfile syntax..."
+          docker build -t test-build:latest -f Dockerfile .
+          echo "✓ Dockerfile builds successfully"
+          docker images test-build:latest
+
+      - name: Create test .env file for validation
+        run: |
+          echo "Creating test .env file..."
+          cat > .env <<EOF
+          BOT_IMAGE=test-build:latest
+          POSTGRES_USER=test_user
+          POSTGRES_PASSWORD=test_password
+          POSTGRES_DB=test_db
+          POSTGRES_PORT=5432
+          DISCORD_TOKEN=test_token
+          DISCORD_GUILD_ID=test_guild
+          DISCORD_MAIN_CHANNEL_ID=test_channel
+          DISCORD_DREAM_CHANNEL_ID=test_dream_channel
+          OPENROUTER_API_KEY=test_key
+          LLM_PROVIDER=placeholder
+          EOF
+          echo "✓ Test .env file created"
+
+      - name: Verify image size
+        run: |
+          SIZE=$(docker images test-build:latest --format "{{.Size}}")
+          echo "Image size: $SIZE"
+          # Parse human-readable size to bytes (e.g., "500MB" -> 524288000)
+          SIZE_BYTES=$(echo "$SIZE" | sed 's/GB/*1024*1024*1024/;s/MB/*1024*1024/;s/KB/*1024/;s/B//' | bc)
+          echo "Image size: $SIZE_BYTES bytes"
+          # Check if under 500MB (reasonable limit)
+          if [ "$SIZE_BYTES" -gt 524288000 ]; then
+            echo "❌ Image too large: $SIZE"
+            exit 1
+          fi
+          echo "✓ Image size acceptable"
+
+      - name: Validate docker-compose files
+        run: |
+          echo "Validating docker-compose structure..."
+          echo ""
+          echo "✓ docker-compose.base.yml (base config)"
+          docker compose -f docker-compose.base.yml config > /dev/null
+          echo ""
+          echo "✓ docker-compose.dev.yml (dev override)"
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml config > /dev/null
+          echo ""
+          echo "✓ docker-compose.prod.yml (prod override)"
+          docker compose -f docker-compose.base.yml -f docker-compose.prod.yml config > /dev/null
+
+      - name: Compose syntax validation
+        run: |
+          echo "Validating docker-compose.prod.yml syntax..."
+          docker compose -f docker-compose.base.yml -f docker-compose.prod.yml config > /dev/null
+          echo "✓ Compose syntax valid"

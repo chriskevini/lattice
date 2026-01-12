@@ -32,6 +32,9 @@ dev = [
 requires = ["hatchling>=1.21.0,<2.0.0"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["lattice"]
+
 # ============================================================================
 # RUFF CONFIGURATION - Ultra-fast linter & formatter
 # ============================================================================
@@ -49,6 +52,9 @@ exclude = [
     "__pycache__",
     "dist",
     "build",
+    "scripts/schema.sql",
+    "scripts/migrations/*.sql",
+    "scripts/prompts/*.sql",
 ]
 
 [tool.ruff.lint]

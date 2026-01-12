@@ -16,39 +16,39 @@ LIMIT ?= 50
 KEY ?=
 
 docker-up: ## Start all services with Docker Compose
-	docker compose up -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d
 
 docker-down: ## Stop all services
-	docker compose down
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down
 
 view-logs: ## View recent logs (use: make view-logs SERVICE=postgres TAIL=1000)
-	docker compose logs --tail $(TAIL) $(SERVICE)
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml logs --tail $(TAIL) $(SERVICE)
 
 docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
-	docker compose down
-	docker compose build
-	docker compose up -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml build
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d
 
 docker-restart: ## Restart all services
-	docker compose restart
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml restart
 	@echo "All services restarted. View logs with: make view-logs"
 
 restart: docker-restart ## Short alias
 
 docker-reload-env: ## Recreate containers to reload .env changes
-	docker compose up --force-recreate -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up --force-recreate -d
 	@echo "Containers recreated with updated .env. View logs with: make view-logs"
 
 docker-shell: ## Open shell in bot container
-	docker compose exec bot /bin/bash
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml exec bot /bin/bash
 
 docker-db-shell: ## Open PostgreSQL shell (interactive)
-	docker compose exec postgres psql -U lattice -d lattice
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml exec postgres psql -U lattice -d lattice
 
 db-shell: docker-db-shell ## Short alias
 
 docker-clean: ## Remove all containers, volumes, and images
-	docker compose down -v
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down -v
 	docker system prune -f
 
 # ============================================================================
@@ -119,9 +119,9 @@ test-fast: ## Run tests without coverage (faster)
 	uv run pytest -x
 
 test-integration: ## Run integration tests with database
-	@docker compose up -d postgres || true
-	@docker compose exec -T bot uv run pytest tests/integration/ -v --no-cov
-	@docker compose down postgres
+	@docker compose -f docker-compose.base.yml up -d postgres || true
+	@docker compose -f docker-compose.base.yml exec -T bot uv run pytest tests/integration/ -v --no-cov
+	@docker compose -f docker-compose.base.yml down postgres
 
 lint: ## Run linting checks
 	uv run ruff check .
@@ -177,15 +177,15 @@ bump-version: ## Bump version using commitizen
 # ============================================================================
 
 init-db: ## Initialize database schema and seed data
-	docker compose exec bot python scripts/init_db.py
+	docker compose -f docker-compose.base.yml exec bot python scripts/init_db.py
 
 nuke-db: ## Nuke and reinitialize the database (removes all data)
-	docker compose down -v
-	docker compose up -d
+	docker compose -f docker-compose.base.yml down -v
+	docker compose -f docker-compose.base.yml up -d
 	$(MAKE) init-db
 
 migrate: ## Run database migrations
-	docker compose exec bot python scripts/migrate.py
+	docker compose -f docker-compose.base.yml exec bot python scripts/migrate.py
 
 # ============================================================================
 # Local Extraction Model (Optional)

@@ -1,0 +1,16 @@
+# Production override - uses pre-built image, no dev volumes
+# Usage: docker compose -f docker-compose.base.yml -f docker-compose.prod.yml
+#
+# This configuration:
+# - Uses pre-built Docker image from CI/CD (set via .env)
+# - Removes volume mounts (no hot reload, smaller attack surface)
+# - No local build (faster deployment, no CPU spike)
+#
+# .env should contain: BOT_IMAGE=ghcr.io/chriskevini/lattice-bot:<sha>
+
+services:
+  bot:
+    # Use pre-built image from CI/CD
+    image: ${BOT_IMAGE}
+    # No volume mounts in production (security + smaller attack surface)
+    volumes: []

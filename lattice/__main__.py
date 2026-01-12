@@ -64,7 +64,7 @@ async def main() -> None:
     from scripts import init_db
 
     try:
-        await init_db.init_database()
+        init_db.init_database()
         logger.info("Database initialization check complete")
     except Exception as e:
         logger.warning(

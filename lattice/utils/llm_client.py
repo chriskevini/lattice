@@ -219,8 +219,8 @@ class _LLMClient:
             cancelled = getattr(usage, "cancelled", None)
             moderation_latency_ms = getattr(usage, "moderation_latency", None)
 
-            if response.choices:
-                finish_reason = getattr(response.choices[0], "finish_reason", None)
+        if response.choices:
+            finish_reason = getattr(response.choices[0], "finish_reason", None)
 
         if not response.choices:
             logger.error(
