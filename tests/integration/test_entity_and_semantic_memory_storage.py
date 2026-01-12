@@ -9,8 +9,10 @@ The entities table is no longer used for semantic memory storage.
 """
 
 import os
+import time
 import pytest
 from typing import AsyncGenerator
+from uuid import uuid4
 
 from lattice.memory import episodic
 from lattice.utils.database import DatabasePool
@@ -41,7 +43,7 @@ async def cleanup_test_data(db_pool: DatabasePool) -> None:
         )
         # Also clean up semantic memories associated with these test batches
         await conn.execute(
-            "DELETE FROM semantic_memories WHERE source_batch_id LIKE 'test_batch_%'"
+            "DELETE FROM semantic_memories WHERE source_batch_id LIKE 'test_batch_%' OR source_batch_id LIKE 'test_batch_12350_%'"
         )
 
 
@@ -205,6 +207,10 @@ class TestSemanticMemoryStorage:
 
     async def test_text_based_memory_search(self, db_pool: DatabasePool) -> None:
         """Test searching for memories by text matching."""
+        # Use a unique batch ID to avoid collisions in parallel test execution
+        unique_suffix = str(uuid4())[:8]
+        batch_id = f"test_batch_12350_{unique_suffix}"
+
         message = episodic.EpisodicMessage(
             content="Test memory search",
             discord_message_id=12350,
@@ -214,13 +220,15 @@ class TestSemanticMemoryStorage:
         message_id = await episodic.store_message(db_pool, message)
 
         # Store a memory with unique identifiers
-        batch_id = "test_batch_12350"
         memories = [
             {"subject": "user", "predicate": "lives_in", "object": "Richmond, BC"}
         ]
         await episodic.store_semantic_memories(
             db_pool, message_id, memories, source_batch_id=batch_id
         )
+
+        # Small delay to ensure data is committed and visible across connections
+        time.sleep(0.1)
 
         # Search by subject
         async with db_pool.pool.acquire() as conn:
