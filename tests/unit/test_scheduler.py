@@ -63,7 +63,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content is None
             assert result.channel_id == 12345
@@ -105,7 +108,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content is None
             assert result.channel_id == 12345
@@ -156,7 +162,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content is None
 
@@ -209,7 +218,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content == "Hey! How's your project going?"
             assert result.channel_id == 12345

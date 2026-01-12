@@ -92,10 +92,12 @@ class MessageHandler:
 
             from lattice.scheduler.nudges import prepare_contextual_nudge
 
+            user_id = str(self.bot.user.id) if self.bot and self.bot.user else "user"
             nudge_plan = await prepare_contextual_nudge(
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
                 user_context_cache=self.user_context_cache,
+                user_id=user_id,
                 bot=self.bot,
             )
 

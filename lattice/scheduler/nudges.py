@@ -23,8 +23,6 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-SYSTEM_USER_ID = "user"
-
 
 @dataclass
 class NudgePlan:
@@ -56,6 +54,7 @@ async def prepare_contextual_nudge(
     db_pool: "DatabasePool",
     llm_client: Any,
     user_context_cache: Any,
+    user_id: str,
     bot: Any | None = None,
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
@@ -64,6 +63,7 @@ async def prepare_contextual_nudge(
         db_pool: Database pool for dependency injection
         llm_client: LLM client for dependency injection (required)
         user_context_cache: User-level cache for goals/activities
+        user_id: Discord user ID for the owner
         bot: Discord bot instance for dependency injection
 
     Returns:
@@ -96,16 +96,16 @@ async def prepare_contextual_nudge(
 
     from lattice.core import response_generator
 
-    goals = user_context_cache.get_goals(SYSTEM_USER_ID)
+    goals = user_context_cache.get_goals(user_id)
     if goals is None:
         from lattice.core import response_generator
 
         goals = await response_generator.get_goal_context(db_pool=db_pool)
-        await user_context_cache.set_goals(db_pool, SYSTEM_USER_ID, goals)
+        await user_context_cache.set_goals(db_pool, user_id, goals)
 
     from lattice.core.context_strategy import retrieve_context
 
-    activity = user_context_cache.get_activities(SYSTEM_USER_ID)
+    activity = user_context_cache.get_activities(user_id)
     if activity is None:
         context_result = await retrieve_context(
             db_pool=db_pool, entities=[], context_flags=["activity_context"]
@@ -113,7 +113,7 @@ async def prepare_contextual_nudge(
         activity = context_result.get(
             "activity_context", "No recent activity recorded."
         )
-        await user_context_cache.set_activities(db_pool, SYSTEM_USER_ID, activity)
+        await user_context_cache.set_activities(db_pool, user_id, activity)
 
     channel_id = await get_default_channel_id()
 
