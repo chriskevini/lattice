@@ -10,16 +10,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lattice.core import response_generator
-from lattice.core.context import ContextCache
+from lattice.core.context import ChannelContextCache
 from lattice.core.context_strategy import context_strategy, retrieve_context
-from lattice.memory import episodic
 from lattice.utils.date_resolution import get_now
+from lattice.memory import episodic
 
 
 @pytest.fixture
-def context_cache() -> ContextCache:
+def context_cache() -> ChannelContextCache:
     """Create a fresh context cache for each test."""
-    cache = ContextCache(ttl=10)
+    cache = ChannelContextCache(ttl=10)
     return cache
 
 
@@ -55,7 +55,7 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_full_pipeline_declaration(
-        self, db_pool, context_cache: ContextCache
+        self, db_pool, context_cache: ChannelContextCache
     ) -> None:
         """Test complete pipeline flow for a declaration message."""
         message_id = uuid.uuid4()
@@ -116,7 +116,7 @@ class TestContextStrategyPipeline:
             )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            with patch.object(db_pool, "_pool", mock_pool):
+            with patch.object(db_pool, "_pool", mock_pool.pool):
                 async with db_pool.pool.acquire() as conn:
                     await conn.execute(
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
@@ -186,7 +186,7 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_activity_context(
-        self, db_pool, context_cache: ContextCache
+        self, db_pool, context_cache: ChannelContextCache
     ) -> None:
         """Test context strategy detects activity queries."""
         message_id = uuid.uuid4()
@@ -251,7 +251,7 @@ class TestContextStrategyPipeline:
             )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            with patch.object(db_pool, "_pool", mock_pool):
+            with patch.object(db_pool, "_pool", mock_pool.pool):
                 async with db_pool.pool.acquire() as conn:
                     await conn.execute(
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
@@ -279,7 +279,7 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_topic_switch(
-        self, db_pool, context_cache: ContextCache
+        self, db_pool, context_cache: ChannelContextCache
     ) -> None:
         """Test context strategy returns empty when topic switches."""
         message_id = uuid.uuid4()
@@ -343,7 +343,7 @@ class TestContextStrategyPipeline:
             )
             mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-            with patch.object(db_pool, "_pool", mock_pool):
+            with patch.object(db_pool, "_pool", mock_pool.pool):
                 async with db_pool.pool.acquire() as conn:
                     await conn.execute(
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
@@ -389,7 +389,7 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_template(
-        self, context_cache: ContextCache
+        self, context_cache: ChannelContextCache
     ) -> None:
         """Test context strategy fails gracefully when template missing."""
         with (
@@ -410,7 +410,7 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_fields(
-        self, context_cache: ContextCache
+        self, context_cache: ChannelContextCache
     ) -> None:
         """Test context strategy handles missing fields gracefully."""
         message_id = uuid.uuid4()
@@ -452,8 +452,12 @@ class TestContextStrategyPipeline:
             )
             planning_llm.complete.return_value = planning_result
 
+            mock_pool = MagicMock()
+            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock()
+            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
             planning = await context_strategy(
-                db_pool=AsyncMock(),
+                db_pool=mock_pool,
                 message_id=message_id,
                 user_message="Test message",
                 recent_messages=[],

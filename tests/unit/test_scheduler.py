@@ -42,7 +42,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=None),
@@ -61,7 +63,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content is None
             assert result.channel_id == 12345
@@ -82,7 +87,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
@@ -101,7 +108,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content is None
             assert result.channel_id == 12345
@@ -131,7 +141,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
@@ -150,7 +162,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content is None
 
@@ -180,7 +195,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
@@ -201,7 +218,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool, llm_client=mock_llm, user_context_cache=mock_cache
+                db_pool=mock_pool,
+                llm_client=mock_llm,
+                user_context_cache=mock_cache,
+                user_id="user",
             )
             assert result.content == "Hey! How's your project going?"
             assert result.channel_id == 12345

@@ -23,7 +23,7 @@ from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
-    from lattice.core.context import ContextCache
+    from lattice.core.context import ChannelContextCache
 
 
 def _get_channel_id(
@@ -72,7 +72,7 @@ async def context_strategy(
     message_id: UUID,
     user_message: str,
     recent_messages: list[EpisodicMessage],
-    context_cache: "ContextCache",
+    context_cache: "ChannelContextCache",
     channel_id: int,
     user_timezone: str | None = None,
     discord_message_id: int | None = None,
@@ -154,7 +154,7 @@ async def context_strategy(
         created_at=now,
     )
 
-    merged_strategy = context_cache.update(channel_id, fresh_strategy)
+    merged_strategy = await context_cache.update(db_pool, channel_id, fresh_strategy)
 
     return merged_strategy
 

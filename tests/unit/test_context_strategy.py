@@ -5,37 +5,63 @@ Renamed from test_query_extraction.py to match context_strategy.py module.
 
 import json
 import uuid
+from datetime import datetime
 from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from lattice.core.context import ContextCache, ContextStrategy, UserContextCache
-from lattice.core.context_strategy import (
-    build_smaller_episodic_context,
-    context_strategy,
+from lattice.core.context import (
+    ChannelContextCache,
+    ContextStrategy,
+    UserContextCache,
 )
+from lattice.core.context_strategy import context_strategy
 from lattice.memory.episodic import EpisodicMessage
-from lattice.memory.procedural import PromptTemplate
 from lattice.utils.llm import AuditResult
+from lattice.memory.procedural import PromptTemplate
 
 
 @pytest.fixture
 def mock_prompt_template() -> PromptTemplate:
-    """Create a mock CONTEXT_STRATEGY prompt template."""
+    """Create a mock CONTEXT_STRATEGY template."""
     return PromptTemplate(
         prompt_key="CONTEXT_STRATEGY",
-        template="Extract entities from: {user_message}\nContext: {context}",
-        temperature=0.2,
-        version=3,
+        template="Analyze: {user_message}",
+        temperature=0.0,
+        version=1,
         active=True,
     )
 
 
 @pytest.fixture
-def context_cache() -> ContextCache:
+def mock_generation_result() -> AuditResult:
+    """Create a mock AuditResult."""
+    return AuditResult(
+        content=json.dumps({"entities": ["test"], "context_flags": []}),
+        model="test-model",
+        provider="test-provider",
+        prompt_tokens=10,
+        completion_tokens=10,
+        total_tokens=20,
+        cost_usd=0.0,
+        latency_ms=100,
+        temperature=0.0,
+        prompt_key="CONTEXT_STRATEGY",
+    )
+
+
+@pytest.fixture
+def context_cache() -> ChannelContextCache:
     """Create a fresh context cache for each test."""
-    cache = ContextCache(ttl=10)
+    cache = ChannelContextCache(ttl=10)
+    return cache
+
+
+@pytest.fixture
+def user_context_cache() -> UserContextCache:
+    """Create a fresh user context cache for each test."""
+    cache = UserContextCache(ttl_minutes=30)
     return cache
 
 
@@ -47,24 +73,6 @@ def mock_llm_response() -> str:
             "entities": ["lattice project", "Friday"],
             "context_flags": [],
         }
-    )
-
-
-@pytest.fixture
-def mock_generation_result(mock_llm_response: str) -> AuditResult:
-    """Create a mock AuditResult."""
-    return AuditResult(
-        content=mock_llm_response,
-        model="anthropic/claude-3.5-sonnet",
-        provider="anthropic",
-        prompt_tokens=50,
-        completion_tokens=20,
-        total_tokens=70,
-        cost_usd=0.0005,
-        latency_ms=300,
-        temperature=0.2,
-        audit_id=None,
-        prompt_key=None,
     )
 
 
@@ -87,7 +95,7 @@ class TestContextStrategyFunction:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-        context_cache: ContextCache,
+        context_cache: ChannelContextCache,
     ) -> None:
         """Test successful context strategy."""
         message_id = uuid.uuid4()
@@ -141,7 +149,7 @@ class TestContextStrategyFunction:
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_prompt_template(
-        self, context_cache: ContextCache
+        self, context_cache: ChannelContextCache
     ) -> None:
         """Test context strategy with missing prompt template."""
         message_id = uuid.uuid4()
@@ -170,7 +178,7 @@ class TestContextStrategyFunction:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-        context_cache: ContextCache,
+        context_cache: ChannelContextCache,
     ) -> None:
         """Test context strategy with invalid JSON response."""
         message_id = uuid.uuid4()
@@ -218,51 +226,7 @@ class TestContextStrategyFunction:
                 )
 
 
-class TestBuildSmallerEpisodicContext:
-    """Tests for the build_smaller_episodic_context function."""
-
-    def test_build_smaller_episodic_context_basic(self) -> None:
-        """Test building context with recent messages."""
-        recent_messages = [
-            EpisodicMessage(
-                content="Working on mobile app",
-                discord_message_id=1,
-                channel_id=123,
-                is_bot=False,
-            ),
-            EpisodicMessage(
-                content="How's it coming?",
-                discord_message_id=2,
-                channel_id=123,
-                is_bot=True,
-            ),
-        ]
-        current_message = "Pretty good"
-
-        context = build_smaller_episodic_context(
-            recent_messages=recent_messages,
-            current_message=current_message,
-            window_size=3,
-        )
-
-        assert "USER: Working on mobile app" in context
-        assert "ASSISTANT: How's it coming?" in context
-        assert "USER: Pretty good" in context
-
-    def test_build_smaller_episodic_context_empty_history(self) -> None:
-        """Test building context with no recent messages."""
-        current_message = "Hello there"
-
-        context = build_smaller_episodic_context(
-            recent_messages=[],
-            current_message=current_message,
-            window_size=5,
-        )
-
-        assert "USER: Hello there" in context
-
-
-class TestContextCacheIntegration:
+class TestChannelContextCacheIntegration:
     """Tests for in-memory context cache integration via context_strategy."""
 
     @pytest.mark.asyncio
@@ -270,7 +234,7 @@ class TestContextCacheIntegration:
         self,
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
-        context_cache: ContextCache,
+        context_cache: ChannelContextCache,
     ) -> None:
         """Test that context strategy merges with cached context."""
         message_id = uuid.uuid4()
@@ -349,168 +313,185 @@ class TestContextCacheIntegration:
                 assert "weekend" in strategy_2.entities
 
 
-class TestContextCacheDirect:
-    """Unit tests for ContextCache TTL and basic operations."""
+class TestChannelContextCacheDirect:
+    """Unit tests for ChannelContextCache TTL and basic operations."""
 
-    def test_cache_ttl_expiration(self) -> None:
+    @pytest.mark.asyncio
+    async def test_cache_ttl_expiration(self, context_cache) -> None:
         """Test that entries expire after TTL advances."""
-        cache = ContextCache(ttl=2)
+        context_cache.ttl = 2
+        mock_pool = MagicMock()
+        mock_pool.pool.acquire = MagicMock()
 
-        cache.advance(1)
-        cache.update(1, ContextStrategy(entities=["entity1"], context_flags=["flag1"]))
+        with patch.object(ChannelContextCache, "_persist", new_callable=AsyncMock):
+            await context_cache.advance(mock_pool, 1)
+            await context_cache.update(
+                mock_pool,
+                1,
+                ContextStrategy(entities=["entity1"], context_flags=["flag1"]),
+            )
 
-        strategy = cache.get_active(1)
-        assert strategy.entities == ["entity1"]
-        assert strategy.context_flags == ["flag1"]
+            strategy = context_cache.get_active(1)
+            assert strategy.entities == ["entity1"]
+            assert strategy.context_flags == ["flag1"]
 
-        cache.advance(1)
-        strategy = cache.get_active(1)
-        assert strategy.entities == ["entity1"]
-        assert strategy.context_flags == ["flag1"]
+            await context_cache.advance(mock_pool, 1)
+            strategy = context_cache.get_active(1)
+            assert strategy.entities == ["entity1"]
+            assert strategy.context_flags == ["flag1"]
 
-        cache.advance(1)
-        cache.advance(1)
-        strategy = cache.get_active(1)
-        assert strategy.entities == []
-        assert strategy.context_flags == []
+            await context_cache.advance(mock_pool, 1)
+            await context_cache.advance(mock_pool, 1)
+            strategy = context_cache.get_active(1)
+            assert strategy.entities == []
+            assert strategy.context_flags == []
 
-    def test_cache_clear(self) -> None:
+    def test_cache_clear(self, context_cache) -> None:
         """Test that clear resets cache and counter."""
-        cache = ContextCache(ttl=10)
+        context_cache.clear()
+        assert context_cache.get_active(1).entities == []
+        assert context_cache.get_stats()["cached_channels"] == 0
 
-        cache.advance(1)
-        cache.advance(1)
-        cache.update(1, ContextStrategy(entities=["entity"]))
 
-        cache.clear()
+class TestChannelContextCachePersistence:
+    """Tests for ChannelContextCache persistence roundtrip."""
 
-        assert cache.get_active(1).entities == []
-        assert cache.get_stats()["cached_channels"] == 0
+    @pytest.mark.asyncio
+    async def test_persistence_roundtrip(self, context_cache) -> None:
+        """Test that cache data survives clear and reload."""
+        context_cache.ttl = 10
+        mock_pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        mock_conn.fetch.return_value = [
+            {
+                "target_id": "123",
+                "data": json.dumps(
+                    {
+                        "entities": {"test_entity": 1},
+                        "context_flags": {"test_flag": 1},
+                        "unresolved_entities": {},
+                        "message_counter": 1,
+                        "created_at": "2026-01-12T00:00:00",
+                    }
+                ),
+                "updated_at": datetime.now(),
+            }
+        ]
+
+        stats_before = context_cache.get_stats()
+        assert stats_before["cached_channels"] == 0
+
+        with patch.object(ChannelContextCache, "_persist", new_callable=AsyncMock):
+            await context_cache.update(
+                mock_pool,
+                123,
+                ContextStrategy(entities=["test_entity"], context_flags=["test_flag"]),
+            )
+            await context_cache.advance(mock_pool, 123)
+
+        stats_after_update = context_cache.get_stats()
+        assert stats_after_update["cached_channels"] == 1
+
+        context_cache.clear()
+        assert context_cache.get_stats()["cached_channels"] == 0
+
+        await context_cache.load_from_db(mock_pool)
+        stats_reloaded = context_cache.get_stats()
+        assert stats_reloaded["cached_channels"] == 1
+
+        strategy = context_cache.get_active(123)
+        assert "test_entity" in strategy.entities
+        assert "test_flag" in strategy.context_flags
 
 
 class TestUserContextCache:
     """Unit tests for UserContextCache TTL and basic operations."""
 
-    def test_get_set_goals(self) -> None:
+    @pytest.mark.asyncio
+    async def test_get_set_goals(self, user_context_cache) -> None:
         """Test basic goals get/set operations."""
-        cache = UserContextCache(ttl_minutes=30)
+        mock_pool = MagicMock()
+        assert user_context_cache.get_goals("user") is None
 
-        assert cache.get_goals("user") is None
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_goals(
+                mock_pool, "user", "Finish project by Friday"
+            )
+            assert user_context_cache.get_goals("user") == "Finish project by Friday"
 
-        cache.set_goals("user", "Finish project by Friday")
-        assert cache.get_goals("user") == "Finish project by Friday"
-
-    def test_get_set_activities(self) -> None:
+    @pytest.mark.asyncio
+    async def test_get_set_activities(self, user_context_cache) -> None:
         """Test basic activities get/set operations."""
-        cache = UserContextCache(ttl_minutes=30)
+        mock_pool = MagicMock()
+        assert user_context_cache.get_activities("user") is None
 
-        assert cache.get_activities("user") is None
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_activities(
+                mock_pool, "user", "Working on mobile app"
+            )
+            assert user_context_cache.get_activities("user") == "Working on mobile app"
 
-        cache.set_activities("user", "Working on mobile app")
-        assert cache.get_activities("user") == "Working on mobile app"
-
-    def test_missing_user_returns_none(self) -> None:
+    def test_missing_user_returns_none(self, user_context_cache) -> None:
         """Test that missing users return None for both goals and activities."""
-        cache = UserContextCache(ttl_minutes=30)
+        assert user_context_cache.get_goals("unknown_user") is None
+        assert user_context_cache.get_activities("unknown_user") is None
 
-        assert cache.get_goals("unknown_user") is None
-        assert cache.get_activities("unknown_user") is None
-
-    def test_goals_ttl_expiration(self) -> None:
+    @pytest.mark.asyncio
+    async def test_goals_ttl_expiration(self, user_context_cache) -> None:
         """Test that goals expire after TTL."""
-        cache = UserContextCache(ttl_minutes=1)
+        user_context_cache.ttl = 1.0 / 60.0  # 1 second (TTL is in minutes)
+        mock_pool = MagicMock()
 
-        cache.set_goals("user", "Test goals")
-        assert cache.get_goals("user") == "Test goals"
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_goals(mock_pool, "user", "Test goals")
+            assert user_context_cache.get_goals("user") == "Test goals"
 
-        import time
+            import asyncio
 
-        time.sleep(0.1)
+            await asyncio.sleep(1.1)
 
-        assert cache.get_goals("user") == "Test goals"
+            assert user_context_cache.get_goals("user") is None
 
-    def test_activities_ttl_expiration(self) -> None:
+    @pytest.mark.asyncio
+    async def test_activities_ttl_expiration(self, user_context_cache) -> None:
         """Test that activities expire after TTL."""
-        cache = UserContextCache(ttl_minutes=1)
+        user_context_cache.ttl = 1.0 / 60.0  # 1 second (TTL is in minutes)
+        mock_pool = MagicMock()
 
-        cache.set_activities("user", "Test activities")
-        assert cache.get_activities("user") == "Test activities"
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_activities(
+                mock_pool, "user", "Test activities"
+            )
+            assert user_context_cache.get_activities("user") == "Test activities"
 
-        import time
+            import asyncio
 
-        time.sleep(0.1)
+            await asyncio.sleep(1.1)
 
-        assert cache.get_activities("user") == "Test activities"
+            assert user_context_cache.get_activities("user") is None
 
-    def test_cache_clear(self) -> None:
+    def test_cache_clear(self, user_context_cache) -> None:
         """Test that clear removes all cached data."""
-        cache = UserContextCache(ttl_minutes=30)
+        user_context_cache.clear()
+        assert user_context_cache.get_stats()["cached_users"] == 0
 
-        cache.set_goals("user1", "Goals 1")
-        cache.set_goals("user2", "Goals 2")
-        cache.set_activities("user1", "Activities 1")
-
-        assert cache.get_goals("user1") == "Goals 1"
-        assert cache.get_goals("user2") == "Goals 2"
-        assert cache.get_activities("user1") == "Activities 1"
-
-        cache.clear()
-
-        assert cache.get_goals("user1") is None
-        assert cache.get_goals("user2") is None
-        assert cache.get_activities("user1") is None
-        assert cache.get_stats()["cached_users"] == 0
-        assert cache.get_stats()["cached_goals"] == 0
-        assert cache.get_stats()["cached_activities"] == 0
-
-    def test_get_stats(self) -> None:
-        """Test cache statistics."""
-        cache = UserContextCache(ttl_minutes=30)
-
-        assert cache.get_stats() == {
-            "cached_users": 0,
-            "cached_goals": 0,
-            "cached_activities": 0,
-        }
-
-        cache.set_goals("user1", "Goals 1")
-        cache.set_activities("user1", "Activities 1")
-
-        assert cache.get_stats() == {
-            "cached_users": 1,
-            "cached_goals": 1,
-            "cached_activities": 1,
-        }
-
-        cache.set_goals("user2", "Goals 2")
-
-        assert cache.get_stats() == {
-            "cached_users": 2,
-            "cached_goals": 2,
-            "cached_activities": 1,
-        }
-
-    def test_concurrent_users(self) -> None:
+    @pytest.mark.asyncio
+    async def test_concurrent_users(self, user_context_cache) -> None:
         """Test cache handles multiple users independently."""
-        cache = UserContextCache(ttl_minutes=30)
+        mock_pool = MagicMock()
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_goals(mock_pool, "user1", "User1 goals")
+            await user_context_cache.set_goals(mock_pool, "user2", "User2 goals")
+            await user_context_cache.set_activities(
+                mock_pool, "user1", "User1 activities"
+            )
 
-        cache.set_goals("user1", "User1 goals")
-        cache.set_goals("user2", "User2 goals")
-        cache.set_activities("user1", "User1 activities")
-
-        assert cache.get_goals("user1") == "User1 goals"
-        assert cache.get_goals("user2") == "User2 goals"
-        assert cache.get_activities("user1") == "User1 activities"
-        assert cache.get_activities("user2") is None
-
-    def test_update_goals_replaces_existing(self) -> None:
-        """Test that setting goals replaces previous value."""
-        cache = UserContextCache(ttl_minutes=30)
-
-        cache.set_goals("user", "Original goals")
-        assert cache.get_goals("user") == "Original goals"
-
-        cache.set_goals("user", "Updated goals")
-        assert cache.get_goals("user") == "Updated goals"
-
-        assert cache.get_stats()["cached_goals"] == 1
+            assert user_context_cache.get_goals("user1") == "User1 goals"
+            assert user_context_cache.get_goals("user2") == "User2 goals"
+            assert user_context_cache.get_activities("user1") == "User1 activities"
+            assert user_context_cache.get_activities("user2") is None

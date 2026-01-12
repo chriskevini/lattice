@@ -2,13 +2,17 @@
 
 This module provides the data structures and caching for context planning.
 Extracted entities, context flags, and unresolved entities are stored in RAM
-and optionally pre-warmed on bot restart.
+and persisted to the database for durability across restarts.
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,8 +43,39 @@ class ChannelContext:
     created_at: datetime = field(default_factory=datetime.now)
 
 
-class ContextCache:
-    """In-memory cache for extracted context with per-item message-based TTL.
+class ContextCacheBase:
+    """Base class for persistent context caches."""
+
+    def __init__(self, context_type: str) -> None:
+        self.context_type = context_type
+
+    async def _save(self, db_pool: Any, target_id: str, data: dict[str, Any]) -> None:
+        """Upsert context data to the database."""
+        async with db_pool.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO context_cache (context_type, target_id, data, updated_at)
+                VALUES ($1, $2, $3, NOW())
+                ON CONFLICT (context_type, target_id) DO UPDATE SET
+                    data = EXCLUDED.data,
+                    updated_at = EXCLUDED.updated_at
+                """,
+                self.context_type,
+                target_id,
+                json.dumps(data),
+            )
+
+    async def _load_type(self, db_pool: Any) -> list[dict[str, Any]]:
+        """Load all entries of this context type from the database."""
+        async with db_pool.pool.acquire() as conn:
+            return await conn.fetch(
+                "SELECT target_id, data, updated_at FROM context_cache WHERE context_type = $1",
+                self.context_type,
+            )
+
+
+class ChannelContextCache(ContextCacheBase):
+    """In-memory cache for extracted channel context with persistence.
 
     Stores entities, context_flags, and unresolved_entities. Each item's TTL
     is refreshed when it appears in a fresh strategy extraction.
@@ -52,17 +87,20 @@ class ContextCache:
         Args:
             ttl: How many messages an item stays in cache since last seen
         """
+        super().__init__(context_type="channel")
         self.ttl = ttl
         self._cache: dict[int, ChannelContext] = {}
 
-    def advance(self, channel_id: int) -> int:
+    async def advance(self, db_pool: Any, channel_id: int) -> int:
         """Increment channel message counter and return new value."""
         ctx = self._cache.setdefault(channel_id, ChannelContext())
         ctx.message_counter += 1
+        await self._persist(db_pool, channel_id)
         return ctx.message_counter
 
-    def update(
+    async def update(
         self,
+        db_pool: Any,
         channel_id: int,
         fresh: ContextStrategy,
     ) -> ContextStrategy:
@@ -78,6 +116,7 @@ class ContextCache:
             ctx.unresolved_entities[unresolved] = ctx.message_counter
 
         ctx.created_at = fresh.created_at
+        await self._persist(db_pool, channel_id)
         return self.get_active(channel_id)
 
     def get_active(self, channel_id: int) -> ContextStrategy:
@@ -117,15 +156,9 @@ class ContextCache:
         }
 
         if not any([active_entities, active_flags, active_unresolved]):
-            # Keep the message counter even if items are cleared
-            # or delete the whole context if it's been long enough?
-            # For now, let's keep it if message_counter is small or just delete
-            # if everything is expired to avoid channel leak.
-            # However, deleting it resets message_counter.
-            # Let's only delete if it's truly empty AND we haven't seen a message in a while?
-            # Actually, deleting it is fine, next message starts at counter 1.
-            del self._cache[channel_id]
-            return ContextStrategy()
+            # If everything is expired, we don't delete immediately to keep message_counter,
+            # but we return empty strategy.
+            return ContextStrategy(created_at=ctx.created_at)
 
         return ContextStrategy(
             entities=active_entities,
@@ -134,46 +167,44 @@ class ContextCache:
             created_at=ctx.created_at,
         )
 
-    async def save_to_db(self, db_pool: Any) -> None:
-        """Persist cache to database."""
-        async with db_pool.pool.acquire() as conn:
-            for channel_id, ctx in self._cache.items():
-                strategy_json = {
-                    "entities": ctx.entities,
-                    "context_flags": ctx.context_flags,
-                    "unresolved_entities": ctx.unresolved_entities,
-                }
+    async def _persist(self, db_pool: Any, channel_id: int) -> None:
+        """Persist a single channel's context to DB."""
+        ctx = self._cache.get(channel_id)
+        if not ctx:
+            return
 
-                await conn.execute(
-                    """
-                    INSERT INTO context_cache_persistence (channel_id, strategy, message_counter, updated_at)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (channel_id) DO UPDATE SET
-                        strategy = EXCLUDED.strategy,
-                        message_counter = EXCLUDED.message_counter,
-                        updated_at = EXCLUDED.updated_at
-                    """,
-                    channel_id,
-                    json.dumps(strategy_json),
-                    ctx.message_counter,
-                    ctx.created_at,
-                )
+        data = {
+            "entities": ctx.entities,
+            "context_flags": ctx.context_flags,
+            "unresolved_entities": ctx.unresolved_entities,
+            "message_counter": ctx.message_counter,
+            "created_at": ctx.created_at.isoformat(),
+        }
+        ctx_after = self._cache.get(channel_id)
+        if ctx_after is not ctx:
+            return
+        await self._save(db_pool, str(channel_id), data)
 
     async def load_from_db(self, db_pool: Any) -> None:
-        """Load cache from database."""
-        async with db_pool.pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT channel_id, strategy, message_counter, updated_at FROM context_cache_persistence"
-            )
-
-            for row in rows:
-                strategy_data = json.loads(row["strategy"])
-                self._cache[row["channel_id"]] = ChannelContext(
-                    entities=strategy_data["entities"],
-                    context_flags=strategy_data["context_flags"],
-                    unresolved_entities=strategy_data["unresolved_entities"],
-                    message_counter=row["message_counter"],
-                    created_at=row["updated_at"],
+        """Load all channel context from database."""
+        rows = await self._load_type(db_pool)
+        for row in rows:
+            try:
+                channel_id = int(row["target_id"])
+                data = json.loads(row["data"])
+                self._cache[channel_id] = ChannelContext(
+                    entities=data["entities"],
+                    context_flags=data["context_flags"],
+                    unresolved_entities=data["unresolved_entities"],
+                    message_counter=data["message_counter"],
+                    created_at=datetime.fromisoformat(data["created_at"]),
+                )
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+                target_id = row.get("target_id", "unknown")
+                logger.warning(
+                    "Failed to load channel context from DB: target_id=%s, error=%s",
+                    target_id,
+                    e,
                 )
 
     def clear(self) -> None:
@@ -192,12 +223,13 @@ class ContextCache:
         }
 
 
-@dataclass
-class UserContextCache:
-    """User-level cache for goals and activities with time-based TTL."""
+class UserContextCache(ContextCacheBase):
+    """User-level cache for goals and activities with persistence."""
 
     def __init__(self, ttl_minutes: int = 30) -> None:
+        super().__init__(context_type="user")
         self.ttl = ttl_minutes
+        # user_id -> {goals: (content, time), activities: (content, time)}
         self._goals: dict[str, tuple[str, datetime]] = {}
         self._activities: dict[str, tuple[str, datetime]] = {}
 
@@ -211,9 +243,10 @@ class UserContextCache:
             return None
         return content
 
-    def set_goals(self, user_id: str, content: str) -> None:
-        """Cache goals for user."""
+    async def set_goals(self, db_pool: Any, user_id: str, content: str) -> None:
+        """Cache goals for user and persist."""
         self._goals[user_id] = (content, datetime.now())
+        await self._persist(db_pool, user_id)
 
     def get_activities(self, user_id: str) -> str | None:
         """Get cached activities for user, or None if expired/missing."""
@@ -225,12 +258,51 @@ class UserContextCache:
             return None
         return content
 
-    def set_activities(self, user_id: str, content: str) -> None:
-        """Cache activities for user."""
+    async def set_activities(self, db_pool: Any, user_id: str, content: str) -> None:
+        """Cache activities for user and persist."""
         self._activities[user_id] = (content, datetime.now())
+        await self._persist(db_pool, user_id)
 
     def _is_expired(self, cached_at: datetime) -> bool:
         return (datetime.now() - cached_at).total_seconds() > self.ttl * 60
+
+    async def _persist(self, db_pool: Any, user_id: str) -> None:
+        """Persist user context to DB."""
+        goals_data = self._goals.get(user_id)
+        activities_data = self._activities.get(user_id)
+
+        data = {
+            "goals": [goals_data[0], goals_data[1].isoformat()] if goals_data else None,
+            "activities": [activities_data[0], activities_data[1].isoformat()]
+            if activities_data
+            else None,
+        }
+        await self._save(db_pool, user_id, data)
+
+    async def load_from_db(self, db_pool: Any) -> None:
+        """Load all user context from database."""
+        rows = await self._load_type(db_pool)
+        for row in rows:
+            try:
+                user_id = row["target_id"]
+                data = json.loads(row["data"])
+                if data.get("goals"):
+                    self._goals[user_id] = (
+                        data["goals"][0],
+                        datetime.fromisoformat(data["goals"][1]),
+                    )
+                if data.get("activities"):
+                    self._activities[user_id] = (
+                        data["activities"][0],
+                        datetime.fromisoformat(data["activities"][1]),
+                    )
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+                target_id = row.get("target_id", "unknown")
+                logger.warning(
+                    "Failed to load user context from DB: target_id=%s, error=%s",
+                    target_id,
+                    e,
+                )
 
     def clear(self) -> None:
         """Clear all cached user context."""
