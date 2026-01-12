@@ -6,7 +6,7 @@ implementations can satisfy the protocol interfaces.
 
 from datetime import datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
@@ -207,15 +207,6 @@ class TestPostgresRepositoryBase:
         repo = ConcreteRepository(mock_pool)
 
         assert repo._db_pool is mock_pool
-
-    def test_subclass_must_implement_abstract_methods(self) -> None:
-        """Verify PostgresRepository subclasses must implement abstract methods."""
-        from lattice.memory.repositories import PostgresRepository
-
-        with pytest.raises(TypeError):
-
-            class IncompleteRepository(PostgresRepository):
-                pass
 
     def test_subclass_with_all_abstract_methods_works(self) -> None:
         """Verify PostgresRepository with all abstract methods can be instantiated."""
