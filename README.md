@@ -107,7 +107,6 @@ See [scripts/schema.sql](scripts/schema.sql) for the canonical schema.
 | Table | Purpose |
 |-------|---------|
 | `raw_messages` | Stored Discord messages |
-| `context_strategies` | Context strategy output |
 | `entities` | Entity registry |
 | `semantic_memories` | Graph relationships |
 | `objectives` | User goals |
@@ -115,7 +114,7 @@ See [scripts/schema.sql](scripts/schema.sql) for the canonical schema.
 | `prompt_audits` | LLM call tracking |
 | `dreaming_proposals` | Prompt optimization |
 | `user_feedback` | User feedback |
-| `system_health` | Configuration |
+| `system_metrics` | Metrics and scheduler state |
 
 ### Setup
 ```bash

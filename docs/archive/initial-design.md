@@ -105,8 +105,8 @@ CREATE TABLE user_feedback (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Health & Scheduling
-CREATE TABLE system_health (
+-- Metrics & Scheduling
+CREATE TABLE system_metrics (
     metric_key TEXT PRIMARY KEY,               -- 'last_proactive_eval', 'scheduled_next_proactive'
     metric_value TEXT,
     recorded_at TIMESTAMPTZ DEFAULT now()
@@ -233,7 +233,7 @@ All behavior (Reactive User Input + Proactive Check-ins) flows through a single 
 
 ### 4.1 Proactive Check-ins
 
-A lightweight scheduler monitors `system_health.next_check_at`. When due, the AI analyzes conversation context and user goals to decide whether to send a proactive check-in message. The scheduler handles timing:
+A lightweight scheduler monitors `system_metrics.next_check_at`. When due, the AI analyzes conversation context and user goals to decide whether to send a proactive check-in message. The scheduler handles timing:
 - After "message" action: reset to base interval (15 min)
 - After "wait" action: exponential backoff
 - After reactive user message: reset to base interval

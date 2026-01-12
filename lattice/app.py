@@ -4,6 +4,7 @@ from lattice.discord_client.bot import LatticeBot
 from lattice.utils.database import DatabasePool
 from lattice.utils.llm import _LLMClient, AuditingLLMClient
 from lattice.utils.config import config
+from lattice.core.context import ContextCache
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +20,12 @@ class LatticeApp:
         self.db_pool = DatabasePool()
         self.llm_client = _LLMClient(provider=config.llm_provider)
         self.auditing_llm_client = AuditingLLMClient(llm_client=self.llm_client)
-        self.bot = LatticeBot(db_pool=self.db_pool, llm_client=self.auditing_llm_client)
+        self.context_cache = ContextCache(ttl=10)
+        self.bot = LatticeBot(
+            db_pool=self.db_pool,
+            llm_client=self.auditing_llm_client,
+            context_cache=self.context_cache,
+        )
 
     async def start(self) -> None:
         """Start the application and all its components."""

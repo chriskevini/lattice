@@ -62,54 +62,31 @@ class DatabasePool:
             logger.info("Database pool closed")
 
     def is_initialized(self) -> bool:
-        """Check if the pool is initialized.
-
-        Returns:
-            True if pool is initialized, False otherwise
-        """
+        """Check if the pool is initialized."""
         return self._pool is not None
 
     @property
     def pool(self) -> "asyncpg.Pool":
-        """Get the connection pool.
-
-        Returns:
-            The asyncpg connection pool
-
-        Raises:
-            RuntimeError: If pool is not initialized
-        """
+        """Get the connection pool."""
         if not self._pool:
             msg = "Database pool not initialized. Call initialize() first."
             raise RuntimeError(msg)
         return self._pool
 
-    async def get_system_health(self, key: str) -> str | None:
-        """Get a value from the system_health table.
-
-        Args:
-            key: The metric key to retrieve
-
-        Returns:
-            The metric value, or None if not found
-        """
+    async def get_system_metrics(self, key: str) -> str | None:
+        """Get a value from the system_metrics table."""
         async with self.pool.acquire() as conn:
             return await conn.fetchval(
-                "SELECT metric_value FROM system_health WHERE metric_key = $1",
+                "SELECT metric_value FROM system_metrics WHERE metric_key = $1",
                 key,
             )
 
-    async def set_system_health(self, key: str, value: str) -> None:
-        """Set a value in the system_health table.
-
-        Args:
-            key: The metric key to set
-            value: The value to store
-        """
+    async def set_system_metrics(self, key: str, value: str) -> None:
+        """Set a value in the system_metrics table."""
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO system_health (metric_key, metric_value, recorded_at)
+                INSERT INTO system_metrics (metric_key, metric_value, recorded_at)
                 VALUES ($1, $2, now())
                 ON CONFLICT (metric_key)
                 DO UPDATE SET metric_value = EXCLUDED.metric_value, recorded_at = now()
@@ -119,34 +96,19 @@ class DatabasePool:
             )
 
     async def get_next_check_at(self) -> datetime | None:
-        """Get the next proactive check timestamp.
-
-        Returns:
-            The next check datetime, or None if not set
-        """
-        value = await self.get_system_health("next_check_at")
+        """Get the next proactive check timestamp."""
+        value = await self.get_system_metrics("next_check_at")
         if value:
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         return None
 
     async def set_next_check_at(self, dt: datetime) -> None:
-        """Set the next proactive check timestamp.
-
-        Args:
-            dt: The datetime for next check
-        """
-        await self.set_system_health("next_check_at", dt.isoformat())
+        """Set the next proactive check timestamp."""
+        await self.set_system_metrics("next_check_at", dt.isoformat())
 
 
 async def get_user_timezone(db_pool: DatabasePool) -> str:
-    """Get user timezone from semantic memory or cache.
-
-    Args:
-        db_pool: Database pool for DI
-
-    Returns:
-        IANA timezone string (e.g., 'America/New_York'), defaults to 'UTC'
-    """
+    """Get user timezone from semantic memory or cache."""
     global _user_timezone_cache
     if _user_timezone_cache:
         return _user_timezone_cache
@@ -170,47 +132,21 @@ async def get_user_timezone(db_pool: DatabasePool) -> str:
     return "UTC"
 
 
-async def get_system_health(key: str, db_pool: DatabasePool) -> str | None:
-    """Get a value from the system_health table.
-
-    Args:
-        key: The metric key to retrieve
-        db_pool: Database pool (required for DI)
-
-    Returns:
-        The metric value, or None if not found
-    """
-    return await db_pool.get_system_health(key)
+async def get_system_metrics(key: str, db_pool: DatabasePool) -> str | None:
+    """Get a value from the system_metrics table."""
+    return await db_pool.get_system_metrics(key)
 
 
-async def set_system_health(key: str, value: str, db_pool: DatabasePool) -> None:
-    """Set a value in the system_health table.
-
-    Args:
-        key: The metric key to set
-        value: The value to store
-        db_pool: Database pool (required for DI)
-    """
-    await db_pool.set_system_health(key, value)
+async def set_system_metrics(key: str, value: str, db_pool: DatabasePool) -> None:
+    """Set a value in the system_metrics table."""
+    await db_pool.set_system_metrics(key, value)
 
 
 async def get_next_check_at(db_pool: DatabasePool) -> datetime | None:
-    """Get the next proactive check timestamp.
-
-    Args:
-        db_pool: Database pool (required for DI)
-
-    Returns:
-        The next check datetime, or None if not set
-    """
+    """Get the next proactive check timestamp."""
     return await db_pool.get_next_check_at()
 
 
 async def set_next_check_at(dt: datetime, db_pool: DatabasePool) -> None:
-    """Set the next proactive check timestamp.
-
-    Args:
-        dt: The datetime for next check
-        db_pool: Database pool (required for DI)
-    """
+    """Set the next proactive check timestamp."""
     await db_pool.set_next_check_at(dt)

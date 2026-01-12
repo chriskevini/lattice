@@ -15,11 +15,15 @@ class TestUnifiedPipeline:
         """Test UnifiedPipeline initialization."""
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
+        mock_cache = MagicMock()
 
-        pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
+        pipeline = UnifiedPipeline(
+            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+        )
 
         assert pipeline.db_pool is mock_db_pool
         assert pipeline.bot is mock_bot
+        assert pipeline.context_cache is mock_cache
 
     @pytest.mark.asyncio
     async def test_send_response_success(self) -> None:
@@ -28,12 +32,15 @@ class TestUnifiedPipeline:
         mock_bot = MagicMock()
         mock_channel = MagicMock()
         mock_message = MagicMock()
+        mock_cache = MagicMock()
 
         # Setup bot to return channel
         mock_bot.get_channel.return_value = mock_channel
         mock_channel.send = AsyncMock(return_value=mock_message)
 
-        pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
+        pipeline = UnifiedPipeline(
+            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+        )
 
         result = await pipeline.send_response(
             channel_id=123456789,
@@ -57,11 +64,14 @@ class TestUnifiedPipeline:
         """
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
+        mock_cache = MagicMock()
 
         # Setup bot to return None (channel not found)
         mock_bot.get_channel.return_value = None
 
-        pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
+        pipeline = UnifiedPipeline(
+            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+        )
 
         result = await pipeline.send_response(
             channel_id=999999999,
@@ -81,12 +91,15 @@ class TestUnifiedPipeline:
         mock_bot = MagicMock()
         mock_channel = MagicMock()
         mock_message = MagicMock()
+        mock_cache = MagicMock()
 
         # Setup bot to return channel
         mock_bot.get_channel.return_value = mock_channel
         mock_channel.send = AsyncMock(return_value=mock_message)
 
-        pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
+        pipeline = UnifiedPipeline(
+            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+        )
 
         result = await pipeline.dispatch_autonomous_nudge(
             content="Nudge reminder: Don't forget your meeting!",
@@ -109,11 +122,14 @@ class TestUnifiedPipeline:
         """Test dispatch_autonomous_nudge when channel doesn't exist."""
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
+        mock_cache = MagicMock()
 
         # Setup bot to return None (channel not found)
         mock_bot.get_channel.return_value = None
 
-        pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
+        pipeline = UnifiedPipeline(
+            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+        )
 
         result = await pipeline.dispatch_autonomous_nudge(
             content="Nudge message",
@@ -136,6 +152,7 @@ class TestUnifiedPipeline:
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
         mock_channel = MagicMock()
+        mock_cache = MagicMock()
 
         mock_bot.get_channel.return_value = mock_channel
         # Simulate Discord API error
@@ -145,7 +162,9 @@ class TestUnifiedPipeline:
             )
         )
 
-        pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
+        pipeline = UnifiedPipeline(
+            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+        )
 
         # Verify exception propagates
         with pytest.raises(discord.HTTPException):
@@ -164,6 +183,7 @@ class TestUnifiedPipeline:
         mock_db_pool = MagicMock()
         mock_bot = MagicMock()
         mock_channel = MagicMock()
+        mock_cache = MagicMock()
 
         mock_bot.get_channel.return_value = mock_channel
         # Simulate permission error
@@ -173,7 +193,9 @@ class TestUnifiedPipeline:
             )
         )
 
-        pipeline = UnifiedPipeline(db_pool=mock_db_pool, bot=mock_bot)
+        pipeline = UnifiedPipeline(
+            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+        )
 
         # Verify exception propagates
         with pytest.raises(discord.Forbidden):

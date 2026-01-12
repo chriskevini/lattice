@@ -9,7 +9,9 @@ makes it easier to tune the system.
 
 # Number of recent messages to analyze for context strategy extraction
 # Used for detecting entities, context flags, and unresolved entities
-CONTEXT_STRATEGY_WINDOW_SIZE = 10
+# Kept small (2) to avoid re-analyzing overlapping windows - entities are cached
+# in an in-memory context cache with TTL
+CONTEXT_STRATEGY_WINDOW_SIZE = 2
 
 # Number of recent messages to include in response generation context
 # Used for UNIFIED_RESPONSE prompt template

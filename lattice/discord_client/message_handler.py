@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
+    from lattice.core.context import ContextCache
 
 from lattice.core import memory_orchestrator, response_generator
 
@@ -21,8 +22,8 @@ from lattice.core.constants import (
     CONTEXT_STRATEGY_WINDOW_SIZE,
     RESPONSE_EPISODIC_LIMIT,
 )
+from lattice.core.context import ContextStrategy
 from lattice.core.context_strategy import (
-    ContextStrategy,
     context_strategy,
     retrieve_context,
 )
@@ -50,6 +51,7 @@ class MessageHandler:
         dream_channel_id: int,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
+        context_cache: "ContextCache",
         user_timezone: str = "UTC",
     ) -> None:
         """Initialize the message handler.
@@ -61,6 +63,7 @@ class MessageHandler:
             db_pool: Database pool for dependency injection
             llm_client: LLM client for dependency injection
             user_timezone: The user's timezone
+            context_cache: In-memory context cache for dependency injection
         """
         self.bot = bot
         self.main_channel_id = main_channel_id
@@ -68,6 +71,7 @@ class MessageHandler:
         self.db_pool = db_pool
         self.llm_client = llm_client
         self.user_timezone = user_timezone
+        self.context_cache = context_cache
         self._memory_healthy = False
         self._consecutive_failures = 0
         self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
@@ -97,7 +101,10 @@ class MessageHandler:
                 from lattice.core.pipeline import UnifiedPipeline
 
                 pipeline = UnifiedPipeline(
-                    db_pool=self.db_pool, bot=self.bot, llm_client=self.llm_client
+                    db_pool=self.db_pool,
+                    bot=self.bot,
+                    context_cache=self.context_cache,
+                    llm_client=self.llm_client,
                 )
                 result = await pipeline.dispatch_autonomous_nudge(
                     content=decision.content,
@@ -255,6 +262,9 @@ class MessageHandler:
         )
 
         try:
+            # Increment per-channel message counter for context TTL
+            self.context_cache.advance(message.channel.id)
+
             # Store user message in memory
             user_message_id = await memory_orchestrator.store_user_message(
                 content=message.content,
@@ -279,6 +289,8 @@ class MessageHandler:
                     message_id=user_message_id,
                     user_message=message.content,
                     recent_messages=recent_msgs_for_strategy,
+                    context_cache=self.context_cache,
+                    channel_id=message.channel.id,
                     user_timezone=self.user_timezone,
                     discord_message_id=message.id,
                     audit_view=True,
@@ -296,7 +308,6 @@ class MessageHandler:
                         entity_count=len(strategy.entities),
                         context_flags=strategy.context_flags,
                         unresolved_entities=strategy.unresolved_entities,
-                        strategy_id=str(strategy.id),
                     )
                 else:
                     logger.warning("Context strategy returned None")
@@ -320,10 +331,10 @@ class MessageHandler:
 
             # Retrieve semantic context
             context_result = await retrieve_context(
+                db_pool=self.db_pool,
                 entities=entities,
                 context_flags=context_flags,
                 memory_depth=2 if entities else 0,
-                db_pool=self.db_pool,
             )
             semantic_context = cast(str, context_result.get("semantic_context", ""))
             memory_origins: set[UUID] = cast(

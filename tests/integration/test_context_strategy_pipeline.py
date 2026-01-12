@@ -10,9 +10,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lattice.core import response_generator
+from lattice.core.context import ContextCache
 from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.memory import episodic
 from lattice.utils.date_resolution import get_now
+
+
+@pytest.fixture
+def context_cache() -> ContextCache:
+    """Create a fresh context cache for each test."""
+    cache = ContextCache(ttl=10)
+    return cache
+
+
+@pytest.fixture(autouse=True)
+def reset_cache(context_cache):
+    """Reset context cache before each test."""
+    context_cache.clear()
+    yield
+    context_cache.clear()
 
 
 @pytest.fixture
@@ -38,10 +54,13 @@ class TestContextStrategyPipeline:
     """Integration tests for the entity extraction pipeline."""
 
     @pytest.mark.asyncio
-    async def test_full_pipeline_declaration(self, db_pool) -> None:
+    async def test_full_pipeline_declaration(
+        self, db_pool, context_cache: ContextCache
+    ) -> None:
         """Test complete pipeline flow for a declaration message."""
         message_id = uuid.uuid4()
         message_content = "I need to finish the lattice project by Friday"
+        channel_id = 67890
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -104,7 +123,7 @@ class TestContextStrategyPipeline:
                         message_id,
                         message_content,
                         12345,
-                        67890,
+                        channel_id,
                         False,
                     )
                 response_template = PromptTemplate(
@@ -132,11 +151,14 @@ class TestContextStrategyPipeline:
                 )
 
                 extraction = await context_strategy(
+                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=[],
+                    context_cache=context_cache,
+                    channel_id=channel_id,
+                    discord_message_id=12345,
                     llm_client=extraction_llm,
-                    db_pool=db_pool,
                 )
 
                 assert extraction is not None
@@ -163,10 +185,13 @@ class TestContextStrategyPipeline:
                 )
 
     @pytest.mark.asyncio
-    async def test_context_strategy_activity_context(self, db_pool) -> None:
+    async def test_context_strategy_activity_context(
+        self, db_pool, context_cache: ContextCache
+    ) -> None:
         """Test context strategy detects activity queries."""
         message_id = uuid.uuid4()
         message_content = "What did I do last week?"
+        channel_id = 67890
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -233,16 +258,19 @@ class TestContextStrategyPipeline:
                         message_id,
                         message_content,
                         12345,
-                        67890,
+                        channel_id,
                         False,
                     )
                 recent_messages: list[episodic.EpisodicMessage] = []
                 planning = await context_strategy(
+                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=recent_messages,
+                    context_cache=context_cache,
+                    channel_id=channel_id,
+                    discord_message_id=channel_id,
                     llm_client=planning_llm,
-                    db_pool=db_pool,
                 )
 
             assert planning is not None
@@ -250,7 +278,9 @@ class TestContextStrategyPipeline:
             assert "activity_context" in planning.context_flags
 
     @pytest.mark.asyncio
-    async def test_context_strategy_topic_switch(self, db_pool) -> None:
+    async def test_context_strategy_topic_switch(
+        self, db_pool, context_cache: ContextCache
+    ) -> None:
         """Test context strategy returns empty when topic switches."""
         message_id = uuid.uuid4()
         message_content = "Actually, what's the weather like?"
@@ -343,11 +373,13 @@ class TestContextStrategyPipeline:
                 ]
 
                 planning = await context_strategy(
+                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=recent_messages,
+                    context_cache=context_cache,
+                    channel_id=67890,
                     llm_client=planning_llm,
-                    db_pool=db_pool,
                 )
 
             assert planning is not None
@@ -356,7 +388,9 @@ class TestContextStrategyPipeline:
             assert len(planning.unresolved_entities) == 0
 
     @pytest.mark.asyncio
-    async def test_context_strategy_missing_template(self) -> None:
+    async def test_context_strategy_missing_template(
+        self, context_cache: ContextCache
+    ) -> None:
         """Test context strategy fails gracefully when template missing."""
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -365,16 +399,22 @@ class TestContextStrategyPipeline:
 
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
                 await context_strategy(
+                    db_pool=AsyncMock(),
                     message_id=uuid.uuid4(),
                     user_message="Test message",
                     recent_messages=[],
-                    db_pool=AsyncMock(),
+                    context_cache=context_cache,
+                    channel_id=123,
+                    discord_message_id=123,
                 )
 
     @pytest.mark.asyncio
-    async def test_context_strategy_missing_fields(self) -> None:
-        """Test context strategy validates required fields."""
+    async def test_context_strategy_missing_fields(
+        self, context_cache: ContextCache
+    ) -> None:
+        """Test context strategy handles missing fields gracefully."""
         message_id = uuid.uuid4()
+        channel_id = 67890
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -396,8 +436,9 @@ class TestContextStrategyPipeline:
             mock_canonical.return_value = []
 
             planning_llm = AsyncMock()
+            # Only entities provided, flags and unresolved missing
             planning_result = AuditResult(
-                content='{"entities": []}',
+                content='{"entities": ["test"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=50,
@@ -411,14 +452,21 @@ class TestContextStrategyPipeline:
             )
             planning_llm.complete.return_value = planning_result
 
-            with pytest.raises(ValueError, match="Missing required field"):
-                await context_strategy(
-                    message_id=message_id,
-                    user_message="Test message",
-                    recent_messages=[],
-                    llm_client=planning_llm,
-                    db_pool=AsyncMock(),
-                )
+            planning = await context_strategy(
+                db_pool=AsyncMock(),
+                message_id=message_id,
+                user_message="Test message",
+                recent_messages=[],
+                context_cache=context_cache,
+                channel_id=channel_id,
+                discord_message_id=channel_id,
+                llm_client=planning_llm,
+            )
+
+            assert planning is not None
+            assert planning.entities == ["test"]
+            assert planning.context_flags == []
+            assert planning.unresolved_entities == ["test"]
 
 
 class TestRetrieveContext:
