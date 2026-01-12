@@ -267,7 +267,7 @@ async def context_strategy(
             )
         raise
 
-    required_fields = ["entities", "context_flags", "unresolved_entities"]
+    required_fields = ["entities", "context_flags"]
     for field in required_fields:
         if field not in strategy_data:
             msg = f"Missing required field in strategy: {field}"
@@ -285,7 +285,8 @@ async def context_strategy(
 
     fresh_entities = strategy_data["entities"]
     fresh_flags = strategy_data["context_flags"]
-    fresh_unresolved = strategy_data["unresolved_entities"]
+
+    fresh_unresolved = [e for e in fresh_entities if e not in canonical_entities]
 
     merged_entities = _merge_deduplicate(cached_entities, fresh_entities)
     merged_flags = _merge_deduplicate(cached_flags, fresh_flags)

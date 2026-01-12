@@ -76,7 +76,7 @@ class TestContextStrategyPipeline:
 
             extraction_llm = AsyncMock()
             extraction_result = AuditResult(
-                content='{"entities":["lattice project","Friday"], "context_flags":[], "unresolved_entities":[]}',
+                content='{"entities":["lattice project","Friday"], "context_flags":[]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=100,
@@ -205,7 +205,7 @@ class TestContextStrategyPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
+                content='{"entities": [], "context_flags": ["activity_context"]}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=60,
@@ -226,11 +226,10 @@ class TestContextStrategyPipeline:
                 "extraction": {
                     "entities": [],
                     "context_flags": ["activity_context"],
-                    "unresolved_entities": [],
                     "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": [], "context_flags": ["activity_context"], "unresolved_entities": []}',
+                "raw_response": '{"entities": [], "context_flags": ["activity_context"]}',
                 "created_at": get_now("UTC"),
             }
             mock_pool = MagicMock()
@@ -295,7 +294,7 @@ class TestContextStrategyPipeline:
 
             planning_llm = AsyncMock()
             planning_result = AuditResult(
-                content='{"entities": [], "context_flags": [], "unresolved_entities": []}',
+                content='{"entities": [], "context_flags": []}',
                 model="anthropic/claude-3.5-sonnet",
                 provider="anthropic",
                 prompt_tokens=50,
@@ -316,11 +315,10 @@ class TestContextStrategyPipeline:
                 "extraction": {
                     "entities": [],
                     "context_flags": [],
-                    "unresolved_entities": [],
                     "_strategy_method": "api",
                 },
                 "rendered_prompt": "test prompt",
-                "raw_response": '{"entities": [], "context_flags": [], "unresolved_entities": []}',
+                "raw_response": '{"entities": [], "context_flags": []}',
                 "created_at": get_now("UTC"),
             }
             mock_pool = MagicMock()

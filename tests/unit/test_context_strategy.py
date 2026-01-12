@@ -49,7 +49,6 @@ def mock_llm_response() -> str:
         {
             "entities": ["lattice project", "Friday"],
             "context_flags": [],
-            "unresolved_entities": [],
         }
     )
 
@@ -98,7 +97,6 @@ class TestContextStrategyFunction:
         extraction_data = {
             "entities": ["lattice project", "Friday"],
             "context_flags": ["goal_context"],
-            "unresolved_entities": [],
         }
         mock_generation_result.content = json.dumps(extraction_data)
 
@@ -429,7 +427,6 @@ class TestInMemoryContextCache:
         extraction_data = {
             "entities": ["project", "Friday"],
             "context_flags": ["goal_context"],
-            "unresolved_entities": [],
         }
         mock_generation_result.content = json.dumps(extraction_data)
 
@@ -478,7 +475,6 @@ class TestInMemoryContextCache:
             second_extraction = {
                 "entities": ["weekend"],
                 "context_flags": [],
-                "unresolved_entities": ["meeting"],
             }
             mock_generation_result.content = json.dumps(second_extraction)
 
