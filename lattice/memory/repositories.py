@@ -242,3 +242,78 @@ class PostgresRepository(ABC):
             List of entity names sorted by creation date (newest first)
         """
         ...
+
+    @abstractmethod
+    async def get_predicates_list(self) -> list[str]:
+        """Fetch all canonical predicate names.
+
+        Returns:
+            List of predicate names sorted by creation date (newest first)
+        """
+        ...
+
+    @abstractmethod
+    async def get_entities_set(self) -> set[str]:
+        """Fetch all canonical entities as a set.
+
+        Returns:
+            Set of entity names for fast membership testing
+        """
+        ...
+
+    @abstractmethod
+    async def get_predicates_set(self) -> set[str]:
+        """Fetch all canonical predicates as a set.
+
+        Returns:
+            Set of predicate names for fast membership testing
+        """
+        ...
+
+    @abstractmethod
+    async def store_entities(self, names: list[str]) -> int:
+        """Store new canonical entities.
+
+        Args:
+            names: List of entity names to store
+
+        Returns:
+            Number of entities inserted
+        """
+        ...
+
+    @abstractmethod
+    async def store_predicates(self, names: list[str]) -> int:
+        """Store new canonical predicates.
+
+        Args:
+            names: List of predicate names to store
+
+        Returns:
+            Number of predicates inserted
+        """
+        ...
+
+    @abstractmethod
+    async def entity_exists(self, name: str) -> bool:
+        """Check if an entity name exists.
+
+        Args:
+            name: Entity name to check
+
+        Returns:
+            True if entity exists
+        """
+        ...
+
+    @abstractmethod
+    async def predicate_exists(self, name: str) -> bool:
+        """Check if a predicate name exists.
+
+        Args:
+            name: Predicate name to check
+
+        Returns:
+            True if predicate exists
+        """
+        ...
