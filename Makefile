@@ -25,9 +25,9 @@ view-logs: ## View recent logs (use: make view-logs SERVICE=postgres TAIL=1000)
 	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml logs --tail $(TAIL) $(SERVICE)
 
 docker-rebuild: ## Rebuild and restart services (use --no-cache for clean rebuild)
-	docker compose down
-	docker compose build
-	docker compose up -d
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml down
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml build
+	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d
 
 docker-restart: ## Restart all services
 	docker compose -f docker-compose.base.yml -f docker-compose.dev.yml restart
