@@ -115,6 +115,13 @@ class AuditingLLMClient:
                 completion_tokens=result.completion_tokens,
                 cost_usd=result.cost_usd,
                 latency_ms=result.latency_ms,
+                finish_reason=result.finish_reason,
+                cache_discount_usd=result.cache_discount_usd,
+                native_tokens_cached=result.native_tokens_cached,
+                native_tokens_reasoning=result.native_tokens_reasoning,
+                upstream_id=result.upstream_id,
+                cancelled=result.cancelled,
+                moderation_latency_ms=result.moderation_latency_ms,
             )
 
             logger.info(
@@ -148,15 +155,37 @@ class AuditingLLMClient:
 
                     params = audit_view_params or {}
                     metadata = params.get("metadata", [])
+
                     if result.cost_usd is not None:
                         metadata.append(f"Cost: ${result.cost_usd:.4f}")
-                    metadata.extend(
-                        [
-                            f"Model: {result.model}",
-                            f"Tokens: {result.total_tokens}",
-                            f"Latency: {result.latency_ms}ms",
-                        ],
-                    )
+
+                    metadata.append(f"Model: {result.model}")
+                    metadata.append(f"Tokens: {result.total_tokens}")
+                    metadata.append(f"Latency: {result.latency_ms}ms")
+
+                    if result.finish_reason:
+                        if result.finish_reason == "stop":
+                            metadata.append("✓ Complete")
+                        elif result.finish_reason == "length":
+                            metadata.append("⚠️ Truncated")
+                        elif result.finish_reason == "content_filter":
+                            metadata.append("🚫 Filtered")
+                        else:
+                            metadata.append(f"Finish: {result.finish_reason}")
+
+                    if (
+                        result.cache_discount_usd is not None
+                        and result.cache_discount_usd > 0
+                    ):
+                        metadata.append(f"🔒 Saved: ${result.cache_discount_usd:.4f}")
+                        if result.native_tokens_cached:
+                            metadata.append(f"({result.native_tokens_cached} cached)")
+
+                    if result.native_tokens_reasoning:
+                        metadata.append(
+                            f"🧠 Reasoning: {result.native_tokens_reasoning}"
+                        )
+
                     if audit_id:
                         metadata.append(f"Audit ID: {audit_id}")
 
@@ -195,6 +224,13 @@ class AuditingLLMClient:
                 cost_usd=result.cost_usd,
                 latency_ms=result.latency_ms,
                 temperature=result.temperature,
+                finish_reason=result.finish_reason,
+                cache_discount_usd=result.cache_discount_usd,
+                native_tokens_cached=result.native_tokens_cached,
+                native_tokens_reasoning=result.native_tokens_reasoning,
+                upstream_id=result.upstream_id,
+                cancelled=result.cancelled,
+                moderation_latency_ms=result.moderation_latency_ms,
                 audit_id=audit_id,
                 prompt_key=prompt_key,
             )
@@ -240,6 +276,13 @@ class AuditingLLMClient:
                 completion_tokens=0,
                 cost_usd=0,
                 latency_ms=0,
+                finish_reason=None,
+                cache_discount_usd=None,
+                native_tokens_cached=None,
+                native_tokens_reasoning=None,
+                upstream_id=None,
+                cancelled=None,
+                moderation_latency_ms=None,
             )
 
             return AuditResult(
