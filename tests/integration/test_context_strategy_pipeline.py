@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lattice.core import response_generator
-from lattice.core.context import ContextStrategy, ContextCache
+from lattice.core.context import ContextCache
 from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.memory import episodic
 from lattice.utils.date_resolution import get_now

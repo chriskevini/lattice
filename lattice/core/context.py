@@ -7,6 +7,7 @@ and optionally pre-warmed on bot restart.
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -23,6 +24,18 @@ class ContextStrategy:
     context_flags: list[str] = field(default_factory=list)
     unresolved_entities: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
+    # Fields for testing compatibility/backward compatibility if needed
+    message_id: Any = None
+    id: Any = None
+    rendered_prompt: str = ""
+    raw_response: str = ""
+    strategy_method: str = ""
+    # Fields for testing compatibility/backward compatibility if needed
+    message_id: Any = None
+    id: Any = None
+    rendered_prompt: str = ""
+    raw_response: str = ""
+    strategy_method: str = ""
 
 
 @dataclass
