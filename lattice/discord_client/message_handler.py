@@ -262,8 +262,8 @@ class MessageHandler:
         )
 
         try:
-            # Increment global message counter for context TTL
-            self.context_cache.advance()
+            # Increment per-channel message counter for context TTL
+            self.context_cache.advance(message.channel.id)
 
             # Store user message in memory
             user_message_id = await memory_orchestrator.store_user_message(
@@ -290,6 +290,7 @@ class MessageHandler:
                     user_message=message.content,
                     recent_messages=recent_msgs_for_strategy,
                     context_cache=self.context_cache,
+                    channel_id=message.channel.id,
                     user_timezone=self.user_timezone,
                     discord_message_id=message.id,
                     audit_view=True,
@@ -330,10 +331,10 @@ class MessageHandler:
 
             # Retrieve semantic context
             context_result = await retrieve_context(
+                db_pool=self.db_pool,
                 entities=entities,
                 context_flags=context_flags,
                 memory_depth=2 if entities else 0,
-                db_pool=self.db_pool,
             )
             semantic_context = cast(str, context_result.get("semantic_context", ""))
             memory_origins: set[UUID] = cast(
