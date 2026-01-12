@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
-    from lattice.core.context import ContextCache, UserContextCache
+    from lattice.core.context import ChannelContextCache, UserContextCache
 
 from lattice.core import memory_orchestrator, response_generator
 
@@ -51,7 +51,7 @@ class MessageHandler:
         dream_channel_id: int,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
-        context_cache: "ContextCache",
+        context_cache: "ChannelContextCache",
         user_context_cache: "UserContextCache",
         user_timezone: str = "UTC",
     ) -> None:
@@ -264,7 +264,7 @@ class MessageHandler:
         try:
             # Increment per-channel message counter for context TTL
             # Removed advance() from context_strategy to avoid double increment
-            self.context_cache.advance(message.channel.id)
+            await self.context_cache.advance(self.db_pool, message.channel.id)
 
             # Store user message in memory
             user_message_id = await memory_orchestrator.store_user_message(

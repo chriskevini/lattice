@@ -8,7 +8,7 @@ import pytest
 
 from lattice.discord_client.bot import LatticeBot
 from lattice.utils.config import get_config
-from lattice.core.context import ContextCache, UserContextCache
+from lattice.core.context import ChannelContextCache, UserContextCache
 
 
 class TestLatticeBot:
@@ -31,8 +31,8 @@ class TestLatticeBot:
         return MagicMock()
 
     @pytest.fixture
-    def mock_context_cache(self) -> ContextCache:
-        return ContextCache(ttl=10)
+    def mock_context_cache(self) -> ChannelContextCache:
+        return ChannelContextCache(ttl=10)
 
     @pytest.fixture
     def mock_user_context_cache(self) -> UserContextCache:

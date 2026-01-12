@@ -20,7 +20,7 @@ from lattice.discord_client.message_handler import MessageHandler
 from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
 from lattice.utils.database import get_user_timezone
-from lattice.core.context import ContextCache, UserContextCache
+from lattice.core.context import ChannelContextCache, UserContextCache
 
 # from lattice.core.context import ContextStrategy # temporarily commented for test
 from typing import TYPE_CHECKING
@@ -44,7 +44,7 @@ class LatticeBot(commands.Bot):
         self,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
-        context_cache: ContextCache,
+        context_cache: ChannelContextCache,
         user_context_cache: UserContextCache,
     ) -> None:
         """Initialize the Lattice bot."""
@@ -213,16 +213,20 @@ class LatticeBot(commands.Bot):
         )
 
     async def _pre_warm_context_cache(self) -> None:
-        """Pre-warm the context cache from database persistence."""
-        logger.info("Pre-warming context cache from DB")
+        """Pre-warm the context caches from database persistence."""
+        logger.info("Pre-warming context caches from DB")
         try:
-            await self.context_cache.load_from_db(self.db_pool)
+            await asyncio.gather(
+                self.context_cache.load_from_db(self.db_pool),
+                self.user_context_cache.load_from_db(self.db_pool),
+            )
             logger.info(
-                "Context cache pre-warmed from DB",
-                stats=self.context_cache.get_stats(),
+                "Context caches pre-warmed from DB",
+                channel_stats=self.context_cache.get_stats(),
+                user_stats=self.user_context_cache.get_stats(),
             )
         except Exception:
-            logger.exception("Failed to pre-warm context cache from DB")
+            logger.exception("Failed to pre-warm context caches from DB")
 
     async def close(self) -> None:
         """Clean up resources when shutting down."""

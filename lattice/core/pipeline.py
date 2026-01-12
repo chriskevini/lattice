@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
-    from lattice.core.context import ContextCache
+    from lattice.core.context import ChannelContextCache
 
 
 logger = structlog.get_logger(__name__)
@@ -23,7 +23,7 @@ class UnifiedPipeline:
         self,
         db_pool: "DatabasePool",
         bot: Any,
-        context_cache: "ContextCache",
+        context_cache: "ChannelContextCache",
         llm_client: Any = None,
     ) -> None:
         self.db_pool = db_pool
@@ -82,6 +82,8 @@ class UnifiedPipeline:
         # Filter out current message from recent history
         history = [m for m in recent_messages if m.message_id != message_id]
 
+        await self.context_cache.advance(self.db_pool, channel_id)
+
         strategy = await context_strategy(
             db_pool=self.db_pool,
             message_id=message_id,
@@ -130,8 +132,9 @@ class UnifiedPipeline:
                 timezone=timezone,
                 db_pool=self.db_pool,
             )
-            # Persist context cache after each message
-            await self.context_cache.save_to_db(self.db_pool)
+            # Persist context cache after each message is no longer needed
+            # as it is handled automatically in context_cache.update and advance
+            pass
 
         return sent_msg
 

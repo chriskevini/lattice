@@ -42,7 +42,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=None),
@@ -82,7 +84,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
@@ -131,7 +135,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
@@ -180,7 +186,9 @@ class TestPrepareContextualNudge:
 
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
+        mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
+        mock_cache.set_activities = AsyncMock()
 
         with (
             patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
