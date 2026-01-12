@@ -5,6 +5,7 @@ Extracted entities, context flags, and unresolved entities are stored in RAM
 and optionally pre-warmed on bot restart.
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -24,12 +25,6 @@ class ContextStrategy:
     context_flags: list[str] = field(default_factory=list)
     unresolved_entities: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
-    # Fields for testing compatibility/backward compatibility if needed
-    message_id: Any = None
-    id: Any = None
-    rendered_prompt: str = ""
-    raw_response: str = ""
-    strategy_method: str = ""
 
 
 @dataclass
@@ -148,7 +143,6 @@ class ContextCache:
                     "context_flags": ctx.context_flags,
                     "unresolved_entities": ctx.unresolved_entities,
                 }
-                import json
 
                 await conn.execute(
                     """
@@ -171,7 +165,6 @@ class ContextCache:
             rows = await conn.fetch(
                 "SELECT channel_id, strategy, message_counter, updated_at FROM context_cache_persistence"
             )
-            import json
 
             for row in rows:
                 strategy_data = json.loads(row["strategy"])

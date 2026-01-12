@@ -8,7 +8,7 @@ from lattice.utils.date_resolution import get_now
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from lattice.core.context_strategy import ContextStrategy
+from lattice.core.context import ContextStrategy
 from lattice.core.response_generator import (
     generate_response,
     get_available_placeholders,
@@ -23,14 +23,9 @@ from lattice.utils.llm import AuditResult
 def mock_extraction_declaration() -> ContextStrategy:
     """Create a mock ContextStrategy for goal message type."""
     return ContextStrategy(
-        id=uuid.uuid4(),
-        message_id=uuid.uuid4(),
         entities=["lattice project", "Friday"],
         context_flags=["goal_context"],
         unresolved_entities=[],
-        rendered_prompt="test prompt",
-        raw_response="test response",
-        strategy_method="api",
         created_at=get_now(timezone_str="UTC"),
     )
 
@@ -39,14 +34,9 @@ def mock_extraction_declaration() -> ContextStrategy:
 def mock_extraction_query() -> ContextStrategy:
     """Create a mock ContextStrategy for question message type."""
     return ContextStrategy(
-        id=uuid.uuid4(),
-        message_id=uuid.uuid4(),
         entities=["lattice", "deadline"],
         context_flags=[],
         unresolved_entities=[],
-        rendered_prompt="test prompt",
-        raw_response="test response",
-        strategy_method="api",
         created_at=get_now(timezone_str="UTC"),
     )
 
@@ -55,14 +45,9 @@ def mock_extraction_query() -> ContextStrategy:
 def mock_extraction_activity() -> ContextStrategy:
     """Create a mock ContextStrategy for activity_update message type."""
     return ContextStrategy(
-        id=uuid.uuid4(),
-        message_id=uuid.uuid4(),
         entities=["coding"],
         context_flags=["activity_context"],
         unresolved_entities=[],
-        rendered_prompt="test prompt",
-        raw_response="test response",
-        strategy_method="api",
         created_at=get_now(timezone_str="UTC"),
     )
 
@@ -71,14 +56,9 @@ def mock_extraction_activity() -> ContextStrategy:
 def mock_extraction_conversation() -> ContextStrategy:
     """Create a mock ContextStrategy for conversation message type."""
     return ContextStrategy(
-        id=uuid.uuid4(),
-        message_id=uuid.uuid4(),
         entities=["tea"],
         context_flags=[],
         unresolved_entities=[],
-        rendered_prompt="test prompt",
-        raw_response="test response",
-        strategy_method="api",
         created_at=get_now(timezone_str="UTC"),
     )
 
