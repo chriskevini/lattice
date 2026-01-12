@@ -6,6 +6,10 @@ Extracted entities are used as starting points for multi-hop memory retrieval.
 Templates:
 - CONTEXT_STRATEGY: Analyzes conversation window for entities, context flags, and unresolved entities
 - CONTEXT_RETRIEVAL: Fetches context based on entities and context flags
+
+The context strategy uses an in-memory cache to avoid re-extracting entities
+from overlapping message windows. Only the most recent 2 messages are analyzed
+fresh; historical entities are retrieved from the cache with TTL.
 """
 
 import asyncio
@@ -32,6 +36,18 @@ from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
+
+
+def _get_channel_id(
+    recent_messages: list[EpisodicMessage], discord_message_id: int | None
+) -> int:
+    """Extract channel_id from recent_messages or discord_message_id."""
+    for msg in recent_messages:
+        if msg.channel_id:
+            return msg.channel_id
+    if discord_message_id:
+        return discord_message_id % (10**18)
+    return 0
 
 
 @dataclass
@@ -116,13 +132,16 @@ async def context_strategy(
     """Perform context strategy analysis on conversation window.
 
     This function:
-    1. Fetches the CONTEXT_STRATEGY prompt template
-    2. Builds smaller episodic context (including current message)
-    3. Fetches canonical entities from database
-    4. Renders the prompt with context
-    5. Calls LLM API for analysis
-    6. Parses JSON response into strategy fields
-    7. Stores strategy in context_strategies table
+    1. Fetches cached context from in-memory store (entities, flags, unresolved)
+    2. Fetches the CONTEXT_STRATEGY prompt template
+    3. Builds smaller episodic context (including current message)
+    4. Fetches canonical entities from database
+    5. Renders the prompt with context
+    6. Calls LLM API for fresh analysis on 2-msg window
+    7. Parses JSON response into strategy fields
+    8. Merges fresh extraction with cached context
+    9. Updates in-memory cache with fresh extraction
+    10. Stores strategy in context_strategies table
 
     Args:
         db_pool: Database pool for dependency injection
@@ -137,14 +156,20 @@ async def context_strategy(
         bot: Discord bot instance for dependency injection
 
     Returns:
-        ContextStrategy object with structured fields
+        ContextStrategy object with structured fields (merged with cache)
 
     Raises:
         ValueError: If prompt template not found
         json.JSONDecodeError: If LLM response is not valid JSON
     """
     from lattice.memory.canonical import get_canonical_entities_list
+    from lattice.utils.context import get_context_cache
     from lattice.utils.date_resolution import get_now
+
+    channel_id = _get_channel_id(recent_messages, discord_message_id)
+    cache = get_context_cache()
+
+    cached_entities, cached_flags, cached_unresolved = cache.get_active(channel_id)
 
     prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXT_STRATEGY")
     if not prompt_template:
@@ -180,7 +205,6 @@ async def context_strategy(
         entity_count=len(canonical_entities),
     )
 
-    # Use injected llm_client if provided, otherwise raise error
     if not llm_client:
         raise ValueError("llm_client is required for context_strategy")
 
@@ -198,13 +222,10 @@ async def context_strategy(
         "bot": bot,
     }
 
-    # Handle both real client and Mock objects
     if hasattr(active_llm_client, "complete"):
-        # We know it has complete, but it might be a Mock or a real client
         coro = active_llm_client.complete(**complete_kwargs)
         result: Any = await coro if asyncio.iscoroutine(coro) else coro
     elif callable(active_llm_client):
-        # Fallback for simple callable mocks
         coro = active_llm_client(prompt=rendered_prompt)
         result = await coro if asyncio.iscoroutine(coro) else coro
     else:
@@ -257,6 +278,23 @@ async def context_strategy(
                 msg = f"Invalid {field} field: item at index {i} is not a string"
                 raise ValueError(msg)
 
+    fresh_entities = strategy_data["entities"]
+    fresh_flags = strategy_data["context_flags"]
+    fresh_unresolved = strategy_data["unresolved_entities"]
+
+    merged_entities = _merge_deduplicate(cached_entities, fresh_entities)
+    merged_flags = _merge_deduplicate(cached_flags, fresh_flags)
+    merged_unresolved = _merge_deduplicate(cached_unresolved, fresh_unresolved)
+
+    cache.advance()
+    if fresh_entities or fresh_flags or fresh_unresolved:
+        cache.add(
+            channel_id=channel_id,
+            entities=fresh_entities,
+            context_flags=fresh_flags,
+            unresolved_entities=fresh_unresolved,
+        )
+
     now = get_now("UTC")
     strategy_id = uuid.uuid4()
     strategy_data["_strategy_method"] = strategy_method
@@ -285,23 +323,41 @@ async def context_strategy(
         "Context strategy stored",
         strategy_id=str(strategy_id),
         message_id=str(message_id),
-        entity_count=len(strategy_data["entities"]),
-        context_flag_count=len(strategy_data["context_flags"]),
-        unresolved_entity_count=len(strategy_data["unresolved_entities"]),
+        entity_count=len(merged_entities),
+        context_flag_count=len(merged_flags),
+        unresolved_entity_count=len(merged_unresolved),
         strategy_method=strategy_method,
     )
 
     return ContextStrategy(
         id=strategy_id,
         message_id=message_id,
-        entities=strategy_data["entities"],
-        context_flags=strategy_data["context_flags"],
-        unresolved_entities=strategy_data["unresolved_entities"],
+        entities=merged_entities,
+        context_flags=merged_flags,
+        unresolved_entities=merged_unresolved,
         rendered_prompt=rendered_prompt,
         raw_response=raw_response,
         strategy_method=strategy_method,
         created_at=now,
     )
+
+
+def _merge_deduplicate(cached: list[str], fresh: list[str]) -> list[str]:
+    """Merge two lists and deduplicate while preserving order."""
+    seen: set[str] = set()
+    result: list[str] = []
+
+    for item in cached:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+
+    for item in fresh:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+
+    return result
 
 
 async def get_context_strategy(
