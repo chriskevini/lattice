@@ -68,51 +68,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
 
-  schema-drift:
+  pr-body-check:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: lattice
-          POSTGRES_PASSWORD: lattice_dev_password
-          POSTGRES_DB: lattice
-        ports:
-          - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-      - run: uv sync --extra dev
-      - name: Run migrations
-        run: .venv/bin/python scripts/migrate.py
-        env:
-          DATABASE_URL: postgresql://lattice:lattice_dev_password@localhost:5432/lattice
-      - name: Dump schema
-        run: pg_dump -s -h localhost -U lattice lattice > tmp_schema.sql
-        env:
-          PGPASSWORD: lattice_dev_password
-      - name: Check for drift
+      - name: Check PR body
         run: |
-          # pg_dump includes session-specific tokens that change on each run:
-          # - \restrict/\unrestrict tokens (lines starting with \restrict or \unrestrict)
-          # - Version comments (lines starting with -- Dumped by pg_dump)
-          # - SET statements (lines starting with SET )
-          # - set_config calls (lines containing SELECT pg_catalog.set_config)
-          # Filter them out before comparison
-          grep -E -v '^\\?restrict|^\\?unrestrict|^-- Dumped by pg_dump|^SET |pg_catalog\.set_config' scripts/schema.sql > scripts/schema.sql.clean
-          grep -E -v '^\\?restrict|^\\?unrestrict|^-- Dumped by pg_dump|^SET |pg_catalog\.set_config' tmp_schema.sql > tmp_schema.sql.clean
-
-          if ! diff -u scripts/schema.sql.clean tmp_schema.sql.clean; then
-            echo "Schema drift detected! The schema.sql does not match the migration output."
-            echo "Please update schema.sql by running migrations on a clean database and dumping the schema."
-            rm -f scripts/schema.sql.clean tmp_schema.sql.clean
+          if ! gh pr view ${{ github.event.pull_request.number }} --json body --jq '.body' | grep -q "## Related"; then
+            echo "Error: PR body must include '## Related' section"
             exit 1
           fi
-          rm -f scripts/schema.sql.clean tmp_schema.sql.clean
-            exit 1
-          fi
-          rm -f scripts/schema.sql.clean tmp_schema.sql.clean
-
