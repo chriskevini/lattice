@@ -12,10 +12,6 @@
 
 Details in [lattice/core/memory_orchestrator.py](lattice/core/memory_orchestrator.py).
 
-### Dependency Injection Infrastructure
-
-All module functions receive `db_pool` and `llm_client` as explicit parameters. The `LatticeApp` class ([lattice/app.py](lattice/app.py)) manages component lifecycle and wires dependencies together.
-
 ## 🔄 Core Pipeline
 1. **Ingest**: Message stored in episodic memory.
 2. **Analyze**: Context Strategy identifies entities and retrieval needs using `CONTEXT_STRATEGY`.
@@ -64,7 +60,7 @@ make view-logs TAIL=500         # View 500 lines
 - **Strict Typing**: Mandatory for all functions.
 - **Docs**: Google-style docstrings (focus on "why").
 - **Quality**: Enforced via Ruff and Mypy.
-- **LLM**: All calls must use `AuditingLLMClient` for observability.
+- **Commits**: Commit frequently and adhere to the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) spec.
 - **PRs**: ALWAYS follow the [pull request template](.github/pull_request_template.md) when creating PRs.
 
 ## ⚙️ Key Concepts
