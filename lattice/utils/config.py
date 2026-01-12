@@ -44,6 +44,7 @@ class Config:
     llm_provider: str
     openrouter_api_key: str | None
     openrouter_model: str
+    openrouter_timeout: int
     gemini_api_key: str | None
 
     # Application Settings
@@ -71,6 +72,7 @@ class Config:
             openrouter_model=os.getenv(
                 "OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"
             ),
+            openrouter_timeout=_get_env_int("OPENROUTER_TIMEOUT", 30),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             environment=os.getenv("ENVIRONMENT", "production"),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),

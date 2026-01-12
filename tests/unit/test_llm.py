@@ -21,6 +21,7 @@ def mock_config():
     config.llm_provider = "placeholder"
     config.openrouter_api_key = None
     config.openrouter_model = "nvidia/nemotron-3-nano-30b-a3b:free"
+    config.openrouter_timeout = 30
     yield config
 
 
@@ -155,7 +156,7 @@ class Test_LLMClientOpenRouter:
         with patch.dict("os.environ", {"FORCE_OPENAI_IMPORT_ERROR": "1"}):
             with patch.dict("sys.modules", {"openai": None}):
                 with pytest.raises(ImportError, match="openai package not installed"):
-                    await client._openrouter_complete("test", 0.7, None)
+                    await client._openrouter_complete("test", 0.7, None, None)
 
     @pytest.mark.asyncio
     async def test_openrouter_complete_missing_api_key(self, mock_config) -> None:
@@ -167,7 +168,7 @@ class Test_LLMClientOpenRouter:
         mock_config.openrouter_api_key = None
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
             with pytest.raises(ValueError, match="OPENROUTER_API_KEY not set"):
-                await client._openrouter_complete("test", 0.7, None)
+                await client._openrouter_complete("test", 0.7, None, None)
 
     @pytest.mark.asyncio
     async def test_openrouter_complete_success(self, mock_config) -> None:
@@ -201,7 +202,7 @@ class Test_LLMClientOpenRouter:
 
         mock_config.openrouter_api_key = "test-key"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
-            result = await client._openrouter_complete("test prompt", 0.7, 100)
+            result = await client._openrouter_complete("test prompt", 0.7, 100, None)
 
             assert result.content == "OpenRouter response"
             assert result.model == "anthropic/claude-3.5-sonnet"
@@ -242,7 +243,7 @@ class Test_LLMClientOpenRouter:
         mock_config.openrouter_api_key = "test-key"
         mock_config.openrouter_model = "custom/model"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
-            result = await client._openrouter_complete("test", 0.7, None)
+            result = await client._openrouter_complete("test", 0.7, None, None)
 
             # Verify the create call was made with correct model
             call_args = mock_openai_client.chat.completions.create.call_args
@@ -278,7 +279,7 @@ class Test_LLMClientOpenRouter:
 
         mock_config.openrouter_api_key = "test-key"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
-            result = await client._openrouter_complete("test", 0.7, None)
+            result = await client._openrouter_complete("test", 0.7, None, None)
 
             # Should return empty string instead of None
             assert result.content == ""
@@ -307,7 +308,7 @@ class Test_LLMClientOpenRouter:
 
         mock_config.openrouter_api_key = "test-key"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
-            result = await client._openrouter_complete("test", 0.7, None)
+            result = await client._openrouter_complete("test", 0.7, None, None)
 
             # Should default to 0 for missing usage
             assert result.prompt_tokens == 0
@@ -345,9 +346,9 @@ class Test_LLMClientOpenRouter:
         mock_config.openrouter_api_key = "test-key"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
             # First call
-            await client._openrouter_complete("test1", 0.7, None)
+            await client._openrouter_complete("test1", 0.7, None, None)
             # Second call
-            await client._openrouter_complete("test2", 0.7, None)
+            await client._openrouter_complete("test2", 0.7, None, None)
 
             # Constructor should only be called once
             assert mock_constructor.call_count == 1
@@ -380,7 +381,7 @@ class Test_LLMClientOpenRouter:
         mock_config.openrouter_api_key = "test-key"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
             # Should return empty GenerationResult instead of raising IndexError
-            result = await client._openrouter_complete("test", 0.7, None)
+            result = await client._openrouter_complete("test", 0.7, None, None)
             assert result.content == ""
             assert result.model == "test-model"
 
@@ -413,7 +414,7 @@ class Test_LLMClientOpenRouter:
 
         mock_config.openrouter_api_key = "test-key"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
-            result = await client._openrouter_complete("test", 0.7, None)
+            result = await client._openrouter_complete("test", 0.7, None, None)
 
             # Should convert string cost to float
             assert result.cost_usd == 0.001
@@ -455,7 +456,7 @@ class Test_LLMClientComplete:
                 "test prompt", temperature=0.8, max_tokens=100
             )
 
-            mock_openrouter.assert_called_once_with("test prompt", 0.8, 100)
+            mock_openrouter.assert_called_once_with("test prompt", 0.8, 100, None)
             assert result == mock_result
 
 
@@ -522,3 +523,234 @@ class TestAuditResult:
         assert result.cost_usd is None
         assert result.audit_id == audit_id
         assert result.prompt_key is None
+
+
+class Test_LLMClientOpenRouterFallbackModels:
+    """Tests for OpenRouter fallback model support."""
+
+    @pytest.mark.asyncio
+    async def test_openrouter_complete_with_single_model(self, mock_config) -> None:
+        """Test OpenRouter uses single model without extra_body."""
+        client = _LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 5
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 15
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "test response"
+
+        mock_response = MagicMock()
+        mock_response.model = "primary/model"
+        mock_response.usage = mock_usage
+        mock_response.choices = [mock_choice]
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        mock_config.openrouter_api_key = "test-key"
+        mock_config.openrouter_model = "primary/model"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            result = await client._openrouter_complete("test", 0.7, None, None)
+
+            call_args = mock_openai_client.chat.completions.create.call_args
+            assert call_args[1]["model"] == "primary/model"
+            assert "extra_body" not in call_args[1]
+            assert result.model == "primary/model"
+
+    @pytest.mark.asyncio
+    async def test_openrouter_complete_with_fallback_models(self, mock_config) -> None:
+        """Test OpenRouter uses extra_body with fallback models."""
+        client = _LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 5
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 15
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "test response"
+
+        mock_response = MagicMock()
+        mock_response.model = "primary/model"
+        mock_response.usage = mock_usage
+        mock_response.choices = [mock_choice]
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        mock_config.openrouter_api_key = "test-key"
+        mock_config.openrouter_model = "primary/model,fallback1,fallback2"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            await client._openrouter_complete("test", 0.7, None, None)
+
+            call_args = mock_openai_client.chat.completions.create.call_args
+            assert call_args[1]["model"] == "primary/model"
+            assert call_args[1]["extra_body"]["models"] == [
+                {"model": "primary/model", "weight": 1},
+                {"model": "fallback1", "weight": 0.5},
+                {"model": "fallback2", "weight": 0.5},
+            ]
+
+    @pytest.mark.asyncio
+    async def test_openrouter_complete_with_whitespace_in_models(
+        self, mock_config
+    ) -> None:
+        """Test OpenRouter handles whitespace in comma-separated models."""
+        client = _LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 5
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 15
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "test response"
+
+        mock_response = MagicMock()
+        mock_response.model = "primary/model"
+        mock_response.usage = mock_usage
+        mock_response.choices = [mock_choice]
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        mock_config.openrouter_api_key = "test-key"
+        mock_config.openrouter_model = " primary/model , fallback1 , fallback2 "
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            await client._openrouter_complete("test", 0.7, None, None)
+
+            call_args = mock_openai_client.chat.completions.create.call_args
+            assert call_args[1]["model"] == "primary/model"
+            assert call_args[1]["extra_body"]["models"] == [
+                {"model": "primary/model", "weight": 1},
+                {"model": "fallback1", "weight": 0.5},
+                {"model": "fallback2", "weight": 0.5},
+            ]
+
+
+class Test_LLMClientTimeout:
+    """Tests for OpenRouter timeout support."""
+
+    @pytest.mark.asyncio
+    async def test_openrouter_complete_uses_default_timeout(self, mock_config) -> None:
+        """Test OpenRouter uses default timeout from config."""
+        client = _LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 5
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 15
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "test response"
+
+        mock_response = MagicMock()
+        mock_response.model = "test-model"
+        mock_response.usage = mock_usage
+        mock_response.choices = [mock_choice]
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        mock_config.openrouter_api_key = "test-key"
+        mock_config.openrouter_model = "test-model"
+        mock_config.openrouter_timeout = 45
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            await client._openrouter_complete("test", 0.7, None, None)
+
+            call_args = mock_openai_client.chat.completions.create.call_args
+            assert call_args[1]["timeout"] == 45
+
+    @pytest.mark.asyncio
+    async def test_openrouter_complete_uses_custom_timeout(self, mock_config) -> None:
+        """Test OpenRouter uses custom timeout parameter."""
+        client = _LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 5
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 15
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "test response"
+
+        mock_response = MagicMock()
+        mock_response.model = "test-model"
+        mock_response.usage = mock_usage
+        mock_response.choices = [mock_choice]
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        mock_config.openrouter_api_key = "test-key"
+        mock_config.openrouter_model = "test-model"
+        mock_config.openrouter_timeout = 30
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            await client._openrouter_complete("test", 0.7, None, 120)
+
+            call_args = mock_openai_client.chat.completions.create.call_args
+            assert call_args[1]["timeout"] == 120
+
+    @pytest.mark.asyncio
+    async def test_complete_passes_timeout_to_openrouter(self, mock_config) -> None:
+        """Test that complete() passes timeout to _openrouter_complete()."""
+        client = _LLMClient(provider="openrouter")
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 5
+        mock_usage.completion_tokens = 10
+        mock_usage.total_tokens = 15
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "test response"
+
+        mock_response = MagicMock()
+        mock_response.model = "test-model"
+        mock_response.usage = mock_usage
+        mock_response.choices = [mock_choice]
+
+        mock_openai_client = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=mock_response
+        )
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+
+        mock_config.openrouter_api_key = "test-key"
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            with patch.object(
+                client, "_openrouter_complete", return_value=mock_response
+            ) as mock_openrouter:
+                await client.complete(
+                    "test prompt", temperature=0.8, max_tokens=100, timeout=60
+                )
+
+                mock_openrouter.assert_called_once_with("test prompt", 0.8, 100, 60)
