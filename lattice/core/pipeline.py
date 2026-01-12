@@ -23,13 +23,13 @@ class UnifiedPipeline:
         self,
         db_pool: "DatabasePool",
         bot: Any,
+        context_cache: "InMemoryContextCache",
         llm_client: Any = None,
-        context_cache: "InMemoryContextCache | None" = None,
     ) -> None:
         self.db_pool = db_pool
         self.bot = bot
-        self.llm_client = llm_client
         self.context_cache = context_cache
+        self.llm_client = llm_client
 
     async def send_response(
         self,
@@ -87,10 +87,10 @@ class UnifiedPipeline:
             message_id=message_id,
             user_message=content,
             recent_messages=history,
+            context_cache=self.context_cache,
             user_timezone=timezone,
             discord_message_id=discord_message_id,
             llm_client=self.llm_client,
-            context_cache=self.context_cache,
         )
 
         # 3. Retrieve

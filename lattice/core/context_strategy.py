@@ -48,7 +48,7 @@ def _get_channel_id(
             return msg.channel_id
     if discord_message_id:
         return discord_message_id % (10**18)
-    return 0
+    raise ValueError("No channel_id found in recent_messages or discord_message_id")
 
 
 @dataclass
@@ -123,13 +123,13 @@ async def context_strategy(
     message_id: UUID,
     user_message: str,
     recent_messages: list[EpisodicMessage],
+    context_cache: "InMemoryContextCache",
     user_timezone: str | None = None,
     discord_message_id: int | None = None,
     audit_view: bool = False,
     audit_view_params: dict[str, Any] | None = None,
     llm_client: Any | None = None,
     bot: Any | None = None,
-    context_cache: "InMemoryContextCache | None" = None,
 ) -> ContextStrategy:
     """Perform context strategy analysis on conversation window.
 
@@ -168,13 +168,11 @@ async def context_strategy(
     from lattice.memory.canonical import get_canonical_entities_list
     from lattice.utils.date_resolution import get_now
 
-    if context_cache is None:
-        raise ValueError("context_cache is required for context_strategy")
-
     channel_id = _get_channel_id(recent_messages, discord_message_id)
-    cache = context_cache
 
-    cached_entities, cached_flags, cached_unresolved = cache.get_active(channel_id)
+    cached_entities, cached_flags, cached_unresolved = context_cache.get_active(
+        channel_id
+    )
 
     prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXT_STRATEGY")
     if not prompt_template:
@@ -292,9 +290,9 @@ async def context_strategy(
     merged_flags = _merge_deduplicate(cached_flags, fresh_flags)
     merged_unresolved = _merge_deduplicate(cached_unresolved, fresh_unresolved)
 
-    cache.advance()
+    context_cache.advance()
     if fresh_entities or fresh_flags or fresh_unresolved:
-        cache.add(
+        context_cache.add(
             channel_id=channel_id,
             entities=fresh_entities,
             context_flags=fresh_flags,
@@ -460,8 +458,7 @@ async def get_context_strategy_by_message_id(
             message_id=row["message_id"],
             entities=strategy_data["entities"],
             context_flags=strategy_data.get("context_flags", []),
-            unresolved_entities=strategy_data.get("unresolved_entities")
-            or strategy_data.get("unknown_entities", []),
+            unresolved_entities=strategy_data.get("unresolved_entities", []),
             rendered_prompt=row["rendered_prompt"],
             raw_response=row["raw_response"],
             strategy_method=strategy_data.get("_strategy_method", "api"),

@@ -163,6 +163,7 @@ class TestContextStrategyFunction:
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    discord_message_id=12345,
                     context_cache=context_cache,
                 )
 
@@ -212,6 +213,7 @@ class TestContextStrategyFunction:
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    discord_message_id=12345,
                     llm_client=mock_client,
                     context_cache=context_cache,
                 )
@@ -264,6 +266,7 @@ class TestContextStrategyFunction:
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
+                    discord_message_id=12345,
                     llm_client=mock_client,
                     context_cache=context_cache,
                 )
@@ -495,3 +498,72 @@ class TestInMemoryContextCache:
                 assert "project" in strategy_2.entities
                 assert "Friday" in strategy_2.entities
                 assert "weekend" in strategy_2.entities
+
+
+class TestInMemoryContextCacheDirect:
+    """Unit tests for InMemoryContextCache TTL and basic operations."""
+
+    def test_cache_ttl_expiration(self) -> None:
+        """Test that entries expire after TTL advances."""
+        cache = InMemoryContextCache(ttl=2)
+
+        cache.advance()
+        cache.add(1, ["entity1"], ["flag1"], [])
+
+        entities, flags, unresolved = cache.get_active(1)
+        assert entities == ["entity1"]
+        assert flags == ["flag1"]
+
+        cache.advance()
+        entities, flags, unresolved = cache.get_active(1)
+        assert entities == ["entity1"]
+        assert flags == ["flag1"]
+
+        cache.advance()
+        cache.advance()
+        entities, flags, unresolved = cache.get_active(1)
+        assert entities == []
+        assert flags == []
+
+    def test_cache_prune_expired(self) -> None:
+        """Test that prune_expired removes expired entries."""
+        cache = InMemoryContextCache(ttl=2)
+
+        cache.advance()
+        cache.add(1, ["entity1"], [], [])
+        cache.advance()
+        cache.add(2, ["entity2"], [], [])
+
+        assert cache.get_active(1)[0] == ["entity1"]
+        assert cache.get_active(2)[0] == ["entity2"]
+
+        cache.advance()
+        cache.advance()
+        cache.advance()
+        cache.prune_expired()
+
+        assert cache.get_active(1) == ([], [], [])
+        assert cache.get_active(2) == ([], [], [])
+
+    def test_cache_clear(self) -> None:
+        """Test that clear resets cache and counter."""
+        cache = InMemoryContextCache(ttl=10)
+
+        cache.advance()
+        cache.advance()
+        cache.add(1, ["entity"], [], [])
+
+        cache.clear()
+
+        assert cache.get_active(1) == ([], [], [])
+        assert cache.get_stats()["message_counter"] == 0
+
+    def test_cache_get_entities_convenience(self) -> None:
+        """Test the get_entities convenience method."""
+        cache = InMemoryContextCache(ttl=10)
+
+        cache.advance()
+        cache.add(1, ["entity1", "entity2"], [], [])
+
+        entities = cache.get_entities(1)
+        assert entities == ["entity1", "entity2"]

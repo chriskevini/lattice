@@ -51,8 +51,8 @@ class MessageHandler:
         dream_channel_id: int,
         db_pool: "DatabasePool",
         llm_client: "AuditingLLMClient",
+        context_cache: "InMemoryContextCache",
         user_timezone: str = "UTC",
-        context_cache: "InMemoryContextCache | None" = None,
     ) -> None:
         """Initialize the message handler.
 
@@ -101,7 +101,10 @@ class MessageHandler:
                 from lattice.core.pipeline import UnifiedPipeline
 
                 pipeline = UnifiedPipeline(
-                    db_pool=self.db_pool, bot=self.bot, llm_client=self.llm_client
+                    db_pool=self.db_pool,
+                    bot=self.bot,
+                    context_cache=self.context_cache,
+                    llm_client=self.llm_client,
                 )
                 result = await pipeline.dispatch_autonomous_nudge(
                     content=decision.content,
@@ -283,6 +286,7 @@ class MessageHandler:
                     message_id=user_message_id,
                     user_message=message.content,
                     recent_messages=recent_msgs_for_strategy,
+                    context_cache=self.context_cache,
                     user_timezone=self.user_timezone,
                     discord_message_id=message.id,
                     audit_view=True,
@@ -292,7 +296,6 @@ class MessageHandler:
                     },
                     llm_client=self.llm_client,
                     bot=self.bot,
-                    context_cache=self.context_cache,
                 )
 
                 if strategy:
