@@ -119,9 +119,9 @@ test-fast: ## Run tests without coverage (faster)
 	uv run pytest -x
 
 test-integration: ## Run integration tests with database
-	@docker compose up -d postgres || true
-	@docker compose exec -T bot uv run pytest tests/integration/ -v --no-cov
-	@docker compose down postgres
+	@docker compose -f docker-compose.base.yml up -d postgres || true
+	@docker compose -f docker-compose.base.yml exec -T bot uv run pytest tests/integration/ -v --no-cov
+	@docker compose -f docker-compose.base.yml down postgres
 
 lint: ## Run linting checks
 	uv run ruff check .
@@ -177,15 +177,15 @@ bump-version: ## Bump version using commitizen
 # ============================================================================
 
 init-db: ## Initialize database schema and seed data
-	docker compose exec bot python scripts/init_db.py
+	docker compose -f docker-compose.base.yml exec bot python scripts/init_db.py
 
 nuke-db: ## Nuke and reinitialize the database (removes all data)
-	docker compose down -v
-	docker compose up -d
+	docker compose -f docker-compose.base.yml down -v
+	docker compose -f docker-compose.base.yml up -d
 	$(MAKE) init-db
 
 migrate: ## Run database migrations
-	docker compose exec bot python scripts/migrate.py
+	docker compose -f docker-compose.base.yml exec bot python scripts/migrate.py
 
 # ============================================================================
 # Local Extraction Model (Optional)

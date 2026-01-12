@@ -34,6 +34,7 @@ All functions receive `db_pool` and `llm_client` as explicit parameters.
 - `lattice/scheduler/`: Task orchestration (triggers and adaptive runners).
 - `lattice/discord_client/`: Bot interface and UI handlers.
 - `lattice/prompts/`: Template management.
+- `scripts/prompts/`: Canonical prompt templates. v1 = canonical (Git versions), v2+ = user customizations.
 - `lattice/app.py`: `LatticeApp` class for component lifecycle and DI wiring.
 - `lattice/utils/`: LLM client, auditing, database utilities, and placeholder registry/injector.
 - `scripts/`: Database schema, seeding, and migration tools.
