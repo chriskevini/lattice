@@ -12,7 +12,16 @@ import pytest
 from lattice.core import response_generator
 from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.memory import episodic
+from lattice.utils.context import reset_context_cache
 from lattice.utils.date_resolution import get_now
+
+
+@pytest.fixture(autouse=True)
+def reset_cache():
+    """Reset context cache before each test."""
+    reset_context_cache()
+    yield
+    reset_context_cache()
 
 
 @pytest.fixture

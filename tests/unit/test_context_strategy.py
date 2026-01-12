@@ -417,7 +417,7 @@ class TestInMemoryContextCache:
         from lattice.utils.context import get_context_cache, reset_context_cache
 
         reset_context_cache()
-        cache = get_context_cache()
+        get_context_cache()
 
         message_id = uuid.uuid4()
         extraction_data = {
