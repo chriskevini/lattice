@@ -30,22 +30,17 @@ class ContextStrategy:
     rendered_prompt: str = ""
     raw_response: str = ""
     strategy_method: str = ""
-    # Fields for testing compatibility/backward compatibility if needed
-    message_id: Any = None
-    id: Any = None
-    rendered_prompt: str = ""
-    raw_response: str = ""
-    strategy_method: str = ""
 
 
 @dataclass
 class ChannelContext:
     """Cached context for a specific channel with per-item TTL tracking."""
 
-    # Key: item (entity/flag), Value: global message index when last seen
+    # Key: item (entity/flag), Value: channel-local message index when last seen
     entities: dict[str, int] = field(default_factory=dict)
     context_flags: dict[str, int] = field(default_factory=dict)
     unresolved_entities: dict[str, int] = field(default_factory=dict)
+    message_counter: int = 0
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -64,12 +59,12 @@ class ContextCache:
         """
         self.ttl = ttl
         self._cache: dict[int, ChannelContext] = {}
-        self._message_counter: int = 0
 
-    def advance(self) -> int:
-        """Increment global message counter and return new value."""
-        self._message_counter += 1
-        return self._message_counter
+    def advance(self, channel_id: int) -> int:
+        """Increment channel message counter and return new value."""
+        ctx = self._cache.setdefault(channel_id, ChannelContext())
+        ctx.message_counter += 1
+        return ctx.message_counter
 
     def update(
         self,
@@ -79,13 +74,13 @@ class ContextCache:
         """Update cache with fresh strategy, refreshing TTL for seen items."""
         ctx = self._cache.setdefault(channel_id, ChannelContext())
 
-        # Update per-item counters to current global index
+        # Update per-item counters to current channel index
         for entity in fresh.entities:
-            ctx.entities[entity] = self._message_counter
+            ctx.entities[entity] = ctx.message_counter
         for flag in fresh.context_flags:
-            ctx.context_flags[flag] = self._message_counter
+            ctx.context_flags[flag] = ctx.message_counter
         for unresolved in fresh.unresolved_entities:
-            ctx.unresolved_entities[unresolved] = self._message_counter
+            ctx.unresolved_entities[unresolved] = ctx.message_counter
 
         ctx.created_at = fresh.created_at
         return self.get_active(channel_id)
@@ -100,17 +95,17 @@ class ContextCache:
         active_entities = [
             e
             for e, idx in ctx.entities.items()
-            if self._message_counter - idx <= self.ttl
+            if ctx.message_counter - idx <= self.ttl
         ]
         active_flags = [
             f
             for f, idx in ctx.context_flags.items()
-            if self._message_counter - idx <= self.ttl
+            if ctx.message_counter - idx <= self.ttl
         ]
         active_unresolved = [
             u
             for u, idx in ctx.unresolved_entities.items()
-            if self._message_counter - idx <= self.ttl
+            if ctx.message_counter - idx <= self.ttl
         ]
 
         # Cleanup internal dicts to prevent memory leaks
@@ -127,6 +122,13 @@ class ContextCache:
         }
 
         if not any([active_entities, active_flags, active_unresolved]):
+            # Keep the message counter even if items are cleared
+            # or delete the whole context if it's been long enough?
+            # For now, let's keep it if message_counter is small or just delete
+            # if everything is expired to avoid channel leak.
+            # However, deleting it resets message_counter.
+            # Let's only delete if it's truly empty AND we haven't seen a message in a while?
+            # Actually, deleting it is fine, next message starts at counter 1.
             del self._cache[channel_id]
             return ContextStrategy()
 
@@ -137,10 +139,53 @@ class ContextCache:
             created_at=ctx.created_at,
         )
 
+    async def save_to_db(self, db_pool: Any) -> None:
+        """Persist cache to database."""
+        async with db_pool.pool.acquire() as conn:
+            for channel_id, ctx in self._cache.items():
+                strategy_json = {
+                    "entities": ctx.entities,
+                    "context_flags": ctx.context_flags,
+                    "unresolved_entities": ctx.unresolved_entities,
+                }
+                import json
+
+                await conn.execute(
+                    """
+                    INSERT INTO context_cache_persistence (channel_id, strategy, message_counter, updated_at)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (channel_id) DO UPDATE SET
+                        strategy = EXCLUDED.strategy,
+                        message_counter = EXCLUDED.message_counter,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    channel_id,
+                    json.dumps(strategy_json),
+                    ctx.message_counter,
+                    ctx.created_at,
+                )
+
+    async def load_from_db(self, db_pool: Any) -> None:
+        """Load cache from database."""
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT channel_id, strategy, message_counter, updated_at FROM context_cache_persistence"
+            )
+            import json
+
+            for row in rows:
+                strategy_data = json.loads(row["strategy"])
+                self._cache[row["channel_id"]] = ChannelContext(
+                    entities=strategy_data["entities"],
+                    context_flags=strategy_data["context_flags"],
+                    unresolved_entities=strategy_data["unresolved_entities"],
+                    message_counter=row["message_counter"],
+                    created_at=row["updated_at"],
+                )
+
     def clear(self) -> None:
         """Clear all cached context."""
         self._cache.clear()
-        self._message_counter = 0
 
     def get_stats(self) -> dict[str, int]:
         """Get cache statistics for debugging/monitoring."""
@@ -148,5 +193,7 @@ class ContextCache:
             "cached_channels": len(self._cache),
             "total_entities": sum(len(ctx.entities) for ctx in self._cache.values()),
             "total_flags": sum(len(ctx.context_flags) for ctx in self._cache.values()),
-            "message_counter": self._message_counter,
+            "total_messages_tracked": sum(
+                ctx.message_counter for ctx in self._cache.values()
+            ),
         }

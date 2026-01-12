@@ -210,62 +210,16 @@ class LatticeBot(commands.Bot):
         )
 
     async def _pre_warm_context_cache(self) -> None:
-        """Pre-warm the context cache from recent messages."""
-        logger.info("Pre-warming context cache")
-        from lattice.memory import episodic
-        from lattice.core.context_strategy import context_strategy
-
-        # Get recent messages from main channel to rebuild context cache
-        # We take a slightly larger window than the strategy window to ensure we have history
-        recent_msgs = await episodic.get_recent_messages(
-            channel_id=self.main_channel_id,
-            limit=10,
-            db_pool=self.db_pool,
-        )
-
-        if not recent_msgs:
-            logger.info("No recent messages found for pre-warming")
-            return
-
-        # Ensure database pool is initialized before starting pre-warming
-        if not self.db_pool.is_initialized():
-            logger.warning("Database pool not initialized during pre-warming, skipping")
-            return
-
+        """Pre-warm the context cache from database persistence."""
+        logger.info("Pre-warming context cache from DB")
         try:
-            # Replay the last few messages sequentially to populate the cache
-            # This simulates the bot having been online for these messages
-            # get_recent_messages returns oldest first (already chronological)
-
-            # We want to process them in a way that building up the cache
-            # For each message, we treat it as a new incoming message
-            for i in range(1, len(recent_msgs)):
-                history = recent_msgs[:i]
-                current = recent_msgs[i]
-
-                if current.message_id is None:
-                    continue
-
-                await context_strategy(
-                    db_pool=self.db_pool,
-                    message_id=current.message_id,
-                    user_message=current.content,
-                    recent_messages=history,
-                    context_cache=self.context_cache,
-                    user_timezone=self._user_timezone,
-                    discord_message_id=current.discord_message_id,
-                    llm_client=self.llm_client,
-                    bot=self,
-                )
-
+            await self.context_cache.load_from_db(self.db_pool)
             logger.info(
-                "Context cache pre-warmed",
-                cached_stats=self.context_cache.get_stats()
-                if hasattr(self.context_cache, "get_stats")
-                else "done",
+                "Context cache pre-warmed from DB",
+                stats=self.context_cache.get_stats(),
             )
         except Exception:
-            logger.exception("Failed to pre-warm context cache")
+            logger.exception("Failed to pre-warm context cache from DB")
 
     async def close(self) -> None:
         """Clean up resources when shutting down."""

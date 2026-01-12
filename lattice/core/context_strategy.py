@@ -73,6 +73,7 @@ async def context_strategy(
     user_message: str,
     recent_messages: list[EpisodicMessage],
     context_cache: "ContextCache",
+    channel_id: int,
     user_timezone: str | None = None,
     discord_message_id: int | None = None,
     audit_view: bool = False,
@@ -83,8 +84,6 @@ async def context_strategy(
     """Perform context strategy analysis on conversation window."""
     from lattice.memory.canonical import get_canonical_entities_list
     from lattice.utils.date_resolution import get_now
-
-    channel_id = _get_channel_id(recent_messages, discord_message_id)
 
     prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXT_STRATEGY")
     if not prompt_template:
@@ -155,7 +154,7 @@ async def context_strategy(
         created_at=now,
     )
 
-    context_cache.advance()
+    context_cache.advance(channel_id)
     merged_strategy = context_cache.update(channel_id, fresh_strategy)
 
     return merged_strategy

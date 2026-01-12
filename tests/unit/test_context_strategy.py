@@ -133,6 +133,7 @@ class TestContextStrategyFunction:
                 recent_messages=recent_messages,
                 llm_client=mock_client,
                 context_cache=context_cache,
+                channel_id=123,
             )
 
             assert strategy.entities == ["lattice project", "Friday"]
@@ -161,6 +162,7 @@ class TestContextStrategyFunction:
                     discord_message_id=12345,
                     context_cache=context_cache,
                     llm_client=AsyncMock(),
+                    channel_id=123,
                 )
 
     @pytest.mark.asyncio
@@ -212,6 +214,7 @@ class TestContextStrategyFunction:
                     discord_message_id=12345,
                     llm_client=mock_client,
                     context_cache=context_cache,
+                    channel_id=123,
                 )
 
 
@@ -314,6 +317,7 @@ class TestContextCacheIntegration:
                 recent_messages=recent_messages,
                 llm_client=mock_client,
                 context_cache=context_cache,
+                channel_id=123,
             )
 
             assert strategy.entities == ["project", "Friday"]
@@ -337,6 +341,7 @@ class TestContextCacheIntegration:
                     recent_messages=recent_messages,
                     llm_client=mock_client,
                     context_cache=context_cache,
+                    channel_id=123,
                 )
 
                 assert "project" in strategy_2.entities
@@ -351,20 +356,20 @@ class TestContextCacheDirect:
         """Test that entries expire after TTL advances."""
         cache = ContextCache(ttl=2)
 
-        cache.advance()
+        cache.advance(1)
         cache.update(1, ContextStrategy(entities=["entity1"], context_flags=["flag1"]))
 
         strategy = cache.get_active(1)
         assert strategy.entities == ["entity1"]
         assert strategy.context_flags == ["flag1"]
 
-        cache.advance()
+        cache.advance(1)
         strategy = cache.get_active(1)
         assert strategy.entities == ["entity1"]
         assert strategy.context_flags == ["flag1"]
 
-        cache.advance()
-        cache.advance()
+        cache.advance(1)
+        cache.advance(1)
         strategy = cache.get_active(1)
         assert strategy.entities == []
         assert strategy.context_flags == []
@@ -373,11 +378,11 @@ class TestContextCacheDirect:
         """Test that clear resets cache and counter."""
         cache = ContextCache(ttl=10)
 
-        cache.advance()
-        cache.advance()
+        cache.advance(1)
+        cache.advance(1)
         cache.update(1, ContextStrategy(entities=["entity"]))
 
         cache.clear()
 
         assert cache.get_active(1).entities == []
-        assert cache.get_stats()["message_counter"] == 0
+        assert cache.get_stats()["cached_channels"] == 0

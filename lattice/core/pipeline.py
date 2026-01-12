@@ -88,6 +88,7 @@ class UnifiedPipeline:
             user_message=content,
             recent_messages=history,
             context_cache=self.context_cache,
+            channel_id=channel_id,
             user_timezone=timezone,
             discord_message_id=discord_message_id,
             llm_client=self.llm_client,
@@ -129,6 +130,8 @@ class UnifiedPipeline:
                 timezone=timezone,
                 db_pool=self.db_pool,
             )
+            # Persist context cache after each message
+            await self.context_cache.save_to_db(self.db_pool)
 
         return sent_msg
 
