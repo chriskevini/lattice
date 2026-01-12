@@ -78,3 +78,5 @@ jobs:
             echo "Error: PR body must include '## Related' section"
             exit 1
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
