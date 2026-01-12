@@ -263,6 +263,7 @@ class MessageHandler:
 
         try:
             # Increment per-channel message counter for context TTL
+            # Removed advance() from context_strategy to avoid double increment
             self.context_cache.advance(message.channel.id)
 
             # Store user message in memory
