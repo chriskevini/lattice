@@ -4,7 +4,7 @@ This module provides renderer functions for different memory types.
 Each renderer produces a consistent string representation for LLM context.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Callable
 from zoneinfo import ZoneInfo
 
