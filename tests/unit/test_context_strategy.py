@@ -523,32 +523,25 @@ class TestUserContextCache:
     @pytest.mark.asyncio
     async def test_load_from_db_with_timezone(self, user_context_cache) -> None:
         """Test that load_from_db correctly reconstructs timezone data."""
-        mock_conn = AsyncMock()
-        user_context_cache._db_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
+        now = datetime.now()
+        user_context_cache._repository.load_context_type = AsyncMock(
+            return_value=[
+                {
+                    "target_id": "user1",
+                    "data": {
+                        "timezone": ["America/New_York", now.isoformat()],
+                    },
+                    "updated_at": now.isoformat(),
+                },
+                {
+                    "target_id": "user2",
+                    "data": {
+                        "timezone": ["Europe/London", now.isoformat()],
+                    },
+                    "updated_at": now.isoformat(),
+                },
+            ]
         )
-        user_context_cache._db_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-        mock_conn.fetch.return_value = [
-            {
-                "target_id": "user1",
-                "data": json.dumps(
-                    {
-                        "timezone": ["America/New_York", "2024-01-01T00:00:00"],
-                    }
-                ),
-                "updated_at": "2024-01-01T00:00:00",
-            },
-            {
-                "target_id": "user2",
-                "data": json.dumps(
-                    {
-                        "timezone": ["Europe/London", "2024-01-02T00:00:00"],
-                    }
-                ),
-                "updated_at": "2024-01-02T00:00:00",
-            },
-        ]
 
         await user_context_cache.load_from_db()
 

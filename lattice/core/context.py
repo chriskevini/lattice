@@ -292,7 +292,9 @@ class UserContextCache(ContextCacheBase):
         for row in rows:
             try:
                 user_id = row["target_id"]
-                data = json.loads(row["data"])
+                data = row["data"]
+                if isinstance(data, str):
+                    data = json.loads(data)
                 if data.get("goals"):
                     self._goals[user_id] = (
                         data["goals"][0],
