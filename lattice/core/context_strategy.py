@@ -178,6 +178,7 @@ async def retrieve_context(
     context_flags: list[str],
     memory_depth: int = 2,
     semantic_repo: "SemanticMemoryRepository | None" = None,
+    user_timezone: str | None = None,
 ) -> dict[str, Any]:
     """Retrieve context based on entities and context flags."""
     from lattice.memory.graph import GraphTraversal
@@ -214,7 +215,7 @@ async def retrieve_context(
                 if activity_memories:
                     renderer = get_renderer("activity_context")
                     activities = [
-                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'))}"
+                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
                         for m in activity_memories
                         if m.get("object")
                     ]
@@ -232,7 +233,7 @@ async def retrieve_context(
                 if goal_memories:
                     renderer = get_renderer("goal_context")
                     goals = [
-                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''))}"
+                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
                         for m in goal_memories
                         if m.get("object")
                     ]
@@ -288,7 +289,9 @@ async def retrieve_context(
             )
             if subject and predicate and obj:
                 relationships.append(
-                    renderer(subject, predicate, obj, memory.get("created_at"))
+                    renderer(
+                        subject, predicate, obj, memory.get("created_at"), user_timezone
+                    )
                 )
 
         if relationships:
