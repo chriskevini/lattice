@@ -256,24 +256,14 @@ class TestRunBatchConsolidation:
         mock_pool, mock_conn = create_mock_pool_with_conn()
 
         # Setup mocks
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-        mock_conn.fetchval = AsyncMock(return_value=20)
+        mock_pool.get_system_metrics = AsyncMock(return_value="100")
+        mock_pool.pool.fetchval = AsyncMock(return_value=20)
 
-        # Setup repository with mock pool
-        mock_repo = MagicMock()
-        mock_repo._db_pool = mock_pool
-
-        # Ensure pool is the same as the one mock_pool.pool points to
-        mock_repo._db_pool.pool = mock_pool.pool
-
-        # Fix: should_consolidate calls db_pool.fetchval and db_pool.pool.acquire
-        mock_pool.fetchval = AsyncMock(return_value=20)
-
-        result = await should_consolidate(mock_repo)
+        result = await should_consolidate(mock_pool)
         assert result is True
 
         # Verify the fetchval call
-        mock_pool.fetchval.assert_called_once_with(
+        mock_pool.pool.fetchval.assert_called_once_with(
             "SELECT COUNT(*) FROM raw_messages WHERE discord_message_id > $1", 100
         )
 

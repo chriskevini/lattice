@@ -112,22 +112,21 @@ async def _update_consolidation_cursor(conn: Any, cursor_id: str) -> None:
     )
 
 
-async def should_consolidate(message_repo: "MessageRepository") -> bool:
+async def should_consolidate(db_pool: "DatabasePool") -> bool:
     """Check if consolidation is needed (message count trigger).
 
     This is a fast check without locks, called after each message.
     Returns True if there are CONSOLIDATION_BATCH_SIZE or more pending messages.
 
     Args:
-        message_repo: Message repository
+        db_pool: Database pool for dependency injection
 
     Returns:
         True if consolidation should run
     """
-    cursor_id = await _get_consolidation_cursor(
-        await message_repo._db_pool.pool.acquire()  # type: ignore[attr-defined]
-    )
-    count = await message_repo._db_pool.fetchval(  # type: ignore[attr-defined]
+    cursor_id = await db_pool.get_system_metrics(CONSOLIDATION_CURSOR_KEY) or "0"
+
+    count = await db_pool.pool.fetchval(
         "SELECT COUNT(*) FROM raw_messages WHERE discord_message_id > $1",
         int(cursor_id) if cursor_id.isdigit() else 0,
     )
