@@ -80,13 +80,12 @@ async def get_goal_context(
     Returns:
         Formatted goals string showing goals and their predicates
     """
-    if goal_names is None and semantic_repo:
+    if goal_names is None:
+        if not semantic_repo:
+            return "No active goals."
         goal_names = await semantic_repo.fetch_goal_names(limit=MAX_GOALS_CONTEXT)
 
     if not goal_names:
-        return "No active goals."
-
-    if not semantic_repo:
         return "No active goals."
 
     try:
