@@ -305,10 +305,10 @@ class TestAuditViewBuilder:
         )
 
         assert embed.fields[0].name == "📥"
-        assert len(embed.fields[0].value) <= 4000
+        assert len(embed.fields[0].value) <= 1024
 
         assert embed.fields[1].name == "📤"
-        assert len(embed.fields[1].value) <= 4000
+        assert len(embed.fields[1].value) <= 1024
 
     @pytest.mark.asyncio
     async def test_warnings_shown_in_embed(self, db_pool: AsyncMock) -> None:

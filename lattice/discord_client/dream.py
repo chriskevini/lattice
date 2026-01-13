@@ -109,7 +109,7 @@ MODAL_TEXT_LIMIT = 4000
 
 MODAL_TEXT_SAFE_LIMIT = 3900
 DISCORD_MESSAGE_LIMIT = 2000
-DISCORD_FIELD_LIMIT = 4000
+DISCORD_FIELD_LIMIT = 1024
 
 # View Registration Pattern:
 # - Views with timeout=None (persistent) must be registered with bot.add_view()
