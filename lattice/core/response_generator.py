@@ -92,11 +92,11 @@ async def get_goal_context(
         return "No active goals."
 
     assert semantic_repo is not None  # Type narrowing for mypy
+    predicates: list[dict[str, Any]] = []
     try:
         predicates = await semantic_repo.get_goal_predicates(goal_names)
     except Exception as e:
         logger.error("Failed to fetch goal predicates from repository", error=str(e))
-        predicates: list[dict[str, Any]] = []
 
     goal_predicates: dict[str, list[tuple[str, str]]] = {}
     for pred in predicates:
