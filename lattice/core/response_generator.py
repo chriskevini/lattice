@@ -12,6 +12,7 @@ from lattice.utils.llm import AuditResult
 
 
 if TYPE_CHECKING:
+    from lattice.memory.repositories import SemanticMemoryRepository
     from lattice.utils.database import DatabasePool
 
 
@@ -66,7 +67,7 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
 
 
 async def get_goal_context(
-    semantic_repo: Any = None,
+    semantic_repo: "SemanticMemoryRepository | None" = None,
     goal_names: list[str] | None = None,
 ) -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.

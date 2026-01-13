@@ -14,7 +14,7 @@ from lattice.utils.date_resolution import get_now
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 if TYPE_CHECKING:
-    pass
+    from lattice.memory.repositories import SemanticMemoryRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -53,7 +53,7 @@ async def prepare_contextual_nudge(
     prompt_template: Any,
     db_pool: Any = None,
     bot: Any | None = None,
-    semantic_repo: Any = None,
+    semantic_repo: "SemanticMemoryRepository | None" = None,
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 
