@@ -133,6 +133,17 @@ class SemanticMemoryRepository(Protocol):
         """
         ...
 
+    async def fetch_goal_names(self, limit: int = 50) -> list[str]:
+        """Fetch unique goal names from knowledge graph.
+
+        Args:
+            limit: Maximum number of goals to return
+
+        Returns:
+            List of unique goal strings
+        """
+        ...
+
 
 @runtime_checkable
 class CanonicalRepository(Protocol):
