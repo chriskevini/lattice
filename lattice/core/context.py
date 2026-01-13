@@ -285,26 +285,6 @@ class UserContextCache(ContextCacheBase):
             return None
         return tz_value
 
-    async def set_timezone(self, user_id: str, timezone: str) -> None:
-        """Update cached timezone and persist to DB."""
-        self._timezone = (timezone, datetime.now())
-        await self._persist(user_id)
-
-    def get_timezone(self) -> str | None:
-        """Get cached timezone, or None if expired/missing."""
-        if self._timezone is None:
-            return None
-        tz_value, cached_at = self._timezone
-        if self._is_expired(cached_at):
-            self._timezone = None
-            return None
-        return tz_value
-
-    async def set_timezone(self, db_pool: Any, user_id: str, timezone: str) -> None:
-        """Update cached timezone and persist to DB."""
-        self._timezone = (timezone, datetime.now())
-        await self._persist(db_pool, user_id)
-
     def _is_expired(self, cached_at: datetime) -> bool:
         return (datetime.now() - cached_at).total_seconds() > self.ttl * 60
 
