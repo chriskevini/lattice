@@ -50,8 +50,8 @@ class PromptAudit:
     cancelled: bool | None
     moderation_latency_ms: int | None
 
-    # Context configuration
-    context_config: dict[str, Any] | None
+    # Execution metadata (context config, batch metrics, etc.)
+    execution_metadata: dict[str, Any] | None
     archetype_matched: str | None
     archetype_confidence: float | None
 
@@ -90,7 +90,7 @@ async def store_prompt_audit(
     upstream_id: str | None = None,
     cancelled: bool | None = None,
     moderation_latency_ms: int | None = None,
-    context_config: dict[str, Any] | None = None,
+    execution_metadata: dict[str, Any] | None = None,
     archetype_matched: str | None = None,
     archetype_confidence: float | None = None,
     reasoning: dict[str, Any] | None = None,
@@ -119,7 +119,7 @@ async def store_prompt_audit(
         upstream_id: Traceability to underlying provider
         cancelled: Whether the request was cancelled
         moderation_latency_ms: Content moderation overhead
-        context_config: Context configuration used
+        execution_metadata: Execution metadata (context config, batch metrics, etc.)
         archetype_matched: Archetype that was matched
         archetype_confidence: Confidence score for archetype match
         reasoning: AI reasoning and decision factors
@@ -128,7 +128,9 @@ async def store_prompt_audit(
     Returns:
         UUID of the stored audit entry
     """
-    context_config_json = json.dumps(context_config) if context_config else None
+    execution_metadata_json = (
+        json.dumps(execution_metadata) if execution_metadata else None
+    )
     reasoning_json = json.dumps(reasoning) if reasoning else None
 
     async with db_pool.pool.acquire() as conn:
@@ -153,7 +155,7 @@ async def store_prompt_audit(
                 upstream_id,
                 cancelled,
                 moderation_latency_ms,
-                context_config,
+                execution_metadata,
                 archetype_matched,
                 archetype_confidence,
                 reasoning,
@@ -181,7 +183,7 @@ async def store_prompt_audit(
             upstream_id,
             cancelled,
             moderation_latency_ms,
-            context_config_json,
+            execution_metadata_json,
             archetype_matched,
             archetype_confidence,
             reasoning_json,
@@ -342,7 +344,7 @@ async def get_audit_by_dream_message(
                 cost_usd, latency_ms,
                 finish_reason, cache_discount_usd, native_tokens_cached,
                 native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
-                context_config, archetype_matched, archetype_confidence,
+                execution_metadata, archetype_matched, archetype_confidence,
                 reasoning,
                 main_discord_message_id, dream_discord_message_id,
                 feedback_id, created_at
@@ -375,7 +377,7 @@ async def get_audit_by_dream_message(
             upstream_id=row["upstream_id"],
             cancelled=row["cancelled"],
             moderation_latency_ms=row["moderation_latency_ms"],
-            context_config=row["context_config"],
+            execution_metadata=row["execution_metadata"],
             archetype_matched=row["archetype_matched"],
             archetype_confidence=row["archetype_confidence"],
             reasoning=row["reasoning"],
@@ -409,7 +411,7 @@ async def get_audits_with_feedback(
                 cost_usd, latency_ms,
                 finish_reason, cache_discount_usd, native_tokens_cached,
                 native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
-                context_config, archetype_matched, archetype_confidence,
+                execution_metadata, archetype_matched, archetype_confidence,
                 reasoning,
                 main_discord_message_id, dream_discord_message_id,
                 feedback_id, created_at
@@ -443,7 +445,7 @@ async def get_audits_with_feedback(
                 upstream_id=row["upstream_id"],
                 cancelled=row["cancelled"],
                 moderation_latency_ms=row["moderation_latency_ms"],
-                context_config=row["context_config"],
+                execution_metadata=row["execution_metadata"],
                 archetype_matched=row["archetype_matched"],
                 archetype_confidence=row["archetype_confidence"],
                 reasoning=row["reasoning"],
