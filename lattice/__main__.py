@@ -79,8 +79,8 @@ async def main() -> None:
 
     db_pool = DatabasePool()
     await db_pool.initialize()
-    context_cache = ChannelContextCache(ttl=10)
-    user_context_cache = UserContextCache(ttl_minutes=30)
+    context_cache = ChannelContextCache(db_pool=db_pool, ttl=10)
+    user_context_cache = UserContextCache(db_pool=db_pool, ttl_minutes=30)
 
     bot = LatticeBot(
         db_pool=db_pool,

@@ -79,7 +79,7 @@ async def prepare_contextual_nudge(
     goals = user_context_cache.get_goals(user_id)
     if goals is None and db_pool:
         goals = await response_generator.get_goal_context(db_pool=db_pool)
-        await user_context_cache.set_goals(db_pool, user_id, goals)
+        await user_context_cache.set_goals(user_id, goals)
 
     from lattice.core.context_strategy import retrieve_context
 
@@ -91,7 +91,7 @@ async def prepare_contextual_nudge(
         activity = context_result.get(
             "activity_context", "No recent activity recorded."
         )
-        await user_context_cache.set_activities(db_pool, user_id, activity)
+        await user_context_cache.set_activities(user_id, activity)
 
     channel_id = await get_default_channel_id()
 

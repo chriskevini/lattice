@@ -154,7 +154,7 @@ async def context_strategy(
         created_at=now,
     )
 
-    merged_strategy = await context_cache.update(db_pool, channel_id, fresh_strategy)
+    merged_strategy = await context_cache.update(channel_id, fresh_strategy)
 
     return merged_strategy
 

@@ -307,7 +307,7 @@ class MessageHandler:
         try:
             # Increment per-channel message counter for context TTL
             # Removed advance() from context_strategy to avoid double increment
-            await self.context_cache.advance(self.db_pool, message.channel.id)
+            await self.context_cache.advance(message.channel.id)
 
             # Store user message in memory
             user_message_id = await memory_orchestrator.store_user_message(

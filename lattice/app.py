@@ -20,8 +20,8 @@ class LatticeApp:
         self.db_pool = DatabasePool()
         self.llm_client = _LLMClient(provider=config.llm_provider)
         self.auditing_llm_client = AuditingLLMClient(llm_client=self.llm_client)
-        self.context_cache = ChannelContextCache(ttl=10)
-        self.user_context_cache = UserContextCache(ttl_minutes=30)
+        self.context_cache = ChannelContextCache(db_pool=self.db_pool, ttl=10)
+        self.user_context_cache = UserContextCache(db_pool=self.db_pool, ttl_minutes=30)
         self.bot = LatticeBot(
             db_pool=self.db_pool,
             llm_client=self.auditing_llm_client,

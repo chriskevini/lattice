@@ -82,7 +82,7 @@ class UnifiedPipeline:
         # Filter out current message from recent history
         history = [m for m in recent_messages if m.message_id != message_id]
 
-        await self.context_cache.advance(self.db_pool, channel_id)
+        await self.context_cache.advance(channel_id)
 
         strategy = await context_strategy(
             db_pool=self.db_pool,

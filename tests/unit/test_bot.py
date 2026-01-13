@@ -32,12 +32,12 @@ class TestLatticeBot:
         return MagicMock()
 
     @pytest.fixture
-    def mock_context_cache(self) -> ChannelContextCache:
-        return ChannelContextCache(ttl=10)
+    def mock_context_cache(self, mock_db_pool) -> ChannelContextCache:
+        return ChannelContextCache(db_pool=mock_db_pool, ttl=10)
 
     @pytest.fixture
-    def mock_user_context_cache(self) -> UserContextCache:
-        return UserContextCache(ttl_minutes=30)
+    def mock_user_context_cache(self, mock_db_pool) -> UserContextCache:
+        return UserContextCache(db_pool=mock_db_pool, ttl_minutes=30)
 
     @pytest.fixture
     def bot(

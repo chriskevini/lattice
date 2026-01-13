@@ -81,26 +81,27 @@ class ChannelContextCache(ContextCacheBase):
     is refreshed when it appears in a fresh strategy extraction.
     """
 
-    def __init__(self, ttl: int = 10) -> None:
+    def __init__(self, db_pool: Any, ttl: int = 10) -> None:
         """Initialize cache.
 
         Args:
+            db_pool: Database pool for persistence (stored for write-through caching)
             ttl: How many messages an item stays in cache since last seen
         """
         super().__init__(context_type="channel")
+        self._db_pool = db_pool
         self.ttl = ttl
         self._cache: dict[int, ChannelContext] = {}
 
-    async def advance(self, db_pool: Any, channel_id: int) -> int:
+    async def advance(self, channel_id: int) -> int:
         """Increment channel message counter and return new value."""
         ctx = self._cache.setdefault(channel_id, ChannelContext())
         ctx.message_counter += 1
-        await self._persist(db_pool, channel_id)
+        await self._persist(channel_id)
         return ctx.message_counter
 
     async def update(
         self,
-        db_pool: Any,
         channel_id: int,
         fresh: ContextStrategy,
     ) -> ContextStrategy:
@@ -116,7 +117,7 @@ class ChannelContextCache(ContextCacheBase):
             ctx.unresolved_entities[unresolved] = ctx.message_counter
 
         ctx.created_at = fresh.created_at
-        await self._persist(db_pool, channel_id)
+        await self._persist(channel_id)
         return self.get_active(channel_id)
 
     def get_active(self, channel_id: int) -> ContextStrategy:
@@ -167,7 +168,7 @@ class ChannelContextCache(ContextCacheBase):
             created_at=ctx.created_at,
         )
 
-    async def _persist(self, db_pool: Any, channel_id: int) -> None:
+    async def _persist(self, channel_id: int) -> None:
         """Persist a single channel's context to DB."""
         ctx = self._cache.get(channel_id)
         if not ctx:
@@ -183,7 +184,7 @@ class ChannelContextCache(ContextCacheBase):
         ctx_after = self._cache.get(channel_id)
         if ctx_after is not ctx:
             return
-        await self._save(db_pool, str(channel_id), data)
+        await self._save(self._db_pool, str(channel_id), data)
 
     async def load_from_db(self, db_pool: Any) -> None:
         """Load all channel context from database."""
@@ -224,12 +225,22 @@ class ChannelContextCache(ContextCacheBase):
 
 
 class UserContextCache(ContextCacheBase):
-    """User-level cache for goals and activities with persistence."""
+    """User-level cache for goals and activities with persistence.
 
-    def __init__(self, ttl_minutes: int = 30) -> None:
+    Stores goals, activities, and timezone with automatic write-through
+    persistence to the database.
+    """
+
+    def __init__(self, db_pool: Any, ttl_minutes: int = 30) -> None:
+        """Initialize cache.
+
+        Args:
+            db_pool: Database pool for persistence (stored for write-through caching)
+            ttl_minutes: TTL for cached items in minutes
+        """
         super().__init__(context_type="user")
+        self._db_pool = db_pool
         self.ttl = ttl_minutes
-        # user_id -> {goals: (content, time), activities: (content, time)}
         self._goals: dict[str, tuple[str, datetime]] = {}
         self._activities: dict[str, tuple[str, datetime]] = {}
         self._timezone: tuple[str, datetime] | None = None
@@ -244,10 +255,10 @@ class UserContextCache(ContextCacheBase):
             return None
         return content
 
-    async def set_goals(self, db_pool: Any, user_id: str, content: str) -> None:
-        """Cache goals for user and persist."""
+    async def set_goals(self, user_id: str, content: str) -> None:
+        """Cache goals for user and persist to DB."""
         self._goals[user_id] = (content, datetime.now())
-        await self._persist(db_pool, user_id)
+        await self._persist(user_id)
 
     def get_activities(self, user_id: str) -> str | None:
         """Get cached activities for user, or None if expired/missing."""
@@ -259,10 +270,10 @@ class UserContextCache(ContextCacheBase):
             return None
         return content
 
-    async def set_activities(self, db_pool: Any, user_id: str, content: str) -> None:
-        """Cache activities for user and persist."""
+    async def set_activities(self, user_id: str, content: str) -> None:
+        """Cache activities for user and persist to DB."""
         self._activities[user_id] = (content, datetime.now())
-        await self._persist(db_pool, user_id)
+        await self._persist(user_id)
 
     def get_timezone(self) -> str | None:
         """Get cached timezone, or None if expired/missing."""
@@ -274,15 +285,15 @@ class UserContextCache(ContextCacheBase):
             return None
         return tz_value
 
-    async def set_timezone(self, db_pool: Any, user_id: str, timezone: str) -> None:
+    async def set_timezone(self, user_id: str, timezone: str) -> None:
         """Update cached timezone and persist to DB."""
         self._timezone = (timezone, datetime.now())
-        await self._persist(db_pool, user_id)
+        await self._persist(user_id)
 
     def _is_expired(self, cached_at: datetime) -> bool:
         return (datetime.now() - cached_at).total_seconds() > self.ttl * 60
 
-    async def _persist(self, db_pool: Any, user_id: str) -> None:
+    async def _persist(self, user_id: str) -> None:
         """Persist user context to DB."""
         goals_data = self._goals.get(user_id)
         activities_data = self._activities.get(user_id)
@@ -295,7 +306,7 @@ class UserContextCache(ContextCacheBase):
             else None,
             "timezone": [tz_data[0], tz_data[1].isoformat()] if tz_data else None,
         }
-        await self._save(db_pool, user_id, data)
+        await self._save(self._db_pool, user_id, data)
 
     async def load_from_db(self, db_pool: Any) -> None:
         """Load all user context from database."""
