@@ -566,6 +566,9 @@ async def run_batch_consolidation(
         max_tokens=MAX_CONSOLIDATION_TOKENS,
         audit_view=True,
         bot=active_bot,
+        execution_metadata={
+            "batch_message_count": message_count,
+        },
     )
 
     # Parse JSON response
@@ -685,5 +688,6 @@ async def run_batch_consolidation(
     logger.info(
         "Batch consolidation completed",
         batch_id=batch_id,
+        message_count=message_count,
         memory_count=len(extracted_memories),
     )

@@ -178,9 +178,11 @@ async def retrieve_context(
     context_flags: list[str],
     memory_depth: int = 2,
     semantic_repo: "SemanticMemoryRepository | None" = None,
+    user_timezone: str | None = None,
 ) -> dict[str, Any]:
     """Retrieve context based on entities and context flags."""
     from lattice.memory.graph import GraphTraversal
+    from lattice.memory.renderers import get_renderer
 
     context: dict[str, Any] = {
         "semantic_context": "",
@@ -211,8 +213,9 @@ async def retrieve_context(
                     subject="User", predicate="did activity", limit=20
                 )
                 if activity_memories:
+                    renderer = get_renderer("activity_context")
                     activities = [
-                        f"- {m.get('object')}"
+                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
                         for m in activity_memories
                         if m.get("object")
                     ]
@@ -228,8 +231,9 @@ async def retrieve_context(
                     predicate="has goal", limit=10
                 )
                 if goal_memories:
+                    renderer = get_renderer("goal_context")
                     goals = [
-                        f"- {m.get('subject')} has goal: {m.get('object')}"
+                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
                         for m in goal_memories
                         if m.get("object")
                     ]
@@ -275,6 +279,7 @@ async def retrieve_context(
                                 context["memory_origins"].add(origin_id)
 
     if semantic_memories:
+        renderer = get_renderer("semantic_context")
         relationships = []
         for memory in semantic_memories[:10]:
             subject, predicate, obj = (
@@ -283,7 +288,11 @@ async def retrieve_context(
                 memory.get("object"),
             )
             if subject and predicate and obj:
-                relationships.append(f"{subject} {predicate} {obj}")
+                relationships.append(
+                    renderer(
+                        subject, predicate, obj, memory.get("created_at"), user_timezone
+                    )
+                )
 
         if relationships:
             context["semantic_context"] = (

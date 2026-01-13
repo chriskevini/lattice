@@ -144,7 +144,11 @@ pre-commit: ## Run all pre-commit hooks on all files
 check-discord-v2: ## Check that Discord UI components use V2 APIs
 	python scripts/check_discord_v2.py
 
-check-all: lint type-check check-discord-v2 ## Run all quality checks
+check-migrations: ## Check that existing migrations are immutable
+	@echo "Checking migration immutability..."
+	@scripts/check_migrations.sh || exit 1
+
+check-all: lint type-check check-discord-v2 check-migrations ## Run all quality checks
 
 # ============================================================================
 # Application Commands

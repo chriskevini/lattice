@@ -114,6 +114,7 @@ class UnifiedPipeline:
             entities=strategy.entities,
             context_flags=strategy.context_flags,
             semantic_repo=self.semantic_repo,
+            user_timezone=timezone,
         )
 
         # 4. Generate

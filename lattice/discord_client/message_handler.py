@@ -114,6 +114,7 @@ class MessageHandler:
                 prompt_template=prompt_template,
                 db_pool=self.db_pool,
                 bot=self.bot,
+                semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
             )
 
             if nudge_plan.content and nudge_plan.channel_id:
@@ -427,6 +428,7 @@ class MessageHandler:
                 entities=entities,
                 context_flags=context_flags,
                 memory_depth=2 if entities else 0,
+                user_timezone=self.user_timezone,
             )
             semantic_context = cast(str, context_result.get("semantic_context", ""))
             memory_origins: set[UUID] = cast(
