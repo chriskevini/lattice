@@ -243,7 +243,7 @@ class UserContextCache(ContextCacheBase):
         self.ttl = ttl_minutes
         self._goals: dict[str, tuple[str, datetime]] = {}
         self._activities: dict[str, tuple[str, datetime]] = {}
-        self._timezone: tuple[str, datetime] | None = None
+        self._timezone: dict[str, tuple[str, datetime]] = {}
 
     def get_goals(self, user_id: str) -> str | None:
         """Get cached goals for user, or None if expired/missing."""
@@ -275,15 +275,20 @@ class UserContextCache(ContextCacheBase):
         self._activities[user_id] = (content, datetime.now())
         await self._persist(user_id)
 
-    def get_timezone(self) -> str | None:
-        """Get cached timezone, or None if expired/missing."""
-        if self._timezone is None:
+    def get_timezone(self, user_id: str) -> str | None:
+        """Get cached timezone for user, or None if expired/missing."""
+        if user_id not in self._timezone:
             return None
-        tz_value, cached_at = self._timezone
+        tz_value, cached_at = self._timezone[user_id]
         if self._is_expired(cached_at):
-            self._timezone = None
+            del self._timezone[user_id]
             return None
         return tz_value
+
+    async def set_timezone(self, user_id: str, tz_value: str) -> None:
+        """Cache timezone for user and persist to DB."""
+        self._timezone[user_id] = (tz_value, datetime.now())
+        await self._persist(user_id)
 
     def _is_expired(self, cached_at: datetime) -> bool:
         return (datetime.now() - cached_at).total_seconds() > self.ttl * 60
@@ -292,7 +297,7 @@ class UserContextCache(ContextCacheBase):
         """Persist user context to DB."""
         goals_data = self._goals.get(user_id)
         activities_data = self._activities.get(user_id)
-        tz_data = self._timezone
+        tz_data = self._timezone.get(user_id)
 
         data = {
             "goals": [goals_data[0], goals_data[1].isoformat()] if goals_data else None,
@@ -321,7 +326,7 @@ class UserContextCache(ContextCacheBase):
                         datetime.fromisoformat(data["activities"][1]),
                     )
                 if data.get("timezone"):
-                    self._timezone = (
+                    self._timezone[user_id] = (
                         data["timezone"][0],
                         datetime.fromisoformat(data["timezone"][1]),
                     )
@@ -337,12 +342,12 @@ class UserContextCache(ContextCacheBase):
         """Clear all cached user context."""
         self._goals.clear()
         self._activities.clear()
-        self._timezone = None
+        self._timezone.clear()
 
     def get_stats(self) -> dict[str, int]:
         return {
             "cached_users": len(set(self._goals.keys()) | set(self._activities.keys())),
             "cached_goals": len(self._goals),
             "cached_activities": len(self._activities),
-            "cached_timezone": 1 if self._timezone else 0,
+            "cached_timezone": len(self._timezone),
         }

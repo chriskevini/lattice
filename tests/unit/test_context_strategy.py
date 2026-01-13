@@ -485,3 +485,38 @@ class TestUserContextCache:
             assert user_context_cache.get_goals("user2") == "User2 goals"
             assert user_context_cache.get_activities("user1") == "User1 activities"
             assert user_context_cache.get_activities("user2") is None
+
+    @pytest.mark.asyncio
+    async def test_get_set_timezone(self, user_context_cache) -> None:
+        """Test basic timezone get/set operations."""
+        assert user_context_cache.get_timezone("user") is None
+
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_timezone("user", "America/New_York")
+            assert user_context_cache.get_timezone("user") == "America/New_York"
+
+    @pytest.mark.asyncio
+    async def test_timezone_ttl_expiration(self, user_context_cache) -> None:
+        """Test that timezone expires after TTL."""
+        user_context_cache.ttl = 1.0 / 60.0  # 1 second (TTL is in minutes)
+
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_timezone("user", "Europe/London")
+            assert user_context_cache.get_timezone("user") == "Europe/London"
+
+            import asyncio
+
+            await asyncio.sleep(1.1)
+
+            assert user_context_cache.get_timezone("user") is None
+
+    @pytest.mark.asyncio
+    async def test_timezone_concurrent_users(self, user_context_cache) -> None:
+        """Test timezone cache handles multiple users independently."""
+        with patch.object(UserContextCache, "_persist", new_callable=AsyncMock):
+            await user_context_cache.set_timezone("user1", "UTC")
+            await user_context_cache.set_timezone("user2", "America/Los_Angeles")
+
+            assert user_context_cache.get_timezone("user1") == "UTC"
+            assert user_context_cache.get_timezone("user2") == "America/Los_Angeles"
+            assert user_context_cache.get_timezone("user3") is None

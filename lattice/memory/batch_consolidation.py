@@ -330,7 +330,8 @@ async def run_batch_consolidation(
                 from zoneinfo import ZoneInfo
 
                 ZoneInfo(timezone_str)
-                await user_context_cache.set_timezone("user", timezone_str)
+                user_id = str(bot.user.id) if bot and bot.user else "user"
+                await user_context_cache.set_timezone(user_id, timezone_str)
                 logger.info(
                     "Updated user timezone cache from semantic memory",
                     timezone=timezone_str,

@@ -70,7 +70,7 @@ async def prepare_contextual_nudge(
     if not llm_client:
         raise ValueError("llm_client is required for prepare_contextual_nudge")
 
-    user_tz = user_context_cache.get_timezone()
+    user_tz = user_context_cache.get_timezone(user_id)
     if not user_tz:
         user_tz = "UTC"
 
