@@ -10,7 +10,6 @@ The repository pattern abstracts database access behind clean async interfaces,
 enabling dependency injection and future database portability.
 """
 
-from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
@@ -219,7 +218,38 @@ class CanonicalRepository(Protocol):
         ...
 
 
-class PostgresRepository(ABC):
+@runtime_checkable
+class ContextRepository(Protocol):
+    """Repository for persistent context caching.
+
+    Handles upserting and loading context data from the context_cache table.
+    """
+
+    async def save_context(
+        self, context_type: str, target_id: str, data: dict[str, Any]
+    ) -> None:
+        """Upsert context data to the database.
+
+        Args:
+            context_type: Type of context (e.g., 'channel', 'user')
+            target_id: Unique identifier for the context target (e.g., channel_id)
+            data: Dictionary of context data to persist
+        """
+        ...
+
+    async def load_context_type(self, context_type: str) -> list[dict[str, Any]]:
+        """Load all entries of a specific context type.
+
+        Args:
+            context_type: Type of context to load
+
+        Returns:
+            List of rows with target_id, data, and updated_at
+        """
+        ...
+
+
+class PostgresRepository:
     """Base class for PostgreSQL-based repositories.
 
     Provides common database connection handling using asyncpg pool.
@@ -233,87 +263,3 @@ class PostgresRepository(ABC):
             db_pool: asyncpg connection pool
         """
         self._db_pool = db_pool
-
-    @abstractmethod
-    async def get_entities_list(self) -> list[str]:
-        """Fetch all canonical entity names.
-
-        Returns:
-            List of entity names sorted by creation date (newest first)
-        """
-        ...
-
-    @abstractmethod
-    async def get_predicates_list(self) -> list[str]:
-        """Fetch all canonical predicate names.
-
-        Returns:
-            List of predicate names sorted by creation date (newest first)
-        """
-        ...
-
-    @abstractmethod
-    async def get_entities_set(self) -> set[str]:
-        """Fetch all canonical entities as a set.
-
-        Returns:
-            Set of entity names for fast membership testing
-        """
-        ...
-
-    @abstractmethod
-    async def get_predicates_set(self) -> set[str]:
-        """Fetch all canonical predicates as a set.
-
-        Returns:
-            Set of predicate names for fast membership testing
-        """
-        ...
-
-    @abstractmethod
-    async def store_entities(self, names: list[str]) -> int:
-        """Store new canonical entities.
-
-        Args:
-            names: List of entity names to store
-
-        Returns:
-            Number of entities inserted
-        """
-        ...
-
-    @abstractmethod
-    async def store_predicates(self, names: list[str]) -> int:
-        """Store new canonical predicates.
-
-        Args:
-            names: List of predicate names to store
-
-        Returns:
-            Number of predicates inserted
-        """
-        ...
-
-    @abstractmethod
-    async def entity_exists(self, name: str) -> bool:
-        """Check if an entity name exists.
-
-        Args:
-            name: Entity name to check
-
-        Returns:
-            True if entity exists
-        """
-        ...
-
-    @abstractmethod
-    async def predicate_exists(self, name: str) -> bool:
-        """Check if a predicate name exists.
-
-        Args:
-            name: Predicate name to check
-
-        Returns:
-            True if predicate exists
-        """
-        ...

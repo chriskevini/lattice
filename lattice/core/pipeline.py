@@ -5,6 +5,11 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.core.context import ChannelContextCache
+    from lattice.memory.repositories import (
+        CanonicalRepository,
+        MessageRepository,
+        SemanticMemoryRepository,
+    )
 
 
 logger = structlog.get_logger(__name__)
@@ -24,11 +29,17 @@ class UnifiedPipeline:
         db_pool: "DatabasePool",
         bot: Any,
         context_cache: "ChannelContextCache",
+        message_repo: "MessageRepository",
+        semantic_repo: "SemanticMemoryRepository",
+        canonical_repo: "CanonicalRepository",
         llm_client: Any = None,
     ) -> None:
         self.db_pool = db_pool
         self.bot = bot
         self.context_cache = context_cache
+        self.message_repo = message_repo
+        self.semantic_repo = semantic_repo
+        self.canonical_repo = canonical_repo
         self.llm_client = llm_client
 
     async def send_response(
@@ -70,19 +81,19 @@ class UnifiedPipeline:
             discord_message_id=discord_message_id,
             channel_id=channel_id,
             timezone=timezone,
-            db_pool=self.db_pool,
+            message_repo=self.message_repo,
         )
 
         # 2. Analyze
         recent_messages = await memory_orchestrator.episodic.get_recent_messages(
             channel_id=channel_id,
             limit=10,
-            db_pool=self.db_pool,
+            repo=self.message_repo,
         )
         # Filter out current message from recent history
         history = [m for m in recent_messages if m.message_id != message_id]
 
-        await self.context_cache.advance(self.db_pool, channel_id)
+        await self.context_cache.advance(channel_id)
 
         strategy = await context_strategy(
             db_pool=self.db_pool,
@@ -94,6 +105,7 @@ class UnifiedPipeline:
             user_timezone=timezone,
             discord_message_id=discord_message_id,
             llm_client=self.llm_client,
+            canonical_repo=self.canonical_repo,
         )
 
         # 3. Retrieve
@@ -101,6 +113,7 @@ class UnifiedPipeline:
             db_pool=self.db_pool,
             entities=strategy.entities,
             context_flags=strategy.context_flags,
+            semantic_repo=self.semantic_repo,
         )
 
         # 4. Generate
@@ -130,7 +143,7 @@ class UnifiedPipeline:
                     "context_info": context_info,
                 },
                 timezone=timezone,
-                db_pool=self.db_pool,
+                message_repo=self.message_repo,
             )
             # Persist context cache after each message is no longer needed
             # as it is handled automatically in context_cache.update and advance

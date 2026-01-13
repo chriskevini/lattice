@@ -38,6 +38,7 @@ from lattice.utils.placeholder_injector import PlaceholderInjector
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import MessageRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -71,7 +72,7 @@ async def _update_last_batch_id(conn: Any, batch_id: str) -> None:
     )
 
 
-async def check_and_run_batch(db_pool: Any) -> None:
+async def check_and_run_batch(db_pool: Any, message_repo: "MessageRepository") -> None:
     """Check if memory consolidation is needed and run it.
 
     Called after each message is stored. Performs a fast threshold check
@@ -80,6 +81,7 @@ async def check_and_run_batch(db_pool: Any) -> None:
 
     Args:
         db_pool: Database pool for dependency injection (required)
+        message_repo: Message repository
     """
     async with db_pool.pool.acquire() as conn:
         last_batch_id = await _get_last_batch_id(conn)
@@ -119,11 +121,12 @@ async def check_and_run_batch(db_pool: Any) -> None:
         threshold=CONSOLIDATION_BATCH_SIZE,
     )
 
-    await run_batch_consolidation(db_pool=db_pool)
+    await run_batch_consolidation(db_pool=db_pool, message_repo=message_repo)
 
 
 async def run_batch_consolidation(
     db_pool: "DatabasePool",
+    message_repo: "MessageRepository",
     llm_client: Any = None,
     bot: Any = None,
     user_context_cache: Any = None,
@@ -142,6 +145,7 @@ async def run_batch_consolidation(
 
     Args:
         db_pool: Database pool for dependency injection (required)
+        message_repo: Message repository
         llm_client: LLM client for dependency injection
         bot: Discord bot instance for dependency injection
         user_context_cache: User-level cache for timezone updates
@@ -330,9 +334,8 @@ async def run_batch_consolidation(
                 from zoneinfo import ZoneInfo
 
                 ZoneInfo(timezone_str)
-                await user_context_cache.set_timezone(
-                    db_pool=db_pool, user_id="user", timezone=timezone_str
-                )
+                user_id = str(bot.user.id) if bot and bot.user else "user"
+                await user_context_cache.set_timezone(user_id, timezone_str)
                 logger.info(
                     "Updated user timezone cache from semantic memory",
                     timezone=timezone_str,
@@ -373,7 +376,7 @@ async def run_batch_consolidation(
 
         message_id = messages[-1]["id"]
         await store_semantic_memories(
-            db_pool=db_pool,
+            repo=message_repo,
             message_id=message_id,
             memories=extracted_memories,
             source_batch_id=batch_id,

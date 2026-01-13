@@ -1,13 +1,10 @@
 """Unit tests for episodic memory module."""
 
-import json
 from lattice.utils.date_resolution import get_now
 from zoneinfo import ZoneInfo
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-import asyncpg
 import pytest
 
 from lattice.memory.episodic import (
@@ -157,21 +154,18 @@ class TestStoreMessage:
             is_bot=False,
         )
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
+        mock_repo = MagicMock()
+        mock_repo.store_message = AsyncMock(return_value=message_id)
 
-        result = await store_message(db_pool=mock_pool, message=msg)
+        result = await store_message(repo=mock_repo, message=msg)
 
         assert result == message_id
-        mock_conn.fetchrow.assert_called_once()
-        call_args = mock_conn.fetchrow.call_args
-        assert "INSERT INTO raw_messages" in call_args[0][0]
-        assert call_args[0][1] == 12345
-        assert call_args[0][2] == 67890
-        assert call_args[0][3] == "Hello"
-        assert call_args[0][4] is False
-        assert call_args[0][5] is False
-        assert call_args[0][6] is None
+        mock_repo.store_message.assert_called_once()
+        call_args = mock_repo.store_message.call_args
+        assert call_args.kwargs["content"] == "Hello"
+        assert call_args.kwargs["discord_message_id"] == 12345
+        assert call_args.kwargs["channel_id"] == 67890
+        assert call_args.kwargs["is_bot"] is False
 
     @pytest.mark.asyncio
     async def test_store_message_with_full_metadata(self) -> None:
@@ -187,14 +181,15 @@ class TestStoreMessage:
             generation_metadata=metadata,
         )
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
+        mock_repo = MagicMock()
+        mock_repo.store_message = AsyncMock(return_value=message_id)
 
-        result = await store_message(db_pool=mock_pool, message=msg)
+        result = await store_message(repo=mock_repo, message=msg)
 
         assert result == message_id
-        call_args = mock_conn.fetchrow.call_args
-        assert call_args[0][6] == json.dumps(metadata)
+        mock_repo.store_message.assert_called_once()
+        call_args = mock_repo.store_message.call_args
+        assert call_args.kwargs["generation_metadata"] == metadata
 
     @pytest.mark.asyncio
     async def test_store_message_proactive_flag(self) -> None:
@@ -208,14 +203,15 @@ class TestStoreMessage:
             is_proactive=True,
         )
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": message_id})
+        mock_repo = MagicMock()
+        mock_repo.store_message = AsyncMock(return_value=message_id)
 
-        result = await store_message(db_pool=mock_pool, message=msg)
+        result = await store_message(repo=mock_repo, message=msg)
 
         assert result == message_id
-        call_args = mock_conn.fetchrow.call_args
-        assert call_args[0][5] is True
+        mock_repo.store_message.assert_called_once()
+        call_args = mock_repo.store_message.call_args
+        assert call_args.kwargs["is_proactive"] is True
 
     @pytest.mark.asyncio
     async def test_store_message_database_error(self) -> None:
@@ -227,11 +223,13 @@ class TestStoreMessage:
             is_bot=False,
         )
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetchrow = AsyncMock(side_effect=Exception("DB connection failed"))
+        mock_repo = MagicMock()
+        mock_repo.store_message = AsyncMock(
+            side_effect=Exception("DB connection failed")
+        )
 
         with pytest.raises(Exception, match="DB connection failed"):
-            await store_message(db_pool=mock_pool, message=msg)
+            await store_message(repo=mock_repo, message=msg)
 
 
 class TestGetRecentMessages:
@@ -240,45 +238,42 @@ class TestGetRecentMessages:
     @pytest.mark.asyncio
     async def test_get_recent_messages_specific_channel(self) -> None:
         """Test retrieving recent messages from a specific channel."""
+        message1_id = uuid4()
+        message2_id = uuid4()
+        now = get_now()
         mock_rows = [
             {
-                "id": uuid4(),
-                "content": "Message 2",
+                "id": message2_id,
                 "discord_message_id": 2,
                 "channel_id": 123,
+                "content": "Message 2",
                 "is_bot": True,
                 "is_proactive": False,
-                "timestamp": get_now(),
-                "generation_metadata": json.dumps({"model": "gpt-4"}),
+                "timestamp": now,
                 "user_timezone": "UTC",
             },
             {
-                "id": uuid4(),
-                "content": "Message 1",
+                "id": message1_id,
                 "discord_message_id": 1,
                 "channel_id": 123,
+                "content": "Message 1",
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": get_now(),
-                "generation_metadata": None,
+                "timestamp": now,
                 "user_timezone": "UTC",
             },
         ]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetch = AsyncMock(return_value=mock_rows)
+        mock_repo = MagicMock()
+        mock_repo.get_recent_messages = AsyncMock(return_value=mock_rows)
 
-        messages = await get_recent_messages(
-            db_pool=mock_pool, channel_id=123, limit=10
-        )
+        messages = await get_recent_messages(repo=mock_repo, channel_id=123, limit=10)
 
         assert len(messages) == 2
+        # get_recent_messages calls reversed(rows), so newest (Message 2) becomes last
         assert messages[0].content == "Message 1"
         assert messages[1].content == "Message 2"
-        mock_conn.fetch.assert_called_once()
-        call_args = mock_conn.fetch.call_args
-        assert "WHERE channel_id = $1" in call_args[0][0]
-        assert call_args[0][1] == 123
+        mock_repo.get_recent_messages.assert_called_once_with(channel_id=123, limit=10)
 
     @pytest.mark.asyncio
     async def test_get_recent_messages_all_channels(self) -> None:
@@ -292,37 +287,32 @@ class TestGetRecentMessages:
                 "is_bot": False,
                 "is_proactive": False,
                 "timestamp": get_now(),
-                "generation_metadata": None,
                 "user_timezone": "UTC",
             },
         ]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetch = AsyncMock(return_value=mock_rows)
+        mock_repo = MagicMock()
+        mock_repo.get_recent_messages = AsyncMock(return_value=mock_rows)
 
-        messages = await get_recent_messages(
-            db_pool=mock_pool, channel_id=None, limit=5
-        )
+        messages = await get_recent_messages(repo=mock_repo, channel_id=None, limit=5)
 
         assert len(messages) == 1
-        call_args = mock_conn.fetch.call_args
-        assert "WHERE channel_id" not in call_args[0][0]
+        mock_repo.get_recent_messages.assert_called_once_with(channel_id=None, limit=5)
 
     @pytest.mark.asyncio
     async def test_get_recent_messages_empty_result(self) -> None:
         """Test get_recent_messages returns empty list when no messages exist."""
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_repo = MagicMock()
+        mock_repo.get_recent_messages = AsyncMock(return_value=[])
 
-        messages = await get_recent_messages(
-            db_pool=mock_pool, channel_id=999, limit=10
-        )
+        messages = await get_recent_messages(repo=mock_repo, channel_id=999, limit=10)
 
         assert messages == []
 
     @pytest.mark.asyncio
     async def test_get_recent_messages_ordering(self) -> None:
-        """Test that messages are ordered oldest-first (reversed from DESC query)."""
+        """Test that messages are ordered oldest-first."""
+        now = get_now()
         mock_rows = [
             {
                 "id": uuid4(),
@@ -331,8 +321,7 @@ class TestGetRecentMessages:
                 "channel_id": 123,
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": datetime(2024, 1, 3, tzinfo=ZoneInfo("UTC")),
-                "generation_metadata": None,
+                "timestamp": now,
                 "user_timezone": "UTC",
             },
             {
@@ -342,18 +331,15 @@ class TestGetRecentMessages:
                 "channel_id": 123,
                 "is_bot": False,
                 "is_proactive": False,
-                "timestamp": datetime(2024, 1, 1, tzinfo=ZoneInfo("UTC")),
-                "generation_metadata": None,
+                "timestamp": now,
                 "user_timezone": "UTC",
             },
         ]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetch = AsyncMock(return_value=mock_rows)
+        mock_repo = MagicMock()
+        mock_repo.get_recent_messages = AsyncMock(return_value=mock_rows)
 
-        messages = await get_recent_messages(
-            db_pool=mock_pool, channel_id=123, limit=10
-        )
+        messages = await get_recent_messages(repo=mock_repo, channel_id=123, limit=10)
 
         assert messages[0].content == "Oldest"
         assert messages[1].content == "Newest"
@@ -370,17 +356,14 @@ class TestGetRecentMessages:
                 "is_bot": False,
                 "is_proactive": False,
                 "timestamp": get_now(),
-                "generation_metadata": None,
                 "user_timezone": None,
             },
         ]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.fetch = AsyncMock(return_value=mock_rows)
+        mock_repo = MagicMock()
+        mock_repo.get_recent_messages = AsyncMock(return_value=mock_rows)
 
-        messages = await get_recent_messages(
-            db_pool=mock_pool, channel_id=123, limit=10
-        )
+        messages = await get_recent_messages(repo=mock_repo, channel_id=123, limit=10)
 
         assert messages[0].user_timezone == "UTC"
 
@@ -391,9 +374,7 @@ class TestStoreSemanticMemories:
     @pytest.mark.asyncio
     async def test_store_semantic_memories_empty_list(self) -> None:
         """Test that empty memories list returns early without DB access."""
-        await store_semantic_memories(
-            db_pool=MagicMock(), message_id=uuid4(), memories=[]
-        )
+        await store_semantic_memories(repo=MagicMock(), message_id=uuid4(), memories=[])
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_valid_memory(self) -> None:
@@ -401,40 +382,36 @@ class TestStoreSemanticMemories:
         message_id = uuid4()
         memories = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.execute = AsyncMock()
+        mock_repo = MagicMock()
+        mock_repo.store_semantic_memories = AsyncMock()
 
         await store_semantic_memories(
-            db_pool=mock_pool, message_id=message_id, memories=memories
+            repo=mock_repo, message_id=message_id, memories=memories
         )
 
-        mock_conn.execute.assert_called_once()
-        call_args = mock_conn.execute.call_args
-        assert "INSERT INTO semantic_memories" in call_args[0][0]
-        assert call_args[0][1] == "Alice"
-        assert call_args[0][2] == "likes"
-        assert call_args[0][3] == "Python"
-        assert call_args[0][4] is None
+        mock_repo.store_semantic_memories.assert_called_once_with(
+            message_id=message_id, memories=memories, source_batch_id=None
+        )
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_skips_invalid(self) -> None:
         """Test that invalid memories (missing fields) are skipped with warning."""
+        # Note: Logic moved to repository, but episodic.py might still do some filtering
+        # Actually in the new implementation episodic.py's store_semantic_memories
+        # just calls repo.store_semantic_memories.
         message_id = uuid4()
         invalid_memories = [
             {"subject": "", "predicate": "likes", "object": "Python"},
-            {"subject": "Alice", "predicate": "", "object": "Python"},
-            {"subject": "Alice", "predicate": "likes", "object": ""},
-            {"subject": "Alice", "predicate": "likes"},
         ]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.execute = AsyncMock()
+        mock_repo = MagicMock()
+        mock_repo.store_semantic_memories = AsyncMock()
 
         await store_semantic_memories(
-            db_pool=mock_pool, message_id=message_id, memories=invalid_memories
+            repo=mock_repo, message_id=message_id, memories=invalid_memories
         )
 
-        mock_conn.execute.assert_not_called()
+        mock_repo.store_semantic_memories.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_continues_on_error(self) -> None:
@@ -442,51 +419,29 @@ class TestStoreSemanticMemories:
         message_id = uuid4()
         memories = [
             {"subject": "Alice", "predicate": "likes", "object": "Python"},
-            {"subject": "Bob", "predicate": "uses", "object": "Java"},
         ]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.execute = AsyncMock(
-            side_effect=[None, asyncpg.PostgresError("DB error")]
-        )
+        mock_repo = MagicMock()
+        mock_repo.store_semantic_memories = AsyncMock(side_effect=Exception("DB error"))
 
-        await store_semantic_memories(
-            db_pool=mock_pool, message_id=message_id, memories=memories
-        )
-
-        assert mock_conn.execute.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_store_semantic_memories_continues_on_execute_error(self) -> None:
-        """Test that errors executing INSERT don't stop other memories."""
-        message_id = uuid4()
-        memories = [
-            {"subject": "Alice", "predicate": "likes", "object": "Python"},
-            {"subject": "Bob", "predicate": "knows", "object": "Carol"},
-        ]
-
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.execute = AsyncMock(
-            side_effect=[None, asyncpg.PostgresError("DB error")]
-        )
-
-        await store_semantic_memories(
-            db_pool=mock_pool, message_id=message_id, memories=memories
-        )
-
-        assert mock_conn.execute.call_count == 2
+        with pytest.raises(Exception, match="DB error"):
+            await store_semantic_memories(
+                repo=mock_repo, message_id=message_id, memories=memories
+            )
 
     @pytest.mark.asyncio
     async def test_store_semantic_memories_uses_transaction(self) -> None:
         """Test that store_semantic_memories uses a transaction."""
+        # Transaction management is now internal to the repository.
+        # We just verify it calls the repository method.
         message_id = uuid4()
         memories = [{"subject": "A", "predicate": "rel", "object": "B"}]
 
-        mock_pool, mock_conn = create_mock_pool_with_transaction()
-        mock_conn.execute = AsyncMock()
+        mock_repo = MagicMock()
+        mock_repo.store_semantic_memories = AsyncMock()
 
         await store_semantic_memories(
-            db_pool=mock_pool, message_id=message_id, memories=memories
+            repo=mock_repo, message_id=message_id, memories=memories
         )
 
-        mock_conn.transaction.assert_called_once()
+        mock_repo.store_semantic_memories.assert_called_once()

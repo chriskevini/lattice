@@ -24,6 +24,10 @@ from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.core.context import ChannelContextCache
+    from lattice.memory.repositories import (
+        SemanticMemoryRepository,
+        CanonicalRepository,
+    )
 
 
 def _get_channel_id(
@@ -80,6 +84,7 @@ async def context_strategy(
     audit_view_params: dict[str, Any] | None = None,
     llm_client: Any | None = None,
     bot: Any | None = None,
+    canonical_repo: "CanonicalRepository | None" = None,
 ) -> ContextStrategy:
     """Perform context strategy analysis on conversation window."""
     from lattice.memory.canonical import get_canonical_entities_list
@@ -91,7 +96,15 @@ async def context_strategy(
         raise ValueError(msg)
 
     user_tz = user_timezone or "UTC"
-    canonical_entities = await get_canonical_entities_list(db_pool=db_pool)
+    if canonical_repo:
+        canonical_entities = await get_canonical_entities_list(repo=canonical_repo)
+    else:
+        # Fallback for tests not yet using repositories
+        from lattice.memory.context import PostgresCanonicalRepository
+
+        repo = PostgresCanonicalRepository(db_pool)
+        canonical_entities = await get_canonical_entities_list(repo=repo)
+
     canonical_entities_str = (
         ", ".join(canonical_entities) if canonical_entities else "(empty)"
     )
@@ -154,7 +167,7 @@ async def context_strategy(
         created_at=now,
     )
 
-    merged_strategy = await context_cache.update(db_pool, channel_id, fresh_strategy)
+    merged_strategy = await context_cache.update(channel_id, fresh_strategy)
 
     return merged_strategy
 
@@ -164,6 +177,7 @@ async def retrieve_context(
     entities: list[str],
     context_flags: list[str],
     memory_depth: int = 2,
+    semantic_repo: "SemanticMemoryRepository | None" = None,
 ) -> dict[str, Any]:
     """Retrieve context based on entities and context flags."""
     from lattice.memory.graph import GraphTraversal
@@ -180,9 +194,18 @@ async def retrieve_context(
     if "activity_context" in context_flags or "goal_context" in context_flags:
         additional_entities = []
 
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool, max_depth=1)
+        if semantic_repo:
+            traverser = GraphTraversal(repo=semantic_repo)
+        elif db_pool and db_pool.is_initialized():
+            # This branch should be removed once all callers use repositories
+            from lattice.memory.context import PostgresSemanticMemoryRepository
 
+            repo = PostgresSemanticMemoryRepository(db_pool)
+            traverser = GraphTraversal(repo=repo)
+        else:
+            traverser = None
+
+        if traverser:
             if "activity_context" in context_flags:
                 activity_memories = await traverser.find_semantic_memories(
                     subject="User", predicate="did activity", limit=20
@@ -219,8 +242,17 @@ async def retrieve_context(
             entities = list(entities) + additional_entities
 
     if entities and memory_depth > 0:
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool, max_depth=memory_depth)
+        if semantic_repo:
+            traverser = GraphTraversal(repo=semantic_repo)
+        elif db_pool and db_pool.is_initialized():
+            from lattice.memory.context import PostgresSemanticMemoryRepository
+
+            repo = PostgresSemanticMemoryRepository(db_pool)
+            traverser = GraphTraversal(repo=repo)
+        else:
+            traverser = None
+
+        if traverser:
             traverse_tasks = [
                 traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
                 for entity_name in entities

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from lattice.memory.repositories import SemanticMemoryRepository
 from lattice.memory.graph import GraphTraversal
 from lattice.utils.date_resolution import get_now
 from lattice.utils.memory_parsing import parse_semantic_memories
@@ -33,10 +34,9 @@ class TestMultiHopReasoningIntegration:
         Verifies that BFS can discover entities across multiple hops:
         Alice -> works_at -> Acme Corp -> acquired_by -> TechCorp -> in -> Technology Industry
         """
-        # Create mock pool and connection
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
+        # Create mock repository
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "Alice",
@@ -58,13 +58,9 @@ class TestMultiHopReasoningIntegration:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        # Create traverser with mock pool
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        # Create traverser with mock repository
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(subject="Alice")
 
         assert len(result) == 3
@@ -78,26 +74,22 @@ class TestMultiHopReasoningIntegration:
     @pytest.mark.asyncio
     async def test_filtered_multi_hop_traversal(self) -> None:
         """Test multi-hop traversal with predicate filter."""
-        # Create mock pool and connection
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
+        # Create mock repository
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.traverse_from_entity = AsyncMock(
             return_value=[
                 {
                     "subject": "Alice",
                     "predicate": "works_at",
                     "object": "Acme Corp",
                     "created_at": get_now("UTC"),
+                    "depth": 1,
                 }
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        # Create traverser with mock pool
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        # Create traverser with mock repository
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.traverse_from_entity(
             "Alice", predicate_filter={"works_at", "likes"}, max_hops=2
         )

@@ -32,16 +32,65 @@ class TestLatticeBot:
         return MagicMock()
 
     @pytest.fixture
-    def mock_context_cache(self) -> ChannelContextCache:
-        return ChannelContextCache(ttl=10)
+    def mock_context_repo(self) -> MagicMock:
+        from lattice.memory.repositories import ContextRepository
+
+        repo = MagicMock(spec=ContextRepository)
+        repo.save_context = AsyncMock()
+        repo.load_context_type = AsyncMock(return_value=[])
+        return repo
 
     @pytest.fixture
-    def mock_user_context_cache(self) -> UserContextCache:
-        return UserContextCache(ttl_minutes=30)
+    def mock_context_cache(self, mock_context_repo) -> ChannelContextCache:
+        return ChannelContextCache(repository=mock_context_repo, ttl=10)
+
+    @pytest.fixture
+    def mock_user_context_cache(self, mock_context_repo) -> UserContextCache:
+        return UserContextCache(repository=mock_context_repo, ttl_minutes=30)
+
+    @pytest.fixture
+    def mock_message_repo(self) -> MagicMock:
+        from lattice.memory.repositories import MessageRepository
+
+        repo = MagicMock(spec=MessageRepository)
+        repo.store_message = AsyncMock(return_value=uuid4())
+        repo.get_recent_messages = AsyncMock(return_value=[])
+        return repo
+
+    @pytest.fixture
+    def mock_semantic_repo(self) -> MagicMock:
+        from lattice.memory.repositories import SemanticMemoryRepository
+
+        repo = MagicMock(spec=SemanticMemoryRepository)
+        repo.find_memories = AsyncMock(return_value=[])
+        repo.traverse_from_entity = AsyncMock(return_value=[])
+        return repo
+
+    @pytest.fixture
+    def mock_canonical_repo(self) -> MagicMock:
+        from lattice.memory.repositories import CanonicalRepository
+
+        repo = MagicMock(spec=CanonicalRepository)
+        repo.get_entities_list = AsyncMock(return_value=[])
+        repo.get_predicates_list = AsyncMock(return_value=[])
+        repo.get_entities_set = AsyncMock(return_value=set())
+        repo.get_predicates_set = AsyncMock(return_value=set())
+        repo.store_entities = AsyncMock(return_value=0)
+        repo.store_predicates = AsyncMock(return_value=0)
+        repo.entity_exists = AsyncMock(return_value=False)
+        repo.predicate_exists = AsyncMock(return_value=False)
+        return repo
 
     @pytest.fixture
     def bot(
-        self, mock_db_pool, mock_llm_client, mock_context_cache, mock_user_context_cache
+        self,
+        mock_db_pool,
+        mock_llm_client,
+        mock_context_cache,
+        mock_user_context_cache,
+        mock_message_repo,
+        mock_semantic_repo,
+        mock_canonical_repo,
     ) -> LatticeBot:
         config = get_config()
         config.discord_main_channel_id = 123
@@ -51,10 +100,20 @@ class TestLatticeBot:
             llm_client=mock_llm_client,
             context_cache=mock_context_cache,
             user_context_cache=mock_user_context_cache,
+            message_repo=mock_message_repo,
+            semantic_repo=mock_semantic_repo,
+            canonical_repo=mock_canonical_repo,
         )
 
     def test_bot_initialization(
-        self, mock_db_pool, mock_llm_client, mock_context_cache, mock_user_context_cache
+        self,
+        mock_db_pool,
+        mock_llm_client,
+        mock_context_cache,
+        mock_user_context_cache,
+        mock_message_repo,
+        mock_semantic_repo,
+        mock_canonical_repo,
     ) -> None:
         """Test bot initialization with default settings."""
         config = get_config()
@@ -66,6 +125,9 @@ class TestLatticeBot:
             llm_client=mock_llm_client,
             context_cache=mock_context_cache,
             user_context_cache=mock_user_context_cache,
+            message_repo=mock_message_repo,
+            semantic_repo=mock_semantic_repo,
+            canonical_repo=mock_canonical_repo,
         )
 
         assert bot.main_channel_id == 123
@@ -75,7 +137,14 @@ class TestLatticeBot:
         assert bot._dreaming_scheduler is None
 
     def test_bot_initialization_missing_channels(
-        self, mock_db_pool, mock_llm_client, mock_context_cache, mock_user_context_cache
+        self,
+        mock_db_pool,
+        mock_llm_client,
+        mock_context_cache,
+        mock_user_context_cache,
+        mock_message_repo,
+        mock_semantic_repo,
+        mock_canonical_repo,
     ) -> None:
         """Test bot initialization with missing channel IDs logs warnings."""
         config = get_config()
@@ -86,6 +155,9 @@ class TestLatticeBot:
             llm_client=mock_llm_client,
             context_cache=mock_context_cache,
             user_context_cache=mock_user_context_cache,
+            message_repo=mock_message_repo,
+            semantic_repo=mock_semantic_repo,
+            canonical_repo=mock_canonical_repo,
         )
 
         assert bot.main_channel_id == 0

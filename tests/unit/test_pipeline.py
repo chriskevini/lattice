@@ -18,7 +18,12 @@ class TestUnifiedPipeline:
         mock_cache = MagicMock()
 
         pipeline = UnifiedPipeline(
-            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+            db_pool=mock_db_pool,
+            bot=mock_bot,
+            context_cache=mock_cache,
+            message_repo=MagicMock(),
+            semantic_repo=MagicMock(),
+            canonical_repo=MagicMock(),
         )
 
         assert pipeline.db_pool is mock_db_pool
@@ -39,7 +44,12 @@ class TestUnifiedPipeline:
         mock_channel.send = AsyncMock(return_value=mock_message)
 
         pipeline = UnifiedPipeline(
-            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+            db_pool=mock_db_pool,
+            bot=mock_bot,
+            context_cache=mock_cache,
+            message_repo=MagicMock(),
+            semantic_repo=MagicMock(),
+            canonical_repo=MagicMock(),
         )
 
         result = await pipeline.send_response(
@@ -70,7 +80,12 @@ class TestUnifiedPipeline:
         mock_bot.get_channel.return_value = None
 
         pipeline = UnifiedPipeline(
-            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+            db_pool=mock_db_pool,
+            bot=mock_bot,
+            context_cache=mock_cache,
+            message_repo=MagicMock(),
+            semantic_repo=MagicMock(),
+            canonical_repo=MagicMock(),
         )
 
         result = await pipeline.send_response(
@@ -98,7 +113,12 @@ class TestUnifiedPipeline:
         mock_channel.send = AsyncMock(return_value=mock_message)
 
         pipeline = UnifiedPipeline(
-            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+            db_pool=mock_db_pool,
+            bot=mock_bot,
+            context_cache=mock_cache,
+            message_repo=MagicMock(),
+            semantic_repo=MagicMock(),
+            canonical_repo=MagicMock(),
         )
 
         result = await pipeline.dispatch_autonomous_nudge(
@@ -128,7 +148,12 @@ class TestUnifiedPipeline:
         mock_bot.get_channel.return_value = None
 
         pipeline = UnifiedPipeline(
-            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+            db_pool=mock_db_pool,
+            bot=mock_bot,
+            context_cache=mock_cache,
+            message_repo=MagicMock(),
+            semantic_repo=MagicMock(),
+            canonical_repo=MagicMock(),
         )
 
         result = await pipeline.dispatch_autonomous_nudge(
@@ -163,7 +188,12 @@ class TestUnifiedPipeline:
         )
 
         pipeline = UnifiedPipeline(
-            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+            db_pool=mock_db_pool,
+            bot=mock_bot,
+            context_cache=mock_cache,
+            message_repo=MagicMock(),
+            semantic_repo=MagicMock(),
+            canonical_repo=MagicMock(),
         )
 
         # Verify exception propagates
@@ -194,7 +224,12 @@ class TestUnifiedPipeline:
         )
 
         pipeline = UnifiedPipeline(
-            db_pool=mock_db_pool, bot=mock_bot, context_cache=mock_cache
+            db_pool=mock_db_pool,
+            bot=mock_bot,
+            context_cache=mock_cache,
+            message_repo=MagicMock(),
+            semantic_repo=MagicMock(),
+            canonical_repo=MagicMock(),
         )
 
         # Verify exception propagates

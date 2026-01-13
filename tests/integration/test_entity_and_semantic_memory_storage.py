@@ -10,11 +10,13 @@ The entities table is no longer used for semantic memory storage.
 
 import os
 import time
-import pytest
 from typing import AsyncGenerator
 from uuid import uuid4
 
+import pytest
+
 from lattice.memory import episodic
+from lattice.memory.context import PostgresMessageRepository
 from lattice.utils.database import DatabasePool
 
 
@@ -34,6 +36,12 @@ async def db_pool() -> AsyncGenerator[DatabasePool, None]:
     await pool.close()
 
 
+@pytest.fixture
+def message_repo(db_pool: DatabasePool) -> PostgresMessageRepository:
+    """Fixture to provide a PostgresMessageRepository."""
+    return PostgresMessageRepository(db_pool)
+
+
 @pytest.fixture(autouse=True)
 async def cleanup_test_data(db_pool: DatabasePool) -> None:
     """Fixture to clean up test data before each test."""
@@ -51,7 +59,9 @@ async def cleanup_test_data(db_pool: DatabasePool) -> None:
 class TestSemanticMemoryStorage:
     """Test semantic memory storage functionality."""
 
-    async def test_store_simple_memory(self, db_pool: DatabasePool) -> None:
+    async def test_store_simple_memory(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
         """Test storing a simple semantic memory."""
         # Create a test message
         message = episodic.EpisodicMessage(
@@ -60,11 +70,11 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(db_pool, message)
+        message_id = await episodic.store_message(message_repo, message)
 
         # Store semantic memory
         memories = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
-        await episodic.store_semantic_memories(db_pool, message_id, memories)
+        await episodic.store_semantic_memories(message_repo, message_id, memories)
 
         # Verify memory was stored
         async with db_pool.pool.acquire() as conn:
@@ -90,7 +100,9 @@ class TestSemanticMemoryStorage:
                     break
             assert found, "Memory not found in database"
 
-    async def test_store_multiple_memories(self, db_pool: DatabasePool) -> None:
+    async def test_store_multiple_memories(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
         """Test storing multiple memories from same message."""
         # Create test message
         message = episodic.EpisodicMessage(
@@ -99,7 +111,7 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(db_pool, message)
+        message_id = await episodic.store_message(message_repo, message)
 
         # Store multiple memories with a batch ID for tracking
         batch_id = "test_batch_12346"
@@ -108,7 +120,7 @@ class TestSemanticMemoryStorage:
             {"subject": "user", "predicate": "likes", "object": "Python"},
         ]
         await episodic.store_semantic_memories(
-            db_pool, message_id, memories, source_batch_id=batch_id
+            message_repo, message_id, memories, source_batch_id=batch_id
         )
 
         # Verify both memories stored
@@ -124,7 +136,9 @@ class TestSemanticMemoryStorage:
 
             assert rows[0]["count"] == 2
 
-    async def test_skip_invalid_memories(self, db_pool: DatabasePool) -> None:
+    async def test_skip_invalid_memories(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
         """Test that invalid memories are skipped gracefully."""
         message = episodic.EpisodicMessage(
             content="Test message",
@@ -132,7 +146,7 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(db_pool, message)
+        message_id = await episodic.store_message(message_repo, message)
 
         # Mix of valid and invalid memories
         batch_id = "test_batch_12348"
@@ -157,7 +171,7 @@ class TestSemanticMemoryStorage:
 
         # Should not raise exception
         await episodic.store_semantic_memories(
-            db_pool, message_id, memories, source_batch_id=batch_id
+            message_repo, message_id, memories, source_batch_id=batch_id
         )
 
         # Verify only valid memory was stored
@@ -177,7 +191,9 @@ class TestSemanticMemoryStorage:
             assert rows[0]["predicate"] == "works_at"
             assert rows[0]["object"] == "OpenAI"
 
-    async def test_empty_memories_list(self, db_pool: DatabasePool) -> None:
+    async def test_empty_memories_list(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
         """Test that empty memories list is handled gracefully."""
         message = episodic.EpisodicMessage(
             content="No memories here",
@@ -185,12 +201,12 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(db_pool, message)
+        message_id = await episodic.store_message(message_repo, message)
 
         # Should not raise exception
         batch_id = "test_batch_12349"
         await episodic.store_semantic_memories(
-            db_pool, message_id, [], source_batch_id=batch_id
+            message_repo, message_id, [], source_batch_id=batch_id
         )
 
         # Verify no memories stored
@@ -205,7 +221,9 @@ class TestSemanticMemoryStorage:
             )
             assert rows[0]["count"] == 0
 
-    async def test_text_based_memory_search(self, db_pool: DatabasePool) -> None:
+    async def test_text_based_memory_search(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
         """Test searching for memories by text matching."""
         # Use a unique batch ID to avoid collisions in parallel test execution
         unique_suffix = str(uuid4())[:8]
@@ -217,14 +235,14 @@ class TestSemanticMemoryStorage:
             channel_id=67890,
             is_bot=False,
         )
-        message_id = await episodic.store_message(db_pool, message)
+        message_id = await episodic.store_message(message_repo, message)
 
         # Store a memory with unique identifiers
         memories = [
             {"subject": "user", "predicate": "lives_in", "object": "Richmond, BC"}
         ]
         await episodic.store_semantic_memories(
-            db_pool, message_id, memories, source_batch_id=batch_id
+            message_repo, message_id, memories, source_batch_id=batch_id
         )
 
         # Small delay to ensure data is committed and visible across connections
@@ -260,4 +278,6 @@ class TestSemanticMemoryStorage:
 
 
 if __name__ == "__main__":
+    import pytest
+
     pytest.main([__file__, "-v"])

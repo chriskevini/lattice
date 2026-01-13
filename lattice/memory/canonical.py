@@ -23,9 +23,14 @@ Tables:
 import structlog
 from typing import TYPE_CHECKING, Any
 
+from lattice.memory.repositories import CanonicalRepository
 
 if TYPE_CHECKING:
+    from lattice.memory.repositories import CanonicalRepository
     from lattice.utils.database import DatabasePool
+else:
+    CanonicalRepository = Any
+    DatabasePool = Any
 
 
 logger = structlog.get_logger(__name__)
@@ -37,308 +42,254 @@ class CanonicalRegistryError(Exception):
     pass
 
 
-async def get_canonical_entities_list(db_pool: Any) -> list[str]:
+async def get_canonical_entities_list(
+    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
+) -> list[str]:
     """Fetch all canonical entity names from database.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         List of entity names sorted by creation date (newest first)
     """
-    if not db_pool.is_initialized():
-        import os
+    if repo:
+        return await repo.get_entities_list()
+    if db_pool:
+        # Fallback for tests not yet using repositories
+        from lattice.memory.repositories import PostgresRepository
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
+        class TempCanonicalRepo(PostgresRepository):
+            async def get_entities_list(self):
+                async with self._db_pool.pool.acquire() as conn:
+                    rows = await conn.fetch(
+                        "SELECT name FROM entities ORDER BY created_at DESC"
+                    )
+                    return [row["name"] for row in rows]
+
+            async def get_predicates_list(self):
                 return []
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical entities"
-            )
-            return []
 
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch("SELECT name FROM entities ORDER BY created_at DESC")
-        return [row["name"] for row in rows]
+            async def get_entities_set(self):
+                return set()
+
+            async def get_predicates_set(self):
+                return set()
+
+            async def store_entities(self, names):
+                return 0
+
+            async def store_predicates(self, names):
+                return 0
+
+            async def entity_exists(self, name):
+                return False
+
+            async def predicate_exists(self, name):
+                return False
+
+        temp_repo = TempCanonicalRepo(db_pool)
+        return await temp_repo.get_entities_list()
+    raise ValueError("Either repo or db_pool must be provided")
 
 
-async def get_canonical_predicates_list(db_pool: Any) -> list[str]:
+async def get_canonical_predicates_list(
+    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
+) -> list[str]:
     """Fetch all canonical predicate names from database.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         List of predicate names sorted by creation date (newest first)
     """
-    if not db_pool.is_initialized():
-        import os
+    if repo:
+        return await repo.get_predicates_list()
+    if db_pool:
+        # Fallback for tests not yet using repositories
+        from lattice.memory.repositories import PostgresRepository
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
+        class TempCanonicalRepo(PostgresRepository):
+            async def get_entities_list(self):
                 return []
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical predicates"
-            )
-            return []
 
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch("SELECT name FROM predicates ORDER BY created_at DESC")
-        return [row["name"] for row in rows]
+            async def get_predicates_list(self):
+                async with self._db_pool.pool.acquire() as conn:
+                    rows = await conn.fetch(
+                        "SELECT name FROM predicates ORDER BY created_at DESC"
+                    )
+                    return [row["name"] for row in rows]
+
+            async def get_entities_set(self):
+                return set()
+
+            async def get_predicates_set(self):
+                return set()
+
+            async def store_entities(self, names):
+                return 0
+
+            async def store_predicates(self, names):
+                return 0
+
+            async def entity_exists(self, name):
+                return False
+
+            async def predicate_exists(self, name):
+                return False
+
+        temp_repo = TempCanonicalRepo(db_pool)
+        return await temp_repo.get_predicates_list()
+    raise ValueError("Either repo or db_pool must be provided")
 
 
-async def get_canonical_entities_set(db_pool: Any) -> set[str]:
+async def get_canonical_entities_set(
+    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
+) -> set[str]:
     """Fetch all canonical entities as a set for O(1) lookup.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Set of entity names for fast membership testing
     """
-    if not db_pool.is_initialized():
-        import os
+    if repo:
+        return await repo.get_entities_set()
+    if db_pool:
+        # Fallback for tests not yet using repositories
+        from lattice.memory.context import PostgresCanonicalRepository
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
-                return set()
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical entities"
-            )
-            return set()
-
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch("SELECT name FROM entities")
-        return {row["name"] for row in rows}
+        repo = PostgresCanonicalRepository(db_pool)
+        return await repo.get_entities_set()
+    raise ValueError("Either repo or db_pool must be provided")
 
 
-async def get_canonical_predicates_set(db_pool: Any) -> set[str]:
+async def get_canonical_predicates_set(
+    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
+) -> set[str]:
     """Fetch all canonical predicates as a set for O(1) lookup.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Set of predicate names for fast membership testing
     """
-    if not db_pool.is_initialized():
-        import os
+    if repo:
+        return await repo.get_predicates_set()
+    if db_pool:
+        # Fallback for tests not yet using repositories
+        from lattice.memory.context import PostgresCanonicalRepository
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
-                return set()
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical predicates"
-            )
-            return set()
-
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch("SELECT name FROM predicates")
-        return {row["name"] for row in rows}
+        repo = PostgresCanonicalRepository(db_pool)
+        return await repo.get_predicates_set()
+    raise ValueError("Either repo or db_pool must be provided")
 
 
-async def store_canonical_entities(db_pool: Any, names: list[str]) -> int:
+async def store_canonical_entities(
+    repo: CanonicalRepository | None = None,
+    names: list[str] = [],
+    db_pool: DatabasePool | None = None,
+) -> int:
     """Store new canonical entities, ignoring duplicates.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
         names: List of entity names to store
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Number of entities actually inserted
     """
-    if not names:
-        return 0
+    if repo:
+        return await repo.store_entities(names)
+    if db_pool:
+        from lattice.memory.context import PostgresCanonicalRepository
 
-    if not db_pool.is_initialized():
-        import os
-
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
-                return 0
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical entities"
-            )
-            return 0
-
-    async with db_pool.pool.acquire() as conn:
-        await conn.executemany(
-            "INSERT INTO entities (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
-            [(name,) for name in names],
-        )
-
-    logger.debug("Stored canonical entities", count=len(names))
-    return len(names)
+        repo = PostgresCanonicalRepository(db_pool)
+        return await repo.store_entities(names)
+    raise ValueError("Either repo or db_pool must be provided")
 
 
-async def store_canonical_predicates(db_pool: Any, names: list[str]) -> int:
+async def store_canonical_predicates(
+    repo: CanonicalRepository | None = None,
+    names: list[str] = [],
+    db_pool: DatabasePool | None = None,
+) -> int:
     """Store new canonical predicates, ignoring duplicates.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
         names: List of predicate names to store
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Number of predicates actually inserted
     """
-    if not names:
-        return 0
+    if repo:
+        return await repo.store_predicates(names)
+    if db_pool:
+        from lattice.memory.context import PostgresCanonicalRepository
 
-    if not db_pool.is_initialized():
-        import os
-
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
-                return 0
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical predicates"
-            )
-            return 0
-
-    async with db_pool.pool.acquire() as conn:
-        await conn.executemany(
-            "INSERT INTO predicates (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
-            [(name,) for name in names],
-        )
-
-    logger.debug("Stored canonical predicates", count=len(names))
-    return len(names)
+        repo = PostgresCanonicalRepository(db_pool)
+        return await repo.store_predicates(names)
+    raise ValueError("Either repo or db_pool must be provided")
 
 
-async def entity_exists(db_pool: Any, name: str) -> bool:
+async def entity_exists(
+    repo: CanonicalRepository | None = None,
+    name: str = "",
+    db_pool: DatabasePool | None = None,
+) -> bool:
     """Check if an entity name already exists.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
         name: Entity name to check
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         True if entity exists
     """
-    if not db_pool.is_initialized():
-        import os
+    if repo:
+        return await repo.entity_exists(name)
+    if db_pool:
+        from lattice.memory.context import PostgresCanonicalRepository
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
-                return False
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical entities"
-            )
-            return False
-
-    async with db_pool.pool.acquire() as conn:
-        result = await conn.fetchval(
-            "SELECT 1 FROM entities WHERE name = $1 LIMIT 1", name
-        )
-        return result is not None
+        repo = PostgresCanonicalRepository(db_pool)
+        return await repo.entity_exists(name)
+    raise ValueError("Either repo or db_pool must be provided")
 
 
-async def predicate_exists(db_pool: Any, name: str) -> bool:
+async def predicate_exists(
+    repo: CanonicalRepository | None = None,
+    name: str = "",
+    db_pool: DatabasePool | None = None,
+) -> bool:
     """Check if a predicate name already exists.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
         name: Predicate name to check
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         True if predicate exists
     """
-    if not db_pool.is_initialized():
-        import os
+    if repo:
+        return await repo.predicate_exists(name)
+    if db_pool:
+        from lattice.memory.context import PostgresCanonicalRepository
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            is_mock = (
-                hasattr(db_pool, "pool")
-                or hasattr(db_pool, "acquire")
-                or "MagicMock" in str(type(db_pool))
-                or "Mock" in str(type(db_pool))
-                or "AsyncMock" in str(type(db_pool))
-            )
-            if is_mock:
-                pass
-            else:
-                return False
-        else:
-            logger.warning(
-                "Database pool not initialized, cannot fetch canonical predicates"
-            )
-            return False
-
-    async with db_pool.pool.acquire() as conn:
-        result = await conn.fetchval(
-            "SELECT 1 FROM predicates WHERE name = $1 LIMIT 1", name
-        )
-        return result is not None
+        repo = PostgresCanonicalRepository(db_pool)
+        return await repo.predicate_exists(name)
+    raise ValueError("Either repo or db_pool must be provided")
 
 
 def _is_entity_like(text: str) -> bool:
@@ -418,20 +369,28 @@ def extract_canonical_forms(
 
 
 async def store_canonical_forms(
-    db_pool: "DatabasePool", new_entities: list[str], new_predicates: list[str]
+    repo: CanonicalRepository | None = None,
+    new_entities: list[str] = [],
+    new_predicates: list[str] = [],
+    db_pool: DatabasePool | None = None,
 ) -> dict[str, int]:
     """Store new canonical entities and predicates in database.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Canonical repository
         new_entities: Sorted list of new entity names to store
         new_predicates: Sorted list of new predicate names to store
+        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Dictionary with 'entities' and 'predicates' counts of items stored
     """
-    entity_count = await store_canonical_entities(db_pool, new_entities)
-    predicate_count = await store_canonical_predicates(db_pool, new_predicates)
+    entity_count = await store_canonical_entities(
+        repo=repo, names=new_entities, db_pool=db_pool
+    )
+    predicate_count = await store_canonical_predicates(
+        repo=repo, names=new_predicates, db_pool=db_pool
+    )
 
     if new_entities or new_predicates:
         logger.info(
