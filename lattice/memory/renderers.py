@@ -4,7 +4,7 @@ This module provides renderer functions for different memory types.
 Each renderer produces a consistent string representation for LLM context.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -34,6 +34,8 @@ def render_activity(
         "[2026-01-12 10:30:00] coding"
     """
     if created_at:
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
         if user_timezone:
             tz = ZoneInfo(user_timezone)
             local_dt = created_at.astimezone(tz)
