@@ -65,6 +65,7 @@ class AuditingLLMClient:
         bot: Any | None = None,
         audit_view: bool = False,
         audit_view_params: dict[str, Any] | None = None,
+        execution_metadata: dict[str, Any] | None = None,
     ) -> AuditResult:
         """Complete a prompt with automatic audit tracking and optional AuditView.
 
@@ -84,6 +85,7 @@ class AuditingLLMClient:
                 - output_text: Custom output text (default: result.content)
                 - main_message_url: Link to the main channel message
                 - metadata: Additional metadata strings
+            execution_metadata: Execution metadata (context config, batch metrics, etc.)
 
         Returns:
             AuditResult with content, metadata, and audit_id
@@ -122,6 +124,7 @@ class AuditingLLMClient:
                 upstream_id=result.upstream_id,
                 cancelled=result.cancelled,
                 moderation_latency_ms=result.moderation_latency_ms,
+                execution_metadata=execution_metadata,
             )
 
             logger.info(
@@ -283,6 +286,7 @@ class AuditingLLMClient:
                 upstream_id=None,
                 cancelled=None,
                 moderation_latency_ms=None,
+                execution_metadata=execution_metadata,
             )
 
             return AuditResult(
