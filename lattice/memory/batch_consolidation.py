@@ -123,7 +123,10 @@ async def check_and_run_batch(db_pool: Any) -> None:
 
 
 async def run_batch_consolidation(
-    db_pool: "DatabasePool", llm_client: Any = None, bot: Any = None
+    db_pool: "DatabasePool",
+    llm_client: Any = None,
+    bot: Any = None,
+    user_context_cache: Any = None,
 ) -> None:
     """Run memory consolidation: fetch messages, extract memories, store them.
 
@@ -141,6 +144,7 @@ async def run_batch_consolidation(
         db_pool: Database pool for dependency injection (required)
         llm_client: LLM client for dependency injection
         bot: Discord bot instance for dependency injection
+        user_context_cache: User-level cache for timezone updates
     """
     async with db_pool.pool.acquire() as conn:
         last_batch_id = await _get_last_batch_id(conn)
@@ -310,32 +314,32 @@ async def run_batch_consolidation(
         tokens=result.total_tokens,
     )
 
-    # Check for new timezone information and update cache
-    import lattice.utils.database
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    if extracted_memories and user_context_cache:
+        tz_triple = next(
+            (
+                m
+                for m in extracted_memories
+                if m.get("predicate") == "lives in timezone"
+                and m.get("subject") == "User"
+            ),
+            None,
+        )
+        if tz_triple:
+            timezone_str = tz_triple["object"]
+            try:
+                from zoneinfo import ZoneInfo
 
-    tz_triple = next(
-        (
-            m
-            for m in extracted_memories
-            if m.get("predicate") == "lives in timezone" and m.get("subject") == "User"
-        ),
-        None,
-    )
-    if tz_triple:
-        timezone_str = tz_triple["object"]
-        try:
-            ZoneInfo(timezone_str)
-            lattice.utils.database._user_timezone_cache = timezone_str
-            logger.info(
-                "Updated user timezone cache from semantic memory",
-                timezone=timezone_str,
-            )
-        except ZoneInfoNotFoundError:
-            logger.warning(
-                "Invalid timezone extracted, skipping cache update",
-                timezone=timezone_str,
-            )
+                ZoneInfo(timezone_str)
+                await user_context_cache.set_timezone(timezone_str)
+                logger.info(
+                    "Updated user timezone cache from semantic memory",
+                    timezone=timezone_str,
+                )
+            except Exception:
+                logger.warning(
+                    "Invalid timezone extracted, skipping cache update",
+                    timezone=timezone_str,
+                )
 
     if extracted_memories:
         extracted_memories.sort(

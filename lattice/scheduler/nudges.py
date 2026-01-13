@@ -3,22 +3,18 @@
 Uses LLM to generate goal-aligned check-in messages.
 """
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock
 from uuid import UUID
 
 import structlog
 
-from lattice.memory.procedural import get_prompt
 from lattice.utils.config import get_config
-
 from lattice.utils.date_resolution import get_now
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    pass
 
 
 logger = structlog.get_logger(__name__)
@@ -51,19 +47,21 @@ async def get_default_channel_id() -> int | None:
 
 
 async def prepare_contextual_nudge(
-    db_pool: "DatabasePool",
     llm_client: Any,
     user_context_cache: Any,
     user_id: str,
+    prompt_template: Any,
+    db_pool: Any = None,
     bot: Any | None = None,
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 
     Args:
-        db_pool: Database pool for dependency injection
         llm_client: LLM client for dependency injection (required)
-        user_context_cache: User-level cache for goals/activities
+        user_context_cache: User-level cache for goals/activities/timezone
         user_id: Discord user ID for the owner
+        prompt_template: Pre-fetched prompt template from DB
+        db_pool: Database pool for fallback fetches (optional)
         bot: Discord bot instance for dependency injection
 
     Returns:
@@ -72,41 +70,21 @@ async def prepare_contextual_nudge(
     if not llm_client:
         raise ValueError("llm_client is required for prepare_contextual_nudge")
 
-    try:
-        if hasattr(db_pool, "get_user_timezone"):
-            res = db_pool.get_user_timezone()
-            if asyncio.iscoroutine(res):
-                user_tz = await res
-            else:
-                user_tz = res
-        else:
-            from lattice.utils.database import get_user_timezone as global_get_tz
-
-            user_tz = await global_get_tz(db_pool=db_pool)
-    except (AttributeError, TypeError):
-        from lattice.utils.database import get_user_timezone as global_get_tz
-
-        user_tz = await global_get_tz(db_pool=db_pool)
-
-    if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
-        user_tz = "UTC"
-
-    if not isinstance(user_tz, str):
+    user_tz = user_context_cache.get_timezone()
+    if not user_tz:
         user_tz = "UTC"
 
     from lattice.core import response_generator
 
     goals = user_context_cache.get_goals(user_id)
-    if goals is None:
-        from lattice.core import response_generator
-
+    if goals is None and db_pool:
         goals = await response_generator.get_goal_context(db_pool=db_pool)
         await user_context_cache.set_goals(db_pool, user_id, goals)
 
     from lattice.core.context_strategy import retrieve_context
 
     activity = user_context_cache.get_activities(user_id)
-    if activity is None:
+    if activity is None and db_pool:
         context_result = await retrieve_context(
             db_pool=db_pool, entities=[], context_flags=["activity_context"]
         )
@@ -121,7 +99,6 @@ async def prepare_contextual_nudge(
     local_date = now.strftime("%Y/%m/%d, %A")
     local_time = now.strftime("%H:%M")
 
-    prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXTUAL_NUDGE")
     if not prompt_template:
         logger.error("CONTEXTUAL_NUDGE prompt not found in database")
         return NudgePlan(content=None, channel_id=channel_id)

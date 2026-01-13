@@ -95,13 +95,18 @@ class MessageHandler:
             await asyncio.sleep(delay_minutes * 60)
 
             from lattice.scheduler.nudges import prepare_contextual_nudge
+            from lattice.memory.procedural import get_prompt
 
             user_id = str(self.bot.user.id) if self.bot and self.bot.user else "user"
+            prompt_template = await get_prompt(
+                db_pool=self.db_pool, prompt_key="CONTEXTUAL_NUDGE"
+            )
             nudge_plan = await prepare_contextual_nudge(
-                db_pool=self.db_pool,
                 llm_client=self.llm_client,
                 user_context_cache=self.user_context_cache,
                 user_id=user_id,
+                prompt_template=prompt_template,
+                db_pool=self.db_pool,
                 bot=self.bot,
             )
 
@@ -185,6 +190,7 @@ class MessageHandler:
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
                 bot=self.bot,
+                user_context_cache=self.user_context_cache,
             )
         except asyncio.CancelledError:
             logger.debug("Consolidation timer cancelled by new user message")
