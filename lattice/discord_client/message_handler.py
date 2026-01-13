@@ -113,6 +113,7 @@ class MessageHandler:
                 prompt_template=prompt_template,
                 db_pool=self.db_pool,
                 bot=self.bot,
+                semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
             )
 
             if nudge_plan.content and nudge_plan.channel_id:

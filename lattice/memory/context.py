@@ -288,6 +288,40 @@ class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryReposit
 
         return all_memories
 
+    async def fetch_goal_names(self, limit: int = 50) -> list[str]:
+        """Fetch unique goal names from knowledge graph."""
+        async with self._db_pool.pool.acquire() as conn:
+            goals = await conn.fetch(
+                """
+                SELECT DISTINCT object FROM semantic_memories
+                WHERE predicate = 'has goal'
+                ORDER BY object
+                LIMIT $1
+                """,
+                limit,
+            )
+        return [g["object"] for g in goals]
+
+    async def get_goal_predicates(self, goal_names: list[str]) -> list[dict[str, Any]]:
+        """Fetch predicates for specific goal names.
+
+        Args:
+            goal_names: List of goal names to fetch predicates for
+
+        Returns:
+            List of predicate tuples with keys: subject, predicate, object
+        """
+        if not goal_names:
+            return []
+
+        async with self._db_pool.pool.acquire() as conn:
+            predicates = await conn.fetch(
+                "SELECT subject, predicate, object FROM semantic_memories WHERE subject = ANY($1) ORDER BY subject, predicate",
+                goal_names,
+            )
+
+        return [dict(p) for p in predicates]
+
 
 class PostgresCanonicalRepository(PostgresRepository, CanonicalRepository):
     """PostgreSQL implementation of CanonicalRepository."""

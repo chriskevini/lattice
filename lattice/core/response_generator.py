@@ -12,6 +12,7 @@ from lattice.utils.llm import AuditResult
 
 
 if TYPE_CHECKING:
+    from lattice.memory.repositories import SemanticMemoryRepository
     from lattice.utils.database import DatabasePool
 
 
@@ -65,61 +66,37 @@ def validate_template_placeholders(template: str) -> tuple[bool, list[str]]:
     return injector.validate_template(template)
 
 
-async def fetch_goal_names(db_pool: Any) -> list[str]:
-    """Fetch unique goal names from knowledge graph.
-
-    Args:
-        db_pool: Database pool for dependency injection (required)
-
-    Returns:
-        List of unique goal strings
-    """
-    if not db_pool.is_initialized():
-        logger.warning("Database pool not initialized, cannot fetch goal names")
-        return []
-
-    try:
-        async with db_pool.pool.acquire() as conn:
-            goals = await conn.fetch(
-                f"""
-                SELECT DISTINCT object FROM semantic_memories
-                WHERE predicate = 'has goal'
-                ORDER BY object
-                LIMIT {MAX_GOALS_CONTEXT}
-                """
-            )
-    except Exception as e:
-        logger.error("Failed to fetch goal names from database", error=str(e))
-        return []
-
-    return [g["object"] for g in goals]
-
-
-async def get_goal_context(db_pool: Any, goal_names: list[str] | None = None) -> str:
+async def get_goal_context(
+    semantic_repo: "SemanticMemoryRepository | None" = None,
+    goal_names: list[str] | None = None,
+) -> str:
     """Get user's goals from knowledge graph with hierarchical predicate display.
 
     Args:
-        db_pool: Database pool for dependency injection (required)
+        semantic_repo: Semantic memory repository for dependency injection
         goal_names: Optional pre-fetched goal names to avoid duplicate DB call.
-                    If None, fetches from database.
+                    If None, fetches from repository.
 
     Returns:
         Formatted goals string showing goals and their predicates
     """
     if goal_names is None:
-        goal_names = await fetch_goal_names(db_pool=db_pool)
+        if not semantic_repo:
+            return "No active goals."
+        goal_names = await semantic_repo.fetch_goal_names(limit=MAX_GOALS_CONTEXT)
 
     if not goal_names:
         return "No active goals."
 
+    if not semantic_repo:
+        return "No active goals."
+
+    assert semantic_repo is not None  # Type narrowing for mypy
+    predicates: list[dict[str, Any]] = []
     try:
-        async with db_pool.pool.acquire() as conn:
-            placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
-            query = f"SELECT subject, predicate, object FROM semantic_memories WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
-            predicates = await conn.fetch(query, *goal_names)
+        predicates = await semantic_repo.get_goal_predicates(goal_names)
     except Exception as e:
-        logger.error("Failed to fetch goal predicates from database", error=str(e))
-        predicates = []
+        logger.error("Failed to fetch goal predicates from repository", error=str(e))
 
     goal_predicates: dict[str, list[tuple[str, str]]] = {}
     for pred in predicates:
@@ -136,11 +113,11 @@ async def get_goal_context(db_pool: Any, goal_names: list[str] | None = None) ->
 
         if goal_name in goal_predicates:
             preds = goal_predicates[goal_name]
-            for j, (pred, obj) in enumerate(preds):
+            for j, (p, obj) in enumerate(preds):
                 pred_is_last = j == len(preds) - 1
                 pred_prefix = "    " if is_last else "│   "
                 pred_goal_prefix = "└── " if pred_is_last else "├── "
-                lines.append(f"{pred_prefix}{pred_goal_prefix}{pred}: {obj}")
+                lines.append(f"{pred_prefix}{pred_goal_prefix}{p}: {obj}")
 
     return "\n".join(lines)
 

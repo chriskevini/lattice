@@ -14,7 +14,7 @@ from lattice.utils.date_resolution import get_now
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 if TYPE_CHECKING:
-    pass
+    from lattice.memory.repositories import SemanticMemoryRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -53,6 +53,7 @@ async def prepare_contextual_nudge(
     prompt_template: Any,
     db_pool: Any = None,
     bot: Any | None = None,
+    semantic_repo: "SemanticMemoryRepository | None" = None,
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 
@@ -63,6 +64,7 @@ async def prepare_contextual_nudge(
         prompt_template: Pre-fetched prompt template from DB
         db_pool: Database pool for fallback fetches (optional)
         bot: Discord bot instance for dependency injection
+        semantic_repo: Semantic memory repository for goal retrieval (optional)
 
     Returns:
         NudgePlan with nudge content
@@ -77,16 +79,19 @@ async def prepare_contextual_nudge(
     from lattice.core import response_generator
 
     goals = user_context_cache.get_goals(user_id)
-    if goals is None and db_pool:
-        goals = await response_generator.get_goal_context(db_pool=db_pool)
+    if goals is None and semantic_repo:
+        goals = await response_generator.get_goal_context(semantic_repo=semantic_repo)
         await user_context_cache.set_goals(user_id, goals)
 
     from lattice.core.context_strategy import retrieve_context
 
     activity = user_context_cache.get_activities(user_id)
-    if activity is None and db_pool:
+    if activity is None and semantic_repo:
         context_result = await retrieve_context(
-            db_pool=db_pool, entities=[], context_flags=["activity_context"]
+            db_pool=db_pool,
+            semantic_repo=semantic_repo,
+            entities=[],
+            context_flags=["activity_context"],
         )
         activity = context_result.get(
             "activity_context", "No recent activity recorded."
