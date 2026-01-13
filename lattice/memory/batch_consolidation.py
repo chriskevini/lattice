@@ -125,9 +125,9 @@ async def should_consolidate(message_repo: "MessageRepository") -> bool:
         True if consolidation should run
     """
     cursor_id = await _get_consolidation_cursor(
-        await message_repo._db_pool.pool.acquire()
+        await message_repo._db_pool.pool.acquire()  # type: ignore[attr-defined]
     )
-    count = await message_repo._db_pool.fetchval(
+    count = await message_repo._db_pool.fetchval(  # type: ignore[attr-defined]
         "SELECT COUNT(*) FROM raw_messages WHERE discord_message_id > $1",
         int(cursor_id) if cursor_id.isdigit() else 0,
     )
