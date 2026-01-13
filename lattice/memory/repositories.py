@@ -65,6 +65,23 @@ class MessageRepository(Protocol):
         """
         ...
 
+    async def get_messages_since_cursor(
+        self,
+        cursor_message_id: int,
+        limit: int = 18,
+    ) -> list[dict[str, Any]]:
+        """Get messages since a given cursor message ID, ordered by timestamp ASC.
+
+        Args:
+            cursor_message_id: Discord message ID to use as cursor (exclusive)
+            limit: Maximum number of messages to return
+
+        Returns:
+            List of messages with keys: id, discord_message_id,
+            channel_id, content, is_bot, is_proactive, timestamp, user_timezone
+        """
+        ...
+
     async def store_semantic_memories(
         self,
         message_id: UUID,

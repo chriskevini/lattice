@@ -116,6 +116,27 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                 )
         return [dict(row) for row in rows]
 
+    async def get_messages_since_cursor(
+        self,
+        cursor_message_id: int,
+        limit: int = 18,
+    ) -> list[dict[str, Any]]:
+        """Get messages since a given cursor message ID, ordered by timestamp ASC."""
+        async with self._db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
+                FROM raw_messages
+                WHERE discord_message_id > $1
+                ORDER BY timestamp ASC
+                LIMIT $2
+                FOR UPDATE SKIP LOCKED
+                """,
+                cursor_message_id,
+                limit,
+            )
+        return [dict(row) for row in rows]
+
     async def store_semantic_memories(
         self,
         message_id: UUID,
