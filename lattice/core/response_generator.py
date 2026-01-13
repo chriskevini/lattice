@@ -88,6 +88,10 @@ async def get_goal_context(
     if not goal_names:
         return "No active goals."
 
+    if not semantic_repo:
+        return "No active goals."
+
+    assert semantic_repo is not None  # Type narrowing for mypy
     try:
         predicates = await semantic_repo.get_goal_predicates(goal_names)
     except Exception as e:
