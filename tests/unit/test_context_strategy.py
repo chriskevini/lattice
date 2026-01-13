@@ -1,8 +1,3 @@
-"""Unit tests for entity extraction module.
-
-Renamed from test_query_extraction.py to match context_strategy.py module.
-"""
-
 import json
 import uuid
 from datetime import datetime
@@ -20,6 +15,30 @@ from lattice.core.context_strategy import context_strategy
 from lattice.memory.episodic import EpisodicMessage
 from lattice.utils.llm import AuditResult
 from lattice.memory.procedural import PromptTemplate
+from lattice.memory.repositories import ContextRepository
+
+
+@pytest.fixture
+def mock_repo() -> MagicMock:
+    """Create a mock context repository."""
+    repo = MagicMock(spec=ContextRepository)
+    repo.save_context = AsyncMock()
+    repo.load_context_type = AsyncMock(return_value=[])
+    return repo
+
+
+@pytest.fixture
+def context_cache(mock_repo) -> ChannelContextCache:
+    """Create a fresh context cache for each test."""
+    cache = ChannelContextCache(repository=mock_repo, ttl=10)
+    return cache
+
+
+@pytest.fixture
+def user_context_cache(mock_repo) -> UserContextCache:
+    """Create a fresh user context cache for each test."""
+    cache = UserContextCache(repository=mock_repo, ttl_minutes=30)
+    return cache
 
 
 @pytest.fixture
@@ -57,20 +76,6 @@ def mock_generation_result() -> AuditResult:
         temperature=0.0,
         prompt_key="CONTEXT_STRATEGY",
     )
-
-
-@pytest.fixture
-def context_cache(mock_pool) -> ChannelContextCache:
-    """Create a fresh context cache for each test."""
-    cache = ChannelContextCache(db_pool=mock_pool, ttl=10)
-    return cache
-
-
-@pytest.fixture
-def user_context_cache(mock_pool) -> UserContextCache:
-    """Create a fresh user context cache for each test."""
-    cache = UserContextCache(db_pool=mock_pool, ttl_minutes=30)
-    return cache
 
 
 @pytest.fixture
@@ -362,16 +367,10 @@ class TestChannelContextCachePersistence:
     """Tests for ChannelContextCache persistence roundtrip."""
 
     @pytest.mark.asyncio
-    async def test_persistence_roundtrip(self, context_cache) -> None:
+    async def test_persistence_roundtrip(self, context_cache, mock_repo) -> None:
         """Test that cache data survives clear and reload."""
         context_cache.ttl = 10
-        mock_conn = AsyncMock()
-        context_cache._db_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        context_cache._db_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-        mock_conn.fetch.return_value = [
+        mock_repo.load_context_type.return_value = [
             {
                 "target_id": "123",
                 "data": json.dumps(
@@ -520,3 +519,39 @@ class TestUserContextCache:
             assert user_context_cache.get_timezone("user1") == "UTC"
             assert user_context_cache.get_timezone("user2") == "America/Los_Angeles"
             assert user_context_cache.get_timezone("user3") is None
+
+    @pytest.mark.asyncio
+    async def test_load_from_db_with_timezone(self, user_context_cache) -> None:
+        """Test that load_from_db correctly reconstructs timezone data."""
+        mock_conn = AsyncMock()
+        user_context_cache._db_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
+            return_value=mock_conn
+        )
+        user_context_cache._db_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+
+        mock_conn.fetch.return_value = [
+            {
+                "target_id": "user1",
+                "data": json.dumps(
+                    {
+                        "timezone": ["America/New_York", "2024-01-01T00:00:00"],
+                    }
+                ),
+                "updated_at": "2024-01-01T00:00:00",
+            },
+            {
+                "target_id": "user2",
+                "data": json.dumps(
+                    {
+                        "timezone": ["Europe/London", "2024-01-02T00:00:00"],
+                    }
+                ),
+                "updated_at": "2024-01-02T00:00:00",
+            },
+        ]
+
+        await user_context_cache.load_from_db()
+
+        assert user_context_cache.get_timezone("user1") == "America/New_York"
+        assert user_context_cache.get_timezone("user2") == "Europe/London"
+        assert user_context_cache.get_timezone("user3") is None
