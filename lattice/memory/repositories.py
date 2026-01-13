@@ -144,6 +144,17 @@ class SemanticMemoryRepository(Protocol):
         """
         ...
 
+    async def get_goal_predicates(self, goal_names: list[str]) -> list[dict[str, Any]]:
+        """Fetch predicates for specific goal names.
+
+        Args:
+            goal_names: List of goal names to fetch predicates for
+
+        Returns:
+            List of predicate tuples with keys: subject, predicate, object
+        """
+        ...
+
 
 @runtime_checkable
 class CanonicalRepository(Protocol):
