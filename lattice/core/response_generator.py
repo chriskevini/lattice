@@ -113,11 +113,11 @@ async def get_goal_context(
 
         if goal_name in goal_predicates:
             preds = goal_predicates[goal_name]
-            for j, (pred, obj) in enumerate(preds):
+            for j, (p, obj) in enumerate(preds):
                 pred_is_last = j == len(preds) - 1
                 pred_prefix = "    " if is_last else "│   "
                 pred_goal_prefix = "└── " if pred_is_last else "├── "
-                lines.append(f"{pred_prefix}{pred_goal_prefix}{pred}: {obj}")
+                lines.append(f"{pred_prefix}{pred_goal_prefix}{p}: {obj}")
 
     return "\n".join(lines)
 
