@@ -330,9 +330,13 @@ class MessageHandler:
             self._delayed_typing(message.channel, typing_delay)
         )
 
+        # Cancel any pending response/nudge tasks for this channel
+        if self._nudge_task:
+            self._nudge_task.cancel()
+        if self._consolidation_task:
+            self._consolidation_task.cancel()
+
         try:
-            # Increment per-channel message counter for context TTL
-            # Removed advance() from context_strategy to avoid double increment
             await self.context_cache.advance(message.channel.id)
 
             # Store user message in memory
@@ -346,9 +350,7 @@ class MessageHandler:
 
             # Consolidation trigger: Check if 18 messages since last batch
             try:
-                if await batch_consolidation.should_consolidate(
-                    message_repo=self.message_repo
-                ):
+                if await batch_consolidation.should_consolidate(db_pool=self.db_pool):
                     logger.info(
                         "Message count threshold reached, scheduling consolidation",
                     )
@@ -407,13 +409,9 @@ class MessageHandler:
                 )
 
             # Schedule/Reset contextual nudge_plan
-            if self._nudge_task:
-                self._nudge_task.cancel()
             self._nudge_task = asyncio.create_task(self._await_silence_then_nudge())
 
             # Schedule/Reset consolidation timer
-            if self._consolidation_task:
-                self._consolidation_task.cancel()
             self._consolidation_task = asyncio.create_task(
                 self._await_silence_then_consolidate()
             )
@@ -430,6 +428,7 @@ class MessageHandler:
                 memory_depth=2 if entities else 0,
                 user_timezone=self.user_timezone,
             )
+
             semantic_context = cast(str, context_result.get("semantic_context", ""))
             memory_origins: set[UUID] = cast(
                 set[UUID], context_result.get("memory_origins", set())
