@@ -302,21 +302,12 @@ class AuditView(discord.ui.DesignerView):
         self.rendered_prompt = rendered_prompt
         self.raw_output = raw_output
 
-        view_prompt_button: Any = discord.ui.Button(
-            emoji="📥",
+        details_button: Any = discord.ui.Button(
+            emoji="🔍",
             style=discord.ButtonStyle.secondary,
-            custom_id=f"audit:view_prompt:{audit_id}"
-            if audit_id
-            else "audit:view_prompt",
+            custom_id=f"audit:details:{audit_id}" if audit_id else "audit:details",
         )
-        view_prompt_button.callback = self._make_view_prompt_callback()
-
-        view_raw_button: Any = discord.ui.Button(
-            emoji="📤",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"audit:view_raw:{audit_id}" if audit_id else "audit:view_raw",
-        )
-        view_raw_button.callback = self._make_view_raw_callback()
+        details_button.callback = self._make_details_callback()
 
         feedback_button: Any = discord.ui.Button(
             emoji="💬",
@@ -344,8 +335,7 @@ class AuditView(discord.ui.DesignerView):
         quick_negative_button.callback = self._make_quick_negative_callback()
 
         action_row: Any = discord.ui.ActionRow(
-            view_prompt_button,
-            view_raw_button,
+            details_button,
             feedback_button,
             quick_positive_button,
             quick_negative_button,
@@ -383,23 +373,81 @@ class AuditView(discord.ui.DesignerView):
 
         return view_prompt_callback
 
-    def _make_view_raw_callback(self) -> Any:
-        """Create view raw output button callback."""
+    def _make_details_callback(self) -> Any:
+        """Create details button callback that creates a thread with full content."""
 
-        async def view_raw_callback(interaction: discord.Interaction) -> None:
-            """Handle RAW button click - shows ephemeral message."""
-            if not self.raw_output:
+        async def details_callback(interaction: discord.Interaction) -> None:
+            """Handle Details button click - creates thread with full content."""
+            if not self.raw_output or not self.rendered_prompt:
                 await interaction.response.send_message(
-                    "Raw output not available.",
+                    "Content not available.",
                     ephemeral=True,
                 )
                 return
 
-            await interaction.response.defer(ephemeral=True)
-            view = PromptDetailView(self.raw_output)
-            await interaction.followup.send(view=view, ephemeral=True)
+            thread_name = f"Audit: {self.prompt_key or 'unknown'}"[:100]
 
-        return view_raw_callback
+            if not isinstance(interaction.channel, discord.TextChannel):
+                await interaction.response.send_message(
+                    "Cannot create thread in this channel type.",
+                    ephemeral=True,
+                )
+                return
+
+            channel = interaction.channel
+
+            try:
+                thread = await channel.create_thread(
+                    name=thread_name,
+                    auto_archive_duration=1440,
+                )
+            except discord.Forbidden:
+                logger.warning(
+                    "Permission denied when creating audit thread",
+                    audit_id=str(self.audit_id),
+                )
+                await interaction.response.send_message(
+                    "Cannot create thread: missing permissions.",
+                    ephemeral=True,
+                )
+                return
+            except discord.HTTPException as e:
+                logger.warning(
+                    "Failed to create audit thread",
+                    audit_id=str(self.audit_id),
+                    error=str(e),
+                )
+                await interaction.response.send_message(
+                    "Failed to create thread. Please try again.",
+                    ephemeral=True,
+                )
+                return
+
+            await thread.send(f"**Rendered Prompt**\n{self.rendered_prompt}")
+
+            if len(self.raw_output) <= 19000:
+                await thread.send(f"**Raw Output**\n{self.raw_output}")
+            else:
+                chunks = [
+                    self.raw_output[i : i + 19000]
+                    for i in range(0, len(self.raw_output), 19000)
+                ]
+                for i, chunk in enumerate(chunks):
+                    await thread.send(
+                        f"**Raw Output** ({i + 1}/{len(chunks)})\n{chunk}"
+                    )
+
+            await interaction.response.send_message(
+                f"🔍 {thread.jump_url}",
+                ephemeral=True,
+            )
+            logger.debug(
+                "Audit details thread created",
+                audit_id=str(self.audit_id),
+                thread_id=thread.id,
+            )
+
+        return details_callback
 
     def _make_feedback_callback(self) -> Any:
         """Create feedback button callback."""
@@ -571,6 +619,7 @@ class AuditViewBuilder:
         db_pool: "DatabasePool",
         result: GenerationResult | None = None,
         message_id: int | None = None,
+        warnings: list[str] | None = None,
     ) -> tuple[discord.Embed, AuditView]:
         """Build a unified audit message for any LLM call.
 
@@ -593,8 +642,9 @@ class AuditViewBuilder:
             prompt_key, ("🤖", discord.Color.default())
         )
 
+        title_prefix = "⚠️ " if warnings else ""
         embed = discord.Embed(
-            title=f"{emoji} {prompt_key} v{version}",
+            title=f"{title_prefix}{emoji} {prompt_key} v{version}",
             color=color,
         )
 
@@ -615,6 +665,13 @@ class AuditViewBuilder:
             value=_truncate_for_field(final_output),
             inline=False,
         )
+
+        if warnings:
+            embed.add_field(
+                name="⚠️ WARNINGS",
+                value="\n".join(f"• {w}" for w in warnings),
+                inline=False,
+            )
 
         if metadata_parts:
             # Check for source links in metadata to highlight them

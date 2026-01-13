@@ -311,6 +311,58 @@ class TestAuditViewBuilder:
         assert len(embed.fields[1].value) <= 1024
 
     @pytest.mark.asyncio
+    async def test_warnings_shown_in_embed(self, db_pool: AsyncMock) -> None:
+        """Test that warnings are displayed in embed with warning indicator."""
+        audit_id = uuid4()
+
+        embed, _ = AuditViewBuilder.build_standard_audit(
+            prompt_key="MEMORY_CONSOLIDATION",
+            version=1,
+            input_text="test input",
+            output_text="test output",
+            metadata_parts=["100ms"],
+            audit_id=audit_id,
+            rendered_prompt="test prompt",
+            db_pool=db_pool,
+            warnings=[
+                "max_tokens=None (unlimited generation)",
+                "prompt_tokens=8500 (large prompt)",
+            ],
+        )
+
+        assert embed.title is not None
+        assert embed.title.startswith("⚠️ ")
+        assert "MEMORY_CONSOLIDATION" in embed.title
+
+        warning_field = next((f for f in embed.fields if f.name == "⚠️ WARNINGS"), None)
+        assert warning_field is not None
+        assert "max_tokens=None" in warning_field.value
+        assert "prompt_tokens=8500" in warning_field.value
+
+    @pytest.mark.asyncio
+    async def test_no_warnings_no_indicator(self, db_pool: AsyncMock) -> None:
+        """Test that no warning indicator when no warnings."""
+        audit_id = uuid4()
+
+        embed, _ = AuditViewBuilder.build_standard_audit(
+            prompt_key="CONTEXTUAL_NUDGE",
+            version=1,
+            input_text="test input",
+            output_text="test output",
+            metadata_parts=["100ms"],
+            audit_id=audit_id,
+            rendered_prompt="test prompt",
+            db_pool=db_pool,
+        )
+
+        assert embed.title is not None
+        assert not embed.title.startswith("⚠️ ")
+        assert embed.title.startswith("🤖")
+
+        warning_field = next((f for f in embed.fields if f.name == "⚠️ WARNINGS"), None)
+        assert warning_field is None
+
+    @pytest.mark.asyncio
     async def test_build_audit_no_message_id(self, db_pool: AsyncMock) -> None:
         """Test building an audit embed without a Discord message ID."""
         audit_id = uuid4()
@@ -559,8 +611,7 @@ class TestAuditViewCustomIds:
         custom_ids = [button.custom_id for button in buttons]
 
         # Should use fallback custom_ids without audit_id suffix
-        assert "audit:view_prompt" in custom_ids
-        assert "audit:view_raw" in custom_ids
+        assert "audit:details" in custom_ids
         assert "audit:feedback" in custom_ids
         assert "audit:quick_positive" in custom_ids
         assert "audit:quick_negative" in custom_ids
@@ -574,8 +625,8 @@ class TestAuditViewCallbacks:
         return AsyncMock()
 
     @pytest.mark.asyncio
-    async def test_view_prompt_callback_executes(self, db_pool: AsyncMock) -> None:
-        """Test that view prompt callback executes correctly."""
+    async def test_details_callback_executes(self, db_pool: AsyncMock) -> None:
+        """Test that details callback creates thread correctly."""
         audit_id = uuid4()
         view = AuditView(
             db_pool=db_pool,
@@ -583,62 +634,32 @@ class TestAuditViewCallbacks:
             message_id=12345,
             prompt_key="TEST_PROMPT",
             version=1,
-            rendered_prompt="This is a test prompt content",
-            raw_output="test output",
-        )
-
-        # Create mock interaction
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.defer = AsyncMock()
-        mock_interaction.followup = AsyncMock()
-        mock_interaction.followup.send = AsyncMock()
-
-        # Get and execute callback
-        callback = view._make_view_prompt_callback()
-        await callback(mock_interaction)
-
-        # Verify interaction was handled
-        mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
-        mock_interaction.followup.send.assert_called_once()
-        assert mock_interaction.followup.send.call_args[1]["ephemeral"] is True
-        assert "view" in mock_interaction.followup.send.call_args[1]
-
-    @pytest.mark.asyncio
-    async def test_view_raw_callback_executes(self, db_pool: AsyncMock) -> None:
-        """Test that view raw callback executes correctly."""
-        audit_id = uuid4()
-        view = AuditView(
-            db_pool=db_pool,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="test prompt",
+            rendered_prompt="This is test prompt content",
             raw_output="This is raw output content",
         )
 
-        # Create mock interaction
         mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_channel = AsyncMock(spec=discord.TextChannel)
+        mock_channel.create_thread = AsyncMock()
+        mock_thread = AsyncMock()
+        mock_thread.jump_url = "https://discord.com/threads/123/456"
+        mock_channel.create_thread.return_value = mock_thread
+        mock_interaction.channel = mock_channel
         mock_interaction.response = AsyncMock()
-        mock_interaction.response.defer = AsyncMock()
-        mock_interaction.followup = AsyncMock()
-        mock_interaction.followup.send = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
 
-        # Get and execute callback
-        callback = view._make_view_raw_callback()
+        callback = view._make_details_callback()
         await callback(mock_interaction)
 
-        # Verify interaction was handled
-        mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
-        mock_interaction.followup.send.assert_called_once()
-        assert mock_interaction.followup.send.call_args[1]["ephemeral"] is True
+        mock_channel.create_thread.assert_called_once()
+        mock_interaction.response.send_message.assert_called_once()
+        assert "🔍" in mock_interaction.response.send_message.call_args[0][0]
 
     @pytest.mark.asyncio
-    async def test_view_prompt_callback_handles_empty_content(
+    async def test_details_callback_handles_empty_content(
         self, db_pool: AsyncMock
     ) -> None:
-        """Test that view prompt callback handles empty content gracefully."""
+        """Test that details callback handles empty content gracefully."""
         audit_id = uuid4()
         view = AuditView(
             db_pool=db_pool,
@@ -650,25 +671,24 @@ class TestAuditViewCallbacks:
             raw_output="test output",
         )
 
-        # Create mock interaction
         mock_interaction = AsyncMock(spec=discord.Interaction)
         mock_interaction.response = AsyncMock()
         mock_interaction.response.send_message = AsyncMock()
 
-        # Get and execute callback
-        callback = view._make_view_prompt_callback()
+        callback = view._make_details_callback()
         await callback(mock_interaction)
 
-        # Verify error message was sent
         mock_interaction.response.send_message.assert_called_once()
         assert "not available" in mock_interaction.response.send_message.call_args[0][0]
         assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
 
     @pytest.mark.asyncio
-    async def test_view_raw_callback_handles_empty_content(
+    async def test_details_callback_handles_forbidden_error(
         self, db_pool: AsyncMock
     ) -> None:
-        """Test that view raw callback handles empty content gracefully."""
+        """Test that details callback handles Forbidden error gracefully."""
+        import discord
+
         audit_id = uuid4()
         view = AuditView(
             db_pool=db_pool,
@@ -677,19 +697,174 @@ class TestAuditViewCallbacks:
             prompt_key="TEST_PROMPT",
             version=1,
             rendered_prompt="test prompt",
-            raw_output=None,
+            raw_output="test output",
         )
 
-        # Create mock interaction
         mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_channel = AsyncMock(spec=discord.TextChannel)
+        mock_channel.create_thread = AsyncMock(
+            side_effect=discord.Forbidden(
+                response=AsyncMock(status=403),
+                message="Missing Permissions",
+            )
+        )
+        mock_interaction.channel = mock_channel
         mock_interaction.response = AsyncMock()
         mock_interaction.response.send_message = AsyncMock()
 
-        # Get and execute callback
-        callback = view._make_view_raw_callback()
+        callback = view._make_details_callback()
         await callback(mock_interaction)
 
-        # Verify error message was sent
         mock_interaction.response.send_message.assert_called_once()
-        assert "not available" in mock_interaction.response.send_message.call_args[0][0]
-        assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
+        assert (
+            "missing permissions"
+            in mock_interaction.response.send_message.call_args[0][0].lower()
+        )
+
+    @pytest.mark.asyncio
+    async def test_details_callback_handles_http_exception(
+        self, db_pool: AsyncMock
+    ) -> None:
+        """Test that details callback handles HTTPException gracefully."""
+        import discord
+
+        audit_id = uuid4()
+        view = AuditView(
+            db_pool=db_pool,
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="test output",
+        )
+
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_channel = AsyncMock(spec=discord.TextChannel)
+        mock_channel.create_thread = AsyncMock(
+            side_effect=discord.HTTPException(
+                response=AsyncMock(status=500),
+                message="Internal Server Error",
+            )
+        )
+        mock_interaction.channel = mock_channel
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
+
+        callback = view._make_details_callback()
+        await callback(mock_interaction)
+
+        mock_interaction.response.send_message.assert_called_once()
+        assert (
+            "Failed to create thread"
+            in mock_interaction.response.send_message.call_args[0][0]
+        )
+
+    @pytest.mark.asyncio
+    async def test_details_callback_handles_invalid_channel_type(
+        self, db_pool: AsyncMock
+    ) -> None:
+        """Test that details callback handles non-TextChannel gracefully."""
+        import discord
+
+        audit_id = uuid4()
+        view = AuditView(
+            db_pool=db_pool,
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="test output",
+        )
+
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_interaction.channel = None
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
+
+        callback = view._make_details_callback()
+        await callback(mock_interaction)
+
+        mock_interaction.response.send_message.assert_called_once()
+        assert (
+            "channel type"
+            in mock_interaction.response.send_message.call_args[0][0].lower()
+        )
+
+    @pytest.mark.asyncio
+    async def test_details_callback_splits_large_output(
+        self, db_pool: AsyncMock
+    ) -> None:
+        """Test that details callback splits large raw output into chunks."""
+        import discord
+
+        audit_id = uuid4()
+        large_output = "x" * 40000
+        view = AuditView(
+            db_pool=db_pool,
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="TEST_PROMPT",
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output=large_output,
+        )
+
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_channel = AsyncMock(spec=discord.TextChannel)
+        mock_channel.create_thread = AsyncMock()
+        mock_thread = AsyncMock()
+        mock_thread.jump_url = "https://discord.com/threads/123/456"
+        mock_thread.send = AsyncMock()
+        mock_channel.create_thread.return_value = mock_thread
+        mock_interaction.channel = mock_channel
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
+
+        callback = view._make_details_callback()
+        await callback(mock_interaction)
+
+        mock_channel.create_thread.assert_called_once()
+        # 1 for prompt + 3 for raw output chunks (40000 / 19000 = 2.1 -> 3 chunks)
+        assert mock_thread.send.call_count == 4
+        # call_args_list[0] = prompt, [1] = chunk 1/3, [2] = chunk 2/3, [3] = chunk 3/3
+        assert "(1/3)" in mock_thread.send.call_args_list[1][0][0]
+        assert "(2/3)" in mock_thread.send.call_args_list[2][0][0]
+        assert "(3/3)" in mock_thread.send.call_args_list[3][0][0]
+
+    @pytest.mark.asyncio
+    async def test_details_callback_thread_name_truncated(
+        self, db_pool: AsyncMock
+    ) -> None:
+        """Test that thread name is truncated to 100 characters."""
+        audit_id = uuid4()
+        view = AuditView(
+            db_pool=db_pool,
+            audit_id=audit_id,
+            message_id=12345,
+            prompt_key="A" * 200,
+            version=1,
+            rendered_prompt="test prompt",
+            raw_output="test output",
+        )
+
+        mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_channel = AsyncMock(spec=discord.TextChannel)
+        mock_channel.create_thread = AsyncMock()
+        mock_thread = AsyncMock()
+        mock_thread.jump_url = "https://discord.com/threads/123/456"
+        mock_channel.create_thread.return_value = mock_thread
+        mock_interaction.channel = mock_channel
+        mock_interaction.response = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
+
+        callback = view._make_details_callback()
+        await callback(mock_interaction)
+
+        create_thread_call = mock_channel.create_thread.call_args
+        thread_name = create_thread_call[1]["name"]
+        # Thread name is "Audit: {prompt_key}" truncated to 100 chars
+        # "Audit: " is 7 chars, so we get "Audit: " + 93 A's = 100 chars
+        assert len(thread_name) == 100
+        assert thread_name == f"Audit: {'A' * 93}"

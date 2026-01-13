@@ -24,6 +24,37 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+PROMPT_TOKENS_WARNING_THRESHOLD = 5000
+
+
+def _collect_warnings(
+    max_tokens: int | None,
+    prompt_tokens: int,
+    finish_reason: str | None,
+) -> list[str]:
+    """Collect warnings for suspicious patterns in LLM calls.
+
+    Args:
+        max_tokens: Maximum tokens requested (None = unlimited)
+        prompt_tokens: Number of tokens in the prompt
+        finish_reason: Reason the LLM stopped generating
+
+    Returns:
+        List of warning messages
+    """
+    warnings = []
+
+    if max_tokens is None:
+        warnings.append("max_tokens=None (unlimited generation)")
+
+    if prompt_tokens >= PROMPT_TOKENS_WARNING_THRESHOLD:
+        warnings.append(f"prompt_tokens={prompt_tokens} (large prompt)")
+
+    if finish_reason == "length":
+        warnings.append("Response truncated by token limit")
+
+    return warnings
+
 
 @dataclass
 class AuditResult(GenerationResult):
@@ -192,6 +223,12 @@ class AuditingLLMClient:
                     if audit_id:
                         metadata.append(f"Audit ID: {audit_id}")
 
+                    warnings = _collect_warnings(
+                        max_tokens=max_tokens,
+                        prompt_tokens=result.prompt_tokens or 0,
+                        finish_reason=result.finish_reason,
+                    )
+
                     try:
                         embed, view = AuditViewBuilder.build_standard_audit(
                             prompt_key=prompt_key or "UNKNOWN",
@@ -204,6 +241,7 @@ class AuditingLLMClient:
                             db_pool=effective_db_pool,
                             result=result,
                             message_id=main_discord_message_id,
+                            warnings=warnings,
                         )
 
                         channel = bot.get_channel(effective_dream_channel_id)
