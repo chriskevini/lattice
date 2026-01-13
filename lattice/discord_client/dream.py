@@ -387,12 +387,41 @@ class AuditView(discord.ui.DesignerView):
 
             thread_name = f"Audit: {self.prompt_key or 'unknown'}"[:100]
 
-            channel = cast(discord.TextChannel, interaction.channel)
+            if not isinstance(interaction.channel, discord.TextChannel):
+                await interaction.response.send_message(
+                    "Cannot create thread in this channel type.",
+                    ephemeral=True,
+                )
+                return
 
-            thread = await channel.create_thread(
-                name=thread_name,
-                auto_archive_duration=1440,
-            )
+            channel = interaction.channel
+
+            try:
+                thread = await channel.create_thread(
+                    name=thread_name,
+                    auto_archive_duration=1440,
+                )
+            except discord.Forbidden:
+                logger.warning(
+                    "Permission denied when creating audit thread",
+                    audit_id=str(self.audit_id),
+                )
+                await interaction.response.send_message(
+                    "Cannot create thread: missing permissions.",
+                    ephemeral=True,
+                )
+                return
+            except discord.HTTPException as e:
+                logger.warning(
+                    "Failed to create audit thread",
+                    audit_id=str(self.audit_id),
+                    error=str(e),
+                )
+                await interaction.response.send_message(
+                    "Failed to create thread. Please try again.",
+                    ephemeral=True,
+                )
+                return
 
             await thread.send(f"**Rendered Prompt**\n{self.rendered_prompt}")
 
