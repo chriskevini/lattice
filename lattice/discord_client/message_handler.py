@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
     from lattice.core.context import ChannelContextCache, UserContextCache
+    from lattice.memory.repositories import MessageRepository
+
 
 from lattice.core import memory_orchestrator, response_generator
 
@@ -56,6 +58,7 @@ class MessageHandler:
         llm_client: "AuditingLLMClient",
         context_cache: "ChannelContextCache",
         user_context_cache: "UserContextCache",
+        message_repo: "MessageRepository",
         user_timezone: str = "UTC",
     ) -> None:
         """Initialize the message handler.
@@ -68,6 +71,7 @@ class MessageHandler:
             llm_client: LLM client for dependency injection
             context_cache: In-memory context cache for dependency injection
             user_context_cache: User-level cache for goals/activities
+            message_repo: Message repository
             user_timezone: The user's timezone
         """
         self.bot = bot
@@ -78,6 +82,7 @@ class MessageHandler:
         self.user_timezone = user_timezone
         self.context_cache = context_cache
         self.user_context_cache = user_context_cache
+        self.message_repo = message_repo
         self._memory_healthy = False
         self._consecutive_failures = 0
         self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
@@ -117,6 +122,9 @@ class MessageHandler:
                     db_pool=self.db_pool,
                     bot=self.bot,
                     context_cache=self.context_cache,
+                    message_repo=self.message_repo,
+                    semantic_repo=self.bot.semantic_repo,  # type: ignore
+                    canonical_repo=self.bot.canonical_repo,  # type: ignore
                     llm_client=self.llm_client,
                 )
                 result = await pipeline.dispatch_autonomous_nudge(
@@ -130,13 +138,13 @@ class MessageHandler:
                     )
 
                     message_id = await memory_orchestrator.store_bot_message(
-                        nudge_plan.content,
-                        result.id,
-                        result.channel.id,
-                        self.db_pool,
-                        True,
-                        None,
-                        self.user_timezone,
+                        content=nudge_plan.content,
+                        discord_message_id=result.id,
+                        channel_id=result.channel.id,
+                        message_repo=self.message_repo,
+                        is_proactive=True,
+                        generation_metadata=None,
+                        timezone=self.user_timezone,
                     )
 
                     # Audit trail
@@ -191,6 +199,7 @@ class MessageHandler:
                 llm_client=self.llm_client,
                 bot=self.bot,
                 user_context_cache=self.user_context_cache,
+                message_repo=self.message_repo,
             )
         except asyncio.CancelledError:
             logger.debug("Consolidation timer cancelled by new user message")
@@ -315,7 +324,7 @@ class MessageHandler:
                 discord_message_id=message.id,
                 channel_id=message.channel.id,
                 timezone=self.user_timezone,
-                db_pool=self.db_pool,
+                message_repo=self.message_repo,
             )
 
             # CONTEXT_STRATEGY: Analyze conversation window for entities, flags, and unresolved entities
@@ -325,7 +334,7 @@ class MessageHandler:
                 recent_msgs_for_strategy = await episodic.get_recent_messages(
                     channel_id=message.channel.id,
                     limit=CONTEXT_STRATEGY_WINDOW_SIZE,
-                    db_pool=self.db_pool,
+                    repo=self.message_repo,
                 )
 
                 strategy = await context_strategy(
@@ -403,6 +412,7 @@ class MessageHandler:
                 memory_depth=0,
                 entity_names=[],
                 db_pool=self.db_pool,
+                message_repo=self.message_repo,
             )
             # Format episodic context (excluding current message)
             from zoneinfo import ZoneInfo
@@ -486,7 +496,7 @@ class MessageHandler:
                     is_proactive=False,
                     generation_metadata=generation_metadata,
                     timezone=self.user_timezone,
-                    db_pool=self.db_pool,
+                    message_repo=self.message_repo,
                 )
 
             self._consecutive_failures = 0

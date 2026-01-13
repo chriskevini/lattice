@@ -12,6 +12,7 @@ from uuid import UUID
 import discord
 import structlog
 from discord.ext import commands
+from typing import TYPE_CHECKING, Any
 
 from lattice.discord_client.audit_mirror import AuditMirror
 from lattice.discord_client.command_handler import CommandHandler
@@ -21,16 +22,20 @@ from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.config import config
 from lattice.utils.database import get_user_timezone
 from lattice.core.context import ChannelContextCache, UserContextCache
+from lattice.core.pipeline import UnifiedPipeline
 
-# from lattice.core.context import ContextStrategy # temporarily commented for test
-from typing import TYPE_CHECKING
+from lattice.memory.repositories import (
+    CanonicalRepository,
+    MessageRepository,
+    SemanticMemoryRepository,
+)
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
-    from lattice.utils.auditing_middleware import AuditingLLMClient
 
 
 logger = structlog.get_logger(__name__)
+
 
 # Database initialization retry settings
 DB_INIT_MAX_RETRIES = 20
@@ -43,26 +48,35 @@ class LatticeBot(commands.Bot):
     def __init__(
         self,
         db_pool: "DatabasePool",
-        llm_client: "AuditingLLMClient",
-        context_cache: ChannelContextCache,
-        user_context_cache: UserContextCache,
+        llm_client: Any,
+        context_cache: "ChannelContextCache",
+        user_context_cache: "UserContextCache",
+        message_repo: "MessageRepository",
+        semantic_repo: "SemanticMemoryRepository",
+        canonical_repo: "CanonicalRepository",
     ) -> None:
-        """Initialize the Lattice bot."""
         intents = discord.Intents.default()
         intents.message_content = True
-        intents.messages = True
-        intents.reactions = True
-
-        super().__init__(
-            command_prefix="!",
-            intents=intents,
-            help_command=None,
-        )
+        super().__init__(command_prefix="!", intents=intents)
 
         self.db_pool = db_pool
         self.llm_client = llm_client
         self.context_cache = context_cache
         self.user_context_cache = user_context_cache
+        self.message_repo = message_repo
+        self.semantic_repo = semantic_repo
+        self.canonical_repo = canonical_repo
+
+        # Initialize the pipeline
+        self.pipeline = UnifiedPipeline(
+            db_pool=db_pool,
+            bot=self,
+            context_cache=context_cache,
+            message_repo=message_repo,
+            semantic_repo=semantic_repo,
+            canonical_repo=canonical_repo,
+            llm_client=llm_client,
+        )
 
         self.main_channel_id = config.discord_main_channel_id
         if not self.main_channel_id:
@@ -88,6 +102,7 @@ class LatticeBot(commands.Bot):
             user_timezone=self._user_timezone,
             context_cache=self.context_cache,
             user_context_cache=self.user_context_cache,
+            message_repo=self.message_repo,
         )
 
         self._error_manager = ErrorManager(

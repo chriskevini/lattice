@@ -60,7 +60,7 @@ class TestCheckAndRunBatch:
             "lattice.memory.batch_consolidation.run_batch_consolidation"
         ) as mock_run:
             mock_run.return_value = None
-            await check_and_run_batch(db_pool=mock_pool)
+            await check_and_run_batch(db_pool=mock_pool, message_repo=MagicMock())
             mock_run.assert_not_called()
 
     @pytest.mark.asyncio
@@ -78,7 +78,7 @@ class TestCheckAndRunBatch:
             "lattice.memory.batch_consolidation.run_batch_consolidation"
         ) as mock_run:
             mock_run.return_value = None
-            await check_and_run_batch(db_pool=mock_pool)
+            await check_and_run_batch(db_pool=mock_pool, message_repo=MagicMock())
             mock_run.assert_called_once()
 
     @pytest.mark.asyncio
@@ -96,7 +96,7 @@ class TestCheckAndRunBatch:
             "lattice.memory.batch_consolidation.run_batch_consolidation"
         ) as mock_run:
             mock_run.return_value = None
-            await check_and_run_batch(db_pool=mock_pool)
+            await check_and_run_batch(db_pool=mock_pool, message_repo=MagicMock())
             mock_run.assert_called_once()
 
     @pytest.mark.asyncio
@@ -114,7 +114,7 @@ class TestCheckAndRunBatch:
             "lattice.memory.batch_consolidation.run_batch_consolidation"
         ) as mock_run:
             mock_run.return_value = None
-            await check_and_run_batch(db_pool=mock_pool)
+            await check_and_run_batch(db_pool=mock_pool, message_repo=MagicMock())
             call_args = mock_conn.fetchrow.call_args_list[1]
             assert "discord_message_id > $1" in call_args[0][0]
             assert call_args[0][1] == 0
@@ -135,7 +135,7 @@ class TestCheckAndRunBatch:
             "lattice.memory.batch_consolidation.run_batch_consolidation"
         ) as mock_run:
             mock_run.return_value = None
-            await check_and_run_batch(db_pool=mock_pool)
+            await check_and_run_batch(db_pool=mock_pool, message_repo=MagicMock())
             call_args = mock_conn.fetchrow.call_args_list[1]
             assert call_args[0][1] == 0
 
@@ -167,7 +167,10 @@ class TestRunBatchConsolidation:
 
         with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
             await run_batch_consolidation(
-                db_pool=mock_pool, llm_client=MagicMock(), bot=mock_bot
+                db_pool=mock_pool,
+                llm_client=MagicMock(),
+                bot=mock_bot,
+                message_repo=MagicMock(),
             )
             mock_prompt.assert_not_called()
 
@@ -194,7 +197,10 @@ class TestRunBatchConsolidation:
 
         with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
             await run_batch_consolidation(
-                db_pool=mock_pool, llm_client=MagicMock(), bot=mock_bot
+                db_pool=mock_pool,
+                llm_client=MagicMock(),
+                bot=mock_bot,
+                message_repo=MagicMock(),
             )
             mock_prompt.assert_not_called()
 
@@ -238,7 +244,10 @@ class TestRunBatchConsolidation:
                 "lattice.memory.batch_consolidation.store_semantic_memories"
             ) as mock_store:
                 await run_batch_consolidation(
-                    db_pool=mock_pool, llm_client=mock_llm_client, bot=mock_bot
+                    db_pool=mock_pool,
+                    llm_client=mock_llm_client,
+                    bot=mock_bot,
+                    message_repo=MagicMock(),
                 )
                 mock_llm_client.assert_not_called()
                 mock_store.assert_not_called()
@@ -363,6 +372,7 @@ class TestRunBatchConsolidation:
                                                 db_pool=mock_pool,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
+                                                message_repo=MagicMock(),
                                             )
                                         mock_store.assert_called_once()
                                         call_kwargs = mock_store.call_args.kwargs
@@ -493,6 +503,7 @@ class TestRunBatchConsolidation:
                                                     db_pool=mock_pool,
                                                     llm_client=mock_llm_client,
                                                     bot=mock_bot,
+                                                    message_repo=MagicMock(),
                                                 )
                                             mock_store.assert_not_called()
 
@@ -601,6 +612,7 @@ class TestRunBatchConsolidation:
                                         db_pool=mock_pool,
                                         llm_client=mock_llm_client,
                                         bot=mock_bot,
+                                        message_repo=MagicMock(),
                                     )
                                     call_args = mock_prompt.safe_format.call_args
                                     assert "bigger_episodic_context" in call_args[1]
@@ -713,6 +725,7 @@ class TestRunBatchConsolidation:
                                         db_pool=mock_pool,
                                         llm_client=mock_llm_client,
                                         bot=mock_bot,
+                                        message_repo=MagicMock(),
                                     )
                                     # semantic_context should NOT be in call_args anymore
                                     call_args = mock_prompt.safe_format.call_args
@@ -815,6 +828,7 @@ class TestRunBatchConsolidation:
                                         db_pool=mock_pool,
                                         llm_client=mock_llm_client,
                                         bot=mock_bot,
+                                        message_repo=MagicMock(),
                                     )
                                     call_args = mock_prompt.safe_format.call_args
                                     assert "semantic_context" not in call_args[1]
@@ -888,8 +902,12 @@ class TestRaceCondition:
 
         with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
             await run_batch_consolidation(
-                db_pool=mock_pool, llm_client=MagicMock(), bot=MagicMock()
+                db_pool=mock_pool,
+                llm_client=MagicMock(),
+                bot=MagicMock(),
+                message_repo=MagicMock(),
             )
+
             mock_prompt.assert_not_called()
 
 
@@ -1020,6 +1038,7 @@ class TestCanonicalFormIntegration:
                                                 db_pool=mock_pool,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
+                                                message_repo=MagicMock(),
                                             )
 
                                             mock_store.assert_called_once()
@@ -1150,6 +1169,7 @@ class TestCanonicalFormIntegration:
                                             db_pool=mock_pool,
                                             llm_client=mock_llm_client,
                                             bot=mock_bot,
+                                            message_repo=MagicMock(),
                                         )
 
     @pytest.mark.asyncio
@@ -1268,6 +1288,7 @@ class TestCanonicalFormIntegration:
                                                 db_pool=mock_pool,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
+                                                message_repo=MagicMock(),
                                             )
 
                                             mock_store.assert_called_once()

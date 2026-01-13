@@ -19,7 +19,10 @@ from lattice.memory import episodic
 @pytest.fixture
 def context_cache(db_pool) -> ChannelContextCache:
     """Create a fresh context cache for each test."""
-    cache = ChannelContextCache(db_pool=db_pool, ttl=10)
+    from lattice.memory.context import PostgresContextRepository
+
+    repo = PostgresContextRepository(db_pool)
+    cache = ChannelContextCache(repository=repo, ttl=10)
     return cache
 
 

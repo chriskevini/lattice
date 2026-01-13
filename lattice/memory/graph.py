@@ -16,9 +16,14 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from lattice.memory.repositories import SemanticMemoryRepository
 
 if TYPE_CHECKING:
+    from lattice.memory.repositories import SemanticMemoryRepository
     from lattice.utils.database import DatabasePool
+else:
+    SemanticMemoryRepository = Any
+    DatabasePool = Any
 
 
 logger = structlog.get_logger(__name__)
@@ -35,14 +40,38 @@ class GraphTraversal:
     related entities across multiple hops.
     """
 
-    def __init__(self, db_pool: "DatabasePool", max_depth: int = 3) -> None:
+    def __init__(
+        self,
+        repo: Any = None,
+        max_depth: int = 3,
+        db_pool: DatabasePool | None = None,
+    ) -> None:
         """Initialize graph traverser.
 
         Args:
-            db_pool: Database connection pool (asyncpg.Pool)
+            repo: Semantic memory repository or legacy DatabasePool
             max_depth: Default maximum traversal depth for BFS
+            db_pool: Optional database pool (for legacy support)
         """
-        self.db_pool = db_pool
+        if repo is not None:
+            # Check if it's a repository (has find_memories) or a mock that looks like one
+            if hasattr(repo, "find_memories"):
+                self.repo = repo
+            elif hasattr(repo, "pool"):
+                # Treat as legacy db_pool
+                from lattice.memory.context import PostgresSemanticMemoryRepository
+
+                self.repo = PostgresSemanticMemoryRepository(repo)
+            else:
+                # Fallback for generic mocks or other objects
+                self.repo = repo
+        elif db_pool is not None:
+            from lattice.memory.context import PostgresSemanticMemoryRepository
+
+            self.repo = PostgresSemanticMemoryRepository(db_pool)
+        else:
+            raise ValueError("Either repo or db_pool must be provided")
+
         self.max_depth = max_depth
 
     async def traverse_from_entity(
@@ -70,82 +99,11 @@ class GraphTraversal:
         if max_hops is None:
             max_hops = self.max_depth
 
-        all_memories: list[dict[str, Any]] = []
-        visited_entities: set[str] = set()
-        frontier: set[str] = {entity_name.lower()}
-        seen_memories: set[tuple[str, str, str]] = set()
-        predicates = list(predicate_filter) if predicate_filter else []
-
-        async with self.db_pool.pool.acquire() as conn:
-            for depth in range(1, max_hops + 1):
-                if not frontier:
-                    break
-
-                next_frontier: set[str] = set()
-
-                for entity in frontier:
-                    entity_lower = entity.lower()
-                    if entity_lower in visited_entities:
-                        continue
-                    visited_entities.add(entity_lower)
-
-                    # Sanitize for ILIKE matching
-                    sanitized_entity = entity.replace("%", "\\%").replace("_", "\\_")
-                    if predicates:
-                        query = """
-                        SELECT
-                            subject,
-                            predicate,
-                            object,
-                            created_at
-                        FROM semantic_memories
-                        WHERE (subject ILIKE $1 OR object ILIKE $1)
-                          AND predicate = ANY($2)
-                          AND superseded_by IS NULL
-                        ORDER BY created_at DESC
-                        LIMIT 50
-                        """
-                        params = [sanitized_entity, predicates]
-                    else:
-                        query = """
-                        SELECT
-                            subject,
-                            predicate,
-                            object,
-                            created_at
-                        FROM semantic_memories
-                        WHERE (subject ILIKE $1 OR object ILIKE $1)
-                          AND superseded_by IS NULL
-                        ORDER BY created_at DESC
-                        LIMIT 50
-                        """
-                        params = [sanitized_entity]
-                    memories = await conn.fetch(query, *params)
-
-                    for row in memories:
-                        memory = dict(row)
-                        memory_key = (
-                            memory["subject"].lower(),
-                            memory["predicate"].lower(),
-                            memory["object"].lower(),
-                        )
-                        if memory_key in seen_memories:
-                            continue
-                        seen_memories.add(memory_key)
-                        memory["depth"] = depth
-                        all_memories.append(memory)
-
-                        discovered_entity = (
-                            memory["object"]
-                            if memory["subject"].lower() == entity_lower
-                            else memory["subject"]
-                        )
-                        if discovered_entity.lower() not in visited_entities:
-                            next_frontier.add(discovered_entity)
-
-                frontier = next_frontier
-
-        return all_memories
+        return await self.repo.traverse_from_entity(
+            entity_name=entity_name,
+            predicate_filter=predicate_filter,
+            max_hops=max_hops,
+        )
 
     async def find_semantic_memories(
         self,
@@ -196,59 +154,20 @@ class GraphTraversal:
             end_date=end_date,
             limit=limit,
         )
-        try:
-            async with self.db_pool.pool.acquire() as conn:
-                query = """
-                    SELECT
-                        subject,
-                        predicate,
-                        object,
-                        created_at
-                    FROM semantic_memories
-                    WHERE superseded_by IS NULL
-                """
-                params: list[Any] = []
+        results = await self.repo.find_memories(
+            subject=subject,
+            predicate=predicate,
+            object=object,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
 
-                if subject is not None:
-                    query += " AND subject = $" + str(len(params) + 1)
-                    params.append(subject)
-
-                if predicate is not None:
-                    query += " AND predicate = $" + str(len(params) + 1)
-                    params.append(predicate)
-
-                if object is not None:
-                    query += " AND object = $" + str(len(params) + 1)
-                    params.append(object)
-
-                if start_date is not None:
-                    query += " AND created_at >= $" + str(len(params) + 1)
-                    params.append(start_date)
-
-                if end_date is not None:
-                    query += " AND created_at <= $" + str(len(params) + 1)
-                    params.append(end_date)
-
-                query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
-                params.append(limit)
-
-                rows = await conn.fetch(query, *params)
-                results = [dict(row) for row in rows]
-
-                logger.info(
-                    "Memory query completed",
-                    subject=subject,
-                    predicate=predicate,
-                    object=object,
-                    result_count=len(results),
-                )
-                return results
-        except Exception as e:
-            logger.error(
-                "Memory query failed",
-                subject=subject,
-                predicate=predicate,
-                object=object,
-                error=str(e),
-            )
-            return []
+        logger.info(
+            "Memory query completed",
+            subject=subject,
+            predicate=predicate,
+            object=object,
+            result_count=len(results),
+        )
+        return results

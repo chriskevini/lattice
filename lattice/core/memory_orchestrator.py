@@ -13,6 +13,8 @@ from lattice.core.constants import DEFAULT_EPISODIC_LIMIT
 from lattice.memory import episodic
 from lattice.memory.graph import GraphTraversal
 
+from lattice.memory.repositories import MessageRepository
+
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
 
@@ -24,7 +26,7 @@ async def store_user_message(
     content: str,
     discord_message_id: int,
     channel_id: int,
-    db_pool: "DatabasePool",
+    message_repo: MessageRepository,
     timezone: str = "UTC",
 ) -> UUID:
     """Store a user message in episodic memory.
@@ -33,7 +35,7 @@ async def store_user_message(
         content: Message content
         discord_message_id: Discord's unique message ID
         channel_id: Discord channel ID
-        db_pool: Database pool for dependency injection (required)
+        message_repo: Message repository
         timezone: IANA timezone string (e.g., 'America/New_York')
 
     Returns:
@@ -45,7 +47,7 @@ async def store_user_message(
         Consolidation runs every 18 messages.
     """
     user_message_id = await episodic.store_message(
-        db_pool=db_pool,
+        repo=message_repo,
         message=episodic.EpisodicMessage(
             content=content,
             discord_message_id=discord_message_id,
@@ -62,7 +64,7 @@ async def store_bot_message(
     content: str,
     discord_message_id: int,
     channel_id: int,
-    db_pool: "DatabasePool",
+    message_repo: MessageRepository,
     is_proactive: bool = False,
     generation_metadata: dict[str, Any] | None = None,
     timezone: str = "UTC",
@@ -73,7 +75,7 @@ async def store_bot_message(
         content: Message content
         discord_message_id: Discord's unique message ID
         channel_id: Discord channel ID
-        db_pool: Database pool for dependency injection (required)
+        message_repo: Message repository
         is_proactive: Whether the bot initiated this message
         generation_metadata: LLM generation metadata
         timezone: IANA timezone string (e.g., 'America/New_York')
@@ -82,7 +84,7 @@ async def store_bot_message(
         UUID of the stored episodic message
     """
     return await episodic.store_message(
-        db_pool=db_pool,
+        repo=message_repo,
         message=episodic.EpisodicMessage(
             content=content,
             discord_message_id=discord_message_id,
@@ -99,6 +101,7 @@ async def retrieve_context(
     query: str,
     channel_id: int,
     db_pool: "DatabasePool",
+    message_repo: MessageRepository,
     episodic_limit: int = DEFAULT_EPISODIC_LIMIT,
     memory_depth: int = 1,
     entity_names: list[str] | None = None,
@@ -113,7 +116,8 @@ async def retrieve_context(
     Args:
         query: Query text (used for logging)
         channel_id: Discord channel ID for episodic search
-        db_pool: Database pool for dependency injection (required)
+        db_pool: Database pool for dependency injection (required for GraphTraversal)
+        message_repo: Message repository
         episodic_limit: Maximum recent messages to retrieve (default from DEFAULT_EPISODIC_LIMIT)
         memory_depth: Maximum depth for graph traversal (0 = disabled)
         entity_names: Entity names to traverse graph from (from entity extraction)
@@ -124,7 +128,7 @@ async def retrieve_context(
     recent_messages = await episodic.get_recent_messages(
         channel_id=channel_id,
         limit=episodic_limit,
-        db_pool=db_pool,
+        repo=message_repo,
     )
 
     logger.debug(
@@ -135,7 +139,7 @@ async def retrieve_context(
     semantic_context: list[dict[str, Any]] = []
     if memory_depth > 0 and entity_names:
         if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool.pool, max_depth=memory_depth)
+            traverser = GraphTraversal(db_pool, max_depth=memory_depth)
 
             traverse_tasks = [
                 traverser.traverse_from_entity(entity_name, max_hops=memory_depth)

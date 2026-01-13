@@ -60,18 +60,10 @@ class TestEpisodicMemoryFunctions:
     @pytest.mark.asyncio
     async def test_store_message(self) -> None:
         """Test storing a message in episodic memory."""
-        mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={"id": UUID("12345678-1234-5678-1234-567812345678")}
+        mock_repo = AsyncMock()
+        mock_repo.store_message.return_value = UUID(
+            "12345678-1234-5678-1234-567812345678"
         )
-
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock()
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         message = EpisodicMessage(
             content="Test message",
@@ -80,54 +72,53 @@ class TestEpisodicMemoryFunctions:
             is_bot=False,
         )
 
-        result = await store_message(db_pool=mock_pool, message=message)
+        result = await store_message(repo=mock_repo, message=message)
 
         assert result == UUID("12345678-1234-5678-1234-567812345678")
-        mock_conn.fetchrow.assert_called_once()
+        mock_repo.store_message.assert_called_once_with(
+            content="Test message",
+            discord_message_id=12345,
+            channel_id=67890,
+            is_bot=False,
+            is_proactive=False,
+            generation_metadata=None,
+            user_timezone="UTC",
+        )
 
     @pytest.mark.asyncio
     async def test_get_recent_messages(self) -> None:
         """Test retrieving recent messages from a channel."""
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
-            return_value=[
-                {
-                    "id": UUID("22222222-2222-2222-2222-222222222222"),
-                    "discord_message_id": 101,
-                    "channel_id": 67890,
-                    "content": "Second message",
-                    "is_bot": True,
-                    "is_proactive": False,
-                    "timestamp": datetime(2024, 1, 1, 10, 5, 0, tzinfo=UTC),
-                    "user_timezone": "UTC",
-                },
-                {
-                    "id": UUID("11111111-1111-1111-1111-111111111111"),
-                    "discord_message_id": 100,
-                    "channel_id": 67890,
-                    "content": "First message",
-                    "is_bot": False,
-                    "is_proactive": False,
-                    "timestamp": datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
-                    "user_timezone": "UTC",
-                },
-            ]
-        )
+        mock_repo = AsyncMock()
+        mock_repo.get_recent_messages.return_value = [
+            {
+                "id": UUID("22222222-2222-2222-2222-222222222222"),
+                "discord_message_id": 101,
+                "channel_id": 67890,
+                "content": "Second message",
+                "is_bot": True,
+                "is_proactive": False,
+                "timestamp": datetime(2024, 1, 1, 10, 5, 0, tzinfo=UTC),
+                "user_timezone": "UTC",
+            },
+            {
+                "id": UUID("11111111-1111-1111-1111-111111111111"),
+                "discord_message_id": 100,
+                "channel_id": 67890,
+                "content": "First message",
+                "is_bot": False,
+                "is_proactive": False,
+                "timestamp": datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
+                "user_timezone": "UTC",
+            },
+        ]
 
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock()
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
-
-        messages = await get_recent_messages(
-            db_pool=mock_pool, channel_id=67890, limit=10
-        )
+        messages = await get_recent_messages(repo=mock_repo, channel_id=67890, limit=10)
 
         assert len(messages) == 2
+        # get_recent_messages reverses the order from repo (which is newest first)
+        # to oldest first for the LLM context.
         assert messages[0].content == "First message"
+        assert messages[1].content == "Second message"
         assert messages[0].timestamp < messages[1].timestamp
 
 

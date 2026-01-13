@@ -3,19 +3,19 @@
 Stores immutable conversation history with timestamp-based retrieval and timezone tracking.
 """
 
-import asyncio
-import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import structlog
 
+from lattice.memory.repositories import MessageRepository
 from lattice.utils.date_resolution import get_now
 
-
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import MessageRepository
+else:
+    MessageRepository = Any
 
 
 logger = structlog.get_logger(__name__)
@@ -65,92 +65,50 @@ class EpisodicMessage:
         return "ASSISTANT" if self.is_bot else "USER"
 
 
-async def store_message(db_pool: Any, message: EpisodicMessage) -> UUID:
+async def store_message(repo: MessageRepository, message: "EpisodicMessage") -> UUID:
     """Store a message in episodic memory.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Message repository for episodic memory
         message: The message to store
 
     Returns:
         UUID of the stored message
-
-    Raises:
-        Exception: If database operation fails
     """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO raw_messages (
-                discord_message_id, channel_id, content, is_bot, is_proactive, generation_metadata, user_timezone
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id
-            """,
-            message.discord_message_id,
-            message.channel_id,
-            message.content,
-            message.is_bot,
-            message.is_proactive,
-            json.dumps(message.generation_metadata)
-            if message.generation_metadata
-            else None,
-            message.user_timezone,
-        )
+    message_id = await repo.store_message(
+        content=message.content,
+        discord_message_id=message.discord_message_id,
+        channel_id=message.channel_id,
+        is_bot=message.is_bot,
+        is_proactive=message.is_proactive,
+        generation_metadata=message.generation_metadata,
+        user_timezone=message.user_timezone,
+    )
 
-        message_id = cast("UUID", row["id"])
-
-        logger.info(
-            "Stored episodic message",
-            message_id=str(message_id),
-            discord_id=message.discord_message_id,
-            is_bot=message.is_bot,
-        )
-
-    from lattice.memory import batch_consolidation
-
-    asyncio.create_task(batch_consolidation.check_and_run_batch(db_pool=db_pool))
+    logger.info(
+        "Stored episodic message",
+        message_id=str(message_id),
+        discord_id=message.discord_message_id,
+        is_bot=message.is_bot,
+    )
 
     return message_id
 
 
 async def get_recent_messages(
-    db_pool: "DatabasePool", channel_id: int | None = None, limit: int = 10
+    repo: MessageRepository, channel_id: int | None = None, limit: int = 10
 ) -> list[EpisodicMessage]:
     """Get recent messages from a channel or all channels.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Message repository
         channel_id: Discord channel ID (None for all channels)
         limit: Maximum number of messages to return
 
     Returns:
         List of recent messages, ordered by timestamp (oldest first)
     """
-    if channel_id:
-        async with db_pool.pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
-                FROM raw_messages
-                WHERE channel_id = $1
-                ORDER BY timestamp DESC
-                LIMIT $2
-                """,
-                channel_id,
-                limit,
-            )
-    else:
-        async with db_pool.pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
-                FROM raw_messages
-                ORDER BY timestamp DESC
-                LIMIT $1
-                """,
-                limit,
-            )
+    rows = await repo.get_recent_messages(channel_id=channel_id, limit=limit)
 
     return [
         EpisodicMessage(
@@ -185,7 +143,7 @@ def format_messages(messages: list[EpisodicMessage]) -> str:
 
 
 async def store_semantic_memories(
-    db_pool: "DatabasePool",
+    repo: MessageRepository,
     message_id: UUID,
     memories: list[dict[str, str]],
     source_batch_id: str | None = None,
@@ -193,7 +151,7 @@ async def store_semantic_memories(
     """Store extracted memories in semantic_memories table.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Message repository
         message_id: UUID of origin message
         memories: List of {"subject": str, "predicate": str, "object": str}
         source_batch_id: Optional batch identifier for traceability
@@ -204,44 +162,6 @@ async def store_semantic_memories(
     if not memories:
         return
 
-    async with db_pool.pool.acquire() as conn, conn.transaction():
-        for memory in memories:
-            subject = memory.get("subject", "").strip()
-            predicate = memory.get("predicate", "").strip()
-            obj = memory.get("object", "").strip()
-
-            if not (subject and predicate and obj):
-                logger.warning(
-                    "Skipping invalid memory",
-                    memory=memory,
-                )
-                continue
-
-            try:
-                await conn.execute(
-                    """
-                    INSERT INTO semantic_memories (
-                        subject, predicate, object, source_batch_id
-                    )
-                    VALUES ($1, $2, $3, $4)
-                    """,
-                    subject,
-                    predicate,
-                    obj,
-                    source_batch_id,
-                )
-
-                logger.debug(
-                    "Stored semantic memory",
-                    subject=subject,
-                    predicate=predicate,
-                    object=obj,
-                    message_id=str(message_id),
-                )
-
-            except Exception:
-                logger.exception(
-                    "Failed to store memory",
-                    memory=memory,
-                    message_id=str(message_id),
-                )
+    await repo.store_semantic_memories(
+        message_id=message_id, memories=memories, source_batch_id=source_batch_id
+    )

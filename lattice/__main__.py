@@ -76,17 +76,32 @@ async def main() -> None:
     from lattice.utils.auditing_middleware import AuditingLLMClient
     from lattice.utils.llm_client import _LLMClient
     from lattice.core.context import ChannelContextCache, UserContextCache
+    from lattice.memory.context import (
+        PostgresCanonicalRepository,
+        PostgresContextRepository,
+        PostgresMessageRepository,
+        PostgresSemanticMemoryRepository,
+    )
 
     db_pool = DatabasePool()
     await db_pool.initialize()
-    context_cache = ChannelContextCache(db_pool=db_pool, ttl=10)
-    user_context_cache = UserContextCache(db_pool=db_pool, ttl_minutes=30)
+
+    context_repo = PostgresContextRepository(db_pool=db_pool)
+    message_repo = PostgresMessageRepository(db_pool=db_pool)
+    semantic_repo = PostgresSemanticMemoryRepository(db_pool=db_pool)
+    canonical_repo = PostgresCanonicalRepository(db_pool=db_pool)
+
+    context_cache = ChannelContextCache(repository=context_repo, ttl=10)
+    user_context_cache = UserContextCache(repository=context_repo, ttl_minutes=30)
 
     bot = LatticeBot(
         db_pool=db_pool,
         llm_client=AuditingLLMClient(_LLMClient()),
         context_cache=context_cache,
         user_context_cache=user_context_cache,
+        message_repo=message_repo,
+        semantic_repo=semantic_repo,
+        canonical_repo=canonical_repo,
     )
     health_server = HealthServer(port=config.health_port)
 

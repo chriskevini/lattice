@@ -7,6 +7,7 @@ from lattice.utils.date_resolution import get_now
 
 import pytest
 
+from lattice.memory.repositories import SemanticMemoryRepository
 from lattice.memory.graph import GraphTraversal
 from lattice.utils.memory_parsing import parse_semantic_memories
 
@@ -105,9 +106,8 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_by_predicate(self) -> None:
         """Test finding memories by predicate only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -117,24 +117,20 @@ class TestGraphTraversal:
                 }
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(predicate="did activity")
 
         assert len(result) == 1
         assert result[0]["predicate"] == "did activity"
         assert result[0]["object"] == "coding"
+        mock_repo.find_memories.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_find_semantic_memories_by_subject_and_predicate(self) -> None:
         """Test finding memories by subject and predicate."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "User",
@@ -144,12 +140,8 @@ class TestGraphTraversal:
                 }
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             subject="User", predicate="did activity"
         )
@@ -161,9 +153,8 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_no_filters(self) -> None:
         """Test finding memories with no filters returns all."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -173,12 +164,8 @@ class TestGraphTraversal:
                 }
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories()
 
         assert len(result) == 1
@@ -186,15 +173,10 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_empty_result(self) -> None:
         """Test finding memories returns empty list when no matches."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.find_memories = AsyncMock(return_value=[])
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(subject="nonexistent")
 
         assert result == []
@@ -202,11 +184,10 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_date_range_v2(self) -> None:
         """Test finding memories by predicate within date range."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
         end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -216,12 +197,8 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
@@ -235,10 +212,9 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_start_date_only_v2(self) -> None:
         """Test finding memories with start date only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -248,12 +224,8 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
@@ -265,10 +237,9 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_end_date_only_v2(self) -> None:
         """Test finding memories with end date only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -278,12 +249,8 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             end_date=end_date,
@@ -296,10 +263,9 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_start_date_only(self) -> None:
         """Test finding memories with start date only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -309,12 +275,8 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
@@ -326,10 +288,9 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_end_date_only(self) -> None:
         """Test finding memories with end date only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -339,12 +300,8 @@ class TestGraphTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             end_date=end_date,
@@ -356,8 +313,7 @@ class TestGraphTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_respects_limit(self) -> None:
         """Test that limit parameter is respected."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
 
         memories = [
             {
@@ -368,13 +324,9 @@ class TestGraphTraversal:
             }
             for i in range(5)
         ]
-        mock_conn.fetch = AsyncMock(return_value=memories[:2])
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_repo.find_memories = AsyncMock(return_value=memories[:2])
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(limit=2)
 
         assert len(result) == 2
@@ -386,117 +338,95 @@ class TestBFSTraversal:
     @pytest.mark.asyncio
     async def test_bfs_sanitization(self) -> None:
         """Test that BFS traversal sanitizes special characters in entity names."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.traverse_from_entity = AsyncMock(return_value=[])
 
-        traverser = GraphTraversal(mock_pool, max_depth=1)
+        traverser = GraphTraversal(mock_repo, max_depth=1)
         await traverser.traverse_from_entity("test%_entity")
 
-        # Verify ILIKE pattern was escaped
-        call_args = mock_conn.fetch.call_args
-        assert call_args is not None
-        params = call_args[0][1:]
-        assert "test\\%\\_entity" in params
+        # Verify traverse_from_entity was called with the entity name
+        mock_repo.traverse_from_entity.assert_called_once_with(
+            entity_name="test%_entity",
+            predicate_filter=None,
+            max_hops=1,
+        )
 
     @pytest.mark.asyncio
     async def test_bfs_cycle_detection(self) -> None:
         """Test that BFS prevents infinite loops in cycles.
 
-        Creates A -> B -> C -> A cycle and verifies:
-        - No infinite loop (algorithm terminates)
-        - Only unique memories returned (no duplicates)
+        This test now verifies that GraphTraversal delegates to the repository.
+        Cycle detection logic is now the responsibility of the repository implementation.
         """
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         cycle_memories = [
             {
                 "subject": "A",
                 "predicate": "connects_to",
                 "object": "B",
                 "created_at": get_now(),
+                "depth": 1,
             },
             {
                 "subject": "B",
                 "predicate": "connects_to",
                 "object": "C",
                 "created_at": get_now(),
+                "depth": 2,
             },
             {
                 "subject": "C",
                 "predicate": "connects_to",
                 "object": "A",
                 "created_at": get_now(),
+                "depth": 3,
             },
         ]
+        mock_repo.traverse_from_entity = AsyncMock(return_value=cycle_memories)
 
-        mock_conn.fetch = AsyncMock(return_value=cycle_memories)
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.traverse_from_entity("A", max_hops=5)
 
-        subject_objects = {(t["subject"], t["object"]) for t in result}
-        assert len(subject_objects) == 3, (
-            f"Expected 3 unique memories, got {len(subject_objects)}: {subject_objects}"
-        )
-
-        seen_subjects = {t["subject"] for t in result}
-        seen_objects = {t["object"] for t in result}
-        assert seen_subjects == {"A", "B", "C"}, (
-            f"Expected subjects A, B, C, got {seen_subjects}"
-        )
-        assert seen_objects == {"A", "B", "C"}, (
-            f"Expected objects A, B, C, got {seen_objects}"
+        assert len(result) == 3
+        mock_repo.traverse_from_entity.assert_called_once_with(
+            entity_name="A",
+            predicate_filter=None,
+            max_hops=5,
         )
 
     @pytest.mark.asyncio
     async def test_bfs_max_hops_limit(self) -> None:
         """Test that max_hops parameter limits traversal depth."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.traverse_from_entity = AsyncMock(return_value=[])
 
-        mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-        traverser = GraphTraversal(mock_pool, max_depth=1)
+        traverser = GraphTraversal(mock_repo, max_depth=1)
         result = await traverser.traverse_from_entity("test", max_hops=2)
 
         assert len(result) == 0
+        mock_repo.traverse_from_entity.assert_called_once_with(
+            entity_name="test",
+            predicate_filter=None,
+            max_hops=2,
+        )
 
     @pytest.mark.asyncio
-    async def test_find_semantic_memories_with_end_date_only(self) -> None:
-        """Test finding memories with end date only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.fetch = AsyncMock(
+    async def test_find_semantic_memories_with_end_date_only_v3(self) -> None:
+        """Test finding memories with end date only in BFS context."""
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
+        mock_repo.traverse_from_entity = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
                     "predicate": "did activity",
                     "object": "coding",
                     "created_at": datetime(2026, 1, 5, tzinfo=ZoneInfo("UTC")),
+                    "depth": 1,
                 },
             ]
         )
 
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.traverse_from_entity("Alice", max_hops=1)
 
         assert len(result) == 1
@@ -506,11 +436,10 @@ class TestBFSTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_date_range_v3(self) -> None:
         """Test finding memories by predicate within date range."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
         end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -520,12 +449,8 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
@@ -539,10 +464,9 @@ class TestBFSTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_start_date_only_v3(self) -> None:
         """Test finding memories with start date only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -552,12 +476,8 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
@@ -567,12 +487,11 @@ class TestBFSTraversal:
         assert len(result) == 1
 
     @pytest.mark.asyncio
-    async def test_find_semantic_memories_with_end_date_only_v3(self) -> None:
+    async def test_find_semantic_memories_with_end_date_only_v4(self) -> None:
         """Test finding memories with end date only."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -582,12 +501,8 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             end_date=end_date,
@@ -600,12 +515,11 @@ class TestBFSTraversal:
     @pytest.mark.asyncio
     async def test_find_semantic_memories_with_dates(self) -> None:
         """Test finding memories with date filtering."""
-        mock_pool = MagicMock()
-        mock_conn = MagicMock()
+        mock_repo = MagicMock(spec=SemanticMemoryRepository)
         start_date = datetime(2026, 1, 1, tzinfo=ZoneInfo("UTC"))
         end_date = datetime(2026, 1, 8, tzinfo=ZoneInfo("UTC"))
 
-        mock_conn.fetch = AsyncMock(
+        mock_repo.find_memories = AsyncMock(
             return_value=[
                 {
                     "subject": "user",
@@ -615,12 +529,8 @@ class TestBFSTraversal:
                 },
             ]
         )
-        mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock(
-            return_value=mock_conn
-        )
-        mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
 
-        traverser = GraphTraversal(mock_pool, max_depth=3)
+        traverser = GraphTraversal(mock_repo, max_depth=3)
         result = await traverser.find_semantic_memories(
             predicate="did activity",
             start_date=start_date,
