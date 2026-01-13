@@ -1,0 +1,44 @@
+name: Migration Immutability Audit
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/migrations/**'
+
+jobs:
+  audit-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR Branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify No Changes to Existing Migrations
+        run: |
+          BASE_BRANCH="origin/${{ github.base_ref }}"
+
+          echo "Auditing migration changes against $BASE_BRANCH..."
+
+          CHANGED_FILES=$(git diff --name-only $BASE_BRANCH...HEAD -- 'scripts/migrations/' | xargs)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No existing migrations were modified. Proceeding."
+            exit 0
+          fi
+
+          FORBIDDEN_CHANGES=()
+          for FILE in $CHANGED_FILES; do
+            if git ls-tree -r $BASE_BRANCH --name-only | grep -q "^$FILE$"; then
+              FORBIDDEN_CHANGES+=("$FILE")
+            fi
+          done
+
+          if [ ${#FORBIDDEN_CHANGES[@]} -ne 0 ]; then
+            echo "ERROR: The following immutable migrations were modified or renamed:"
+            for FILE in "${FORBIDDEN_CHANGES[@]}"; do
+              echo "  - $FILE"
+            done
+            echo "Directly modifying merged migrations causes schema desync. Create a new version instead."
+            exit 1
+          fi
