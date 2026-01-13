@@ -2,8 +2,6 @@
 
 from datetime import datetime, timezone
 
-import pytest
-
 from lattice.memory.renderers import (
     get_renderer,
     render_activity,
