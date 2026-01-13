@@ -35,6 +35,8 @@ logger = structlog.get_logger(__name__)
 MAX_CONSECUTIVE_FAILURES = 5
 NUDGE_DELAY_MIN_MINUTES = 10
 NUDGE_DELAY_MAX_MINUTES = 20
+# 8 minutes ensures short conversations (goal updates, timezone changes)
+# consolidate in time for nudges without excessive cost (~$0.01/day max)
 CONSOLIDATION_DELAY_MINUTES = 8
 
 
