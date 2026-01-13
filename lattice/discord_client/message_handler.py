@@ -161,7 +161,17 @@ class MessageHandler:
             logger.exception("Error in contextual nudge task")
 
     async def _await_silence_then_consolidate(self) -> None:
-        """Wait for silence then run memory consolidation."""
+        """Wait for silence then run memory consolidation.
+
+        Implements the time-based trigger for dual-trigger consolidation:
+        - Message count: 18 messages (via check_and_run_batch after each message)
+        - Time-based: 8 minutes of silence
+
+        The timer is reset on each user message, ensuring consolidation only
+        runs after extended silence. Combined with message count threshold,
+        this ensures short conversations (goal updates, timezone changes)
+        are consolidated quickly enough to be available for nudges.
+        """
         try:
             logger.info(
                 "Scheduling delayed consolidation",
