@@ -35,6 +35,9 @@ logger = structlog.get_logger(__name__)
 MAX_CONSECUTIVE_FAILURES = 5
 NUDGE_DELAY_MIN_MINUTES = 10
 NUDGE_DELAY_MAX_MINUTES = 20
+# 8 minutes ensures short conversations (goal updates, timezone changes)
+# consolidate in time for nudges without excessive cost (~$0.01/day max)
+CONSOLIDATION_DELAY_MINUTES = 8
 
 
 TYPING_DELAY_MS_PER_CHAR = 30
@@ -79,6 +82,7 @@ class MessageHandler:
         self._consecutive_failures = 0
         self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
         self._nudge_task: Optional[asyncio.Task] = None
+        self._consolidation_task: Optional[asyncio.Task] = None
 
     async def _await_silence_then_nudge(self) -> None:
         """Wait for silence then send a contextual nudge."""
@@ -91,13 +95,18 @@ class MessageHandler:
             await asyncio.sleep(delay_minutes * 60)
 
             from lattice.scheduler.nudges import prepare_contextual_nudge
+            from lattice.memory.procedural import get_prompt
 
             user_id = str(self.bot.user.id) if self.bot and self.bot.user else "user"
+            prompt_template = await get_prompt(
+                db_pool=self.db_pool, prompt_key="CONTEXTUAL_NUDGE"
+            )
             nudge_plan = await prepare_contextual_nudge(
-                db_pool=self.db_pool,
                 llm_client=self.llm_client,
                 user_context_cache=self.user_context_cache,
                 user_id=user_id,
+                prompt_template=prompt_template,
+                db_pool=self.db_pool,
                 bot=self.bot,
             )
 
@@ -155,6 +164,38 @@ class MessageHandler:
             logger.debug("Contextual nudge cancelled by new user message")
         except Exception:
             logger.exception("Error in contextual nudge task")
+
+    async def _await_silence_then_consolidate(self) -> None:
+        """Wait for silence then run memory consolidation.
+
+        Implements the time-based trigger for dual-trigger consolidation:
+        - Message count: 18 messages (via check_and_run_batch after each message)
+        - Time-based: 8 minutes of silence
+
+        The timer is reset on each user message, ensuring consolidation only
+        runs after extended silence. Combined with message count threshold,
+        this ensures short conversations (goal updates, timezone changes)
+        are consolidated quickly enough to be available for nudges.
+        """
+        try:
+            logger.info(
+                "Scheduling delayed consolidation",
+                delay_minutes=CONSOLIDATION_DELAY_MINUTES,
+            )
+            await asyncio.sleep(CONSOLIDATION_DELAY_MINUTES * 60)
+
+            from lattice.memory import batch_consolidation
+
+            await batch_consolidation.run_batch_consolidation(
+                db_pool=self.db_pool,
+                llm_client=self.llm_client,
+                bot=self.bot,
+                user_context_cache=self.user_context_cache,
+            )
+        except asyncio.CancelledError:
+            logger.debug("Consolidation timer cancelled by new user message")
+        except Exception:
+            logger.exception("Error in consolidation timer task")
 
     @property
     def memory_healthy(self) -> bool:
@@ -327,6 +368,13 @@ class MessageHandler:
             if self._nudge_task:
                 self._nudge_task.cancel()
             self._nudge_task = asyncio.create_task(self._await_silence_then_nudge())
+
+            # Schedule/Reset consolidation timer
+            if self._consolidation_task:
+                self._consolidation_task.cancel()
+            self._consolidation_task = asyncio.create_task(
+                self._await_silence_then_consolidate()
+            )
 
             # CONTEXT_RETRIEVAL: Fetch targeted context based on entities and flags
             entities: list[str] = strategy.entities if strategy else []

@@ -1,5 +1,6 @@
 """Unit tests for Discord bot implementation."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from uuid import uuid4
 
@@ -1043,3 +1044,181 @@ class TestLatticeBot:
         ):
             await bot.on_message(message)
             mock_handle.assert_called_once_with(message)
+
+    @pytest.mark.asyncio
+    async def test_consolidation_timer_scheduled_on_message(self, bot) -> None:
+        """Test consolidation timer is created on each user message."""
+        config = get_config()
+        config.discord_main_channel_id = 123
+        mock_user = MagicMock(id=999)
+        bot._message_handler.memory_healthy = True
+        bot._user_timezone = "UTC"
+
+        message = MagicMock(spec=discord.Message)
+        message.author = MagicMock(id=111, name="TestUser")
+        message.channel.id = 123
+        message.id = 555
+        message.content = "Test message"
+        message.guild = None
+        message.jump_url = "https://discord.com/channels/..."
+
+        user_message_id = uuid4()
+
+        with (
+            patch.object(
+                type(bot), "user", new_callable=PropertyMock, return_value=mock_user
+            ),
+            patch(
+                "lattice.discord_client.message_handler.memory_orchestrator"
+            ) as mock_memory,
+            patch(
+                "lattice.discord_client.message_handler.context_strategy",
+                new_callable=AsyncMock,
+            ) as mock_extraction,
+            patch(
+                "lattice.discord_client.message_handler.retrieve_context",
+                new_callable=AsyncMock,
+            ) as mock_retrieve_context,
+            patch("lattice.discord_client.message_handler.episodic") as mock_episodic,
+            patch(
+                "lattice.discord_client.message_handler.response_generator"
+            ) as mock_response,
+        ):
+            mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
+            mock_episodic.get_recent_messages = AsyncMock(return_value=[])
+
+            mock_extraction.return_value = None
+            mock_retrieve_context.return_value = {"semantic_context": ""}
+
+            mock_response_obj = MagicMock()
+            mock_response_obj.content = "Response"
+            mock_response_obj.model = "gpt-4"
+            mock_response_obj.provider = "openai"
+            mock_response_obj.temperature = 0.7
+            mock_response_obj.prompt_tokens = 100
+            mock_response_obj.completion_tokens = 50
+            mock_response_obj.total_tokens = 150
+            mock_response_obj.cost_usd = 0.01
+            mock_response_obj.latency_ms = 500
+
+            mock_memory.retrieve_context = AsyncMock(return_value=([], []))
+            mock_response.generate_response = AsyncMock(
+                return_value=(
+                    mock_response_obj,
+                    "rendered_prompt",
+                    {"template": "UNIFIED_RESPONSE", "template_version": 1},
+                )
+            )
+            mock_response.split_response = MagicMock(return_value=["Response"])
+
+            mock_bot_message = MagicMock(spec=discord.Message)
+            mock_bot_message.id = 999
+            mock_bot_message.channel.id = 123
+            mock_bot_message.content = "Response"
+
+            mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
+
+            with (
+                patch.object(
+                    message.channel,
+                    "send",
+                    AsyncMock(return_value=mock_bot_message),
+                ),
+            ):
+                await bot._message_handler.handle_message(message)
+
+                assert bot._message_handler._consolidation_task is not None
+                assert isinstance(
+                    bot._message_handler._consolidation_task, asyncio.Task
+                )
+
+    @pytest.mark.asyncio
+    async def test_consolidation_timer_cancelled_on_new_message(self, bot) -> None:
+        """Test consolidation timer is cancelled on new message."""
+        config = get_config()
+        config.discord_main_channel_id = 123
+        mock_user = MagicMock(id=999)
+        bot._message_handler.memory_healthy = True
+        bot._user_timezone = "UTC"
+
+        message = MagicMock(spec=discord.Message)
+        message.author = MagicMock(id=111, name="TestUser")
+        message.channel.id = 123
+        message.id = 555
+        message.content = "Test message"
+        message.guild = None
+        message.jump_url = "https://discord.com/channels/..."
+
+        user_message_id = uuid4()
+
+        mock_task_1 = MagicMock()
+        mock_task_1.cancel = MagicMock()
+
+        bot._message_handler._consolidation_task = mock_task_1
+
+        with (
+            patch.object(
+                type(bot), "user", new_callable=PropertyMock, return_value=mock_user
+            ),
+            patch(
+                "lattice.discord_client.message_handler.memory_orchestrator"
+            ) as mock_memory,
+            patch(
+                "lattice.discord_client.message_handler.context_strategy",
+                new_callable=AsyncMock,
+            ) as mock_extraction,
+            patch(
+                "lattice.discord_client.message_handler.retrieve_context",
+                new_callable=AsyncMock,
+            ) as mock_retrieve_context,
+            patch("lattice.discord_client.message_handler.episodic") as mock_episodic,
+            patch(
+                "lattice.discord_client.message_handler.response_generator"
+            ) as mock_response,
+        ):
+            mock_memory.store_user_message = AsyncMock(return_value=user_message_id)
+            mock_episodic.get_recent_messages = AsyncMock(return_value=[])
+
+            mock_extraction.return_value = None
+            mock_retrieve_context.return_value = {"semantic_context": ""}
+
+            mock_response_obj = MagicMock()
+            mock_response_obj.content = "Response"
+            mock_response_obj.model = "gpt-4"
+            mock_response_obj.provider = "openai"
+            mock_response_obj.temperature = 0.7
+            mock_response_obj.prompt_tokens = 100
+            mock_response_obj.completion_tokens = 50
+            mock_response_obj.total_tokens = 150
+            mock_response_obj.cost_usd = 0.01
+            mock_response_obj.latency_ms = 500
+
+            mock_memory.retrieve_context = AsyncMock(return_value=([], []))
+            mock_response.generate_response = AsyncMock(
+                return_value=(
+                    mock_response_obj,
+                    "rendered_prompt",
+                    {"template": "UNIFIED_RESPONSE", "template_version": 1},
+                )
+            )
+            mock_response.split_response = MagicMock(return_value=["Response"])
+
+            mock_bot_message = MagicMock(spec=discord.Message)
+            mock_bot_message.id = 999
+            mock_bot_message.channel.id = 123
+            mock_bot_message.content = "Response"
+
+            mock_memory.store_bot_message = AsyncMock(return_value=uuid4())
+
+            with (
+                patch.object(
+                    message.channel,
+                    "send",
+                    AsyncMock(return_value=mock_bot_message),
+                ),
+            ):
+                await bot._message_handler.handle_message(message)
+
+                mock_task_1.cancel.assert_called_once()
+                assert bot._message_handler._consolidation_task is not None
+                assert bot._message_handler._consolidation_task != mock_task_1

@@ -37,17 +37,14 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock()
 
-        mock_pool = MagicMock()
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
-
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
         mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
         mock_cache.set_activities = AsyncMock()
+        mock_cache.get_timezone.return_value = "UTC"
 
         with (
-            patch("lattice.scheduler.nudges.get_prompt", return_value=None),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
@@ -63,10 +60,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool,
                 llm_client=mock_llm,
                 user_context_cache=mock_cache,
                 user_id="user",
+                prompt_template=None,
             )
             assert result.content is None
             assert result.channel_id == 12345
@@ -82,17 +79,14 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(side_effect=ValueError("LLM service unavailable"))
 
-        mock_pool = MagicMock()
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
-
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
         mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
         mock_cache.set_activities = AsyncMock()
+        mock_cache.get_timezone.return_value = "UTC"
 
         with (
-            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
@@ -108,10 +102,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool,
                 llm_client=mock_llm,
                 user_context_cache=mock_cache,
                 user_id="user",
+                prompt_template=mock_prompt,
             )
             assert result.content is None
             assert result.channel_id == 12345
@@ -136,17 +130,14 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(return_value=mock_result)
 
-        mock_pool = MagicMock()
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
-
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
         mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
         mock_cache.set_activities = AsyncMock()
+        mock_cache.get_timezone.return_value = "UTC"
 
         with (
-            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="No active objectives.",
@@ -162,10 +153,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool,
                 llm_client=mock_llm,
                 user_context_cache=mock_cache,
                 user_id="user",
+                prompt_template=mock_prompt,
             )
             assert result.content is None
 
@@ -190,17 +181,14 @@ class TestPrepareContextualNudge:
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(return_value=mock_result)
 
-        mock_pool = MagicMock()
-        mock_pool.get_user_timezone = AsyncMock(return_value="UTC")
-
         mock_cache = MagicMock()
         mock_cache.get_goals.return_value = None
         mock_cache.set_goals = AsyncMock()
         mock_cache.get_activities.return_value = None
         mock_cache.set_activities = AsyncMock()
+        mock_cache.get_timezone.return_value = "UTC"
 
         with (
-            patch("lattice.scheduler.nudges.get_prompt", return_value=mock_prompt),
             patch(
                 "lattice.core.response_generator.get_goal_context",
                 return_value="User goals:\n├── Finish project",
@@ -218,10 +206,10 @@ class TestPrepareContextualNudge:
             ),
         ):
             result = await prepare_contextual_nudge(
-                db_pool=mock_pool,
                 llm_client=mock_llm,
                 user_context_cache=mock_cache,
                 user_id="user",
+                prompt_template=mock_prompt,
             )
             assert result.content == "Hey! How's your project going?"
             assert result.channel_id == 12345
