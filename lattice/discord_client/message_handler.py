@@ -337,8 +337,6 @@ class MessageHandler:
             self._consolidation_task.cancel()
 
         try:
-            # Increment per-channel message counter for context TTL
-            # Removed advance() from context_strategy to avoid double increment
             await self.context_cache.advance(message.channel.id)
 
             # Store user message in memory
@@ -411,13 +409,9 @@ class MessageHandler:
                 )
 
             # Schedule/Reset contextual nudge_plan
-            if self._nudge_task:
-                self._nudge_task.cancel()
             self._nudge_task = asyncio.create_task(self._await_silence_then_nudge())
 
             # Schedule/Reset consolidation timer
-            if self._consolidation_task:
-                self._consolidation_task.cancel()
             self._consolidation_task = asyncio.create_task(
                 self._await_silence_then_consolidate()
             )

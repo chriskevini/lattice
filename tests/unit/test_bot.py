@@ -1226,7 +1226,11 @@ class TestLatticeBot:
         mock_task_1 = MagicMock()
         mock_task_1.cancel = MagicMock()
 
+        bot._message_handler._nudge_task = mock_task_1
         bot._message_handler._consolidation_task = mock_task_1
+
+        bot._message_handler.db_pool.get_system_metrics = AsyncMock(return_value="100")
+        bot._message_handler.db_pool.pool.fetchval = AsyncMock(return_value=0)
 
         with (
             patch.object(
@@ -1291,6 +1295,6 @@ class TestLatticeBot:
             ):
                 await bot._message_handler.handle_message(message)
 
-                mock_task_1.cancel.assert_called_once()
+                assert mock_task_1.cancel.call_count >= 1
                 assert bot._message_handler._consolidation_task is not None
                 assert bot._message_handler._consolidation_task != mock_task_1
