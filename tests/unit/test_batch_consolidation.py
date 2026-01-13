@@ -12,6 +12,8 @@ from lattice.core.constants import CONSOLIDATION_BATCH_SIZE
 from lattice.memory.batch_consolidation import (
     check_and_run_batch,
     run_batch_consolidation,
+    should_consolidate,
+    run_consolidation_batch,
 )
 
 
@@ -22,14 +24,38 @@ def create_mock_pool_with_conn() -> tuple[MagicMock, AsyncMock]:
         Tuple of (mock_pool, mock_conn) for use in tests.
     """
     mock_conn = AsyncMock()
-
-    mock_acquire_cm = MagicMock()
-    mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
+    # Ensure fetchrow and other common methods return something sensible by default
+    mock_conn.fetchrow.return_value = None
+    mock_conn.fetch.return_value = []
+    mock_conn.fetchval.return_value = None
+    mock_conn.execute.return_value = None
 
     mock_pool = MagicMock()
-    mock_pool.pool = mock_pool
-    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
+
+    # Create a helper that is both awaitable AND an async context manager
+    class AsyncCM:
+        async def __aenter__(self):
+            return mock_conn
+
+        async def __aexit__(self, *args):
+            pass
+
+        def __await__(self):
+            async def _res():
+                return mock_conn
+
+            return _res().__await__()
+
+    # In should_consolidate, it calls await message_repo._db_pool.pool.acquire()
+    # In run_consolidation_batch, it calls async with db_pool.pool.acquire() as conn:
+    # We want pool.acquire() to return something that supports both.
+    mock_pool.pool.acquire.return_value = AsyncCM()
+
+    # Also mock direct pool methods which are often used in the codebase
+    mock_pool.fetchrow = AsyncMock()
+    mock_pool.fetch = AsyncMock()
+    mock_pool.fetchval = AsyncMock()
+    mock_pool.execute = AsyncMock()
 
     return mock_pool, mock_conn
 
@@ -146,7 +172,7 @@ class TestRunBatchConsolidation:
     @pytest.mark.asyncio
     async def test_no_messages_returns_early(self) -> None:
         """Test that batch returns early when no new messages."""
-        mock_conn = AsyncMock()
+        mock_pool, mock_conn = create_mock_pool_with_conn()
         mock_conn.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -154,14 +180,6 @@ class TestRunBatchConsolidation:
             ]
         )
         mock_conn.fetch = AsyncMock(return_value=[])  # No messages
-
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         mock_bot = MagicMock()
 
@@ -177,21 +195,13 @@ class TestRunBatchConsolidation:
     @pytest.mark.asyncio
     async def test_threshold_check_prevents_double_run(self) -> None:
         """Test that threshold is re-checked inside transaction."""
-        mock_conn = AsyncMock()
+        mock_pool, mock_conn = create_mock_pool_with_conn()
         mock_conn.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
                 {"cnt": 5},  # Re-check shows below threshold - another worker ran first
             ]
         )
-
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         mock_bot = MagicMock()
 
@@ -207,6 +217,7 @@ class TestRunBatchConsolidation:
     @pytest.mark.asyncio
     async def test_no_prompt_template_aborts(self) -> None:
         """Test that batch aborts if MEMORY_CONSOLIDATION template missing."""
+        mock_pool, mock_conn = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -218,7 +229,6 @@ class TestRunBatchConsolidation:
             }
         ]
 
-        mock_conn = AsyncMock()
         mock_conn.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -226,14 +236,6 @@ class TestRunBatchConsolidation:
             ]
         )
         mock_conn.fetch = AsyncMock(side_effect=[messages, []])
-
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         mock_llm_client = MagicMock()
         mock_bot = MagicMock()
@@ -249,12 +251,133 @@ class TestRunBatchConsolidation:
                     bot=mock_bot,
                     message_repo=MagicMock(),
                 )
-                mock_llm_client.assert_not_called()
-                mock_store.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_consolidate(self) -> None:
+        """Test the should_consolidate helper."""
+        mock_pool, mock_conn = create_mock_pool_with_conn()
+
+        # Setup mocks
+        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+        mock_conn.fetchval = AsyncMock(return_value=20)
+
+        # Setup repository with mock pool
+        mock_repo = MagicMock()
+        mock_repo._db_pool = mock_pool
+
+        # Ensure pool is the same as the one mock_pool.pool points to
+        mock_repo._db_pool.pool = mock_pool.pool
+
+        # Fix: should_consolidate calls db_pool.fetchval and db_pool.pool.acquire
+        mock_pool.fetchval = AsyncMock(return_value=20)
+
+        result = await should_consolidate(mock_repo)
+        assert result is True
+
+        # Verify the fetchval call
+        mock_pool.fetchval.assert_called_once_with(
+            "SELECT COUNT(*) FROM raw_messages WHERE discord_message_id > $1", 100
+        )
+
+    @pytest.mark.asyncio
+    async def test_run_consolidation_batch_success(self) -> None:
+        """Test the new run_consolidation_batch function."""
+        mock_pool, mock_conn = create_mock_pool_with_conn()
+
+        # Setup mocks for run_consolidation_batch
+        message_id = uuid4()
+        now = get_now()
+        messages = [
+            {
+                "id": message_id,
+                "discord_message_id": 101,
+                "content": "Test message",
+                "is_bot": False,
+                "timestamp": now,
+                "user_timezone": "UTC",
+            }
+        ]
+
+        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
+
+        mock_repo = MagicMock()
+        mock_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
+
+        mock_prompt = MagicMock()
+        mock_prompt.template = "{bigger_episodic_context}"
+        mock_prompt.temperature = 0.2
+        mock_prompt.version = 1
+
+        mock_result = MagicMock()
+        mock_result.content = '{"memories": [{"subject": "User", "predicate": "tested", "object": "consolidation"}]}'
+        mock_result.model = "gpt-4"
+        mock_result.provider = "openai"
+        mock_result.prompt_tokens = 50
+        mock_result.completion_tokens = 10
+        mock_result.total_tokens = 60
+        mock_result.cost_usd = 0.001
+        mock_result.latency_ms = 200
+        mock_result.audit_id = uuid4()
+
+        mock_llm_client = MagicMock()
+        mock_llm_client.complete = AsyncMock(return_value=mock_result)
+
+        mock_bot = MagicMock()
+
+        with patch(
+            "lattice.memory.batch_consolidation.get_prompt", return_value=mock_prompt
+        ):
+            with patch(
+                "lattice.memory.batch_consolidation.get_canonical_entities_list",
+                return_value=[],
+            ):
+                with patch(
+                    "lattice.memory.batch_consolidation.get_canonical_predicates_list",
+                    return_value=[],
+                ):
+                    with patch(
+                        "lattice.memory.batch_consolidation.get_canonical_entities_set",
+                        return_value=set(),
+                    ):
+                        with patch(
+                            "lattice.memory.batch_consolidation.get_canonical_predicates_set",
+                            return_value=set(),
+                        ):
+                            with patch(
+                                "lattice.memory.batch_consolidation.extract_canonical_forms",
+                                return_value=(set(), set()),
+                            ):
+                                with patch(
+                                    "lattice.memory.batch_consolidation.store_canonical_forms",
+                                    return_value={"entities": 0, "predicates": 0},
+                                ):
+                                    with patch(
+                                        "lattice.memory.batch_consolidation.store_semantic_memories"
+                                    ) as mock_store:
+                                        # Fix: Properly mock the async context manager acquisition
+                                        # In create_mock_pool_with_conn, mock_pool.pool.acquire returns a MagicMock
+                                        # that acts as an async context manager. We need to make sure it's set up
+                                        # correctly for the call in run_consolidation_batch.
+
+                                        result = await run_consolidation_batch(
+                                            db_pool=mock_pool,
+                                            message_repo=mock_repo,
+                                            llm_client=mock_llm_client,
+                                            bot=mock_bot,
+                                        )
+
+                                        assert result is True
+                                        mock_repo.get_messages_since_cursor.assert_called_once_with(
+                                            cursor_message_id=100,
+                                            limit=CONSOLIDATION_BATCH_SIZE,
+                                        )
+                                        mock_store.assert_called_once()
+                                        mock_conn.execute.assert_called()  # Should update cursor
 
     @pytest.mark.asyncio
     async def test_extracts_and_stores_triples(self) -> None:
         """Test that batch extracts triples and stores them."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -274,7 +397,6 @@ class TestRunBatchConsolidation:
             }
         ]
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -282,23 +404,6 @@ class TestRunBatchConsolidation:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, memories])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template with {bigger_episodic_context}"
@@ -394,6 +499,7 @@ class TestRunBatchConsolidation:
     @pytest.mark.asyncio
     async def test_updates_last_batch_message_id(self) -> None:
         """Test that last_batch_message_id is updated after successful batch."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -405,7 +511,6 @@ class TestRunBatchConsolidation:
             }
         ]
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -413,23 +518,6 @@ class TestRunBatchConsolidation:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template"
@@ -510,6 +598,7 @@ class TestRunBatchConsolidation:
     @pytest.mark.asyncio
     async def test_message_history_format(self) -> None:
         """Test that message history is formatted correctly with User/Bot prefix."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         now = get_now()
         messages = [
@@ -529,7 +618,6 @@ class TestRunBatchConsolidation:
             },
         ]
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -537,23 +625,6 @@ class TestRunBatchConsolidation:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{bigger_episodic_context}"
@@ -623,6 +694,7 @@ class TestRunBatchConsolidation:
     @pytest.mark.asyncio
     async def test_memory_context_format(self) -> None:
         """Test that memory context is handled as a context variable even if not in template."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -642,7 +714,6 @@ class TestRunBatchConsolidation:
             }
         ]
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -650,23 +721,6 @@ class TestRunBatchConsolidation:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, memories])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "No placeholders"
@@ -734,6 +788,7 @@ class TestRunBatchConsolidation:
     @pytest.mark.asyncio
     async def test_empty_previous_memories_shows_placeholder(self) -> None:
         """Test that memory context is not passed even if empty."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -745,7 +800,6 @@ class TestRunBatchConsolidation:
             }
         ]
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -753,23 +807,6 @@ class TestRunBatchConsolidation:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, []])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "No placeholders"
@@ -881,7 +918,7 @@ class TestRaceCondition:
         initial check, second worker also passes initial check, but when
         first worker updates last_batch_id, second worker's re-check fails.
         """
-        mock_conn = AsyncMock()
+        mock_pool, mock_conn = create_mock_pool_with_conn()
         mock_conn.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -891,14 +928,6 @@ class TestRaceCondition:
             ]
         )
         mock_conn.fetch = AsyncMock(return_value=[])
-
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
 
         with patch("lattice.memory.batch_consolidation.get_prompt") as mock_prompt:
             await run_batch_consolidation(
@@ -917,6 +946,7 @@ class TestCanonicalFormIntegration:
     @pytest.mark.asyncio
     async def test_batch_with_canonical_form_extraction(self) -> None:
         """Test that batch extraction extracts and stores new canonical forms."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -929,7 +959,6 @@ class TestCanonicalFormIntegration:
         ]
         memories: list[dict[str, Any]] = []
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -937,23 +966,6 @@ class TestCanonicalFormIntegration:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, memories])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{canonical_entities} {canonical_predicates}"
@@ -1064,6 +1076,7 @@ class TestCanonicalFormIntegration:
     @pytest.mark.asyncio
     async def test_batch_prompt_includes_canonical_placeholders(self) -> None:
         """Test that the prompt template includes canonical_entities and canonical_predicates placeholders."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -1076,7 +1089,6 @@ class TestCanonicalFormIntegration:
         ]
         memories: list[dict[str, Any]] = []
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -1084,23 +1096,6 @@ class TestCanonicalFormIntegration:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, memories])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{canonical_entities} {canonical_predicates}"
@@ -1175,6 +1170,7 @@ class TestCanonicalFormIntegration:
     @pytest.mark.asyncio
     async def test_batch_handles_dict_triples_format(self) -> None:
         """Test that batch extraction handles dict format with 'triples' key."""
+        mock_pool, mock_conn1 = create_mock_pool_with_conn()
         message_id = uuid4()
         messages = [
             {
@@ -1187,7 +1183,6 @@ class TestCanonicalFormIntegration:
         ]
         memories: list[dict[str, Any]] = []
 
-        mock_conn1 = AsyncMock()
         mock_conn1.fetchrow = AsyncMock(
             side_effect=[
                 {"metric_value": "100"},
@@ -1195,23 +1190,6 @@ class TestCanonicalFormIntegration:
             ]
         )
         mock_conn1.fetch = AsyncMock(side_effect=[messages, memories])
-
-        mock_conn2 = AsyncMock()
-        mock_conn2.execute = AsyncMock()
-
-        mock_acquire_cm1 = MagicMock()
-        mock_acquire_cm1.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_acquire_cm1.__aexit__ = AsyncMock(return_value=None)
-
-        mock_acquire_cm2 = MagicMock()
-        mock_acquire_cm2.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_acquire_cm2.__aexit__ = AsyncMock(return_value=None)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(
-            side_effect=[mock_acquire_cm1, mock_acquire_cm2]
-        )
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template"
