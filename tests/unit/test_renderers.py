@@ -135,3 +135,11 @@ class TestTimezoneEdgeCases:
         dt = datetime(2026, 1, 12, 10, 30)
         result = render_activity("User", "did activity", "coding", dt)
         assert result == "[2026-01-12 10:30:00] coding"
+
+    def test_naive_datetime_treated_as_utc_with_timezone(self) -> None:
+        """Test naive datetime is treated as UTC when converting to user timezone."""
+        dt = datetime(2026, 1, 12, 10, 30)
+        result = render_activity(
+            "User", "did activity", "coding", dt, "America/New_York"
+        )
+        assert result == "[2026-01-12 05:30:00] coding"
