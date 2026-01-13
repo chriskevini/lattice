@@ -3,7 +3,6 @@
 from datetime import datetime, timezone
 
 import pytest
-from zoneinfo import ZoneInfo
 
 from lattice.memory.renderers import (
     get_renderer,
