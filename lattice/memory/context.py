@@ -314,11 +314,11 @@ class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryReposit
         if not goal_names:
             return []
 
-        placeholders = ",".join(f"${i + 1}" for i in range(len(goal_names)))
-        query = f"SELECT subject, predicate, object FROM semantic_memories WHERE subject IN ({placeholders}) ORDER BY subject, predicate"
-
         async with self._db_pool.pool.acquire() as conn:
-            predicates = await conn.fetch(query, *goal_names)
+            predicates = await conn.fetch(
+                "SELECT subject, predicate, object FROM semantic_memories WHERE subject = ANY($1) ORDER BY subject, predicate",
+                goal_names,
+            )
 
         return [dict(p) for p in predicates]
 
