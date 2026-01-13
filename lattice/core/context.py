@@ -274,9 +274,10 @@ class UserContextCache(ContextCacheBase):
             return None
         return tz_value
 
-    async def set_timezone(self, timezone: str) -> None:
-        """Update cached timezone without persistence (consolidation has its own path)."""
+    async def set_timezone(self, db_pool: Any, user_id: str, timezone: str) -> None:
+        """Update cached timezone and persist to DB."""
         self._timezone = (timezone, datetime.now())
+        await self._persist(db_pool, user_id)
 
     def _is_expired(self, cached_at: datetime) -> bool:
         return (datetime.now() - cached_at).total_seconds() > self.ttl * 60
