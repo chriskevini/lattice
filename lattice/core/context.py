@@ -1,15 +1,10 @@
-"""Context strategy and in-memory caching.
-
-This module provides the data structures and caching for context planning.
-Extracted entities, context flags, and unresolved entities are stored in RAM
-and persisted to the database for durability across restarts.
-"""
-
 import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+from lattice.memory.repositories import ContextRepository
 
 
 logger = logging.getLogger(__name__)
@@ -46,33 +41,17 @@ class ChannelContext:
 class ContextCacheBase:
     """Base class for persistent context caches."""
 
-    def __init__(self, context_type: str, db_pool: Any) -> None:
+    def __init__(self, context_type: str, repository: ContextRepository) -> None:
         self.context_type = context_type
-        self._db_pool = db_pool
+        self._repository = repository
 
     async def _save(self, target_id: str, data: dict[str, Any]) -> None:
-        """Upsert context data to the database."""
-        async with self._db_pool.pool.acquire() as conn:
-            await conn.execute(
-                """
-                INSERT INTO context_cache (context_type, target_id, data, updated_at)
-                VALUES ($1, $2, $3, NOW())
-                ON CONFLICT (context_type, target_id) DO UPDATE SET
-                    data = EXCLUDED.data,
-                    updated_at = EXCLUDED.updated_at
-                """,
-                self.context_type,
-                target_id,
-                json.dumps(data),
-            )
+        """Upsert context data via repository."""
+        await self._repository.save_context(self.context_type, target_id, data)
 
     async def _load_type(self) -> list[dict[str, Any]]:
-        """Load all entries of this context type from the database."""
-        async with self._db_pool.pool.acquire() as conn:
-            return await conn.fetch(
-                "SELECT target_id, data, updated_at FROM context_cache WHERE context_type = $1",
-                self.context_type,
-            )
+        """Load all entries of this context type via repository."""
+        return await self._repository.load_context_type(self.context_type)
 
 
 class ChannelContextCache(ContextCacheBase):
@@ -82,14 +61,14 @@ class ChannelContextCache(ContextCacheBase):
     is refreshed when it appears in a fresh strategy extraction.
     """
 
-    def __init__(self, db_pool: Any, ttl: int = 10) -> None:
+    def __init__(self, repository: ContextRepository, ttl: int = 10) -> None:
         """Initialize cache.
 
         Args:
-            db_pool: Database pool for persistence (stored for write-through caching)
+            repository: Context repository for persistence
             ttl: How many messages an item stays in cache since last seen
         """
-        super().__init__(context_type="channel", db_pool=db_pool)
+        super().__init__(context_type="channel", repository=repository)
         self.ttl = ttl
         self._cache: dict[int, ChannelContext] = {}
 
@@ -231,14 +210,14 @@ class UserContextCache(ContextCacheBase):
     persistence to the database.
     """
 
-    def __init__(self, db_pool: Any, ttl_minutes: int = 30) -> None:
+    def __init__(self, repository: ContextRepository, ttl_minutes: int = 30) -> None:
         """Initialize cache.
 
         Args:
-            db_pool: Database pool for persistence (stored for write-through caching)
+            repository: Context repository for persistence
             ttl_minutes: TTL for cached items in minutes
         """
-        super().__init__(context_type="user", db_pool=db_pool)
+        super().__init__(context_type="user", repository=repository)
         self.ttl = ttl_minutes
         self._goals: dict[str, tuple[str, datetime]] = {}
         self._activities: dict[str, tuple[str, datetime]] = {}
@@ -284,16 +263,16 @@ class UserContextCache(ContextCacheBase):
             return None
         return tz_value
 
-    async def set_timezone(self, user_id: str, tz_value: str) -> None:
+    async def set_timezone(self, user_id: str, timezone: str) -> None:
         """Cache timezone for user and persist to DB."""
-        self._timezone[user_id] = (tz_value, datetime.now())
+        self._timezone[user_id] = (timezone, datetime.now())
         await self._persist(user_id)
 
     def _is_expired(self, cached_at: datetime) -> bool:
         return (datetime.now() - cached_at).total_seconds() > self.ttl * 60
 
     async def _persist(self, user_id: str) -> None:
-        """Persist user context to DB."""
+        """Persist user context to DB via repository."""
         goals_data = self._goals.get(user_id)
         activities_data = self._activities.get(user_id)
         tz_data = self._timezone.get(user_id)
@@ -308,7 +287,7 @@ class UserContextCache(ContextCacheBase):
         await self._save(user_id, data)
 
     async def load_from_db(self) -> None:
-        """Load all user context from database."""
+        """Load all user context from database via repository."""
         rows = await self._load_type()
         for row in rows:
             try:
