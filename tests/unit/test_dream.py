@@ -305,10 +305,62 @@ class TestAuditViewBuilder:
         )
 
         assert embed.fields[0].name == "📥"
-        assert len(embed.fields[0].value) <= 1024
+        assert len(embed.fields[0].value) <= 4000
 
         assert embed.fields[1].name == "📤"
-        assert len(embed.fields[1].value) <= 1024
+        assert len(embed.fields[1].value) <= 4000
+
+    @pytest.mark.asyncio
+    async def test_warnings_shown_in_embed(self, db_pool: AsyncMock) -> None:
+        """Test that warnings are displayed in embed with warning indicator."""
+        audit_id = uuid4()
+
+        embed, _ = AuditViewBuilder.build_standard_audit(
+            prompt_key="MEMORY_CONSOLIDATION",
+            version=1,
+            input_text="test input",
+            output_text="test output",
+            metadata_parts=["100ms"],
+            audit_id=audit_id,
+            rendered_prompt="test prompt",
+            db_pool=db_pool,
+            warnings=[
+                "max_tokens=None (unlimited generation)",
+                "prompt_tokens=8500 (large prompt)",
+            ],
+        )
+
+        assert embed.title is not None
+        assert embed.title.startswith("⚠️ ")
+        assert "MEMORY_CONSOLIDATION" in embed.title
+
+        warning_field = next((f for f in embed.fields if f.name == "⚠️ WARNINGS"), None)
+        assert warning_field is not None
+        assert "max_tokens=None" in warning_field.value
+        assert "prompt_tokens=8500" in warning_field.value
+
+    @pytest.mark.asyncio
+    async def test_no_warnings_no_indicator(self, db_pool: AsyncMock) -> None:
+        """Test that no warning indicator when no warnings."""
+        audit_id = uuid4()
+
+        embed, _ = AuditViewBuilder.build_standard_audit(
+            prompt_key="CONTEXTUAL_NUDGE",
+            version=1,
+            input_text="test input",
+            output_text="test output",
+            metadata_parts=["100ms"],
+            audit_id=audit_id,
+            rendered_prompt="test prompt",
+            db_pool=db_pool,
+        )
+
+        assert embed.title is not None
+        assert not embed.title.startswith("⚠️ ")
+        assert embed.title.startswith("🤖")
+
+        warning_field = next((f for f in embed.fields if f.name == "⚠️ WARNINGS"), None)
+        assert warning_field is None
 
     @pytest.mark.asyncio
     async def test_build_audit_no_message_id(self, db_pool: AsyncMock) -> None:
@@ -559,8 +611,7 @@ class TestAuditViewCustomIds:
         custom_ids = [button.custom_id for button in buttons]
 
         # Should use fallback custom_ids without audit_id suffix
-        assert "audit:view_prompt" in custom_ids
-        assert "audit:view_raw" in custom_ids
+        assert "audit:details" in custom_ids
         assert "audit:feedback" in custom_ids
         assert "audit:quick_positive" in custom_ids
         assert "audit:quick_negative" in custom_ids
@@ -574,8 +625,8 @@ class TestAuditViewCallbacks:
         return AsyncMock()
 
     @pytest.mark.asyncio
-    async def test_view_prompt_callback_executes(self, db_pool: AsyncMock) -> None:
-        """Test that view prompt callback executes correctly."""
+    async def test_details_callback_executes(self, db_pool: AsyncMock) -> None:
+        """Test that details callback creates thread correctly."""
         audit_id = uuid4()
         view = AuditView(
             db_pool=db_pool,
@@ -583,62 +634,32 @@ class TestAuditViewCallbacks:
             message_id=12345,
             prompt_key="TEST_PROMPT",
             version=1,
-            rendered_prompt="This is a test prompt content",
-            raw_output="test output",
-        )
-
-        # Create mock interaction
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.defer = AsyncMock()
-        mock_interaction.followup = AsyncMock()
-        mock_interaction.followup.send = AsyncMock()
-
-        # Get and execute callback
-        callback = view._make_view_prompt_callback()
-        await callback(mock_interaction)
-
-        # Verify interaction was handled
-        mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
-        mock_interaction.followup.send.assert_called_once()
-        assert mock_interaction.followup.send.call_args[1]["ephemeral"] is True
-        assert "view" in mock_interaction.followup.send.call_args[1]
-
-    @pytest.mark.asyncio
-    async def test_view_raw_callback_executes(self, db_pool: AsyncMock) -> None:
-        """Test that view raw callback executes correctly."""
-        audit_id = uuid4()
-        view = AuditView(
-            db_pool=db_pool,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="test prompt",
+            rendered_prompt="This is test prompt content",
             raw_output="This is raw output content",
         )
 
-        # Create mock interaction
         mock_interaction = AsyncMock(spec=discord.Interaction)
+        mock_channel = AsyncMock()
+        mock_channel.create_thread = AsyncMock()
+        mock_thread = AsyncMock()
+        mock_thread.jump_url = "https://discord.com/threads/123/456"
+        mock_channel.create_thread.return_value = mock_thread
+        mock_interaction.channel = mock_channel
         mock_interaction.response = AsyncMock()
-        mock_interaction.response.defer = AsyncMock()
-        mock_interaction.followup = AsyncMock()
-        mock_interaction.followup.send = AsyncMock()
+        mock_interaction.response.send_message = AsyncMock()
 
-        # Get and execute callback
-        callback = view._make_view_raw_callback()
+        callback = view._make_details_callback()
         await callback(mock_interaction)
 
-        # Verify interaction was handled
-        mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
-        mock_interaction.followup.send.assert_called_once()
-        assert mock_interaction.followup.send.call_args[1]["ephemeral"] is True
+        mock_channel.create_thread.assert_called_once()
+        mock_interaction.response.send_message.assert_called_once()
+        assert "🔍" in mock_interaction.response.send_message.call_args[0][0]
 
     @pytest.mark.asyncio
-    async def test_view_prompt_callback_handles_empty_content(
+    async def test_details_callback_handles_empty_content(
         self, db_pool: AsyncMock
     ) -> None:
-        """Test that view prompt callback handles empty content gracefully."""
+        """Test that details callback handles empty content gracefully."""
         audit_id = uuid4()
         view = AuditView(
             db_pool=db_pool,
@@ -650,46 +671,13 @@ class TestAuditViewCallbacks:
             raw_output="test output",
         )
 
-        # Create mock interaction
         mock_interaction = AsyncMock(spec=discord.Interaction)
         mock_interaction.response = AsyncMock()
         mock_interaction.response.send_message = AsyncMock()
 
-        # Get and execute callback
-        callback = view._make_view_prompt_callback()
+        callback = view._make_details_callback()
         await callback(mock_interaction)
 
-        # Verify error message was sent
-        mock_interaction.response.send_message.assert_called_once()
-        assert "not available" in mock_interaction.response.send_message.call_args[0][0]
-        assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
-
-    @pytest.mark.asyncio
-    async def test_view_raw_callback_handles_empty_content(
-        self, db_pool: AsyncMock
-    ) -> None:
-        """Test that view raw callback handles empty content gracefully."""
-        audit_id = uuid4()
-        view = AuditView(
-            db_pool=db_pool,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="test prompt",
-            raw_output=None,
-        )
-
-        # Create mock interaction
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        # Get and execute callback
-        callback = view._make_view_raw_callback()
-        await callback(mock_interaction)
-
-        # Verify error message was sent
         mock_interaction.response.send_message.assert_called_once()
         assert "not available" in mock_interaction.response.send_message.call_args[0][0]
         assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
