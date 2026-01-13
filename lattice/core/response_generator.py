@@ -96,7 +96,7 @@ async def get_goal_context(
         predicates = await semantic_repo.get_goal_predicates(goal_names)
     except Exception as e:
         logger.error("Failed to fetch goal predicates from repository", error=str(e))
-        predicates = []
+        predicates: list[dict[str, Any]] = []
 
     goal_predicates: dict[str, list[tuple[str, str]]] = {}
     for pred in predicates:
