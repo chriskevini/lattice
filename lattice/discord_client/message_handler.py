@@ -31,6 +31,7 @@ from lattice.core.context_strategy import (
 )
 from lattice.memory import episodic
 from lattice.utils.source_links import build_source_map, inject_source_links
+from lattice.memory import batch_consolidation
 
 logger = structlog.get_logger(__name__)
 
@@ -174,11 +175,26 @@ class MessageHandler:
         except Exception:
             logger.exception("Error in contextual nudge task")
 
+    async def _run_consolidation_now(self) -> None:
+        """Run consolidation immediately (message count trigger)."""
+        try:
+            from lattice.memory import batch_consolidation
+
+            await batch_consolidation.run_batch_consolidation(
+                db_pool=self.db_pool,
+                llm_client=self.llm_client,
+                bot=self.bot,
+                user_context_cache=self.user_context_cache,
+                message_repo=self.message_repo,
+            )
+        except Exception:
+            logger.exception("Error in immediate consolidation")
+
     async def _await_silence_then_consolidate(self) -> None:
         """Wait for silence then run memory consolidation.
 
-        Implements the time-based trigger for dual-trigger consolidation:
-        - Message count: 18 messages (via check_and_run_batch after each message)
+        Implements time-based trigger for dual-trigger consolidation:
+        - Message count: 18 messages (via should_consolidate after each message)
         - Time-based: 8 minutes of silence
 
         The timer is reset on each user message, ensuring consolidation only
@@ -327,6 +343,22 @@ class MessageHandler:
                 timezone=self.user_timezone,
                 message_repo=self.message_repo,
             )
+
+            # Consolidation trigger: Check if 18 messages since last batch
+            try:
+                if await batch_consolidation.should_consolidate(
+                    message_repo=self.message_repo
+                ):
+                    logger.info(
+                        "Message count threshold reached, scheduling consolidation",
+                    )
+                    if self._consolidation_task:
+                        self._consolidation_task.cancel()
+                    self._consolidation_task = asyncio.create_task(
+                        self._run_consolidation_now()
+                    )
+            except Exception:
+                logger.exception("Failed to check consolidation threshold")
 
             # CONTEXT_STRATEGY: Analyze conversation window for entities, flags, and unresolved entities
             strategy: ContextStrategy | None = None

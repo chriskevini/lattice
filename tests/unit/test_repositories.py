@@ -115,6 +115,13 @@ class TestRepositoryImplementations:
             ) -> int:
                 return len(memories)
 
+            async def get_messages_since_cursor(
+                self,
+                cursor_message_id: int,
+                limit: int = 18,
+            ) -> list[dict[str, Any]]:
+                return []
+
         repo = ConcreteMessageRepository(MagicMock())
 
         assert isinstance(repo, MessageRepository)
