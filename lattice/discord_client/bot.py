@@ -217,8 +217,8 @@ class LatticeBot(commands.Bot):
         logger.info("Pre-warming context caches from DB")
         try:
             await asyncio.gather(
-                self.context_cache.load_from_db(self.db_pool),
-                self.user_context_cache.load_from_db(self.db_pool),
+                self.context_cache.load_from_db(),
+                self.user_context_cache.load_from_db(),
             )
             logger.info(
                 "Context caches pre-warmed from DB",

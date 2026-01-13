@@ -46,12 +46,13 @@ class ChannelContext:
 class ContextCacheBase:
     """Base class for persistent context caches."""
 
-    def __init__(self, context_type: str) -> None:
+    def __init__(self, context_type: str, db_pool: Any) -> None:
         self.context_type = context_type
+        self._db_pool = db_pool
 
-    async def _save(self, db_pool: Any, target_id: str, data: dict[str, Any]) -> None:
+    async def _save(self, target_id: str, data: dict[str, Any]) -> None:
         """Upsert context data to the database."""
-        async with db_pool.pool.acquire() as conn:
+        async with self._db_pool.pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO context_cache (context_type, target_id, data, updated_at)
@@ -65,9 +66,9 @@ class ContextCacheBase:
                 json.dumps(data),
             )
 
-    async def _load_type(self, db_pool: Any) -> list[dict[str, Any]]:
+    async def _load_type(self) -> list[dict[str, Any]]:
         """Load all entries of this context type from the database."""
-        async with db_pool.pool.acquire() as conn:
+        async with self._db_pool.pool.acquire() as conn:
             return await conn.fetch(
                 "SELECT target_id, data, updated_at FROM context_cache WHERE context_type = $1",
                 self.context_type,
@@ -88,8 +89,7 @@ class ChannelContextCache(ContextCacheBase):
             db_pool: Database pool for persistence (stored for write-through caching)
             ttl: How many messages an item stays in cache since last seen
         """
-        super().__init__(context_type="channel")
-        self._db_pool = db_pool
+        super().__init__(context_type="channel", db_pool=db_pool)
         self.ttl = ttl
         self._cache: dict[int, ChannelContext] = {}
 
@@ -184,11 +184,11 @@ class ChannelContextCache(ContextCacheBase):
         ctx_after = self._cache.get(channel_id)
         if ctx_after is not ctx:
             return
-        await self._save(self._db_pool, str(channel_id), data)
+        await self._save(str(channel_id), data)
 
-    async def load_from_db(self, db_pool: Any) -> None:
+    async def load_from_db(self) -> None:
         """Load all channel context from database."""
-        rows = await self._load_type(db_pool)
+        rows = await self._load_type()
         for row in rows:
             try:
                 channel_id = int(row["target_id"])
@@ -238,8 +238,7 @@ class UserContextCache(ContextCacheBase):
             db_pool: Database pool for persistence (stored for write-through caching)
             ttl_minutes: TTL for cached items in minutes
         """
-        super().__init__(context_type="user")
-        self._db_pool = db_pool
+        super().__init__(context_type="user", db_pool=db_pool)
         self.ttl = ttl_minutes
         self._goals: dict[str, tuple[str, datetime]] = {}
         self._activities: dict[str, tuple[str, datetime]] = {}
@@ -306,11 +305,11 @@ class UserContextCache(ContextCacheBase):
             else None,
             "timezone": [tz_data[0], tz_data[1].isoformat()] if tz_data else None,
         }
-        await self._save(self._db_pool, user_id, data)
+        await self._save(user_id, data)
 
-    async def load_from_db(self, db_pool: Any) -> None:
+    async def load_from_db(self) -> None:
         """Load all user context from database."""
-        rows = await self._load_type(db_pool)
+        rows = await self._load_type()
         for row in rows:
             try:
                 user_id = row["target_id"]

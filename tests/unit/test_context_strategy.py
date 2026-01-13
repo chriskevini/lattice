@@ -403,7 +403,7 @@ class TestChannelContextCachePersistence:
         context_cache.clear()
         assert context_cache.get_stats()["cached_channels"] == 0
 
-        await context_cache.load_from_db(context_cache._db_pool)
+        await context_cache.load_from_db()
         stats_reloaded = context_cache.get_stats()
         assert stats_reloaded["cached_channels"] == 1
 
