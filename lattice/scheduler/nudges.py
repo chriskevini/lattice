@@ -92,6 +92,7 @@ async def prepare_contextual_nudge(
             semantic_repo=semantic_repo,
             entities=[],
             context_flags=["activity_context"],
+            user_timezone=user_tz,
         )
         activity = context_result.get(
             "activity_context", "No recent activity recorded."

@@ -396,6 +396,7 @@ class MessageHandler:
                 entities=entities,
                 context_flags=context_flags,
                 memory_depth=2 if entities else 0,
+                user_timezone=self.user_timezone,
             )
             semantic_context = cast(str, context_result.get("semantic_context", ""))
             memory_origins: set[UUID] = cast(
