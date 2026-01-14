@@ -158,7 +158,10 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
 
 
 async def propose_optimization(
-    metrics: "PromptMetrics", db_pool: Any, llm_client: Any
+    metrics: "PromptMetrics",
+    db_pool: Any,
+    llm_client: Any,
+    prompt_audit_repo: Any = None,
 ) -> OptimizationProposal | None:
     """Generate optimization proposal for an underperforming prompt.
 
@@ -166,6 +169,7 @@ async def propose_optimization(
         metrics: Prompt metrics indicating performance issues
         db_pool: Database pool for dependency injection (required)
         llm_client: LLM client for dependency injection (required)
+        prompt_audit_repo: Prompt audit repository
 
     Returns:
         OptimizationProposal if generated, None otherwise
@@ -200,6 +204,7 @@ async def propose_optimization(
         prompt_key=metrics.prompt_key,
         limit=MAX_FEEDBACK_SAMPLES,
         db_pool=db_pool,
+        prompt_audit_repo=prompt_audit_repo,
     )
 
     if not feedback_samples:

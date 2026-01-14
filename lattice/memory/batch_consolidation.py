@@ -18,6 +18,8 @@ Legacy support:
     - New code should use should_consolidate() and run_consolidation_batch()
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -39,7 +41,10 @@ from lattice.utils.placeholder_injector import PlaceholderInjector
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
-    from lattice.memory.repositories import MessageRepository
+    from lattice.memory.repositories import (
+        CanonicalRepository,
+        MessageRepository,
+    )
 
 
 logger = structlog.get_logger(__name__)
@@ -417,6 +422,7 @@ async def check_and_run_batch(db_pool: Any, message_repo: "MessageRepository") -
 async def run_batch_consolidation(
     db_pool: "DatabasePool",
     message_repo: "MessageRepository",
+    canonical_repo: "CanonicalRepository | None" = None,
     llm_client: Any = None,
     bot: Any = None,
     user_context_cache: Any = None,
