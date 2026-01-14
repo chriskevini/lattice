@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import pytest
 
+from lattice.core.constants import ALIAS_PREDICATE
 from lattice.memory import episodic
 from lattice.memory.context import PostgresMessageRepository
 from lattice.utils.database import DatabasePool
@@ -298,7 +299,9 @@ class TestSemanticMemoryStorage:
         message_id = await episodic.store_message(message_repo, message)
 
         # Store alias triple
-        memories = [{"subject": "mom", "predicate": "has alias", "object": "Mother"}]
+        memories = [
+            {"subject": "mom", "predicate": ALIAS_PREDICATE, "object": "Mother"}
+        ]
         await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
         )
@@ -318,8 +321,8 @@ class TestSemanticMemoryStorage:
             assert len(rows) == 2
             # Check both directions exist regardless of order
             triples = [(r["subject"], r["predicate"], r["object"]) for r in rows]
-            assert ("mom", "has alias", "Mother") in triples
-            assert ("Mother", "has alias", "mom") in triples
+            assert ("mom", ALIAS_PREDICATE, "Mother") in triples
+            assert ("Mother", ALIAS_PREDICATE, "mom") in triples
 
     async def test_duplicate_alias_handling(
         self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
@@ -346,8 +349,8 @@ class TestSemanticMemoryStorage:
 
         # Store same alias twice
         memories = [
-            {"subject": "bf", "predicate": "has alias", "object": "boyfriend"},
-            {"subject": "bf", "predicate": "has alias", "object": "boyfriend"},
+            {"subject": "bf", "predicate": ALIAS_PREDICATE, "object": "boyfriend"},
+            {"subject": "bf", "predicate": ALIAS_PREDICATE, "object": "boyfriend"},
         ]
         result_count = await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
@@ -368,10 +371,10 @@ class TestSemanticMemoryStorage:
             )
             assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}"
             assert rows[0]["subject"] == "bf"
-            assert rows[0]["predicate"] == "has alias"
+            assert rows[0]["predicate"] == ALIAS_PREDICATE
             assert rows[0]["object"] == "boyfriend"
             assert rows[1]["subject"] == "boyfriend"
-            assert rows[1]["predicate"] == "has alias"
+            assert rows[1]["predicate"] == ALIAS_PREDICATE
             assert rows[1]["object"] == "bf"
 
         # Verify the count of unique triples stored (before cleanup)

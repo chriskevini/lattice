@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, TYPE_CHECKING
 from uuid import UUID
 
+from lattice.core.constants import ALIAS_PREDICATE
 from lattice.memory.repositories import (
     CanonicalRepository,
     ContextRepository,
@@ -163,12 +164,12 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                     conn, subject, predicate, obj, source_batch_id
                 )
 
-                if predicate == "has alias":
+                if predicate == ALIAS_PREDICATE:
                     alias_triples.append((subject, obj, source_batch_id))
 
             for alias_from, alias_to, batch_id in alias_triples:
                 count += await self._insert_semantic_memory(
-                    conn, alias_to, "has alias", alias_from, batch_id
+                    conn, alias_to, ALIAS_PREDICATE, alias_from, batch_id
                 )
         return count
 
