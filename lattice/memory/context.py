@@ -186,7 +186,6 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             """
             INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT (subject, predicate, object) DO NOTHING
             """,
             subject,
             predicate,
