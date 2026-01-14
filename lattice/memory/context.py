@@ -174,34 +174,23 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                 count += 1
 
                 if predicate == "has alias":
-                    alias_triples.append((subject, obj))
+                    alias_triples.append((subject, obj, source_batch_id))
 
-            for alias_from, alias_to in alias_triples:
-                existing = await conn.fetchval(
+            for alias_from, alias_to, batch_id in alias_triples:
+                await conn.execute(
                     """
-                    SELECT 1 FROM semantic_memories
-                    WHERE subject = $1 AND predicate = $2 AND object = $3
-                    LIMIT 1
+                    INSERT INTO semantic_memories (
+                        subject, predicate, object, source_batch_id
+                    )
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (subject, predicate, object) DO NOTHING
                     """,
                     alias_to,
                     "has alias",
                     alias_from,
+                    batch_id,
                 )
-
-                if not existing:
-                    await conn.execute(
-                        """
-                        INSERT INTO semantic_memories (
-                            subject, predicate, object, source_batch_id
-                        )
-                        VALUES ($1, $2, $3, $4)
-                        """,
-                        alias_to,
-                        "has alias",
-                        alias_from,
-                        source_batch_id,
-                    )
-                    count += 1
+                count += 1
 
         return count
 
