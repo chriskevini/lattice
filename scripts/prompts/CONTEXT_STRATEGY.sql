@@ -13,8 +13,7 @@ Analyze the conversation window to extract active entities and determine which c
 
 ## Guidelines
 - If user mentions "you", extract "Assistant"
-- Match to canonical entities when confident ("mom" → "Mother")
-- Proper nouns and people are capitalized (Mother, IKEA, etc.)
+- Extract entities exactly as the user wrote them - preserve their capitalization
 - Extract dates as entities in ISO format
 - Use clarifications from conversation
 - If user discusses tasks, todos, deadlines, commitments, or asks for status updates on projects, add "goal_context" to context_flags
@@ -44,11 +43,11 @@ Output:
 
 [2026-01-09 10:00] USER: "my mom loves cooking."
 Output:
-{"entities": ["Mother", "cooking"], "context_flags": []}
+{"entities": ["mom", "cooking"], "context_flags": []}
 
 [2026-01-09 10:00] USER: "bf and i hung out at ikea today"
 Output:
-{"entities": ["bf", "IKEA"], "context_flags": []}
+{"entities": ["bf", "ikea"], "context_flags": []}
 
 [2026-01-09 14:00] USER: "What shows do you like?"
 Output:
