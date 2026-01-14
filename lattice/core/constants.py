@@ -24,3 +24,9 @@ CONSOLIDATION_BATCH_SIZE = 18
 
 # Default episodic context limit (used in memory_orchestrator)
 DEFAULT_EPISODIC_LIMIT = 10
+
+# Semantic memory constants
+
+# Predicate used for entity aliases in semantic memories
+# Example: ("mom", "has alias", "Mother") creates bidirectional alias link
+ALIAS_PREDICATE = "has alias"

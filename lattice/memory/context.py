@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, TYPE_CHECKING
 from uuid import UUID
 
+from lattice.core.constants import ALIAS_PREDICATE
 from lattice.memory.repositories import (
     CanonicalRepository,
     ContextRepository,
@@ -18,7 +19,7 @@ from lattice.memory.repositories import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from asyncpg import Connection
 
 
 class PostgresContextRepository(PostgresRepository, ContextRepository):
@@ -159,51 +160,52 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                 if not (subject and predicate and obj):
                     continue
 
-                await conn.execute(
-                    """
-                    INSERT INTO semantic_memories (
-                        subject, predicate, object, source_batch_id
-                    )
-                    VALUES ($1, $2, $3, $4)
-                    """,
-                    subject,
-                    predicate,
-                    obj,
-                    source_batch_id,
-                )
-                count += 1
-
-                if predicate == "has alias":
-                    alias_triples.append((subject, obj))
-
-            for alias_from, alias_to in alias_triples:
-                existing = await conn.fetchval(
-                    """
-                    SELECT 1 FROM semantic_memories
-                    WHERE subject = $1 AND predicate = $2 AND object = $3
-                    LIMIT 1
-                    """,
-                    alias_to,
-                    "has alias",
-                    alias_from,
+                count += await self._insert_semantic_memory(
+                    conn, subject, predicate, obj, source_batch_id
                 )
 
-                if not existing:
-                    await conn.execute(
-                        """
-                        INSERT INTO semantic_memories (
-                            subject, predicate, object, source_batch_id
-                        )
-                        VALUES ($1, $2, $3, $4)
-                        """,
-                        alias_to,
-                        "has alias",
-                        alias_from,
-                        source_batch_id,
-                    )
-                    count += 1
+                if predicate == ALIAS_PREDICATE:
+                    alias_triples.append((subject, obj, source_batch_id))
+
+            for alias_from, alias_to, batch_id in alias_triples:
+                count += await self._insert_semantic_memory(
+                    conn, alias_to, ALIAS_PREDICATE, alias_from, batch_id
+                )
 
         return count
+
+    async def _insert_semantic_memory(
+        self,
+        conn: "Connection",
+        subject: str,
+        predicate: str,
+        obj: str,
+        source_batch_id: str | None,
+    ) -> int:
+        """Insert a single semantic memory, returns 1 if inserted, 0 if duplicate.
+
+        Uses RETURNING clause to robustly detect if row was inserted.
+        Partial unique index unique_active_semantic_triple on (subject, predicate, object)
+        WHERE superseded_by IS NULL prevents duplicate active memories while allowing versioning.
+
+        Note: ON CONFLICT with partial indexes requires specifying all columns.
+        PostgreSQL will automatically use the partial unique index when inserting rows
+        that match the index predicate (superseded_by IS NULL, which is default for new rows).
+        """
+        result = await conn.fetchval(
+            """
+            INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
+            DO NOTHING
+            RETURNING id
+            """,
+            subject,
+            predicate,
+            obj,
+            source_batch_id,
+        )
+        return 1 if result is not None else 0
 
 
 class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryRepository):

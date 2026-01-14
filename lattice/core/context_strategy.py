@@ -11,7 +11,7 @@ from uuid import UUID
 import structlog
 
 from lattice.discord_client.error_handlers import notify_parse_error_to_dream
-from lattice.core.constants import CONTEXT_STRATEGY_WINDOW_SIZE
+from lattice.core.constants import CONTEXT_STRATEGY_WINDOW_SIZE, ALIAS_PREDICATE
 from lattice.core.context import ContextStrategy
 from lattice.memory.procedural import get_prompt
 from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
@@ -287,17 +287,16 @@ async def retrieve_context(
                 memory.get("predicate"),
                 memory.get("object"),
             )
-            if subject and predicate and obj:
-                if predicate != "has alias":
-                    relationships.append(
-                        renderer(
-                            subject,
-                            predicate,
-                            obj,
-                            memory.get("created_at"),
-                            user_timezone,
-                        )
+            if subject and predicate and obj and predicate != ALIAS_PREDICATE:
+                relationships.append(
+                    renderer(
+                        subject,
+                        predicate,
+                        obj,
+                        memory.get("created_at"),
+                        user_timezone,
                     )
+                )
 
         if relationships:
             context["semantic_context"] = (
