@@ -116,7 +116,7 @@ async def get_memories_by_subject(
             """
             SELECT id, subject, predicate, object, created_at
             FROM semantic_memories
-            WHERE subject = $1 AND superseded_by IS NULL
+            WHERE subject = $1 AND superseded_by IS NULL AND predicate != 'has alias'
             ORDER BY created_at DESC
             """,
             subject,
