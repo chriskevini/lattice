@@ -667,7 +667,11 @@ class AuditViewBuilder:
         )
 
         if thread_url:
-            embed.set_footer(text=f"[View Full Details]({thread_url})")
+            embed.add_field(
+                name="\u200b",
+                value=f"[View in thread]({thread_url})",
+                inline=False,
+            )
 
         return embed, view, thread_url
 
