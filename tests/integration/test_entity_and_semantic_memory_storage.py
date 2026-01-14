@@ -47,11 +47,11 @@ async def cleanup_test_data(db_pool: DatabasePool) -> None:
     """Fixture to clean up test data before each test."""
     async with db_pool.pool.acquire() as conn:
         await conn.execute(
-            "DELETE FROM raw_messages WHERE discord_message_id IN (12345, 12346, 12348, 12349, 12350)"
+            "DELETE FROM raw_messages WHERE discord_message_id IN (12345, 12346, 12348, 12349, 12350, 12351, 12352)"
         )
         # Also clean up semantic memories associated with these test batches
         await conn.execute(
-            "DELETE FROM semantic_memories WHERE source_batch_id LIKE 'test_batch_%' OR source_batch_id LIKE 'test_batch_12350_%'"
+            "DELETE FROM semantic_memories WHERE source_batch_id LIKE 'test_batch_%'"
         )
 
 
@@ -275,6 +275,89 @@ class TestSemanticMemoryStorage:
             )
             assert len(rows) == 1
             assert rows[0]["subject"] == "user"
+
+    async def test_bidirectional_alias_storage(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
+        """Test that 'has alias' triples create bidirectional relationships."""
+        # Use a unique batch ID
+        unique_suffix = str(uuid4())[:8]
+        batch_id = f"test_batch_alias_{unique_suffix}"
+
+        message = episodic.EpisodicMessage(
+            content="Test alias storage",
+            discord_message_id=12351,
+            channel_id=67890,
+            is_bot=False,
+        )
+        message_id = await episodic.store_message(message_repo, message)
+
+        # Store alias triple
+        memories = [{"subject": "mom", "predicate": "has alias", "object": "Mother"}]
+        await episodic.store_semantic_memories(
+            message_repo, message_id, memories, source_batch_id=batch_id
+        )
+
+        # Verify both directions exist
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT subject, predicate, object
+                FROM semantic_memories
+                WHERE source_batch_id = $1
+                ORDER BY subject, object
+                """,
+                batch_id,
+            )
+
+            assert len(rows) == 2
+            # Check original direction
+            assert rows[0]["subject"] == "mom"
+            assert rows[0]["predicate"] == "has alias"
+            assert rows[0]["object"] == "Mother"
+            # Check reverse direction
+            assert rows[1]["subject"] == "Mother"
+            assert rows[1]["predicate"] == "has alias"
+            assert rows[1]["object"] == "mom"
+
+    async def test_duplicate_alias_handling(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
+        """Test that duplicate alias triples are ignored."""
+        unique_suffix = str(uuid4())[:8]
+        batch_id = f"test_batch_dup_{unique_suffix}"
+
+        message = episodic.EpisodicMessage(
+            content="Test duplicate handling",
+            discord_message_id=12352,
+            channel_id=67890,
+            is_bot=False,
+        )
+        message_id = await episodic.store_message(message_repo, message)
+
+        # Store the same alias twice
+        memories = [
+            {"subject": "bf", "predicate": "has alias", "object": "boyfriend"},
+            {"subject": "bf", "predicate": "has alias", "object": "boyfriend"},
+        ]
+        result_count = await episodic.store_semantic_memories(
+            message_repo, message_id, memories, source_batch_id=batch_id
+        )
+
+        # Should return 2 (one for each original alias, reverse should be deduped)
+        assert result_count == 2
+
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT COUNT(*) as count
+                FROM semantic_memories
+                WHERE source_batch_id = $1
+                """,
+                batch_id,
+            )
+            # Only 2 unique triples should exist (bf->boyfriend and boyfriend->bf)
+            assert rows[0]["count"] == 2
 
 
 if __name__ == "__main__":
