@@ -326,6 +326,14 @@ class TestSemanticMemoryStorage:
         unique_suffix = str(uuid4())[:8]
         batch_id = f"test_batch_dup_{unique_suffix}"
 
+        # First verify the batch doesn't exist
+        async with db_pool.pool.acquire() as conn:
+            existing = await conn.fetchval(
+                "SELECT COUNT(*) FROM semantic_memories WHERE source_batch_id = $1",
+                batch_id,
+            )
+            assert existing == 0, f"Pre-existing data found: {existing}"
+
         message = episodic.EpisodicMessage(
             content="Test duplicate handling",
             discord_message_id=12352,
@@ -348,15 +356,23 @@ class TestSemanticMemoryStorage:
         # - First reverse (boyfriend->bf) inserts
         # - Second forward is duplicate, returns 0
         # - Second reverse is duplicate (from first reverse), returns 0
-        assert result_count == 2
+        assert result_count == 2, f"Expected 2, got {result_count}"
 
-        # Clean up test data manually
+        # Verify what was actually stored
         async with db_pool.pool.acquire() as conn:
-            await conn.execute(
-                "DELETE FROM semantic_memories WHERE source_batch_id = $1",
+            rows = await conn.fetch(
+                "SELECT subject, predicate, object FROM semantic_memories WHERE source_batch_id = $1 ORDER BY subject",
                 batch_id,
             )
+            assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}"
+            assert rows[0]["subject"] == "bf"
+            assert rows[0]["predicate"] == "has alias"
+            assert rows[0]["object"] == "boyfriend"
+            assert rows[1]["subject"] == "boyfriend"
+            assert rows[1]["predicate"] == "has alias"
+            assert rows[1]["object"] == "bf"
 
+        # Verify the count of unique triples stored (before cleanup)
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
@@ -368,6 +384,13 @@ class TestSemanticMemoryStorage:
             )
             # Only 2 unique triples should exist (bf->boyfriend and boyfriend->bf)
             assert rows[0]["count"] == 2
+
+        # Clean up test data manually
+        async with db_pool.pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM semantic_memories WHERE source_batch_id = $1",
+                batch_id,
+            )
 
 
 if __name__ == "__main__":

@@ -170,7 +170,6 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                 count += await self._insert_semantic_memory(
                     conn, alias_to, "has alias", alias_from, batch_id
                 )
-
         return count
 
     async def _insert_semantic_memory(
@@ -193,7 +192,8 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             obj,
             source_batch_id,
         )
-        return 0 if "INSERT 0" in result else 1
+        parts = result.split()
+        return 0 if parts[-1] == "0" else 1
 
 
 class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryRepository):
