@@ -311,14 +311,10 @@ class TestSemanticMemoryStorage:
             )
 
             assert len(rows) == 2
-            # Check original direction
-            assert rows[0]["subject"] == "mom"
-            assert rows[0]["predicate"] == "has alias"
-            assert rows[0]["object"] == "Mother"
-            # Check reverse direction
-            assert rows[1]["subject"] == "Mother"
-            assert rows[1]["predicate"] == "has alias"
-            assert rows[1]["object"] == "mom"
+            # Check both directions exist regardless of order
+            triples = [(r["subject"], r["predicate"], r["object"]) for r in rows]
+            assert ("mom", "has alias", "Mother") in triples
+            assert ("Mother", "has alias", "mom") in triples
 
     async def test_duplicate_alias_handling(
         self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
@@ -335,7 +331,7 @@ class TestSemanticMemoryStorage:
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Store the same alias twice
+        # Store same alias twice
         memories = [
             {"subject": "bf", "predicate": "has alias", "object": "boyfriend"},
             {"subject": "bf", "predicate": "has alias", "object": "boyfriend"},
@@ -344,7 +340,11 @@ class TestSemanticMemoryStorage:
             message_repo, message_id, memories, source_batch_id=batch_id
         )
 
-        # Should return 2 (one for each original alias, reverse should be deduped)
+        # Should return 2:
+        # - First forward (bf->boyfriend) inserts
+        # - First reverse (boyfriend->bf) inserts
+        # - Second forward is duplicate, returns 0
+        # - Second reverse is duplicate (from first reverse), returns 0
         assert result_count == 2
 
         async with db_pool.pool.acquire() as conn:

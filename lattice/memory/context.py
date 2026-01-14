@@ -193,7 +193,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             obj,
             source_batch_id,
         )
-        return 1 if "INSERT 0" not in result else 0
+        return 0 if "INSERT 0" in result else 1
 
 
 class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryRepository):
