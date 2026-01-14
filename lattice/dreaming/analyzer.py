@@ -12,10 +12,7 @@ import structlog
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
-    from lattice.memory.repositories import (
-        PromptAuditRepository,
-        UserFeedbackRepository,
-    )
+    from lattice.memory.repositories import PromptAuditRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -85,7 +82,6 @@ class PromptMetrics:
 async def analyze_prompt_effectiveness(
     db_pool: "DatabasePool",
     prompt_audit_repo: "PromptAuditRepository | None" = None,
-    user_feedback_repo: "UserFeedbackRepository | None" = None,
     min_uses: int = 10,
     lookback_days: int = 30,
     min_feedback: int = 10,
@@ -94,8 +90,7 @@ async def analyze_prompt_effectiveness(
 
     Args:
         db_pool: Database pool for dependency injection (required)
-        prompt_audit_repo: Prompt audit repository
-        user_feedback_repo: User feedback repository
+        prompt_audit_repo: Prompt audit repository for data access
         min_uses: Minimum number of uses to consider for analysis
         lookback_days: Number of days to look back for analysis
         min_feedback: Minimum number of feedback items to consider for analysis
@@ -213,7 +208,6 @@ async def analyze_prompt_effectiveness(
 async def get_feedback_samples(
     prompt_key: str,
     db_pool: "DatabasePool",
-    user_feedback_repo: "UserFeedbackRepository | None" = None,
     prompt_audit_repo: "PromptAuditRepository | None" = None,
     limit: int = 10,
     sentiment_filter: str | None = None,
@@ -226,8 +220,7 @@ async def get_feedback_samples(
     Args:
         prompt_key: The prompt key to get feedback for
         db_pool: Database pool for dependency injection (required)
-        user_feedback_repo: User feedback repository (unused, kept for compatibility)
-        prompt_audit_repo: Prompt audit repository
+        prompt_audit_repo: Prompt audit repository for data access
         limit: Maximum number of samples to return
         sentiment_filter: Filter by sentiment ('positive', 'negative', 'neutral')
 

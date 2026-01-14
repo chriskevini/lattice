@@ -453,6 +453,7 @@ async def run_batch_consolidation(
     Args:
         db_pool: Database pool for dependency injection (required)
         message_repo: Message repository
+        canonical_repo: Canonical repository for entity/predicate storage
         llm_client: LLM client for dependency injection
         bot: Discord bot instance for dependency injection
         user_context_cache: User-level cache for timezone updates
