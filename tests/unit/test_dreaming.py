@@ -49,8 +49,17 @@ class TestAnalyzer:
         mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
+        mock_prompt_audit_repo = AsyncMock()
+        mock_prompt_audit_repo.analyze_prompt_effectiveness = AsyncMock(
+            return_value=mock_rows
+        )
+
         metrics = await analyze_prompt_effectiveness(
-            db_pool=mock_pool, min_uses=10, lookback_days=30, min_feedback=0
+            db_pool=mock_pool,
+            prompt_audit_repo=mock_prompt_audit_repo,
+            min_uses=10,
+            lookback_days=30,
+            min_feedback=0,
         )
 
         assert len(metrics) == 1
@@ -70,7 +79,12 @@ class TestAnalyzer:
         mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
         mock_pool.pool.acquire().__aexit__ = AsyncMock()
 
-        metrics = await analyze_prompt_effectiveness(db_pool=mock_pool)
+        mock_prompt_audit_repo = AsyncMock()
+        mock_prompt_audit_repo.analyze_prompt_effectiveness = AsyncMock(return_value=[])
+
+        metrics = await analyze_prompt_effectiveness(
+            db_pool=mock_pool, prompt_audit_repo=mock_prompt_audit_repo
+        )
 
         assert len(metrics) == 0
 

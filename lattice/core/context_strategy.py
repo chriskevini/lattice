@@ -96,14 +96,10 @@ async def context_strategy(
         raise ValueError(msg)
 
     user_tz = user_timezone or "UTC"
-    if canonical_repo:
-        canonical_entities = await get_canonical_entities_list(repo=canonical_repo)
-    else:
-        # Fallback for tests not yet using repositories
-        from lattice.memory.context import PostgresCanonicalRepository
+    if not canonical_repo:
+        raise ValueError("canonical_repo is required")
 
-        repo = PostgresCanonicalRepository(db_pool)
-        canonical_entities = await get_canonical_entities_list(repo=repo)
+    canonical_entities = await get_canonical_entities_list(repo=canonical_repo)
 
     canonical_entities_str = (
         ", ".join(canonical_entities) if canonical_entities else "(empty)"
@@ -197,19 +193,17 @@ async def retrieve_context(
         additional_entities = []
 
         if semantic_repo:
-            traverser = GraphTraversal(repo=semantic_repo)
+            repo_for_queries = semantic_repo
         elif db_pool and db_pool.is_initialized():
-            # This branch should be removed once all callers use repositories
             from lattice.memory.context import PostgresSemanticMemoryRepository
 
-            repo = PostgresSemanticMemoryRepository(db_pool)
-            traverser = GraphTraversal(repo=repo)
+            repo_for_queries = PostgresSemanticMemoryRepository(db_pool)
         else:
-            traverser = None
+            repo_for_queries = None
 
-        if traverser:
+        if repo_for_queries:
             if "activity_context" in context_flags:
-                activity_memories = await traverser.find_semantic_memories(
+                activity_memories = await repo_for_queries.find_memories(
                     subject="User", predicate="did activity", limit=20
                 )
                 if activity_memories:
@@ -223,11 +217,15 @@ async def retrieve_context(
                         "Recent user activities:\n" + "\n".join(activities)
                     )
                 additional_entities.extend(
-                    [m.get("object", "") for m in activity_memories if m.get("object")]
+                    [
+                        m.get("object", "")
+                        for m in activity_memories
+                        if m.get("object") and isinstance(m.get("object"), str)
+                    ]
                 )
 
             if "goal_context" in context_flags:
-                goal_memories = await traverser.find_semantic_memories(
+                goal_memories = await repo_for_queries.find_memories(
                     predicate="has goal", limit=10
                 )
                 if goal_memories:
@@ -267,16 +265,21 @@ async def retrieve_context(
                 seen_memory_ids: set[tuple[str, str, str]] = set()
                 for result in traverse_results:
                     for memory in result:
-                        memory_key = (
-                            memory.get("subject", ""),
-                            memory.get("predicate", ""),
-                            memory.get("object", ""),
-                        )
-                        if memory_key not in seen_memory_ids and all(memory_key):
-                            semantic_memories.append(memory)
-                            seen_memory_ids.add(memory_key)
-                            if origin_id := memory.get("origin_id"):
-                                context["memory_origins"].add(origin_id)
+                        subject = memory.get("subject", "")
+                        predicate = memory.get("predicate", "")
+                        obj = memory.get("object", "")
+                        # Ensure all are strings
+                        if (
+                            isinstance(subject, str)
+                            and isinstance(predicate, str)
+                            and isinstance(obj, str)
+                        ):
+                            memory_key = (subject, predicate, obj)
+                            if memory_key not in seen_memory_ids and all(memory_key):
+                                semantic_memories.append(memory)
+                                seen_memory_ids.add(memory_key)
+                                if origin_id := memory.get("origin_id"):
+                                    context["memory_origins"].add(origin_id)
 
     if semantic_memories:
         renderer = get_renderer("semantic_context")

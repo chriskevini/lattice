@@ -69,7 +69,6 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
         else:
             user_tz = res
     except (AttributeError, TypeError):
-        # Fallback for MagicMock in tests
         from lattice.utils.database import get_user_timezone as global_get_tz
 
         user_tz = await global_get_tz(db_pool=db_pool)
@@ -221,7 +220,6 @@ async def is_within_active_hours(
         start_hour = int(start_hour_raw or 9)
         end_hour = int(end_hour_raw or 21)
     except (AttributeError, TypeError, ValueError):
-        # Fallback for MagicMock in tests or uninitialized pool
         from lattice.utils.database import get_system_metrics as global_get_metrics
 
         start_raw = await global_get_metrics("active_hours_start", db_pool=db_pool)
