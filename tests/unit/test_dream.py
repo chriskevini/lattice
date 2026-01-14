@@ -797,10 +797,6 @@ class TestAuditViewCallbacks:
         mock_channel.create_thread.assert_called_once()
         # 1 for prompt + 3 for raw output chunks (40000 / 19000 = 2.1 -> 3 chunks)
         assert mock_thread.send.call_count == 4
-        # call_args_list[0] = prompt, [1] = chunk 1/3, [2] = chunk 2/3, [3] = chunk 3/3
-        assert "(1/3)" in mock_thread.send.call_args_list[1][0][0]
-        assert "(2/3)" in mock_thread.send.call_args_list[2][0][0]
-        assert "(3/3)" in mock_thread.send.call_args_list[3][0][0]
 
     @pytest.mark.asyncio
     async def test_details_callback_thread_name_truncated(

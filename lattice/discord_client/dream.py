@@ -434,10 +434,8 @@ class AuditView(discord.ui.DesignerView):
                 return
 
             prompt_chunks = split_response(self.rendered_prompt, max_length=1900)
-            for i, chunk in enumerate(prompt_chunks):
-                await thread.send(
-                    f"**Rendered Prompt** ({i + 1}/{len(prompt_chunks)})\n{chunk}"
-                )
+            for chunk in prompt_chunks:
+                await thread.send(f"**Rendered Prompt**\n{chunk}")
 
             if len(self.raw_output) <= 19000:
                 await thread.send(f"**Raw Output**\n{self.raw_output}")
@@ -446,10 +444,8 @@ class AuditView(discord.ui.DesignerView):
                     self.raw_output[i : i + 19000]
                     for i in range(0, len(self.raw_output), 19000)
                 ]
-                for i, chunk in enumerate(chunks):
-                    await thread.send(
-                        f"**Raw Output** ({i + 1}/{len(chunks)})\n{chunk}"
-                    )
+                for chunk in chunks:
+                    await thread.send(f"**Raw Output**\n{chunk}")
 
             await interaction.response.send_message(
                 f"🔍 {thread.jump_url}",
