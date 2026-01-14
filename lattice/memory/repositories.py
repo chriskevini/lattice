@@ -91,6 +91,7 @@ class MessageRepository(Protocol):
         message_id: UUID,
         memories: list[dict[str, str]],
         source_batch_id: str | None = None,
+        message_timestamp: datetime | None = None,
     ) -> int:
         """Store extracted memories in semantic_memories table.
 
@@ -98,6 +99,7 @@ class MessageRepository(Protocol):
             message_id: UUID of origin message
             memories: List of {"subject": str, "predicate": str, "object": str}
             source_batch_id: Optional batch identifier for traceability
+            message_timestamp: Optional original message timestamp for created_at
 
         Returns:
             Number of memories stored
