@@ -159,40 +159,41 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                 if not (subject and predicate and obj):
                     continue
 
-                await conn.execute(
-                    """
-                    INSERT INTO semantic_memories (
-                        subject, predicate, object, source_batch_id
-                    )
-                    VALUES ($1, $2, $3, $4)
-                    """,
-                    subject,
-                    predicate,
-                    obj,
-                    source_batch_id,
+                count += await self._insert_semantic_memory(
+                    conn, subject, predicate, obj, source_batch_id
                 )
-                count += 1
 
                 if predicate == "has alias":
                     alias_triples.append((subject, obj, source_batch_id))
 
             for alias_from, alias_to, batch_id in alias_triples:
-                await conn.execute(
-                    """
-                    INSERT INTO semantic_memories (
-                        subject, predicate, object, source_batch_id
-                    )
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (subject, predicate, object) DO NOTHING
-                    """,
-                    alias_to,
-                    "has alias",
-                    alias_from,
-                    batch_id,
+                count += await self._insert_semantic_memory(
+                    conn, alias_to, "has alias", alias_from, batch_id
                 )
-                count += 1
 
         return count
+
+    async def _insert_semantic_memory(
+        self,
+        conn,
+        subject: str,
+        predicate: str,
+        obj: str,
+        source_batch_id: str | None,
+    ) -> int:
+        """Insert a single semantic memory, returns 1 if inserted, 0 if duplicate."""
+        result = await conn.execute(
+            """
+            INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (subject, predicate, object) DO NOTHING
+            """,
+            subject,
+            predicate,
+            obj,
+            source_batch_id,
+        )
+        return 1 if "INSERT" in result else 0
 
 
 class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryRepository):

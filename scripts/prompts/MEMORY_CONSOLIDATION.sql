@@ -44,7 +44,7 @@ Return ONLY valid JSON. No prose.
 Date resolution hints: Friday → 2026-01-09
 User: "Spent 2 hours at the gym this morning."
 User: "finally finished that report that was due friday."
-User: "my mom loves cooking.""
+User: "my mom loves cooking."
 User: "Mother made cookies too."
 User: "I'm in New York right now."
 Output:
