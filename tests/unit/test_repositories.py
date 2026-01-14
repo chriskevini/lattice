@@ -4,6 +4,7 @@ Validates that repository protocols are correctly defined and that
 implementations can satisfy the protocol interfaces.
 """
 
+from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock
 from uuid import UUID
@@ -119,6 +120,13 @@ class TestRepositoryImplementations:
                 self,
                 cursor_message_id: int,
                 limit: int = 18,
+            ) -> list[dict[str, Any]]:
+                return []
+
+            async def get_message_timestamps_since(
+                self,
+                since: datetime,
+                is_bot: bool = False,
             ) -> list[dict[str, Any]]:
                 return []
 

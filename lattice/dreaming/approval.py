@@ -10,7 +10,10 @@ import discord
 import structlog
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import (
+        DreamingProposalRepository,
+        SemanticMemoryRepository,
+    )
 
 # Import compatibility layer first to ensure DesignerView exists
 from lattice.discord_client import dream  # noqa: F401
@@ -36,18 +39,18 @@ class MemoryReviewView(discord.ui.DesignerView):  # type: ignore[name-defined]
         self,
         proposal_id: str,
         conflicts: list[dict[str, Any]],
-        db_pool: "DatabasePool",
+        semantic_repo: "SemanticMemoryRepository",
     ) -> None:
         """Initialize memory review view.
 
         Args:
             proposal_id: UUID of memory review proposal
             conflicts: List of conflict resolution dictionaries
-            db_pool: Database pool for dependency injection
+            semantic_repo: Semantic memory repository for dependency injection
         """
         super().__init__(timeout=None)  # No timeout for proposal views
         self.proposal_id = proposal_id
-        self.db_pool = db_pool
+        self.semantic_repo = semantic_repo
 
         from uuid import UUID
 
@@ -153,7 +156,7 @@ class MemoryReviewView(discord.ui.DesignerView):  # type: ignore[name-defined]
 
             try:
                 success = await apply_conflict_resolution(
-                    db_pool=self.db_pool,
+                    semantic_repo=self.semantic_repo,
                     proposal_id=self.proposal_uuid,
                     conflict_index=conflict_index,
                 )
@@ -206,20 +209,20 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
     def __init__(
         self,
         proposal: OptimizationProposal,
-        db_pool: "DatabasePool",
+        proposal_repo: "DreamingProposalRepository",
         llm_client: Any = None,
     ) -> None:
         """Initialize template comparison view.
 
         Args:
             proposal: The optimization proposal containing both templates
-            db_pool: Database pool for dependency injection
+            proposal_repo: Dreaming proposal repository for dependency injection
             llm_client: LLM client for dependency injection
         """
         super().__init__(timeout=None)  # No timeout for proposal views
         self.proposal_id = proposal.proposal_id
         self.rendered_optimization_prompt = proposal.rendered_optimization_prompt
-        self.db_pool = db_pool
+        self.proposal_repo = proposal_repo
         self.llm_client = llm_client
 
         # Extract data from proposal_metadata JSONB
@@ -351,7 +354,9 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
     async def _fetch_proposal_or_error(
         self, interaction: discord.Interaction
     ) -> OptimizationProposal | None:
-        proposal = await get_proposal_by_id(self.proposal_id, db_pool=self.db_pool)
+        proposal = await get_proposal_by_id(
+            self.proposal_id, proposal_repo=self.proposal_repo
+        )
         if not proposal:
             await interaction.response.send_message(
                 "❌ Proposal not found. It may have been deleted.",
@@ -399,7 +404,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
             success = await approve_proposal(
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
-                db_pool=self.db_pool,
+                proposal_repo=self.proposal_repo,
                 feedback="Approved via Discord button",
             )
 
@@ -436,7 +441,7 @@ class TemplateComparisonView(discord.ui.DesignerView):  # type: ignore[name-defi
             success = await reject_proposal(
                 proposal_id=proposal.proposal_id,
                 reviewed_by=str(interaction.user.id) if interaction.user else "unknown",
-                db_pool=self.db_pool,
+                proposal_repo=self.proposal_repo,
                 feedback="Rejected via Discord button",
             )
 

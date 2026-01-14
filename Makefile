@@ -148,7 +148,10 @@ check-migrations: ## Check that existing migrations are immutable
 	@echo "Checking migration immutability..."
 	@scripts/check_migrations.sh || exit 1
 
-check-all: lint type-check check-discord-v2 check-migrations ## Run all quality checks
+check-all: lint type-check check-discord-v2 check-migrations check-repository-pattern ## Run all quality checks
+
+check-repository-pattern: ## Check repository pattern compliance
+	python scripts/check_repository_pattern.py
 
 # ============================================================================
 # Application Commands

@@ -11,6 +11,8 @@ from lattice.memory.repositories import (
     PostgresPromptAuditRepository,
     PostgresPromptRegistryRepository,
     PostgresUserFeedbackRepository,
+    PostgresSystemMetricsRepository,
+    PostgresDreamingProposalRepository,
 )
 from lattice.utils.database import DatabasePool
 from lattice.utils.llm import _LLMClient, AuditingLLMClient
@@ -34,6 +36,10 @@ class LatticeApp:
         self.audit_repo = PostgresPromptAuditRepository(db_pool=self.db_pool)
         self.feedback_repo = PostgresUserFeedbackRepository(db_pool=self.db_pool)
         self.prompt_repo = PostgresPromptRegistryRepository(db_pool=self.db_pool)
+        self.system_metrics_repo = PostgresSystemMetricsRepository(db_pool=self.db_pool)
+        self.dreaming_proposal_repo = PostgresDreamingProposalRepository(
+            db_pool=self.db_pool
+        )
         self.auditing_llm_client = AuditingLLMClient(
             llm_client=self.llm_client,
             audit_repo=self.audit_repo,
@@ -58,6 +64,8 @@ class LatticeApp:
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            system_metrics_repo=self.system_metrics_repo,
+            proposal_repo=self.dreaming_proposal_repo,
         )
 
     async def start(self) -> None:

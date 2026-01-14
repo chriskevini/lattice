@@ -4,10 +4,8 @@ Analyzes historical message data to determine when the user is most active,
 enabling respectful proactive messaging that aligns with their natural schedule.
 """
 
-import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, TypedDict
-from unittest.mock import MagicMock
+from typing import TYPE_CHECKING, TypedDict
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -15,7 +13,7 @@ import structlog
 from lattice.utils.date_resolution import get_now
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import SystemMetricsRepository, MessageRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -42,14 +40,18 @@ class ActiveHoursResult(TypedDict):
     timezone: str  # IANA timezone used
 
 
-async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
+async def calculate_active_hours(
+    system_metrics_repo: "SystemMetricsRepository",
+    message_repo: "MessageRepository",
+) -> ActiveHoursResult:
     """Calculate user's active hours from message patterns.
 
     Analyzes messages from the last 30 days to determine peak activity hours.
     Falls back to default 9 AM - 9 PM if insufficient data.
 
     Args:
-        db_pool: Database pool for dependency injection (required)
+        system_metrics_repo: System metrics repository for timezone lookup
+        message_repo: Message repository for fetching message history
 
     Returns:
         ActiveHoursResult with start_hour, end_hour, confidence, and sample_size
@@ -62,40 +64,15 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
         5. Ensure window is at least 6 hours wide
         6. Return start/end hours with confidence score
     """
-    try:
-        res = db_pool.get_user_timezone()
-        if asyncio.iscoroutine(res):
-            user_tz = await res
-        else:
-            user_tz = res
-    except (AttributeError, TypeError):
-        from lattice.utils.database import get_user_timezone as global_get_tz
-
-        user_tz = await global_get_tz(db_pool=db_pool)
-
-    if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
-        user_tz = "UTC"
-
-    if not isinstance(user_tz, str):
-        user_tz = "UTC"
-
+    user_tz = await system_metrics_repo.get_user_timezone()
     tz = ZoneInfo(user_tz)
 
-    # Get messages from last 30 days
     cutoff = get_now(user_tz) - timedelta(days=ANALYSIS_WINDOW_DAYS)
 
-    async with db_pool.pool.acquire() as conn:
-        # Get all user messages (not bot messages) from the analysis window
-        rows = await conn.fetch(
-            """
-            SELECT timestamp, user_timezone
-            FROM raw_messages
-            WHERE is_bot = FALSE
-              AND timestamp >= $1
-            ORDER BY timestamp ASC
-            """,
-            cutoff,
-        )
+    rows = await message_repo.get_message_timestamps_since(
+        since=cutoff,
+        is_bot=False,
+    )
 
     if len(rows) < MIN_MESSAGES_REQUIRED:
         logger.info(
@@ -112,12 +89,10 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
             timezone=user_tz,
         )
 
-    # Build histogram of messages by hour (in user's local timezone)
     hour_counts = [0] * 24
 
     for row in rows:
         utc_time = row["timestamp"]
-        # Convert to user's timezone
         local_time = utc_time.astimezone(tz)
         hour_counts[local_time.hour] += 1
 
@@ -128,30 +103,23 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
         timezone=user_tz,
     )
 
-    # Find the continuous window with highest activity
-    # Use sliding window to find best 12-hour period
     best_start = 0
     best_count = 0
-    window_size = 12  # Look for 12-hour windows
+    window_size = 12
 
     for start in range(24):
-        # Calculate count for window wrapping around midnight
         window_count = sum(hour_counts[(start + i) % 24] for i in range(window_size))
         if window_count > best_count:
             best_count = window_count
             best_start = start
 
-    # The window is 12 hours starting at best_start
     start_hour = best_start
     end_hour = (best_start + window_size) % 24
 
-    # Calculate confidence based on how concentrated the activity is
     total_messages = sum(hour_counts)
     window_messages = best_count
     confidence = window_messages / total_messages if total_messages > 0 else 0.0
 
-    # Adjust confidence based on sample size
-    # Full confidence at 100+ messages, scale down for fewer
     size_multiplier = min(1.0, len(rows) / 100.0)
     confidence *= size_multiplier
 
@@ -176,79 +144,37 @@ async def calculate_active_hours(db_pool: Any) -> ActiveHoursResult:
 
 
 async def is_within_active_hours(
-    db_pool: "DatabasePool", check_time: datetime | None = None
+    system_metrics_repo: "SystemMetricsRepository",
+    check_time: datetime | None = None,
 ) -> bool:
     """Check if the given time (or now) is within the user's active hours.
 
     Args:
-        db_pool: Database pool for dependency injection (required)
+        system_metrics_repo: System metrics repository for timezone and hours lookup
         check_time: Time to check. Defaults to current time in user's timezone.
 
     Returns:
         True if within active hours, False otherwise
     """
-    from lattice.utils.database import get_user_timezone
+    user_tz = await system_metrics_repo.get_user_timezone()
 
-    user_tz = await get_user_timezone(db_pool=db_pool)
+    start_hour_raw = await system_metrics_repo.get_metric("active_hours_start")
+    end_hour_raw = await system_metrics_repo.get_metric("active_hours_end")
 
-    if isinstance(user_tz, MagicMock) or "Mock" in str(type(user_tz)):
-        user_tz = "UTC"
-
-    if not isinstance(user_tz, str):
-        user_tz = "UTC"
-
-    # Get stored active hours
-    try:
-        res_start = db_pool.get_system_metrics("active_hours_start")
-        if asyncio.iscoroutine(res_start):
-            start_hour_raw = await res_start
-        else:
-            start_hour_raw = res_start
-
-        if isinstance(start_hour_raw, MagicMock):
-            start_hour_raw = None
-
-        res_end = db_pool.get_system_metrics("active_hours_end")
-        if asyncio.iscoroutine(res_end):
-            end_hour_raw = await res_end
-        else:
-            end_hour_raw = res_end
-
-        if isinstance(end_hour_raw, MagicMock):
-            end_hour_raw = None
-
-        start_hour = int(start_hour_raw or 9)
-        end_hour = int(end_hour_raw or 21)
-    except (AttributeError, TypeError, ValueError):
-        from lattice.utils.database import get_system_metrics as global_get_metrics
-
-        start_raw = await global_get_metrics("active_hours_start", db_pool=db_pool)
-        if isinstance(start_raw, MagicMock):
-            start_raw = None
-        start_hour = int(start_raw or 9)
-
-        end_raw = await global_get_metrics("active_hours_end", db_pool=db_pool)
-        if isinstance(end_raw, MagicMock):
-            end_raw = None
-        end_hour = int(end_raw or 21)
+    start_hour = int(start_hour_raw) if start_hour_raw else DEFAULT_ACTIVE_START
+    end_hour = int(end_hour_raw) if end_hour_raw else DEFAULT_ACTIVE_END
 
     if check_time is None:
         check_time = get_now(user_tz)
     elif check_time.tzinfo is None or check_time.tzinfo == UTC:
-        # Convert UTC or naive to user timezone
-        from zoneinfo import ZoneInfo
-
         tz = ZoneInfo(user_tz)
         check_time = check_time.astimezone(tz)
 
     current_hour = check_time.hour
 
-    # Handle window that wraps around midnight
     if start_hour <= end_hour:
-        # Normal case: 9 AM - 9 PM
         within_hours = start_hour <= current_hour < end_hour
     else:
-        # Wrap case: 9 PM - 9 AM (night owl)
         within_hours = current_hour >= start_hour or current_hour < end_hour
 
     logger.debug(
@@ -263,49 +189,36 @@ async def is_within_active_hours(
     return within_hours
 
 
-async def update_active_hours(db_pool: Any) -> ActiveHoursResult:
+async def update_active_hours(
+    system_metrics_repo: "SystemMetricsRepository",
+    message_repo: "MessageRepository",
+) -> ActiveHoursResult:
     """Recalculate and store user's active hours.
 
     This should be called periodically (e.g., daily) to keep active hours current.
 
     Args:
-        db_pool: Database pool for dependency injection (required)
+        system_metrics_repo: System metrics repository for storing active hours
+        message_repo: Message repository for fetching message history
 
     Returns:
         ActiveHoursResult with updated hours
     """
-    result = await calculate_active_hours(db_pool=db_pool)
+    result = await calculate_active_hours(
+        system_metrics_repo=system_metrics_repo,
+        message_repo=message_repo,
+    )
 
-    # Store in system_metrics
-    try:
-        await db_pool.set_system_metrics(
-            "active_hours_start", str(result["start_hour"])
-        )
-        await db_pool.set_system_metrics("active_hours_end", str(result["end_hour"]))
-        await db_pool.set_system_metrics(
-            "active_hours_confidence", str(result["confidence"])
-        )
-        # Use UTC for internal last_updated tracking
-        await db_pool.set_system_metrics(
-            "active_hours_last_updated", get_now("UTC").isoformat()
-        )
-    except (AttributeError, TypeError):
-        from lattice.utils.database import set_system_metrics as global_set_metrics
-
-        await global_set_metrics(
-            "active_hours_start", str(result["start_hour"]), db_pool=db_pool
-        )
-        await global_set_metrics(
-            "active_hours_end", str(result["end_hour"]), db_pool=db_pool
-        )
-        await global_set_metrics(
-            "active_hours_confidence", str(result["confidence"]), db_pool=db_pool
-        )
-        await global_set_metrics(
-            "active_hours_last_updated",
-            get_now("UTC").isoformat(),
-            db_pool=db_pool,
-        )
+    await system_metrics_repo.set_metric(
+        "active_hours_start", str(result["start_hour"])
+    )
+    await system_metrics_repo.set_metric("active_hours_end", str(result["end_hour"]))
+    await system_metrics_repo.set_metric(
+        "active_hours_confidence", str(result["confidence"])
+    )
+    await system_metrics_repo.set_metric(
+        "active_hours_last_updated", get_now("UTC").isoformat()
+    )
 
     logger.info(
         "Updated active hours",

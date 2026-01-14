@@ -11,6 +11,7 @@ from lattice.scheduler.dreaming import DreamingScheduler
 from lattice.utils.date_resolution import get_now
 
 if TYPE_CHECKING:
+    from lattice.memory.repositories import MessageRepository, SystemMetricsRepository
     from lattice.utils.database import DatabasePool
 
 logger = structlog.get_logger(__name__)
@@ -23,6 +24,8 @@ class CommandHandler:
         self,
         bot: commands.Bot,
         dream_channel_id: int,
+        system_metrics_repo: "SystemMetricsRepository",
+        message_repo: "MessageRepository",
         dreaming_scheduler: DreamingScheduler | None = None,
         db_pool: Optional["DatabasePool"] = None,
         llm_client: Any | None = None,
@@ -32,12 +35,16 @@ class CommandHandler:
         Args:
             bot: The Discord bot instance
             dream_channel_id: ID of the dream channel
+            system_metrics_repo: System metrics repository for active hours
+            message_repo: Message repository for message history
             dreaming_scheduler: The dreaming scheduler instance
             db_pool: Database pool for dependency injection
             llm_client: LLM client for dependency injection
         """
         self.bot = bot
         self.dream_channel_id = dream_channel_id
+        self.system_metrics_repo = system_metrics_repo
+        self.message_repo = message_repo
         self.dreaming_scheduler = dreaming_scheduler
         self.db_pool = db_pool
         self.llm_client = llm_client
@@ -150,7 +157,12 @@ class CommandHandler:
             await ctx.send("🔄 **Analyzing message patterns...**")
 
             try:
-                result = await update_active_hours(db_pool=self.db_pool)
+                assert self.system_metrics_repo is not None
+                assert self.message_repo is not None
+                result = await update_active_hours(
+                    system_metrics_repo=self.system_metrics_repo,
+                    message_repo=self.message_repo,
+                )
 
                 start_h = result["start_hour"]
                 end_h = result["end_hour"]

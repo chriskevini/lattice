@@ -180,26 +180,21 @@ class TestProposer:
             rendered_optimization_prompt="Optimize this: Old template",
         )
 
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
+        mock_proposal_repo = AsyncMock()
+        mock_proposal_repo.store_proposal = AsyncMock(return_value=proposal.proposal_id)
 
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
-
-        result_id = await store_proposal(proposal, db_pool=mock_pool)
+        result_id = await store_proposal(proposal, proposal_repo=mock_proposal_repo)
 
         assert result_id == proposal.proposal_id
-        mock_conn.fetchrow.assert_called_once()
+        mock_proposal_repo.store_proposal.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_approve_proposal_success(self) -> None:
         """Test approving a proposal."""
         proposal_id = uuid4()
 
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(
+        mock_proposal_repo = AsyncMock()
+        mock_proposal_repo.get_by_id = AsyncMock(
             return_value={
                 "prompt_key": "BASIC_RESPONSE",
                 "current_version": 1,
@@ -208,84 +203,72 @@ class TestProposer:
                 "temperature": 0.7,
             }
         )
-        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
-        mock_conn.transaction = MagicMock()
-        mock_conn.transaction().__aenter__ = AsyncMock()
-        mock_conn.transaction().__aexit__ = AsyncMock()
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_proposal_repo.approve = AsyncMock(return_value=True)
 
         success = await approve_proposal(
-            proposal_id, "user123", mock_pool, "Looks good"
+            proposal_id, "user123", mock_proposal_repo, "Looks good"
         )
 
         assert success is True
-        assert (
-            mock_conn.execute.call_count == 2
-        )  # Insert new version + Update proposals
+        mock_proposal_repo.approve.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reject_proposal_success(self) -> None:
         """Test rejecting a proposal."""
         proposal_id = uuid4()
 
-        mock_conn = AsyncMock()
-        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
+        mock_proposal_repo = AsyncMock()
+        mock_proposal_repo.reject = AsyncMock(return_value=True)
 
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
-
-        success = await reject_proposal(proposal_id, "user123", mock_pool, "Not ready")
+        success = await reject_proposal(
+            proposal_id, "user123", mock_proposal_repo, "Not ready"
+        )
 
         assert success is True
-        mock_conn.execute.assert_called_once()
+        mock_proposal_repo.reject.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reject_stale_proposals(self) -> None:
         """Test rejecting stale proposals when version has changed."""
-        mock_conn = AsyncMock()
-        # Mock current version lookup
-        mock_conn.fetchrow = AsyncMock(return_value={"version": 2})
-        # Mock rejection of stale proposals (3 proposals were stale)
-        mock_conn.execute = AsyncMock(return_value="UPDATE 3")
+        mock_prompt_repo = AsyncMock()
+        mock_prompt_repo.get_template = AsyncMock(
+            return_value={
+                "version": 2,
+                "prompt_key": "BASIC_RESPONSE",
+                "template": "test",
+                "temperature": 0.7,
+                "active": True,
+            }
+        )
 
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_proposal_repo = AsyncMock()
+        mock_proposal_repo.reject_stale = AsyncMock(return_value=3)
 
         rejected_count = await reject_stale_proposals(
-            "BASIC_RESPONSE", db_pool=mock_pool
+            "BASIC_RESPONSE",
+            proposal_repo=mock_proposal_repo,
+            prompt_repo=mock_prompt_repo,
         )
 
         assert rejected_count == 3
-        # Should fetch current version
-        mock_conn.fetchrow.assert_called_once()
-        # Should reject stale proposals
-        mock_conn.execute.assert_called_once()
+        mock_proposal_repo.reject_stale.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_reject_stale_proposals_prompt_not_found(self) -> None:
         """Test that reject_stale_proposals handles missing prompt gracefully."""
-        mock_conn = AsyncMock()
-        # Prompt not found
-        mock_conn.fetchrow = AsyncMock(return_value=None)
+        mock_prompt_repo = AsyncMock()
+        mock_prompt_repo.get_template = AsyncMock(return_value=None)
 
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
+        mock_proposal_repo = AsyncMock()
 
-        rejected_count = await reject_stale_proposals("NONEXISTENT", db_pool=mock_pool)
+        rejected_count = await reject_stale_proposals(
+            "NONEXISTENT",
+            proposal_repo=mock_proposal_repo,
+            prompt_repo=mock_prompt_repo,
+        )
 
         assert rejected_count == 0
-        # Should not try to update proposals
-        mock_conn.execute.assert_not_called()
+        mock_proposal_repo.reject_stale.assert_not_called()
 
 
 class TestValidateTemplate:

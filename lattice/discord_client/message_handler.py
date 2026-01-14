@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         MessageRepository,
         PromptRegistryRepository,
         PromptAuditRepository,
+        SystemMetricsRepository,
         UserFeedbackRepository,
     )
 
@@ -69,6 +70,7 @@ class MessageHandler:
         prompt_repo: "PromptRegistryRepository",
         audit_repo: "PromptAuditRepository",
         feedback_repo: "UserFeedbackRepository",
+        system_metrics_repo: "SystemMetricsRepository",
         canonical_repo: "CanonicalRepository | None" = None,
         user_timezone: str = "UTC",
     ) -> None:
@@ -86,6 +88,7 @@ class MessageHandler:
             prompt_repo: Prompt repository
             audit_repo: Audit repository
             feedback_repo: Feedback repository
+            system_metrics_repo: System metrics repository for cursor tracking
             canonical_repo: Canonical repository for entities/predicates
             user_timezone: The user's timezone
         """
@@ -100,6 +103,7 @@ class MessageHandler:
         self.prompt_repo = prompt_repo
         self.audit_repo = audit_repo
         self.feedback_repo = feedback_repo
+        self.system_metrics_repo = system_metrics_repo
         self.canonical_repo = canonical_repo
         self.user_timezone = user_timezone
         self._memory_healthy = False
@@ -212,7 +216,7 @@ class MessageHandler:
             from lattice.memory import batch_consolidation
 
             await batch_consolidation.run_consolidation_batch(
-                db_pool=self.db_pool,
+                system_metrics_repo=self.system_metrics_repo,
                 llm_client=self.llm_client,
                 bot=self.bot,
                 user_context_cache=self.user_context_cache,
@@ -247,7 +251,7 @@ class MessageHandler:
             from lattice.memory import batch_consolidation
 
             await batch_consolidation.run_consolidation_batch(
-                db_pool=self.db_pool,
+                system_metrics_repo=self.system_metrics_repo,
                 llm_client=self.llm_client,
                 bot=self.bot,
                 user_context_cache=self.user_context_cache,
@@ -389,7 +393,10 @@ class MessageHandler:
 
             # Consolidation trigger: Check if 18 messages since last batch
             try:
-                if await batch_consolidation.should_consolidate(db_pool=self.db_pool):
+                if await batch_consolidation.should_consolidate(
+                    system_metrics_repo=self.system_metrics_repo,
+                    message_repo=self.message_repo,
+                ):
                     logger.info(
                         "Message count threshold reached, scheduling consolidation",
                     )

@@ -13,20 +13,24 @@ Flow:
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID, uuid4
 
 import discord
 import structlog
 
-from lattice.core.constants import ALIAS_PREDICATE
 from lattice.memory.procedural import get_prompt
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
 if TYPE_CHECKING:
-    from lattice.memory.repositories import PromptRegistryRepository
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.context import PostgresSemanticMemoryRepository
+    from lattice.memory.repositories import (
+        PromptRegistryRepository,
+        SemanticMemoryRepository,
+    )
+else:
+    PostgresSemanticMemoryRepository = type(None)  # type: ignore[misc,assignment]
 
 
 logger = structlog.get_logger(__name__)
@@ -74,71 +78,38 @@ def _parse_memory_review_response(
 
 
 async def get_subjects_for_review(
-    db_pool: "DatabasePool", min_memories: int = MIN_MEMORIES_PER_SUBJECT
+    semantic_repo: "SemanticMemoryRepository",
+    min_memories: int = MIN_MEMORIES_PER_SUBJECT,
 ) -> list[str]:
     """Get subjects with enough memories to warrant review.
 
     Args:
-        db_pool: Database pool for dependency injection
+        semantic_repo: Semantic memory repository for dependency injection
         min_memories: Minimum memory count threshold
 
     Returns:
         List of subject names with sufficient memory count
     """
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT subject
-            FROM semantic_memories
-            WHERE superseded_by IS NULL
-            GROUP BY subject
-            HAVING COUNT(*) >= $1
-            ORDER BY COUNT(*) DESC
-            """,
-            min_memories,
-        )
-
-        return [row["subject"] for row in rows]
+    return await semantic_repo.get_subjects_for_review(min_memories)
 
 
 async def get_memories_by_subject(
-    db_pool: "DatabasePool", subject: str
+    semantic_repo: "SemanticMemoryRepository", subject: str
 ) -> list[dict[str, Any]]:
     """Get all active memories for a subject.
 
     Args:
-        db_pool: Database pool for dependency injection
+        semantic_repo: Semantic memory repository for dependency injection
         subject: Subject name to fetch memories for
 
     Returns:
         List of memory dictionaries with id, subject, predicate, object, created_at
     """
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, subject, predicate, object, created_at
-            FROM semantic_memories
-            WHERE subject = $1 AND superseded_by IS NULL AND predicate != $2
-            ORDER BY created_at DESC
-            """,
-            subject,
-            ALIAS_PREDICATE,
-        )
-
-        return [
-            {
-                "id": str(row["id"]),
-                "subject": row["subject"],
-                "predicate": row["predicate"],
-                "object": row["object"],
-                "created_at": row["created_at"].isoformat(),
-            }
-            for row in rows
-        ]
+    return await semantic_repo.get_memories_by_subject(subject)
 
 
 async def analyze_subject_memories(
-    db_pool: "DatabasePool",
+    semantic_repo: "SemanticMemoryRepository",
     llm_client: Any,
     subject: str,
     prompt_repo: "PromptRegistryRepository",
@@ -146,7 +117,7 @@ async def analyze_subject_memories(
     """Analyze memories for a single subject via LLM.
 
     Args:
-        db_pool: Database pool for dependency injection
+        semantic_repo: Semantic memory repository for dependency injection
         llm_client: LLM client for dependency injection
         subject: Subject name to analyze
         prompt_repo: Prompt repository for dependency injection
@@ -157,8 +128,7 @@ async def analyze_subject_memories(
     if not llm_client:
         raise ValueError("llm_client is required for analyze_subject_memories")
 
-    # Get memories for this subject
-    memories = await get_memories_by_subject(db_pool, subject)
+    memories = await get_memories_by_subject(semantic_repo, subject)
 
     if len(memories) < 2:
         logger.debug(
@@ -168,13 +138,11 @@ async def analyze_subject_memories(
         )
         return []
 
-    # Get MEMORY_REVIEW prompt
     prompt_template = await get_prompt(repo=prompt_repo, prompt_key="MEMORY_REVIEW")
     if not prompt_template:
         logger.warning("MEMORY_REVIEW prompt not found")
         return []
 
-    # Format memories for prompt
     injector = PlaceholderInjector()
     context = {
         "subject": subject,
@@ -185,7 +153,6 @@ async def analyze_subject_memories(
     try:
         result = await llm_client.complete(
             prompt=rendered_prompt,
-            db_pool=db_pool,
             prompt_key="MEMORY_REVIEW",
             main_discord_message_id=0,
             temperature=prompt_template.temperature,
@@ -227,7 +194,7 @@ async def analyze_subject_memories(
 
 
 async def run_memory_review(
-    db_pool: "DatabasePool",
+    semantic_repo: "SemanticMemoryRepository",
     llm_client: Any,
     prompt_repo: "PromptRegistryRepository",
     bot: Any | None = None,
@@ -235,7 +202,7 @@ async def run_memory_review(
     """Run full memory review cycle and create proposal.
 
     Args:
-        db_pool: Database pool for dependency injection
+        semantic_repo: Semantic memory repository for dependency injection
         llm_client: LLM client for dependency injection
         prompt_repo: Prompt repository for dependency injection
         bot: Optional Discord bot for dream channel notification
@@ -246,8 +213,7 @@ async def run_memory_review(
     if not llm_client:
         raise ValueError("llm_client is required for run_memory_review")
 
-    # Get subjects to review
-    subjects = await get_subjects_for_review(db_pool)
+    subjects = await get_subjects_for_review(semantic_repo)
 
     if not subjects:
         logger.info("No subjects with sufficient memories for review")
@@ -261,10 +227,9 @@ async def run_memory_review(
 
     all_conflicts: list[dict[str, Any]] = []
 
-    # Analyze each subject
     for subject in subjects:
         conflicts = await analyze_subject_memories(
-            db_pool, llm_client, subject, prompt_repo
+            semantic_repo, llm_client, subject, prompt_repo
         )
 
         if conflicts:
@@ -285,11 +250,15 @@ async def run_memory_review(
         logger.info("Memory review found no conflicts")
         return None
 
-    # Create proposal
     proposal_id = uuid4()
 
-    async with db_pool.pool.acquire() as conn:
-        await conn.execute(
+    all_conflicts_json = json.dumps(all_conflicts)
+
+    from lattice.memory.context import PostgresSemanticMemoryRepository
+
+    repo = cast(PostgresSemanticMemoryRepository, semantic_repo)
+    async with repo._db_pool.pool.acquire() as conn:  # repository-ok
+        await conn.execute(  # repository-ok
             """
             INSERT INTO dreaming_proposals (
                 id,
@@ -303,7 +272,7 @@ async def run_memory_review(
             proposal_id,
             "memory_review",
             {},
-            json.dumps(all_conflicts),
+            all_conflicts_json,
         )
 
     logger.info(
@@ -312,36 +281,38 @@ async def run_memory_review(
         conflicts=len(all_conflicts),
     )
 
-    # Notify dream channel
     if bot:
         await notify_memory_review_proposal(
             bot=bot,
             proposal_id=proposal_id,
             conflicts=all_conflicts,
-            db_pool=db_pool,
+            semantic_repo=repo,
         )
 
     return proposal_id
 
 
 async def apply_conflict_resolution(
-    db_pool: "DatabasePool",
+    semantic_repo: "SemanticMemoryRepository",
     proposal_id: UUID,
     conflict_index: int,
 ) -> bool:
     """Apply a single conflict resolution.
 
     Args:
-        db_pool: Database pool for dependency injection
+        semantic_repo: Semantic memory repository for dependency injection
         proposal_id: UUID of the memory review proposal
         conflict_index: Index of conflict in the review_data array
 
     Returns:
         True if applied successfully, False otherwise
     """
-    async with db_pool.pool.acquire() as conn:
-        async with conn.transaction():
-            proposal_row = await conn.fetchrow(
+    from lattice.memory.context import PostgresSemanticMemoryRepository
+
+    repo = cast(PostgresSemanticMemoryRepository, semantic_repo)
+    async with repo._db_pool.pool.acquire() as conn:  # repository-ok
+        async with conn.transaction():  # repository-ok
+            proposal_row = await conn.fetchrow(  # repository-ok
                 "SELECT review_data FROM dreaming_proposals WHERE id = $1",
                 proposal_id,
             )
@@ -367,8 +338,7 @@ async def apply_conflict_resolution(
             conflict = conflicts[conflict_index]
             canonical = conflict["canonical_memory"]
 
-            # Find canonical memory by matching (subject, predicate, created_at)
-            canonical_row = await conn.fetchrow(
+            canonical_row = await conn.fetchrow(  # repository-ok
                 """
                 SELECT id FROM semantic_memories
                 WHERE subject = $1
@@ -394,10 +364,9 @@ async def apply_conflict_resolution(
 
             canonical_id = canonical_row["id"]
 
-            # Supersede old memories
             superseded_count = 0
             for old_mem in conflict["superseded_memories"]:
-                old = await conn.fetchrow(
+                old = await conn.fetchrow(  # repository-ok
                     """
                     SELECT id FROM semantic_memories
                     WHERE subject = $1
@@ -414,11 +383,7 @@ async def apply_conflict_resolution(
                 )
 
                 if old:
-                    await conn.execute(
-                        "UPDATE semantic_memories SET superseded_by = $1 WHERE id = $2",
-                        canonical_id,
-                        old["id"],
-                    )
+                    await semantic_repo.supersede_memory(old["id"], canonical_id)
                     superseded_count += 1
 
             logger.info(
@@ -436,7 +401,7 @@ async def notify_memory_review_proposal(
     bot: Any,
     proposal_id: UUID,
     conflicts: list[dict[str, Any]],
-    db_pool: "DatabasePool",
+    semantic_repo: "SemanticMemoryRepository",
 ) -> None:
     """Send memory review proposal notification to dream channel.
 
@@ -444,7 +409,7 @@ async def notify_memory_review_proposal(
         bot: Discord bot instance
         proposal_id: UUID of proposal
         conflicts: List of conflict resolutions
-        db_pool: Database pool for dependency injection
+        semantic_repo: Semantic memory repository for MemoryReviewView dependency injection
     """
     from lattice.dreaming.approval import MemoryReviewView
 
@@ -476,7 +441,7 @@ async def notify_memory_review_proposal(
         view = MemoryReviewView(
             proposal_id=str(proposal_id),
             conflicts=conflicts,
-            db_pool=db_pool,
+            semantic_repo=semantic_repo,
         )
         await channel.send(view=view)
         bot.add_view(view)

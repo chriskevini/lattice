@@ -106,6 +106,23 @@ class TestLatticeBot:
         return repo
 
     @pytest.fixture
+    def mock_system_metrics_repo(self) -> MagicMock:
+        from lattice.memory.repositories import SystemMetricsRepository
+
+        repo = MagicMock(spec=SystemMetricsRepository)
+        repo.get_metric = AsyncMock(return_value=None)
+        repo.set_metric = AsyncMock()
+        repo.get_user_timezone = AsyncMock(return_value="UTC")
+        return repo
+
+    @pytest.fixture
+    def mock_proposal_repo(self) -> MagicMock:
+        from lattice.memory.repositories import DreamingProposalRepository
+
+        repo = MagicMock(spec=DreamingProposalRepository)
+        return repo
+
+    @pytest.fixture
     def bot(
         self,
         mock_db_pool,
@@ -118,6 +135,8 @@ class TestLatticeBot:
         mock_prompt_repo,
         mock_audit_repo,
         mock_feedback_repo,
+        mock_system_metrics_repo,
+        mock_proposal_repo,
     ) -> LatticeBot:
         config = get_config()
         config.discord_main_channel_id = 123
@@ -133,6 +152,8 @@ class TestLatticeBot:
             prompt_repo=mock_prompt_repo,
             audit_repo=mock_audit_repo,
             feedback_repo=mock_feedback_repo,
+            system_metrics_repo=mock_system_metrics_repo,
+            proposal_repo=mock_proposal_repo,
         )
 
     def test_bot_initialization(
@@ -147,6 +168,8 @@ class TestLatticeBot:
         mock_prompt_repo,
         mock_audit_repo,
         mock_feedback_repo,
+        mock_system_metrics_repo,
+        mock_proposal_repo,
     ) -> None:
         """Test bot initialization with default settings."""
         config = get_config()
@@ -164,6 +187,8 @@ class TestLatticeBot:
             prompt_repo=mock_prompt_repo,
             audit_repo=mock_audit_repo,
             feedback_repo=mock_feedback_repo,
+            system_metrics_repo=mock_system_metrics_repo,
+            proposal_repo=mock_proposal_repo,
         )
 
         assert bot.main_channel_id == 123
@@ -184,6 +209,8 @@ class TestLatticeBot:
         mock_prompt_repo,
         mock_audit_repo,
         mock_feedback_repo,
+        mock_system_metrics_repo,
+        mock_proposal_repo,
     ) -> None:
         """Test bot initialization with missing channel IDs logs warnings."""
         config = get_config()
@@ -200,6 +227,8 @@ class TestLatticeBot:
             prompt_repo=mock_prompt_repo,
             audit_repo=mock_audit_repo,
             feedback_repo=mock_feedback_repo,
+            system_metrics_repo=mock_system_metrics_repo,
+            proposal_repo=mock_proposal_repo,
         )
 
         assert bot.main_channel_id == 0

@@ -13,8 +13,8 @@ import structlog
 
 if TYPE_CHECKING:
     from lattice.dreaming.analyzer import PromptMetrics
-    from lattice.utils.database import DatabasePool
     from lattice.memory.repositories import (
+        DreamingProposalRepository,
         PromptRegistryRepository,
         PromptAuditRepository,
         UserFeedbackRepository,
@@ -297,90 +297,82 @@ async def propose_optimization(
     )
 
 
-async def store_proposal(proposal: OptimizationProposal, db_pool: Any) -> UUID:
+async def store_proposal(
+    proposal: OptimizationProposal, proposal_repo: "DreamingProposalRepository"
+) -> UUID:
     """Store optimization proposal in database.
 
     Args:
         proposal: The proposal to store
-        db_pool: Database pool for dependency injection (required)
+        proposal_repo: Repository for dreaming proposals (required)
 
     Returns:
         UUID of the stored proposal
     """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO dreaming_proposals (
-                id,
-                prompt_key,
-                current_version,
-                proposed_version,
-                current_template,
-                proposed_template,
-                proposal_metadata,
-                rendered_optimization_prompt,
-                status
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
-            RETURNING id
-            """,
-            proposal.proposal_id,
-            proposal.prompt_key,
-            proposal.current_version,
-            proposal.proposed_version,
-            proposal.current_template,
-            proposal.proposed_template,
-            json.dumps(proposal.proposal_metadata),
-            proposal.rendered_optimization_prompt,
-        )
+    proposal_id = await proposal_repo.store_proposal(
+        proposal_id=proposal.proposal_id,
+        prompt_key=proposal.prompt_key,
+        current_version=proposal.current_version,
+        proposed_version=proposal.proposed_version,
+        current_template=proposal.current_template,
+        proposed_template=proposal.proposed_template,
+        proposal_metadata=proposal.proposal_metadata,
+        rendered_optimization_prompt=proposal.rendered_optimization_prompt,
+    )
 
-        proposal_id: UUID = row["id"]
+    logger.info(
+        "Stored optimization proposal",
+        proposal_id=str(proposal_id),
+        prompt_key=proposal.prompt_key,
+    )
 
-        logger.info(
-            "Stored optimization proposal",
-            proposal_id=str(proposal_id),
-            prompt_key=proposal.prompt_key,
-        )
-
-        return proposal_id
+    return proposal_id
 
 
 async def get_proposal_by_id(
-    proposal_id: UUID, db_pool: Any
+    proposal_id: UUID, proposal_repo: "DreamingProposalRepository"
 ) -> OptimizationProposal | None:
     """Fetch a proposal from the database by ID.
 
     Args:
         proposal_id: UUID of the proposal
-        db_pool: Database pool for dependency injection (required)
+        proposal_repo: Repository for dreaming proposals (required)
 
     Returns:
         OptimizationProposal if found, None otherwise
     """
-    # db_pool already passed via DI
+    row = await proposal_repo.get_by_id(proposal_id)
 
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT
-                id,
-                prompt_key,
-                current_version,
-                proposed_version,
-                current_template,
-                proposed_template,
-                proposal_metadata,
-                rendered_optimization_prompt
-            FROM dreaming_proposals
-            WHERE id = $1
-            """,
-            proposal_id,
-        )
+    if not row:
+        return None
 
-        if not row:
-            return None
+    return OptimizationProposal(
+        proposal_id=row["id"],
+        prompt_key=row["prompt_key"],
+        current_version=row["current_version"],
+        proposed_version=row["proposed_version"],
+        current_template=row["current_template"],
+        proposed_template=row["proposed_template"],
+        proposal_metadata=row["proposal_metadata"],
+        rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
+    )
 
-        return OptimizationProposal(
+
+async def get_pending_proposals(
+    proposal_repo: "DreamingProposalRepository",
+) -> list[OptimizationProposal]:
+    """Get all pending optimization proposals.
+
+    Args:
+        proposal_repo: Repository for dreaming proposals (required)
+
+    Returns:
+        List of pending proposals, ordered by created_at (newest first)
+    """
+    rows = await proposal_repo.get_pending()
+
+    return [
+        OptimizationProposal(
             proposal_id=row["id"],
             prompt_key=row["prompt_key"],
             current_version=row["current_version"],
@@ -390,56 +382,14 @@ async def get_proposal_by_id(
             proposal_metadata=row["proposal_metadata"],
             rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
         )
-
-
-async def get_pending_proposals(db_pool: Any) -> list[OptimizationProposal]:
-    """Get all pending optimization proposals.
-
-    Args:
-        db_pool: Database pool for dependency injection (required)
-
-    Returns:
-        List of pending proposals, ordered by created_at (newest first)
-    """
-    # db_pool already passed via DI
-
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT
-                id,
-                prompt_key,
-                current_version,
-                proposed_version,
-                current_template,
-                proposed_template,
-                proposal_metadata,
-                rendered_optimization_prompt
-            FROM dreaming_proposals
-            WHERE status = 'pending'
-            ORDER BY created_at DESC
-            """
-        )
-
-        return [
-            OptimizationProposal(
-                proposal_id=row["id"],
-                prompt_key=row["prompt_key"],
-                current_version=row["current_version"],
-                proposed_version=row["proposed_version"],
-                current_template=row["current_template"],
-                proposed_template=row["proposed_template"],
-                proposal_metadata=row["proposal_metadata"],
-                rendered_optimization_prompt=row["rendered_optimization_prompt"] or "",
-            )
-            for row in rows
-        ]
+        for row in rows
+    ]
 
 
 async def approve_proposal(
     proposal_id: UUID,
     reviewed_by: str,
-    db_pool: "DatabasePool",
+    proposal_repo: "DreamingProposalRepository",
     feedback: str | None = None,
 ) -> bool:
     """Approve an optimization proposal and apply it to prompt_registry.
@@ -447,97 +397,56 @@ async def approve_proposal(
     Args:
         proposal_id: UUID of the proposal
         reviewed_by: Identifier of who approved (e.g., Discord user ID)
-        db_pool: Database pool for dependency injection (required)
+        proposal_repo: Repository for dreaming proposals (required)
         feedback: Optional feedback from reviewer
 
     Returns:
         True if applied successfully, False otherwise
     """
-    # db_pool already passed via DI
+    proposal_dict = await proposal_repo.get_by_id(proposal_id)
 
-    async with db_pool.pool.acquire() as conn:
-        # Get proposal
-        proposal_row = await conn.fetchrow(
-            """
-            SELECT prompt_key, current_version, proposed_template, proposed_version
-            FROM dreaming_proposals
-            WHERE id = $1 AND status = 'pending'
-            """,
-            proposal_id,
+    if not proposal_dict:
+        logger.warning(
+            "Proposal not found or not pending", proposal_id=str(proposal_id)
         )
+        return False
 
-        if not proposal_row:
-            logger.warning(
-                "Proposal not found or not pending", proposal_id=str(proposal_id)
-            )
-            return False
-
-        # Validate proposed template before applying
-        is_valid, error = validate_template(
-            proposal_row["proposed_template"],
-            proposal_row["prompt_key"],
+    # Validate proposed template before applying
+    is_valid, error = validate_template(
+        proposal_dict["proposed_template"],
+        proposal_dict["prompt_key"],
+    )
+    if not is_valid:
+        logger.error(
+            "Proposed template failed validation",
+            proposal_id=str(proposal_id),
+            prompt_key=proposal_dict["prompt_key"],
+            error=error,
         )
-        if not is_valid:
-            logger.error(
-                "Proposed template failed validation",
-                proposal_id=str(proposal_id),
-                prompt_key=proposal_row["prompt_key"],
-                error=error,
-            )
-            return False
+        return False
 
-        # Begin transaction
-        async with conn.transaction():
-            # Insert new version (version number alone determines "current")
-            await conn.execute(
-                """
-                INSERT INTO prompt_registry (prompt_key, version, template, temperature)
-                VALUES ($1, $2, $3, $4)
-                """,
-                proposal_row["prompt_key"],
-                proposal_row["proposed_version"],
-                proposal_row["proposed_template"],
-                proposal_row.get("temperature", 0.7),
-            )
+    # Use the repository's approve method which handles the full approval workflow
+    success = await proposal_repo.approve(
+        proposal_id=proposal_id,
+        reviewed_by=reviewed_by,
+        feedback=feedback,
+    )
 
-            # Mark proposal as approved (with optimistic locking)
-            result = await conn.execute(
-                """
-                UPDATE dreaming_proposals
-                SET
-                    status = 'approved',
-                    reviewed_at = now(),
-                    reviewed_by = $1,
-                    human_feedback = $2
-                WHERE id = $3 AND status = 'pending'
-                """,
-                reviewed_by,
-                feedback,
-                proposal_id,
-            )
-
-            # Check if update succeeded (race condition check)
-            if result != "UPDATE 1":
-                logger.warning(
-                    "Proposal already processed by another user",
-                    proposal_id=str(proposal_id),
-                )
-                return False
-
+    if success:
         logger.info(
             "Approved and applied optimization proposal",
             proposal_id=str(proposal_id),
-            prompt_key=proposal_row["prompt_key"],
+            prompt_key=proposal_dict["prompt_key"],
             reviewed_by=reviewed_by,
         )
 
-        return True
+    return success
 
 
 async def reject_proposal(
     proposal_id: UUID,
     reviewed_by: str,
-    db_pool: "DatabasePool",
+    proposal_repo: "DreamingProposalRepository",
     feedback: str | None = None,
 ) -> bool:
     """Reject an optimization proposal.
@@ -545,43 +454,33 @@ async def reject_proposal(
     Args:
         proposal_id: UUID of the proposal
         reviewed_by: Identifier of who rejected
-        db_pool: Database pool for dependency injection (required)
+        proposal_repo: Repository for dreaming proposals (required)
         feedback: Optional feedback explaining rejection
 
     Returns:
         True if rejected successfully, False if not found
     """
-    # db_pool already passed via DI
+    rejected = await proposal_repo.reject(
+        proposal_id=proposal_id,
+        reviewed_by=reviewed_by,
+        feedback=feedback,
+    )
 
-    async with db_pool.pool.acquire() as conn:
-        result = await conn.execute(
-            """
-            UPDATE dreaming_proposals
-            SET
-                status = 'rejected',
-                reviewed_at = now(),
-                reviewed_by = $1,
-                human_feedback = $2
-            WHERE id = $3 AND status = 'pending'
-            """,
-            reviewed_by,
-            feedback,
-            proposal_id,
+    if rejected:
+        logger.info(
+            "Rejected optimization proposal",
+            proposal_id=str(proposal_id),
+            reviewed_by=reviewed_by,
         )
 
-        rejected = result == "UPDATE 1"
-
-        if rejected:
-            logger.info(
-                "Rejected optimization proposal",
-                proposal_id=str(proposal_id),
-                reviewed_by=reviewed_by,
-            )
-
-        return bool(rejected)
+    return rejected
 
 
-async def reject_stale_proposals(prompt_key: str, db_pool: Any) -> int:
+async def reject_stale_proposals(
+    prompt_key: str,
+    proposal_repo: "DreamingProposalRepository",
+    prompt_repo: "PromptRegistryRepository",
+) -> int:
     """Reject all pending proposals for a prompt that have outdated current_version.
 
     This cleans up proposals that are no longer applicable because the prompt
@@ -589,60 +488,36 @@ async def reject_stale_proposals(prompt_key: str, db_pool: Any) -> int:
 
     Args:
         prompt_key: The prompt key to check for stale proposals
-        db_pool: Database pool for dependency injection (required)
+        proposal_repo: Repository for dreaming proposals (required)
+        prompt_repo: Repository for prompt registry (required)
 
     Returns:
         Number of stale proposals rejected
     """
-    # db_pool already passed via DI
+    # Get current version from prompt_registry
+    prompt_template = await prompt_repo.get_template(prompt_key)
 
-    async with db_pool.pool.acquire() as conn:
-        # Get current version from prompt_registry
-        current_version_row = await conn.fetchrow(
-            """
-            SELECT version
-            FROM prompt_registry
-            WHERE prompt_key = $1
-              AND active = true
-            """,
-            prompt_key,
+    if not prompt_template:
+        logger.warning(
+            "Cannot reject stale proposals - prompt not found in registry",
+            prompt_key=prompt_key,
+        )
+        return 0
+
+    current_version = prompt_template["version"]
+
+    # Reject all pending proposals with mismatched current_version
+    rejected_count = await proposal_repo.reject_stale(
+        prompt_key=prompt_key,
+        current_version=current_version,
+    )
+
+    if rejected_count > 0:
+        logger.info(
+            "Rejected stale proposals",
+            prompt_key=prompt_key,
+            count=rejected_count,
+            current_version=current_version,
         )
 
-        if not current_version_row:
-            logger.warning(
-                "Cannot reject stale proposals - prompt not found in registry",
-                prompt_key=prompt_key,
-            )
-            return 0
-
-        current_version = current_version_row["version"]
-
-        # Reject all pending proposals with mismatched current_version
-        result = await conn.execute(
-            """
-            UPDATE dreaming_proposals
-            SET
-                status = 'rejected',
-                reviewed_at = now(),
-                reviewed_by = 'system',
-                human_feedback = 'Auto-rejected: prompt version changed (stale proposal)'
-            WHERE prompt_key = $1
-              AND status = 'pending'
-              AND current_version != $2
-            """,
-            prompt_key,
-            current_version,
-        )
-
-        # Parse result like "UPDATE 5" to get count
-        rejected_count = int(result.split()[1]) if result.startswith("UPDATE") else 0
-
-        if rejected_count > 0:
-            logger.info(
-                "Rejected stale proposals",
-                prompt_key=prompt_key,
-                count=rejected_count,
-                current_version=current_version,
-            )
-
-        return rejected_count
+    return rejected_count
