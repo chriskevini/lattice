@@ -287,7 +287,7 @@ async def retrieve_context(
                 memory.get("predicate"),
                 memory.get("object"),
             )
-            if subject and predicate and obj:
+            if subject and predicate and obj and predicate != "has alias":
                 relationships.append(
                     renderer(
                         subject,
