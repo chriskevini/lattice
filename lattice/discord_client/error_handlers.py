@@ -68,7 +68,7 @@ async def notify_parse_error_to_dream(
     rendered_prompt = context.get("rendered_prompt", "")
 
     try:
-        embed, view = AuditViewBuilder.build_standard_audit(
+        embed, view, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key=error.prompt_key or "UNKNOWN",
             version=1,
             input_text=f"[{parser_type.upper()}] Parse failed",
@@ -78,6 +78,7 @@ async def notify_parse_error_to_dream(
             rendered_prompt=rendered_prompt,
             audit_repo=bot.audit_repo,
             feedback_repo=bot.feedback_repo,
+            channel=dream_channel,
         )
 
         embed.description = f"❌ **Parse Error**: {error.parse_error}"
