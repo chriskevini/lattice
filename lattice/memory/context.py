@@ -219,23 +219,35 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         PostgreSQL will automatically use the partial unique index when inserting rows
         that match the index predicate (superseded_by IS NULL, which is default for new rows).
         """
-        params: list[Any] = [subject, predicate, obj, source_batch_id]
-        sql = """
-            INSERT INTO semantic_memories (subject, predicate, object, source_batch_id
-        """
         if message_timestamp:
-            params.append(message_timestamp)
-            sql += ", created_at"
-        sql += """)
-            VALUES ($1, $2, $3, $4"""
-        if message_timestamp:
-            sql += ", $5"
-        sql += """)
-            ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
-            DO NOTHING
-            RETURNING id
-        """
-        result = await conn.fetchval(sql, *params)
+            result = await conn.fetchval(
+                """
+                INSERT INTO semantic_memories (subject, predicate, object, source_batch_id, created_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
+                DO NOTHING
+                RETURNING id
+                """,
+                subject,
+                predicate,
+                obj,
+                source_batch_id,
+                message_timestamp,
+            )
+        else:
+            result = await conn.fetchval(
+                """
+                INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
+                DO NOTHING
+                RETURNING id
+                """,
+                subject,
+                predicate,
+                obj,
+                source_batch_id,
+            )
         return 1 if result is not None else 0
 
 
