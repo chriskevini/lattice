@@ -173,12 +173,11 @@ async def run_consolidation_batch(
 
     user_message = "\n".join(m["content"] for m in messages)
 
-    canonical_entities_list = await get_canonical_entities_list(
-        repo=canonical_repo, db_pool=db_pool
-    )
-    canonical_predicates_list = await get_canonical_predicates_list(
-        repo=canonical_repo, db_pool=db_pool
-    )
+    if not canonical_repo:
+        raise ValueError("canonical_repo is required for run_consolidation_batch")
+
+    canonical_entities_list = await get_canonical_entities_list(repo=canonical_repo)
+    canonical_predicates_list = await get_canonical_predicates_list(repo=canonical_repo)
 
     injector = PlaceholderInjector()
     context = {
@@ -290,12 +289,8 @@ async def run_consolidation_batch(
                 t.get("object", ""),
             )
         )
-        known_entities = await get_canonical_entities_set(
-            repo=canonical_repo, db_pool=db_pool
-        )
-        known_predicates = await get_canonical_predicates_set(
-            repo=canonical_repo, db_pool=db_pool
-        )
+        known_entities = await get_canonical_entities_set(repo=canonical_repo)
+        known_predicates = await get_canonical_predicates_set(repo=canonical_repo)
 
         new_entities, new_predicates = extract_canonical_forms(
             extracted_memories, known_entities, known_predicates
@@ -304,7 +299,6 @@ async def run_consolidation_batch(
         if new_entities or new_predicates:
             store_result = await store_canonical_forms(
                 repo=canonical_repo,
-                db_pool=db_pool,
                 new_entities=new_entities,
                 new_predicates=new_predicates,
             )

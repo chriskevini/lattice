@@ -285,18 +285,22 @@ async def retrieve_context(
         renderer = get_renderer("semantic_context")
         relationships = []
         for memory in semantic_memories[:10]:
-            subject, predicate, obj = (
-                memory.get("subject"),
-                memory.get("predicate"),
-                memory.get("object"),
-            )
-            if subject and predicate and obj and predicate != ALIAS_PREDICATE:
+            sub_val = memory.get("subject")
+            pred_val = memory.get("predicate")
+            obj_val = memory.get("object")
+
+            if (
+                isinstance(sub_val, str)
+                and isinstance(pred_val, str)
+                and isinstance(obj_val, str)
+                and pred_val != ALIAS_PREDICATE
+            ):
                 relationships.append(
                     renderer(
-                        subject,
-                        predicate,
-                        obj,
-                        memory.get("created_at"),
+                        sub_val,
+                        pred_val,
+                        obj_val,
+                        memory.get("created_at"),  # type: ignore[arg-type]
                         user_timezone,
                     )
                 )

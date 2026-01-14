@@ -175,6 +175,14 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "asyncpg" = { msg = "Use lattice.utils.database.db_pool to acquire connections instead of importing asyncpg directly (except in utility/setup scripts)." }
 "logging" = { msg = "Use structlog (from lattice.utils.llm_client or similar) for structured logging instead of the standard logging module." }
 "print" = { msg = "Use structlog for all application logging. Use print only in CLI scripts." }
+"lattice.memory.canonical.get_canonical_entities_list" = { msg = "Use CanonicalRepository instead of direct database functions. Inject via repository protocols." }
+"lattice.memory.canonical.get_canonical_predicates_list" = { msg = "Use CanonicalRepository instead of direct database functions. Inject via repository protocols." }
+"lattice.memory.canonical.get_canonical_entities_set" = { msg = "Use CanonicalRepository instead of direct database functions. Inject via repository protocols." }
+"lattice.memory.canonical.get_canonical_predicates_set" = { msg = "Use CanonicalRepository instead of direct database functions. Inject via repository protocols." }
+"lattice.memory.canonical.store_canonical_forms" = { msg = "Use CanonicalRepository instead of direct database functions. Inject via repository protocols." }
+"lattice.memory.episodic.get_recent_messages" = { msg = "Use MessageRepository instead of direct database functions. Inject via repository protocols." }
+"lattice.memory.episodic.store_message" = { msg = "Use MessageRepository instead of direct database functions. Inject via repository protocols." }
+"lattice.memory.episodic.store_semantic_memories" = { msg = "Use MessageRepository instead of direct database functions. Inject via repository protocols." }
 
 [tool.ruff.lint.isort]
 known-first-party = ["lattice"]

@@ -138,35 +138,35 @@ async def retrieve_context(
 
     semantic_context: list[dict[str, Any]] = []
     if memory_depth > 0 and entity_names:
-        if db_pool.is_initialized():
-            traverser = GraphTraversal(db_pool, max_depth=memory_depth)
+        from lattice.memory.context import PostgresSemanticMemoryRepository
 
-            traverse_tasks = [
-                traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
-                for entity_name in entity_names
-            ]
+        repo = PostgresSemanticMemoryRepository(db_pool)
+        traverser = GraphTraversal(repo, max_depth=memory_depth)
 
-            if traverse_tasks:
-                traverse_results = await asyncio.gather(*traverse_tasks)
-                seen_memory_ids: set[tuple[str, str, str]] = set()
-                for result in traverse_results:
-                    for memory in result:
-                        memory_key = (
-                            memory.get("subject", ""),
-                            memory.get("predicate", ""),
-                            memory.get("object", ""),
-                        )
-                        if memory_key not in seen_memory_ids and all(memory_key):
-                            semantic_context.append(memory)
-                            seen_memory_ids.add(memory_key)
+        traverse_tasks = [
+            traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
+            for entity_name in entity_names
+        ]
 
-                logger.debug(
-                    "Graph traversal completed",
-                    depth=memory_depth,
-                    entities_explored=len(entity_names),
-                    memories_found=len(semantic_context),
-                )
-        else:
-            logger.warning("Database pool not initialized, skipping graph traversal")
+        if traverse_tasks:
+            traverse_results = await asyncio.gather(*traverse_tasks)
+            seen_memory_ids: set[tuple[Any, Any, Any]] = set()
+            for result in traverse_results:
+                for memory in result:
+                    memory_key = (
+                        memory.get("subject", ""),
+                        memory.get("predicate", ""),
+                        memory.get("object", ""),
+                    )
+                    if memory_key not in seen_memory_ids and all(memory_key):
+                        semantic_context.append(memory)
+                        seen_memory_ids.add(memory_key)
+
+            logger.debug(
+                "Graph traversal completed",
+                depth=memory_depth,
+                entities_explored=len(entity_names),
+                memories_found=len(semantic_context),
+            )
 
     return recent_messages, semantic_context

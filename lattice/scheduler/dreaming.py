@@ -203,12 +203,21 @@ class DreamingScheduler:
             min_uses = 1 if force else dream_config.min_uses
             min_feedback = 1 if force else DREAMING_MIN_FEEDBACK_DEFAULT
 
+            if not self.prompt_audit_repo:
+                logger.warning(
+                    "Prompt audit repository not initialized, skipping analysis"
+                )
+                return {
+                    "status": "skipped",
+                    "message": "Prompt audit repository not initialized",
+                }
+
             metrics = await analyze_prompt_effectiveness(
                 min_uses=min_uses,
                 lookback_days=dream_config.lookback_days,
                 min_feedback=min_feedback,
                 db_pool=self.db_pool,
-                prompt_audit_repo=self.prompt_audit_repo,
+                prompt_audit_repo=self.prompt_audit_repo,  # type: ignore[arg-type]
             )
 
             if not metrics:

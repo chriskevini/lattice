@@ -14,6 +14,22 @@ from lattice.core.context import ChannelContextCache
 from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.utils.date_resolution import get_now
 from lattice.memory import episodic
+from lattice.memory.context import (
+    PostgresCanonicalRepository,
+    PostgresMessageRepository,
+)
+
+
+@pytest.fixture
+def canonical_repo(db_pool) -> PostgresCanonicalRepository:
+    """Fixture providing a CanonicalRepository."""
+    return PostgresCanonicalRepository(db_pool)
+
+
+@pytest.fixture
+def episodic_repo(db_pool) -> PostgresMessageRepository:
+    """Fixture providing a MessageRepository."""
+    return PostgresMessageRepository(db_pool)
 
 
 @pytest.fixture
@@ -58,12 +74,17 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_full_pipeline_declaration(
-        self, db_pool, context_cache: ChannelContextCache
+        self,
+        db_pool,
+        context_cache: ChannelContextCache,
+        canonical_repo,
+        unique_discord_id,
     ) -> None:
         """Test complete pipeline flow for a declaration message."""
         message_id = uuid.uuid4()
         message_content = "I need to finish the lattice project by Friday"
         channel_id = 67890
+        discord_id = unique_discord_id.next_id()
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -125,7 +146,7 @@ class TestContextStrategyPipeline:
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
                         message_id,
                         message_content,
-                        12345,
+                        discord_id,
                         channel_id,
                         False,
                     )
@@ -160,8 +181,9 @@ class TestContextStrategyPipeline:
                     recent_messages=[],
                     context_cache=context_cache,
                     channel_id=channel_id,
-                    discord_message_id=12345,
+                    discord_message_id=discord_id,
                     llm_client=extraction_llm,
+                    canonical_repo=canonical_repo,
                 )
 
                 assert extraction is not None
@@ -189,12 +211,17 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_activity_context(
-        self, db_pool, context_cache: ChannelContextCache
+        self,
+        db_pool,
+        context_cache: ChannelContextCache,
+        canonical_repo,
+        unique_discord_id,
     ) -> None:
         """Test context strategy detects activity queries."""
         message_id = uuid.uuid4()
         message_content = "What did I do last week?"
         channel_id = 67890
+        discord_id = unique_discord_id.next_id()
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -260,7 +287,7 @@ class TestContextStrategyPipeline:
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
                         message_id,
                         message_content,
-                        12345,
+                        discord_id,
                         channel_id,
                         False,
                     )
@@ -272,8 +299,9 @@ class TestContextStrategyPipeline:
                     recent_messages=recent_messages,
                     context_cache=context_cache,
                     channel_id=channel_id,
-                    discord_message_id=channel_id,
+                    discord_message_id=discord_id,
                     llm_client=planning_llm,
+                    canonical_repo=canonical_repo,
                 )
 
             assert planning is not None
@@ -282,11 +310,16 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_topic_switch(
-        self, db_pool, context_cache: ChannelContextCache
+        self,
+        db_pool,
+        context_cache: ChannelContextCache,
+        canonical_repo,
+        unique_discord_id,
     ) -> None:
         """Test context strategy returns empty when topic switches."""
         message_id = uuid.uuid4()
         message_content = "Actually, what's the weather like?"
+        discord_id = unique_discord_id.next_id()
 
         with (
             patch("lattice.core.context_strategy.get_prompt") as mock_get_prompt,
@@ -352,14 +385,14 @@ class TestContextStrategyPipeline:
                         "INSERT INTO raw_messages (id, content, discord_message_id, channel_id, is_bot) VALUES ($1, $2, $3, $4, $5)",
                         message_id,
                         message_content,
-                        12345,
+                        discord_id,
                         67890,
                         False,
                     )
                 recent_messages = [
                     episodic.EpisodicMessage(
                         content="Working on mobile app",
-                        discord_message_id=1,
+                        discord_message_id=unique_discord_id.next_id(),
                         channel_id=456,
                         is_bot=False,
                         message_id=uuid.uuid4(),
@@ -367,7 +400,7 @@ class TestContextStrategyPipeline:
                     ),
                     episodic.EpisodicMessage(
                         content="Any blockers?",
-                        discord_message_id=2,
+                        discord_message_id=unique_discord_id.next_id(),
                         channel_id=456,
                         is_bot=True,
                         message_id=uuid.uuid4(),
@@ -383,6 +416,7 @@ class TestContextStrategyPipeline:
                     context_cache=context_cache,
                     channel_id=67890,
                     llm_client=planning_llm,
+                    canonical_repo=canonical_repo,
                 )
 
             assert planning is not None
@@ -392,7 +426,7 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_template(
-        self, context_cache: ChannelContextCache
+        self, context_cache: ChannelContextCache, canonical_repo
     ) -> None:
         """Test context strategy fails gracefully when template missing."""
         with (
@@ -409,11 +443,12 @@ class TestContextStrategyPipeline:
                     context_cache=context_cache,
                     channel_id=123,
                     discord_message_id=123,
+                    canonical_repo=canonical_repo,
                 )
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_fields(
-        self, context_cache: ChannelContextCache
+        self, context_cache: ChannelContextCache, canonical_repo
     ) -> None:
         """Test context strategy handles missing fields gracefully."""
         message_id = uuid.uuid4()
@@ -468,6 +503,7 @@ class TestContextStrategyPipeline:
                 channel_id=channel_id,
                 discord_message_id=channel_id,
                 llm_client=planning_llm,
+                canonical_repo=canonical_repo,
             )
 
             assert planning is not None

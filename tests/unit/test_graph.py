@@ -1,8 +1,6 @@
 """Unit tests for graph traversal and semantic memory parsing utilities."""
 
 from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime
-from zoneinfo import ZoneInfo
 from lattice.utils.date_resolution import get_now
 
 import pytest
