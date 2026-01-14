@@ -19,6 +19,7 @@ from uuid import UUID, uuid4
 import discord
 import structlog
 
+from lattice.core.constants import ALIAS_PREDICATE
 from lattice.memory.procedural import get_prompt
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
@@ -116,10 +117,11 @@ async def get_memories_by_subject(
             """
             SELECT id, subject, predicate, object, created_at
             FROM semantic_memories
-            WHERE subject = $1 AND superseded_by IS NULL
+            WHERE subject = $1 AND superseded_by IS NULL AND predicate != $2
             ORDER BY created_at DESC
             """,
             subject,
+            ALIAS_PREDICATE,
         )
 
         return [

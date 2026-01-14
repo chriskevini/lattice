@@ -171,6 +171,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                 count += await self._insert_semantic_memory(
                     conn, alias_to, ALIAS_PREDICATE, alias_from, batch_id
                 )
+
         return count
 
     async def _insert_semantic_memory(
