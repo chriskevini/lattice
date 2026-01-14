@@ -48,7 +48,7 @@ async def cleanup_test_data(db_pool: DatabasePool) -> None:
     """Fixture to clean up test data before each test."""
     async with db_pool.pool.acquire() as conn:
         await conn.execute(
-            "DELETE FROM raw_messages WHERE discord_message_id IN (12345, 12346, 12348, 12349, 12350, 12351, 12352)"
+            "DELETE FROM raw_messages WHERE discord_message_id IN (12345, 12346, 12348, 12349, 12350, 12351, 12352, 12353, 12354)"
         )
         # Also clean up semantic memories associated with these test batches
         await conn.execute(
@@ -396,6 +396,91 @@ class TestSemanticMemoryStorage:
                 "DELETE FROM semantic_memories WHERE source_batch_id = $1",
                 batch_id,
             )
+
+    async def test_self_alias_skipped(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
+        """Test that self-aliases (entity aliased to itself) don't create duplicate entries."""
+        unique_suffix = str(uuid4())[:8]
+        batch_id = f"test_batch_self_{unique_suffix}"
+
+        message = episodic.EpisodicMessage(
+            content="Testing self-alias",
+            discord_message_id=12353,
+            channel_id=67890,
+            is_bot=False,
+        )
+        message_id = await episodic.store_message(message_repo, message)
+
+        # Try to create self-alias
+        memories = [
+            {"subject": "Alice", "predicate": ALIAS_PREDICATE, "object": "Alice"}
+        ]
+        result_count = await episodic.store_semantic_memories(
+            message_repo, message_id, memories, source_batch_id=batch_id
+        )
+
+        # Should store 1 (forward) but reverse would be duplicate, so total = 1
+        assert result_count == 1, f"Expected 1, got {result_count}"
+
+        # Verify only one entry exists
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT subject, object FROM semantic_memories WHERE source_batch_id = $1",
+                batch_id,
+            )
+            assert len(rows) == 1
+            assert rows[0]["subject"] == "Alice"
+            assert rows[0]["object"] == "Alice"
+
+    async def test_circular_aliases(
+        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+    ) -> None:
+        """Test that circular aliases (A->B, B->C, C->A) are handled gracefully."""
+        unique_suffix = str(uuid4())[:8]
+        batch_id = f"test_batch_circular_{unique_suffix}"
+
+        message = episodic.EpisodicMessage(
+            content="Testing circular aliases",
+            discord_message_id=12354,
+            channel_id=67890,
+            is_bot=False,
+        )
+        message_id = await episodic.store_message(message_repo, message)
+
+        # Create circular chain: mom -> Mother -> mama -> mom
+        memories = [
+            {"subject": "mom", "predicate": ALIAS_PREDICATE, "object": "Mother"},
+            {"subject": "Mother", "predicate": ALIAS_PREDICATE, "object": "mama"},
+            {"subject": "mama", "predicate": ALIAS_PREDICATE, "object": "mom"},
+        ]
+        result_count = await episodic.store_semantic_memories(
+            message_repo, message_id, memories, source_batch_id=batch_id
+        )
+
+        # Each forward alias creates a reverse, so 3 forward + 3 reverse = 6 total
+        # Unless some are duplicates
+        assert result_count == 6, f"Expected 6, got {result_count}"
+
+        # Verify all bidirectional relationships exist
+        async with db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT subject, object FROM semantic_memories 
+                WHERE source_batch_id = $1
+                ORDER BY subject, object
+                """,
+                batch_id,
+            )
+            triples = {(r["subject"], r["object"]) for r in rows}
+
+            # Check all forward and reverse exist
+            assert ("mom", "Mother") in triples
+            assert ("Mother", "mom") in triples
+            assert ("Mother", "mama") in triples
+            assert ("mama", "Mother") in triples
+            assert ("mama", "mom") in triples
+            assert ("mom", "mama") in triples
 
 
 if __name__ == "__main__":

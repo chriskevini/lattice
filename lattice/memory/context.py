@@ -19,7 +19,7 @@ from lattice.memory.repositories import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from asyncpg import Connection
 
 
 class PostgresContextRepository(PostgresRepository, ContextRepository):
@@ -175,7 +175,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
 
     async def _insert_semantic_memory(
         self,
-        conn: Any,
+        conn: "Connection",
         subject: str,
         predicate: str,
         obj: str,
