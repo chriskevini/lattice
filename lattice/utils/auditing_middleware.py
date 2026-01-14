@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-import os
 import structlog
 
+from lattice.utils.config import config
 from lattice.utils.llm_client import GenerationResult
 
 if TYPE_CHECKING:
@@ -166,10 +166,10 @@ class AuditingLLMClient:
             )
 
             # Post to dream channel if requested or if it's a tracked message.
-            dream_channel_id_str = os.getenv("DISCORD_DREAM_CHANNEL_ID")
+            dream_channel_id_from_config = config.discord_dream_channel_id
 
             should_post = audit_view or (
-                bot is not None and dream_channel_id_str is not None
+                bot is not None and dream_channel_id_from_config is not None
             )
 
             if should_post and bot:
@@ -177,8 +177,8 @@ class AuditingLLMClient:
                 try:
                     if dream_channel_id:
                         effective_dream_channel_id = dream_channel_id
-                    elif dream_channel_id_str:
-                        effective_dream_channel_id = int(dream_channel_id_str)
+                    elif dream_channel_id_from_config:
+                        effective_dream_channel_id = dream_channel_id_from_config
                     elif hasattr(bot, "dream_channel_id"):
                         effective_dream_channel_id = bot.dream_channel_id
                 except (ValueError, TypeError):
