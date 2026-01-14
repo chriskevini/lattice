@@ -1,7 +1,7 @@
 """Unit tests for Lattice memory modules."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
