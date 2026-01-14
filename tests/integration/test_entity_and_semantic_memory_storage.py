@@ -350,6 +350,13 @@ class TestSemanticMemoryStorage:
         # - Second reverse is duplicate (from first reverse), returns 0
         assert result_count == 2
 
+        # Clean up test data manually
+        async with db_pool.pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM semantic_memories WHERE source_batch_id = $1",
+                batch_id,
+            )
+
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
