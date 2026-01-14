@@ -5,11 +5,10 @@ Uses cursor-based consolidation:
 - Processes messages in batches (CONSOLIDATION_BATCH_SIZE)
 - Multiple triggers: 8 min silence (frontrun nudges), 18 messages (frontrun episodic context)
 - Handles backlogs by continuing until no more messages
-- Concurrency-safe via FOR UPDATE SKIP LOCKED
 
 Architecture:
-    - should_consolidate(): Fast threshold check (no lock)
-    - run_consolidation_batch(): Cursor-based processing with FOR UPDATE SKIP LOCKED
+    - should_consolidate(): Fast threshold check using message_repo
+    - run_consolidation_batch(): Cursor-based processing using system_metrics_repo
     - Cursor tracking: last_consolidated_message_id in system_metrics
 """
 
@@ -36,12 +35,12 @@ from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
     from lattice.memory.repositories import (
         CanonicalRepository,
         MessageRepository,
         PromptRegistryRepository,
         PromptAuditRepository,
+        SystemMetricsRepository,
         UserFeedbackRepository,
     )
 
@@ -51,62 +50,60 @@ CONSOLIDATION_CURSOR_KEY = "last_consolidated_message_id"
 MAX_CONSOLIDATION_TOKENS = 8000
 
 
-async def _get_consolidation_cursor(conn: Any) -> str:
+async def _get_consolidation_cursor(
+    system_metrics_repo: "SystemMetricsRepository",
+) -> str:
     """Get the last consolidated message ID.
 
     Args:
-        conn: Database connection
+        system_metrics_repo: System metrics repository for dependency injection
 
     Returns:
         The last consolidated message ID as a string, or "0" if not set
     """
-    row = await conn.fetchrow(
-        f"SELECT metric_value FROM system_metrics WHERE metric_key = '{CONSOLIDATION_CURSOR_KEY}'"
-    )
-    return row["metric_value"] if row else "0"
+    value = await system_metrics_repo.get_metric(CONSOLIDATION_CURSOR_KEY)
+    return value if value else "0"
 
 
-async def _update_consolidation_cursor(conn: Any, cursor_id: str) -> None:
+async def _update_consolidation_cursor(
+    system_metrics_repo: "SystemMetricsRepository", cursor_id: str
+) -> None:
     """Update the last consolidated message ID.
 
     Args:
-        conn: Database connection
+        system_metrics_repo: System metrics repository for dependency injection
         cursor_id: The new cursor ID to set
     """
-    await conn.execute(
-        f"""
-        INSERT INTO system_metrics (metric_key, metric_value)
-        VALUES ('{CONSOLIDATION_CURSOR_KEY}', $1)
-        ON CONFLICT (metric_key) DO UPDATE
-        SET metric_value = EXCLUDED.metric_value
-        """,
-        cursor_id,
-    )
+    await system_metrics_repo.set_metric(CONSOLIDATION_CURSOR_KEY, cursor_id)
 
 
-async def should_consolidate(db_pool: "DatabasePool") -> bool:
+async def should_consolidate(
+    system_metrics_repo: "SystemMetricsRepository",
+    message_repo: "MessageRepository",
+) -> bool:
     """Check if consolidation is needed (message count trigger).
 
     This is a fast check without locks, called after each message.
     Returns True if there are CONSOLIDATION_BATCH_SIZE or more pending messages.
 
     Args:
-        db_pool: Database pool for dependency injection
+        system_metrics_repo: System metrics repository for cursor tracking
+        message_repo: Message repository for counting pending messages
 
     Returns:
         True if consolidation should run
     """
-    cursor_id = await db_pool.get_system_metrics(CONSOLIDATION_CURSOR_KEY) or "0"
+    cursor_id = await system_metrics_repo.get_metric(CONSOLIDATION_CURSOR_KEY) or "0"
 
-    count = await db_pool.pool.fetchval(
-        "SELECT COUNT(*) FROM raw_messages WHERE discord_message_id > $1",
-        int(cursor_id) if cursor_id.isdigit() else 0,
+    messages = await message_repo.get_messages_since_cursor(
+        cursor_message_id=int(cursor_id) if cursor_id.isdigit() else 0,
+        limit=CONSOLIDATION_BATCH_SIZE,
     )
-    return count >= CONSOLIDATION_BATCH_SIZE
+    return len(messages) >= CONSOLIDATION_BATCH_SIZE
 
 
 async def run_consolidation_batch(
-    db_pool: "DatabasePool",
+    system_metrics_repo: "SystemMetricsRepository",
     message_repo: "MessageRepository",
     canonical_repo: "CanonicalRepository | None" = None,
     prompt_repo: "PromptRegistryRepository | None" = None,
@@ -125,7 +122,7 @@ async def run_consolidation_batch(
     Concurrency-safe via FOR UPDATE SKIP LOCKED.
 
     Args:
-        db_pool: Database pool for dependency injection (required)
+        system_metrics_repo: System metrics repository for cursor tracking
         message_repo: Message repository
         canonical_repo: Canonical repository for entity/predicate storage
         prompt_repo: Prompt repository for dependency injection
@@ -138,40 +135,39 @@ async def run_consolidation_batch(
     Returns:
         True if batch was processed, False if no pending messages
     """
-    async with db_pool.pool.acquire() as conn:
-        cursor_id = await _get_consolidation_cursor(conn)
+    cursor_id = await _get_consolidation_cursor(system_metrics_repo)
 
-        messages = await message_repo.get_messages_since_cursor(
-            cursor_message_id=int(cursor_id) if cursor_id.isdigit() else 0,
-            limit=CONSOLIDATION_BATCH_SIZE,
-        )
+    messages = await message_repo.get_messages_since_cursor(
+        cursor_message_id=int(cursor_id) if cursor_id.isdigit() else 0,
+        limit=CONSOLIDATION_BATCH_SIZE,
+    )
 
-        if not messages:
-            return False
+    if not messages:
+        return False
 
-        message_count = len(messages)
-        batch_id_val = messages[-1]["discord_message_id"]
-        if "Mock" in str(type(batch_id_val)):
-            batch_id = "100"
+    message_count = len(messages)
+    batch_id_val = messages[-1]["discord_message_id"]
+    if "Mock" in str(type(batch_id_val)):
+        batch_id = "100"
+    else:
+        batch_id = str(batch_id_val)
+
+    user_tz: str = "UTC"
+    if messages:
+        first_message = messages[0]
+        if hasattr(first_message, "get") and not isinstance(first_message, dict):
+            val = first_message.get("user_timezone")
         else:
-            batch_id = str(batch_id_val)
+            val = first_message.get("user_timezone")
+        if isinstance(val, str):
+            user_tz = val
 
-        user_tz: str = "UTC"
-        if messages:
-            first_message = messages[0]
-            if hasattr(first_message, "get") and not isinstance(first_message, dict):
-                val = first_message.get("user_timezone")
-            else:
-                val = first_message.get("user_timezone")
-            if isinstance(val, str):
-                user_tz = val
+    tz = ZoneInfo(user_tz)
 
-        tz = ZoneInfo(user_tz)
-
-        message_history = "\n".join(
-            f"[{m['timestamp'].astimezone(tz).strftime('%Y-%m-%d %H:%M')}] {'Bot' if m['is_bot'] else 'User'}: {m['content']}"
-            for m in messages
-        )
+    message_history = "\n".join(
+        f"[{m['timestamp'].astimezone(tz).strftime('%Y-%m-%d %H:%M')}] {'Bot' if m['is_bot'] else 'User'}: {m['content']}"
+        for m in messages
+    )
 
     if not prompt_repo:
         raise ValueError("prompt_repo is required for run_consolidation_batch")
@@ -335,8 +331,7 @@ async def run_consolidation_batch(
             count=len(extracted_memories),
         )
 
-    async with db_pool.pool.acquire() as conn:
-        await _update_consolidation_cursor(conn, batch_id)
+    await _update_consolidation_cursor(system_metrics_repo, batch_id)
 
     logger.info(
         "Batch consolidation completed",

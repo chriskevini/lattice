@@ -26,10 +26,12 @@ from lattice.core.pipeline import UnifiedPipeline
 
 from lattice.memory.repositories import (
     CanonicalRepository,
+    DreamingProposalRepository,
     MessageRepository,
     PromptAuditRepository,
     PromptRegistryRepository,
     SemanticMemoryRepository,
+    SystemMetricsRepository,
     UserFeedbackRepository,
 )
 
@@ -60,6 +62,8 @@ class LatticeBot(commands.Bot):
         prompt_repo: "PromptRegistryRepository",
         audit_repo: "PromptAuditRepository",
         feedback_repo: "UserFeedbackRepository",
+        system_metrics_repo: "SystemMetricsRepository",
+        proposal_repo: "DreamingProposalRepository",
     ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
@@ -75,6 +79,8 @@ class LatticeBot(commands.Bot):
         self.prompt_repo = prompt_repo
         self.audit_repo = audit_repo
         self.feedback_repo = feedback_repo
+        self.system_metrics_repo = system_metrics_repo
+        self.proposal_repo = proposal_repo
 
         # Initialize the pipeline
         self.pipeline = UnifiedPipeline(
@@ -117,6 +123,7 @@ class LatticeBot(commands.Bot):
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            system_metrics_repo=self.system_metrics_repo,
             canonical_repo=self.canonical_repo,
         )
 
@@ -194,9 +201,11 @@ class LatticeBot(commands.Bot):
             self._dreaming_scheduler = DreamingScheduler(
                 bot=self,
                 dream_channel_id=self.dream_channel_id,
-                db_pool=self.db_pool,
+                semantic_repo=self.semantic_repo,
                 llm_client=self.llm_client,
                 prompt_audit_repo=self.audit_repo,
+                prompt_repo=self.prompt_repo,
+                proposal_repo=self.proposal_repo,
             )
             await self._dreaming_scheduler.start()
 
@@ -207,6 +216,8 @@ class LatticeBot(commands.Bot):
                 dreaming_scheduler=self._dreaming_scheduler,
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
+                system_metrics_repo=self.system_metrics_repo,
+                message_repo=self.message_repo,
             )
             if self._command_handler:
                 self._command_handler.setup()

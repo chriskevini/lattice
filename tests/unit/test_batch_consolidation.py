@@ -13,47 +13,19 @@ from lattice.memory.batch_consolidation import (
 )
 
 
-def create_mock_pool_with_conn() -> tuple[MagicMock, AsyncMock]:
-    """Create a properly mocked database pool with connection.
+def create_mock_system_metrics_repo() -> MagicMock:
+    """Create a mock system metrics repository."""
+    mock_repo = MagicMock()
+    mock_repo.get_metric = AsyncMock(return_value=None)
+    mock_repo.set_metric = AsyncMock(return_value=None)
+    return mock_repo
 
-    Returns:
-        Tuple of (mock_pool, mock_conn) for use in tests.
-    """
-    mock_conn = AsyncMock()
-    # Ensure fetchrow and other common methods return something sensible by default
-    mock_conn.fetchrow.return_value = None
-    mock_conn.fetch.return_value = []
-    mock_conn.fetchval.return_value = None
-    mock_conn.execute.return_value = None
 
-    mock_pool = MagicMock()
-
-    # Create a helper that is both awaitable AND an async context manager
-    class AsyncCM:
-        async def __aenter__(self):
-            return mock_conn
-
-        async def __aexit__(self, *args):
-            pass
-
-        def __await__(self):
-            async def _res():
-                return mock_conn
-
-            return _res().__await__()
-
-    # In should_consolidate, it calls await message_repo._db_pool.pool.acquire()
-    # In run_consolidation_batch, it calls async with db_pool.pool.acquire() as conn:
-    # We want pool.acquire() to return something that supports both.
-    mock_pool.pool.acquire.return_value = AsyncCM()
-
-    # Also mock direct pool methods which are often used in the codebase
-    mock_pool.fetchrow = AsyncMock()
-    mock_pool.fetch = AsyncMock()
-    mock_pool.fetchval = AsyncMock()
-    mock_pool.execute = AsyncMock()
-
-    return mock_pool, mock_conn
+def create_mock_message_repo() -> MagicMock:
+    """Create a mock message repository."""
+    mock_repo = MagicMock()
+    mock_repo.get_messages_since_cursor = AsyncMock(return_value=[])
+    return mock_repo
 
 
 class TestBatchSize:
@@ -70,56 +42,70 @@ class TestShouldConsolidate:
     @pytest.mark.asyncio
     async def test_should_consolidate_returns_true_above_threshold(self) -> None:
         """Test should_consolidate returns True when messages exceed threshold."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
 
-        # Setup mocks
-        mock_pool.get_system_metrics = AsyncMock(return_value="100")
-        mock_pool.pool.fetchval = AsyncMock(return_value=20)  # Above threshold (18)
-
-        result = await should_consolidate(mock_pool)
-        assert result is True
-
-        # Verify the fetchval call
-        mock_pool.pool.fetchval.assert_called_once_with(
-            "SELECT COUNT(*) FROM raw_messages WHERE discord_message_id > $1", 100
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(
+            return_value=[
+                {"id": uuid4(), "discord_message_id": i} for i in range(101, 121)
+            ]
         )
+
+        result = await should_consolidate(system_metrics_repo, message_repo)
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_should_consolidate_returns_false_below_threshold(self) -> None:
         """Test should_consolidate returns False when messages below threshold."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
 
-        mock_pool.get_system_metrics = AsyncMock(return_value="100")
-        mock_pool.pool.fetchval = AsyncMock(return_value=10)  # Below threshold (18)
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(
+            return_value=[
+                {"id": uuid4(), "discord_message_id": i} for i in range(101, 111)
+            ]
+        )
 
-        result = await should_consolidate(mock_pool)
+        result = await should_consolidate(system_metrics_repo, message_repo)
         assert result is False
 
     @pytest.mark.asyncio
     async def test_should_consolidate_returns_true_at_threshold(self) -> None:
         """Test should_consolidate returns True when exactly at threshold."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
 
-        mock_pool.get_system_metrics = AsyncMock(return_value="100")
-        mock_pool.pool.fetchval = AsyncMock(return_value=18)  # Exactly at threshold
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(
+            return_value=[
+                {"id": uuid4(), "discord_message_id": i} for i in range(101, 119)
+            ]
+        )
 
-        result = await should_consolidate(mock_pool)
+        result = await should_consolidate(system_metrics_repo, message_repo)
         assert result is True
 
     @pytest.mark.asyncio
     async def test_should_consolidate_handles_zero_cursor(self) -> None:
         """Test should_consolidate works with initial zero cursor."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="0")
 
-        mock_pool.get_system_metrics = AsyncMock(return_value="0")
-        mock_pool.pool.fetchval = AsyncMock(return_value=25)
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(
+            return_value=[
+                {"id": uuid4(), "discord_message_id": i} for i in range(1, 26)
+            ]
+        )
 
-        result = await should_consolidate(mock_pool)
+        result = await should_consolidate(system_metrics_repo, message_repo)
         assert result is True
 
-        # Should query with cursor 0
-        mock_pool.pool.fetchval.assert_called_once_with(
-            "SELECT COUNT(*) FROM raw_messages WHERE discord_message_id > $1", 0
+        message_repo.get_messages_since_cursor.assert_called_once_with(
+            cursor_message_id=0,
+            limit=CONSOLIDATION_BATCH_SIZE,
         )
 
 
@@ -129,16 +115,15 @@ class TestRunConsolidationBatch:
     @pytest.mark.asyncio
     async def test_returns_false_when_no_messages(self) -> None:
         """Test that batch returns False when no messages to process."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
 
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-
-        mock_repo = MagicMock()
-        mock_repo.get_messages_since_cursor = AsyncMock(return_value=[])
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(return_value=[])
 
         result = await run_consolidation_batch(
-            db_pool=mock_pool,
-            message_repo=mock_repo,
+            system_metrics_repo=system_metrics_repo,
+            message_repo=message_repo,
             prompt_repo=MagicMock(),
             audit_repo=MagicMock(),
             feedback_repo=MagicMock(),
@@ -155,7 +140,9 @@ class TestRunConsolidationBatch:
         When no prompt template is found, the batch is considered "processed"
         to avoid repeatedly retrying the same messages. The system logs a warning.
         """
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
+
         message_id = uuid4()
         now = get_now()
         messages = [
@@ -169,15 +156,13 @@ class TestRunConsolidationBatch:
             }
         ]
 
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-
-        mock_repo = MagicMock()
-        mock_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
 
         with patch("lattice.memory.batch_consolidation.get_prompt", return_value=None):
             result = await run_consolidation_batch(
-                db_pool=mock_pool,
-                message_repo=mock_repo,
+                system_metrics_repo=system_metrics_repo,
+                message_repo=message_repo,
                 prompt_repo=MagicMock(),
                 audit_repo=MagicMock(),
                 feedback_repo=MagicMock(),
@@ -185,14 +170,13 @@ class TestRunConsolidationBatch:
                 bot=MagicMock(),
             )
 
-            # Returns True to indicate batch was "processed" (skipped)
-            # This prevents repeatedly retrying the same messages
             assert result is True
 
     @pytest.mark.asyncio
     async def test_success_returns_true_and_updates_cursor(self) -> None:
         """Test successful batch processing returns True and updates cursor."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
 
         message_id = uuid4()
         now = get_now()
@@ -207,10 +191,8 @@ class TestRunConsolidationBatch:
             }
         ]
 
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-
-        mock_repo = MagicMock()
-        mock_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{bigger_episodic_context}"
@@ -268,8 +250,8 @@ class TestRunConsolidationBatch:
                                         "lattice.memory.batch_consolidation.store_semantic_memories"
                                     ):
                                         result = await run_consolidation_batch(
-                                            db_pool=mock_pool,
-                                            message_repo=mock_repo,
+                                            system_metrics_repo=system_metrics_repo,
+                                            message_repo=message_repo,
                                             canonical_repo=mock_canonical_repo,
                                             prompt_repo=mock_prompt_repo,
                                             audit_repo=mock_audit_repo,
@@ -279,16 +261,18 @@ class TestRunConsolidationBatch:
                                         )
 
                                         assert result is True
-                                        mock_repo.get_messages_since_cursor.assert_called_once_with(
+                                        message_repo.get_messages_since_cursor.assert_called_once_with(
                                             cursor_message_id=100,
                                             limit=CONSOLIDATION_BATCH_SIZE,
                                         )
-                                        mock_conn.execute.assert_called()  # Should update cursor
+                                        system_metrics_repo.set_metric.assert_called()
 
     @pytest.mark.asyncio
     async def test_extracts_and_stores_triples(self) -> None:
         """Test that batch extracts triples and stores them correctly."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
+
         message_id = uuid4()
         now = get_now()
         messages = [
@@ -302,10 +286,8 @@ class TestRunConsolidationBatch:
             }
         ]
 
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-
-        mock_repo = MagicMock()
-        mock_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template with {bigger_episodic_context}"
@@ -380,8 +362,8 @@ class TestRunConsolidationBatch:
                                             },
                                         ):
                                             await run_consolidation_batch(
-                                                db_pool=mock_pool,
-                                                message_repo=mock_repo,
+                                                system_metrics_repo=system_metrics_repo,
+                                                message_repo=message_repo,
                                                 canonical_repo=mock_canonical_repo,
                                                 prompt_repo=mock_prompt_repo,
                                                 audit_repo=mock_audit_repo,
@@ -416,7 +398,9 @@ class TestCanonicalFormIntegration:
     @pytest.mark.asyncio
     async def test_batch_with_canonical_form_extraction(self) -> None:
         """Test that batch extraction extracts and stores new canonical forms."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
+
         message_id = uuid4()
         now = get_now()
         messages = [
@@ -430,10 +414,8 @@ class TestCanonicalFormIntegration:
             }
         ]
 
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-
-        mock_repo = MagicMock()
-        mock_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
 
         mock_prompt = MagicMock()
         mock_prompt.template = "{canonical_entities} {canonical_predicates}"
@@ -519,8 +501,8 @@ class TestCanonicalFormIntegration:
                                             },
                                         ) as mock_store_canonical:
                                             await run_consolidation_batch(
-                                                db_pool=mock_pool,
-                                                message_repo=mock_repo,
+                                                system_metrics_repo=system_metrics_repo,
+                                                message_repo=message_repo,
                                                 canonical_repo=mock_canonical_repo,
                                                 prompt_repo=mock_prompt_repo,
                                                 audit_repo=mock_audit_repo,
@@ -552,7 +534,9 @@ class TestCanonicalFormIntegration:
     @pytest.mark.asyncio
     async def test_batch_handles_dict_triples_format(self) -> None:
         """Test that batch extraction handles dict format with 'triples' key."""
-        mock_pool, mock_conn = create_mock_pool_with_conn()
+        system_metrics_repo = create_mock_system_metrics_repo()
+        system_metrics_repo.get_metric = AsyncMock(return_value="100")
+
         message_id = uuid4()
         now = get_now()
         messages = [
@@ -566,10 +550,8 @@ class TestCanonicalFormIntegration:
             }
         ]
 
-        mock_conn.fetchrow = AsyncMock(return_value={"metric_value": "100"})
-
-        mock_repo = MagicMock()
-        mock_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
+        message_repo = create_mock_message_repo()
+        message_repo.get_messages_since_cursor = AsyncMock(return_value=messages)
 
         mock_prompt = MagicMock()
         mock_prompt.template = "Template"
@@ -647,8 +629,8 @@ class TestCanonicalFormIntegration:
                                             },
                                         ):
                                             await run_consolidation_batch(
-                                                db_pool=mock_pool,
-                                                message_repo=mock_repo,
+                                                system_metrics_repo=system_metrics_repo,
+                                                message_repo=message_repo,
                                                 canonical_repo=mock_canonical_repo,
                                                 prompt_repo=mock_prompt_repo,
                                                 audit_repo=mock_audit_repo,

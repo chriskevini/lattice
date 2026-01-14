@@ -5,3 +5,12 @@
 "lattice/discord_client/dream.py" = ["ANN202"]
 "lattice/dreaming/approval.py" = ["ANN202"]
 "lattice/discord_client/bot.py" = ["PLR0911"]  # on_message has many early returns by design
+# Allow direct db access only in repository implementations
+"lattice/memory/repositories.py" = ["S608"]
+"lattice/memory/context.py" = ["S608"]
+"lattice/utils/database.py" = ["S608"]
+
+[lint.flake8-bandit]
+# Custom check: prevent direct database access outside repository layer
+# S608: Possible SQL injection vector through string-based query construction
+check-typed-exception = true

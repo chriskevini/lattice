@@ -104,6 +104,22 @@ class MessageRepository(Protocol):
         """
         ...
 
+    async def get_message_timestamps_since(
+        self,
+        since: datetime,
+        is_bot: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Get message timestamps for activity analysis.
+
+        Args:
+            since: Get messages since this timestamp
+            is_bot: Whether to get bot messages (False for user messages)
+
+        Returns:
+            List of messages with keys: timestamp, user_timezone
+        """
+        ...
+
 
 @runtime_checkable
 class SemanticMemoryRepository(Protocol):
@@ -173,6 +189,40 @@ class SemanticMemoryRepository(Protocol):
 
         Returns:
             List of predicate tuples with keys: subject, predicate, object
+        """
+        ...
+
+    async def get_subjects_for_review(self, min_memories: int) -> list[str]:
+        """Get subjects with enough memories to warrant review.
+
+        Args:
+            min_memories: Minimum memory count threshold
+
+        Returns:
+            List of subject names with sufficient memory count
+        """
+        ...
+
+    async def get_memories_by_subject(self, subject: str) -> list[dict[str, Any]]:
+        """Get all active memories for a subject.
+
+        Args:
+            subject: Subject name to fetch memories for
+
+        Returns:
+            List of memory dictionaries with id, subject, predicate, object, created_at
+        """
+        ...
+
+    async def supersede_memory(self, triple_id: UUID, superseded_by_id: UUID) -> bool:
+        """Mark a memory as superseded by another.
+
+        Args:
+            triple_id: UUID of the memory to mark as superseded
+            superseded_by_id: UUID of the memory that supersedes it
+
+        Returns:
+            True if updated, False if not found
         """
         ...
 
@@ -509,6 +559,156 @@ class PromptRegistryRepository(Protocol):
         Returns:
             Template dict with keys: prompt_key, template, temperature, version, active
             or None if not found
+        """
+        ...
+
+
+@runtime_checkable
+class SystemMetricsRepository(Protocol):
+    """Repository for system metrics key-value storage.
+
+    Handles reading and writing configuration and runtime metrics to the system_metrics table.
+    """
+
+    async def get_metric(self, key: str) -> str | None:
+        """Get a metric value by key.
+
+        Args:
+            key: The metric key to fetch
+
+        Returns:
+            The metric value as a string, or None if not found
+        """
+        ...
+
+    async def set_metric(self, key: str, value: str) -> None:
+        """Set a metric value.
+
+        Args:
+            key: The metric key to set
+            value: The metric value to store
+        """
+        ...
+
+    async def get_user_timezone(self) -> str:
+        """Get the configured user timezone.
+
+        Returns:
+            IANA timezone string (defaults to "UTC" if not found)
+        """
+        ...
+
+
+@runtime_checkable
+class DreamingProposalRepository(Protocol):
+    """Repository for dreaming cycle optimization proposals.
+
+    Handles storage, retrieval, and lifecycle management of prompt optimization proposals.
+    """
+
+    async def store_proposal(
+        self,
+        proposal_id: UUID,
+        prompt_key: str,
+        current_version: int,
+        proposed_version: int,
+        current_template: str,
+        proposed_template: str,
+        proposal_metadata: dict[str, Any],
+        rendered_optimization_prompt: str,
+    ) -> UUID:
+        """Store an optimization proposal.
+
+        Args:
+            proposal_id: UUID for the new proposal
+            prompt_key: The prompt key being optimized
+            current_version: The current version number of the prompt
+            proposed_version: The proposed new version number
+            current_template: The current template text
+            proposed_template: The proposed new template text
+            proposal_metadata: Metadata dict containing pain_point, proposed_change, justification
+            rendered_optimization_prompt: The full prompt sent to the optimizer LLM
+
+        Returns:
+            UUID of the stored proposal
+        """
+        ...
+
+    async def get_by_id(self, proposal_id: UUID) -> dict[str, Any] | None:
+        """Get proposal by ID.
+
+        Args:
+            proposal_id: UUID of the proposal
+
+        Returns:
+            Proposal dict with keys: id, prompt_key, current_version, proposed_version,
+            current_template, proposed_template, proposal_metadata, rendered_optimization_prompt,
+            status, created_at, reviewed_at, reviewed_by, human_feedback
+            or None if not found
+        """
+        ...
+
+    async def get_pending(self) -> list[dict[str, Any]]:
+        """Get all pending proposals.
+
+        Returns:
+            List of proposal dicts, ordered by created_at (newest first)
+        """
+        ...
+
+    async def approve(
+        self,
+        proposal_id: UUID,
+        reviewed_by: str,
+        feedback: str | None = None,
+    ) -> bool:
+        """Approve and apply a proposal.
+
+        Updates the proposal status to 'approved', inserts the new prompt version
+        into the prompt_registry, and records reviewer information.
+
+        Args:
+            proposal_id: UUID of the proposal to approve
+            reviewed_by: Identifier of the reviewer (e.g., Discord user ID)
+            feedback: Optional feedback from the reviewer
+
+        Returns:
+            True if approved and applied successfully, False otherwise
+        """
+        ...
+
+    async def reject(
+        self,
+        proposal_id: UUID,
+        reviewed_by: str,
+        feedback: str | None = None,
+    ) -> bool:
+        """Reject a proposal.
+
+        Updates the proposal status to 'rejected' and records reviewer information.
+
+        Args:
+            proposal_id: UUID of the proposal to reject
+            reviewed_by: Identifier of the reviewer
+            feedback: Optional feedback explaining the rejection
+
+        Returns:
+            True if rejected successfully, False if not found
+        """
+        ...
+
+    async def reject_stale(self, prompt_key: str, current_version: int) -> int:
+        """Reject stale proposals for a prompt key.
+
+        Rejects all pending proposals that have a current_version mismatch,
+        indicating they are based on an outdated version of the prompt.
+
+        Args:
+            prompt_key: The prompt key to check
+            current_version: The current version of the prompt
+
+        Returns:
+            Number of stale proposals rejected
         """
         ...
 
@@ -984,3 +1184,252 @@ class PostgresPromptRegistryRepository(PostgresRepository, PromptRegistryReposit
                 prompt_key,
             )
             return dict(row) if row else None
+
+
+class PostgresSystemMetricsRepository(PostgresRepository, SystemMetricsRepository):
+    """PostgreSQL implementation of SystemMetricsRepository."""
+
+    async def get_metric(self, key: str) -> str | None:
+        """Get a metric value by key."""
+        async with self._db_pool.pool.acquire() as conn:
+            return await conn.fetchval(
+                "SELECT metric_value FROM system_metrics WHERE metric_key = $1",
+                key,
+            )
+
+    async def set_metric(self, key: str, value: str) -> None:
+        """Set a metric value."""
+        async with self._db_pool.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO system_metrics (metric_key, metric_value, recorded_at)
+                VALUES ($1, $2, now())
+                ON CONFLICT (metric_key)
+                DO UPDATE SET metric_value = EXCLUDED.metric_value, recorded_at = now()
+                """,
+                key,
+                str(value),
+            )
+
+    async def get_user_timezone(self) -> str:
+        """Get the configured user timezone."""
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT object FROM semantic_memories WHERE subject = 'User' AND predicate = 'lives in timezone' ORDER BY created_at DESC LIMIT 1"
+            )
+            if row:
+                tz = row["object"]
+                try:
+                    from zoneinfo import ZoneInfo
+
+                    ZoneInfo(tz)
+                    return tz
+                except Exception:
+                    pass
+        return "UTC"
+
+
+class PostgresDreamingProposalRepository(
+    PostgresRepository, DreamingProposalRepository
+):
+    """PostgreSQL implementation of DreamingProposalRepository."""
+
+    async def store_proposal(
+        self,
+        proposal_id: UUID,
+        prompt_key: str,
+        current_version: int,
+        proposed_version: int,
+        current_template: str,
+        proposed_template: str,
+        proposal_metadata: dict[str, Any],
+        rendered_optimization_prompt: str,
+    ) -> UUID:
+        """Store an optimization proposal."""
+        import json
+
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO dreaming_proposals (
+                    id,
+                    prompt_key,
+                    current_version,
+                    proposed_version,
+                    current_template,
+                    proposed_template,
+                    proposal_metadata,
+                    rendered_optimization_prompt,
+                    status
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+                RETURNING id
+                """,
+                proposal_id,
+                prompt_key,
+                current_version,
+                proposed_version,
+                current_template,
+                proposed_template,
+                json.dumps(proposal_metadata),
+                rendered_optimization_prompt,
+            )
+            return row["id"]
+
+    async def get_by_id(self, proposal_id: UUID) -> dict[str, Any] | None:
+        """Get proposal by ID."""
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    id,
+                    prompt_key,
+                    current_version,
+                    proposed_version,
+                    current_template,
+                    proposed_template,
+                    proposal_metadata,
+                    rendered_optimization_prompt,
+                    status,
+                    created_at,
+                    reviewed_at,
+                    reviewed_by,
+                    human_feedback
+                FROM dreaming_proposals
+                WHERE id = $1
+                """,
+                proposal_id,
+            )
+            return dict(row) if row else None
+
+    async def get_pending(self) -> list[dict[str, Any]]:
+        """Get all pending proposals."""
+        async with self._db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    id,
+                    prompt_key,
+                    current_version,
+                    proposed_version,
+                    current_template,
+                    proposed_template,
+                    proposal_metadata,
+                    rendered_optimization_prompt,
+                    status,
+                    created_at,
+                    reviewed_at,
+                    reviewed_by,
+                    human_feedback
+                FROM dreaming_proposals
+                WHERE status = 'pending'
+                ORDER BY created_at DESC
+                """
+            )
+            return [dict(row) for row in rows]
+
+    async def approve(
+        self,
+        proposal_id: UUID,
+        reviewed_by: str,
+        feedback: str | None = None,
+    ) -> bool:
+        """Approve and apply a proposal."""
+        async with self._db_pool.pool.acquire() as conn:
+            # Get proposal
+            proposal_row = await conn.fetchrow(
+                """
+                SELECT prompt_key, current_version, proposed_template, proposed_version
+                FROM dreaming_proposals
+                WHERE id = $1 AND status = 'pending'
+                """,
+                proposal_id,
+            )
+
+            if not proposal_row:
+                return False
+
+            # Begin transaction
+            async with conn.transaction():
+                # Insert new version
+                await conn.execute(
+                    """
+                    INSERT INTO prompt_registry (prompt_key, version, template, temperature)
+                    VALUES ($1, $2, $3, $4)
+                    """,
+                    proposal_row["prompt_key"],
+                    proposal_row["proposed_version"],
+                    proposal_row["proposed_template"],
+                    0.7,  # Default temperature
+                )
+
+                # Mark proposal as approved
+                result = await conn.execute(
+                    """
+                    UPDATE dreaming_proposals
+                    SET
+                        status = 'approved',
+                        reviewed_at = now(),
+                        reviewed_by = $1,
+                        human_feedback = $2
+                    WHERE id = $3 AND status = 'pending'
+                    """,
+                    reviewed_by,
+                    feedback,
+                    proposal_id,
+                )
+
+                # Check if update succeeded
+                if result != "UPDATE 1":
+                    return False
+
+        return True
+
+    async def reject(
+        self,
+        proposal_id: UUID,
+        reviewed_by: str,
+        feedback: str | None = None,
+    ) -> bool:
+        """Reject a proposal."""
+        async with self._db_pool.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE dreaming_proposals
+                SET
+                    status = 'rejected',
+                    reviewed_at = now(),
+                    reviewed_by = $1,
+                    human_feedback = $2
+                WHERE id = $3 AND status = 'pending'
+                """,
+                reviewed_by,
+                feedback,
+                proposal_id,
+            )
+            return result == "UPDATE 1"
+
+    async def reject_stale(self, prompt_key: str, current_version: int) -> int:
+        """Reject stale proposals for a prompt key."""
+        async with self._db_pool.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE dreaming_proposals
+                SET
+                    status = 'rejected',
+                    reviewed_at = now(),
+                    reviewed_by = 'system',
+                    human_feedback = 'Auto-rejected: prompt version changed (stale proposal)'
+                WHERE prompt_key = $1
+                  AND status = 'pending'
+                  AND current_version != $2
+                """,
+                prompt_key,
+                current_version,
+            )
+
+            # Parse result like "UPDATE 5" to get count
+            rejected_count = (
+                int(result.split()[1]) if result.startswith("UPDATE") else 0
+            )
+            return rejected_count

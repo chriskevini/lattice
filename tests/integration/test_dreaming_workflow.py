@@ -173,49 +173,25 @@ async def test_full_dreaming_cycle_workflow(
         assert proposal.proposed_version == 2
         assert "concise" in proposal.proposed_template.lower()
 
-    mock_conn = AsyncMock()
-    mock_conn.fetchrow = AsyncMock(return_value={"id": proposal.proposal_id})
-    # Mock internal pool again for store_proposal
-    mock_internal_pool = MagicMock()
-    mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
-    mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
+    # Mock proposal repository
+    mock_proposal_repo = AsyncMock()
+    mock_proposal_repo.store_proposal = AsyncMock(return_value=proposal.proposal_id)
 
-    with patch.object(db_pool, "_pool", mock_internal_pool):
-        stored_id = await store_proposal(proposal, db_pool=db_pool)
+    stored_id = await store_proposal(proposal, proposal_repo=mock_proposal_repo)
 
-        assert stored_id == proposal.proposal_id
+    assert stored_id == proposal.proposal_id
 
-    mock_conn = AsyncMock()
-    mock_conn.fetchrow = AsyncMock(
-        return_value={
-            "prompt_key": proposal.prompt_key,
-            "current_version": proposal.current_version,
-            "proposed_template": proposal.proposed_template,
-            "proposed_version": proposal.proposed_version,
-            "temperature": 0.7,
-        }
+    # Mock proposal repository for approve
+    mock_proposal_repo.approve = AsyncMock(return_value=True)
+
+    success = await approve_proposal(
+        proposal_id=proposal.proposal_id,
+        reviewed_by="user123",
+        feedback="Great improvement, approved!",
+        proposal_repo=mock_proposal_repo,
     )
-    mock_conn.execute = AsyncMock(return_value="UPDATE 1")
-    mock_conn.transaction = MagicMock()
-    mock_conn.transaction().__aenter__ = AsyncMock()
-    mock_conn.transaction().__aexit__ = AsyncMock()
-    # Mock internal pool again for approve_proposal
-    mock_internal_pool = MagicMock()
-    mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
-    mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
 
-    with patch.object(db_pool, "_pool", mock_internal_pool):
-        success = await approve_proposal(
-            proposal_id=proposal.proposal_id,
-            reviewed_by="user123",
-            feedback="Great improvement, approved!",
-            db_pool=db_pool,
-        )
-
-        assert success is True
-        assert (
-            mock_conn.execute.call_count == 2
-        )  # Insert new version + Update proposals
+    assert success is True
 
 
 @pytest.mark.asyncio

@@ -28,10 +28,11 @@ from lattice.utils.date_resolution import get_now
 
 if TYPE_CHECKING:
     from lattice.memory.repositories import (
+        DreamingProposalRepository,
         PromptAuditRepository,
         PromptRegistryRepository,
+        SemanticMemoryRepository,
     )
-    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)
@@ -66,10 +67,11 @@ class DreamingScheduler:
         bot: Any,
         dream_channel_id: int | None = None,
         dream_time: time = DEFAULT_DREAM_TIME,
-        db_pool: "DatabasePool" = None,  # type: ignore[assignment]
+        semantic_repo: "SemanticMemoryRepository | None" = None,
         llm_client: Any | None = None,
         prompt_audit_repo: "PromptAuditRepository | None" = None,
         prompt_repo: "PromptRegistryRepository | None" = None,
+        proposal_repo: "DreamingProposalRepository | None" = None,
     ) -> None:
         """Initialize the dreaming scheduler.
 
@@ -77,28 +79,30 @@ class DreamingScheduler:
             bot: Discord bot instance for sending messages
             dream_channel_id: Dream channel ID for posting proposals
             dream_time: Time of day to run dreaming cycle (default: 3:00 AM UTC)
-            db_pool: Database pool for dependency injection (required)
+            semantic_repo: Semantic memory repository for dependency injection
             llm_client: LLM client for dependency injection
             prompt_audit_repo: Prompt audit repository for data access
             prompt_repo: Prompt registry repository for data access
+            proposal_repo: Dreaming proposal repository for data access
         """
-        if db_pool is None:
-            msg = "db_pool is required for DreamingScheduler"
-            raise TypeError(msg)
         if llm_client is None:
             msg = "llm_client is required for DreamingScheduler"
             raise TypeError(msg)
         if prompt_repo is None:
             msg = "prompt_repo is required for DreamingScheduler"
             raise TypeError(msg)
+        if proposal_repo is None:
+            msg = "proposal_repo is required for DreamingScheduler"
+            raise TypeError(msg)
 
         self.bot = bot
         self.dream_channel_id = dream_channel_id
         self.dream_time = dream_time
-        self.db_pool = db_pool
+        self.semantic_repo = semantic_repo
         self.llm_client = llm_client
         self.prompt_audit_repo = prompt_audit_repo
         self.prompt_repo = prompt_repo
+        self.proposal_repo = proposal_repo
 
         self._running: bool = False
         self._scheduler_task: asyncio.Task[None] | None = None
@@ -169,7 +173,8 @@ class DreamingScheduler:
         Returns:
             True if dreaming is enabled, False otherwise
         """
-        enabled_str = await self.db_pool.get_system_metrics("dreaming_enabled")
+        db_pool = self.bot.db_pool
+        enabled_str = await db_pool.get_system_metrics("dreaming_enabled")
         return enabled_str != "false"
 
     async def _get_dreaming_config(self) -> DreamingConfig:
@@ -178,15 +183,16 @@ class DreamingScheduler:
         Returns:
             DreamingConfig with loaded settings
         """
+        db_pool = self.bot.db_pool
         min_uses = int(
-            await self.db_pool.get_system_metrics("dreaming_min_uses")
+            await db_pool.get_system_metrics("dreaming_min_uses")
             or DREAMING_MIN_USES_DEFAULT
         )
         lookback_days = int(
-            await self.db_pool.get_system_metrics("dreaming_lookback_days")
+            await db_pool.get_system_metrics("dreaming_lookback_days")
             or DREAMING_LOOKBACK_DAYS_DEFAULT
         )
-        enabled_str = await self.db_pool.get_system_metrics("dreaming_enabled")
+        enabled_str = await db_pool.get_system_metrics("dreaming_enabled")
         enabled = enabled_str != "false"
 
         return DreamingConfig(
@@ -245,7 +251,9 @@ class DreamingScheduler:
 
             for prompt_metrics in metrics[:MAX_PROPOSALS_PER_CYCLE]:
                 rejected_count = await reject_stale_proposals(
-                    prompt_metrics.prompt_key, db_pool=self.db_pool
+                    prompt_metrics.prompt_key,
+                    proposal_repo=self.proposal_repo,  # type: ignore[arg-type]
+                    prompt_repo=self.prompt_repo,  # type: ignore[arg-type]
                 )
                 if rejected_count > 0:
                     logger.info(
@@ -264,7 +272,7 @@ class DreamingScheduler:
                 )
 
                 if proposal:
-                    await store_proposal(proposal, db_pool=self.db_pool)
+                    await store_proposal(proposal, proposal_repo=self.proposal_repo)  # type: ignore[arg-type]
                     proposals.append(proposal)
 
                     logger.info(
@@ -317,7 +325,7 @@ class DreamingScheduler:
         """
         try:
             memory_review_id = await run_memory_review(
-                db_pool=self.db_pool,
+                semantic_repo=self.semantic_repo,  # type: ignore[arg-type]
                 llm_client=self.llm_client,
                 prompt_repo=self.prompt_repo,  # type: ignore[arg-type]
                 bot=self.bot,
@@ -425,7 +433,9 @@ class DreamingScheduler:
             await channel.send(summary_text)
 
             view = TemplateComparisonView(
-                proposal, db_pool=self.db_pool, llm_client=self.llm_client
+                proposal,
+                proposal_repo=self.proposal_repo,  # type: ignore[arg-type]
+                llm_client=self.llm_client,
             )
             await channel.send(view=view)
             self.bot.add_view(view)
@@ -485,9 +495,10 @@ async def trigger_dreaming_cycle_manually(
     bot: Any,
     dream_channel_id: int | None = None,
     force: bool = True,
-    db_pool: "DatabasePool | None" = None,
+    semantic_repo: "SemanticMemoryRepository | None" = None,
     llm_client: Any | None = None,
     prompt_repo: "PromptRegistryRepository | None" = None,
+    proposal_repo: "DreamingProposalRepository | None" = None,
 ) -> None:
     """Manually trigger the dreaming cycle (for testing or manual invocation).
 
@@ -495,15 +506,17 @@ async def trigger_dreaming_cycle_manually(
         bot: Discord bot instance
         dream_channel_id: Dream channel ID for posting proposals
         force: Whether to bypass statistical thresholds
-        db_pool: Database pool for dependency injection
+        semantic_repo: Semantic memory repository for dependency injection
         llm_client: LLM client for dependency injection
         prompt_repo: Prompt registry repository for data access
+        proposal_repo: Dreaming proposal repository for data access
     """
     scheduler = DreamingScheduler(
         bot=bot,
         dream_channel_id=dream_channel_id,
-        db_pool=db_pool,  # type: ignore[arg-type]
+        semantic_repo=semantic_repo,
         llm_client=llm_client,
-        prompt_repo=prompt_repo,  # type: ignore[arg-type]
+        prompt_repo=prompt_repo,
+        proposal_repo=proposal_repo,
     )
     await scheduler._run_dreaming_cycle(force=force)  # noqa: SLF001

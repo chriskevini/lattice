@@ -174,6 +174,26 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
 
         return count
 
+    async def get_message_timestamps_since(
+        self,
+        since: datetime,
+        is_bot: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Get message timestamps for activity analysis."""
+        async with self._db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT timestamp, user_timezone
+                FROM raw_messages
+                WHERE is_bot = $1
+                  AND timestamp >= $2
+                ORDER BY timestamp ASC
+                """,
+                is_bot,
+                since,
+            )
+        return [dict(row) for row in rows]
+
     async def _insert_semantic_memory(
         self,
         conn: "Connection",
@@ -377,6 +397,56 @@ class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryReposit
             )
 
         return [dict(p) for p in predicates]
+
+    async def get_subjects_for_review(self, min_memories: int) -> list[str]:
+        """Get subjects with enough memories to warrant review."""
+        async with self._db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT subject
+                FROM semantic_memories
+                WHERE superseded_by IS NULL
+                GROUP BY subject
+                HAVING COUNT(*) >= $1
+                ORDER BY COUNT(*) DESC
+                """,
+                min_memories,
+            )
+            return [row["subject"] for row in rows]
+
+    async def get_memories_by_subject(self, subject: str) -> list[dict[str, Any]]:
+        """Get all active memories for a subject."""
+        async with self._db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, subject, predicate, object, created_at
+                FROM semantic_memories
+                WHERE subject = $1 AND superseded_by IS NULL AND predicate != $2
+                ORDER BY created_at DESC
+                """,
+                subject,
+                ALIAS_PREDICATE,
+            )
+            return [
+                {
+                    "id": str(row["id"]),
+                    "subject": row["subject"],
+                    "predicate": row["predicate"],
+                    "object": row["object"],
+                    "created_at": row["created_at"].isoformat(),
+                }
+                for row in rows
+            ]
+
+    async def supersede_memory(self, triple_id: UUID, superseded_by_id: UUID) -> bool:
+        """Mark a memory as superseded by another."""
+        async with self._db_pool.pool.acquire() as conn:
+            result = await conn.execute(
+                "UPDATE semantic_memories SET superseded_by = $1 WHERE id = $2",
+                superseded_by_id,
+                triple_id,
+            )
+            return result == "UPDATE 1"
 
 
 class PostgresCanonicalRepository(PostgresRepository, CanonicalRepository):
