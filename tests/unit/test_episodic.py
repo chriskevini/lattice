@@ -397,6 +397,30 @@ class TestStoreSemanticMemories:
         )
 
     @pytest.mark.asyncio
+    async def test_store_semantic_memories_with_timestamp(self) -> None:
+        """Test storing a semantic memory with original message timestamp."""
+        message_id = uuid4()
+        original_timestamp = get_now()
+        memories = [{"subject": "Alice", "predicate": "likes", "object": "Python"}]
+
+        mock_repo = MagicMock()
+        mock_repo.store_semantic_memories = AsyncMock()
+
+        await store_semantic_memories(
+            repo=mock_repo,
+            message_id=message_id,
+            memories=memories,
+            message_timestamp=original_timestamp,
+        )
+
+        mock_repo.store_semantic_memories.assert_called_once_with(
+            message_id=message_id,
+            memories=memories,
+            source_batch_id=None,
+            message_timestamp=original_timestamp,
+        )
+
+    @pytest.mark.asyncio
     async def test_store_semantic_memories_skips_invalid(self) -> None:
         """Test that invalid memories (missing fields) are skipped with warning."""
         # Note: Logic moved to repository, but episodic.py might still do some filtering
