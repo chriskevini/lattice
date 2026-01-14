@@ -27,8 +27,11 @@ from lattice.utils.date_resolution import get_now
 
 
 if TYPE_CHECKING:
+    from lattice.memory.repositories import (
+        PromptAuditRepository,
+        PromptRegistryRepository,
+    )
     from lattice.utils.database import DatabasePool
-    from lattice.memory.repositories import PromptAuditRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -63,9 +66,10 @@ class DreamingScheduler:
         bot: Any,
         dream_channel_id: int | None = None,
         dream_time: time = DEFAULT_DREAM_TIME,
-        db_pool: "DatabasePool | None" = None,
+        db_pool: "DatabasePool" = None,  # type: ignore[assignment]
         llm_client: Any | None = None,
         prompt_audit_repo: "PromptAuditRepository | None" = None,
+        prompt_repo: "PromptRegistryRepository | None" = None,
     ) -> None:
         """Initialize the dreaming scheduler.
 
@@ -76,12 +80,16 @@ class DreamingScheduler:
             db_pool: Database pool for dependency injection (required)
             llm_client: LLM client for dependency injection
             prompt_audit_repo: Prompt audit repository for data access
+            prompt_repo: Prompt registry repository for data access
         """
         if db_pool is None:
             msg = "db_pool is required for DreamingScheduler"
             raise TypeError(msg)
         if llm_client is None:
             msg = "llm_client is required for DreamingScheduler"
+            raise TypeError(msg)
+        if prompt_repo is None:
+            msg = "prompt_repo is required for DreamingScheduler"
             raise TypeError(msg)
 
         self.bot = bot
@@ -90,6 +98,7 @@ class DreamingScheduler:
         self.db_pool = db_pool
         self.llm_client = llm_client
         self.prompt_audit_repo = prompt_audit_repo
+        self.prompt_repo = prompt_repo
 
         self._running: bool = False
         self._scheduler_task: asyncio.Task[None] | None = None
@@ -310,6 +319,7 @@ class DreamingScheduler:
             memory_review_id = await run_memory_review(
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
+                prompt_repo=self.prompt_repo,  # type: ignore[arg-type]
                 bot=self.bot,
             )
 
@@ -477,6 +487,7 @@ async def trigger_dreaming_cycle_manually(
     force: bool = True,
     db_pool: "DatabasePool | None" = None,
     llm_client: Any | None = None,
+    prompt_repo: "PromptRegistryRepository | None" = None,
 ) -> None:
     """Manually trigger the dreaming cycle (for testing or manual invocation).
 
@@ -486,11 +497,13 @@ async def trigger_dreaming_cycle_manually(
         force: Whether to bypass statistical thresholds
         db_pool: Database pool for dependency injection
         llm_client: LLM client for dependency injection
+        prompt_repo: Prompt registry repository for data access
     """
     scheduler = DreamingScheduler(
         bot=bot,
         dream_channel_id=dream_channel_id,
-        db_pool=db_pool,
+        db_pool=db_pool,  # type: ignore[arg-type]
         llm_client=llm_client,
+        prompt_repo=prompt_repo,  # type: ignore[arg-type]
     )
     await scheduler._run_dreaming_cycle(force=force)  # noqa: SLF001

@@ -82,6 +82,11 @@ async def main() -> None:
         PostgresMessageRepository,
         PostgresSemanticMemoryRepository,
     )
+    from lattice.memory.repositories import (
+        PostgresPromptAuditRepository,
+        PostgresPromptRegistryRepository,
+        PostgresUserFeedbackRepository,
+    )
 
     db_pool = DatabasePool()
     await db_pool.initialize()
@@ -90,6 +95,9 @@ async def main() -> None:
     message_repo = PostgresMessageRepository(db_pool=db_pool)
     semantic_repo = PostgresSemanticMemoryRepository(db_pool=db_pool)
     canonical_repo = PostgresCanonicalRepository(db_pool=db_pool)
+    prompt_repo = PostgresPromptRegistryRepository(db_pool=db_pool)
+    audit_repo = PostgresPromptAuditRepository(db_pool=db_pool)
+    feedback_repo = PostgresUserFeedbackRepository(db_pool=db_pool)
 
     context_cache = ChannelContextCache(repository=context_repo, ttl=10)
     user_context_cache = UserContextCache(repository=context_repo, ttl_minutes=30)
@@ -102,6 +110,9 @@ async def main() -> None:
         message_repo=message_repo,
         semantic_repo=semantic_repo,
         canonical_repo=canonical_repo,
+        prompt_repo=prompt_repo,
+        audit_repo=audit_repo,
+        feedback_repo=feedback_repo,
     )
     health_server = HealthServer(port=config.health_port)
 

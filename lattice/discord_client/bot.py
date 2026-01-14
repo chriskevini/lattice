@@ -125,7 +125,10 @@ class LatticeBot(commands.Bot):
         )
 
         self._audit_mirror = AuditMirror(
-            bot=self, dream_channel_id=self.dream_channel_id, db_pool=self.db_pool
+            bot=self,
+            dream_channel_id=self.dream_channel_id,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
         )
 
         # Command handler initialized after dreaming scheduler

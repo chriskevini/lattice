@@ -76,7 +76,8 @@ async def notify_parse_error_to_dream(
             metadata_parts=[f"Error: {error.parse_error}"],
             audit_id=error.audit_result.audit_id,
             rendered_prompt=rendered_prompt,
-            db_pool=bot.db_pool,
+            audit_repo=bot.audit_repo,
+            feedback_repo=bot.feedback_repo,
         )
 
         embed.description = f"❌ **Parse Error**: {error.parse_error}"

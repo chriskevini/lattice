@@ -25,6 +25,7 @@ from lattice.utils.placeholder_injector import PlaceholderInjector
 
 
 if TYPE_CHECKING:
+    from lattice.memory.repositories import PromptRegistryRepository
     from lattice.utils.database import DatabasePool
 
 
@@ -140,6 +141,7 @@ async def analyze_subject_memories(
     db_pool: "DatabasePool",
     llm_client: Any,
     subject: str,
+    prompt_repo: "PromptRegistryRepository",
 ) -> list[ConflictResolution]:
     """Analyze memories for a single subject via LLM.
 
@@ -147,6 +149,7 @@ async def analyze_subject_memories(
         db_pool: Database pool for dependency injection
         llm_client: LLM client for dependency injection
         subject: Subject name to analyze
+        prompt_repo: Prompt repository for dependency injection
 
     Returns:
         List of conflict resolutions proposed by LLM
@@ -166,7 +169,7 @@ async def analyze_subject_memories(
         return []
 
     # Get MEMORY_REVIEW prompt
-    prompt_template = await get_prompt(db_pool=db_pool, prompt_key="MEMORY_REVIEW")
+    prompt_template = await get_prompt(repo=prompt_repo, prompt_key="MEMORY_REVIEW")
     if not prompt_template:
         logger.warning("MEMORY_REVIEW prompt not found")
         return []
@@ -226,6 +229,7 @@ async def analyze_subject_memories(
 async def run_memory_review(
     db_pool: "DatabasePool",
     llm_client: Any,
+    prompt_repo: "PromptRegistryRepository",
     bot: Any | None = None,
 ) -> UUID | None:
     """Run full memory review cycle and create proposal.
@@ -233,10 +237,11 @@ async def run_memory_review(
     Args:
         db_pool: Database pool for dependency injection
         llm_client: LLM client for dependency injection
+        prompt_repo: Prompt repository for dependency injection
         bot: Optional Discord bot for dream channel notification
 
     Returns:
-        UUID of created proposal, or None if no conflicts found
+        UUID of created proposal, or None if conflicts found
     """
     if not llm_client:
         raise ValueError("llm_client is required for run_memory_review")
@@ -258,7 +263,9 @@ async def run_memory_review(
 
     # Analyze each subject
     for subject in subjects:
-        conflicts = await analyze_subject_memories(db_pool, llm_client, subject)
+        conflicts = await analyze_subject_memories(
+            db_pool, llm_client, subject, prompt_repo
+        )
 
         if conflicts:
             all_conflicts.extend(
