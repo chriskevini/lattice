@@ -5,6 +5,10 @@ This module defines the repository interfaces for all memory layers:
 - MessageRepository: Episodic memory (raw_messages table)
 - SemanticMemoryRepository: Semantic memories (semantic_memories table)
 - CanonicalRepository: Entity/predicate registry (entities, predicates tables)
+- ContextRepository: Persistent context caching (context_cache table)
+- PromptAuditRepository: LLM call auditing (prompt_audits table)
+- UserFeedbackRepository: User feedback (user_feedback table)
+- PromptRegistryRepository: Prompt templates (prompt_registry table)
 
 The repository pattern abstracts database access behind clean async interfaces,
 enabling dependency injection and future database portability.
@@ -288,6 +292,165 @@ class ContextRepository(Protocol):
         ...
 
 
+@runtime_checkable
+class PromptAuditRepository(Protocol):
+    """Repository for prompt audit operations.
+
+    Handles storage and retrieval of LLM call audits for Dreaming Cycle analysis.
+    """
+
+    async def store_audit(
+        self,
+        prompt_key: str,
+        response_content: str,
+        main_discord_message_id: int | None,
+        rendered_prompt: str | None = None,
+        template_version: int | None = None,
+        message_id: UUID | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        cost_usd: float | None = None,
+        latency_ms: int | None = None,
+        finish_reason: str | None = None,
+        cache_discount_usd: float | None = None,
+        native_tokens_cached: int | None = None,
+        native_tokens_reasoning: int | None = None,
+        upstream_id: str | None = None,
+        cancelled: bool | None = None,
+        moderation_latency_ms: int | None = None,
+        execution_metadata: dict[str, Any] | None = None,
+        archetype_matched: str | None = None,
+        archetype_confidence: float | None = None,
+        reasoning: dict[str, Any] | None = None,
+        dream_discord_message_id: int | None = None,
+    ) -> UUID:
+        """Store a prompt audit entry.
+
+        Returns:
+            UUID of the stored audit entry
+        """
+        ...
+
+    async def update_dream_message(
+        self, audit_id: UUID, dream_discord_message_id: int
+    ) -> bool:
+        """Update audit with dream channel message ID.
+
+        Returns:
+            True if updated, False if not found
+        """
+        ...
+
+    async def link_feedback(
+        self, dream_discord_message_id: int, feedback_id: UUID
+    ) -> bool:
+        """Link feedback to prompt audit via dream channel message ID.
+
+        Returns:
+            True if linked, False if audit not found
+        """
+        ...
+
+    async def link_feedback_by_id(self, audit_id: UUID, feedback_id: UUID) -> bool:
+        """Link feedback to prompt audit via audit UUID.
+
+        Returns:
+            True if linked, False if audit not found
+        """
+        ...
+
+    async def get_by_dream_message(
+        self, dream_discord_message_id: int
+    ) -> dict[str, Any] | None:
+        """Get audit by dream channel message ID.
+
+        Returns:
+            Audit dict if found, None otherwise
+        """
+        ...
+
+    async def get_with_feedback(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        """Get prompt audits that have feedback.
+
+        Returns:
+            List of prompt audit dicts with feedback
+        """
+        ...
+
+
+@runtime_checkable
+class UserFeedbackRepository(Protocol):
+    """Repository for user feedback operations.
+
+    Handles storage and retrieval of user feedback from dream channel interactions.
+    """
+
+    async def store_feedback(
+        self,
+        content: str,
+        sentiment: str | None = None,
+        referenced_discord_message_id: int | None = None,
+        user_discord_message_id: int | None = None,
+        audit_id: UUID | None = None,
+    ) -> UUID:
+        """Store user feedback.
+
+        Returns:
+            UUID of the stored feedback
+        """
+        ...
+
+    async def get_by_user_message(
+        self, user_discord_message_id: int
+    ) -> dict[str, Any] | None:
+        """Get feedback by the user's Discord message ID.
+
+        Returns:
+            Feedback dict if found, None otherwise
+        """
+        ...
+
+    async def delete_feedback(self, feedback_id: UUID) -> bool:
+        """Delete feedback by its UUID.
+
+        Returns:
+            True if deleted, False if not found
+        """
+        ...
+
+    async def get_all(self) -> list[dict[str, Any]]:
+        """Get all user feedback entries.
+
+        Returns:
+            List of all feedback dicts, ordered by creation time (newest first)
+        """
+        ...
+
+
+@runtime_checkable
+class PromptRegistryRepository(Protocol):
+    """Repository for prompt template registry operations.
+
+    Handles storage and retrieval of prompt templates for bot behavior.
+    """
+
+    async def get_template(self, prompt_key: str) -> dict[str, Any] | None:
+        """Get the latest active prompt template by key.
+
+        Args:
+            prompt_key: The unique identifier for the template
+
+        Returns:
+            Template dict with keys: prompt_key, template, temperature, version, active
+            or None if not found
+        """
+        ...
+
+
 class PostgresRepository:
     """Base class for PostgreSQL-based repositories.
 
@@ -302,3 +465,269 @@ class PostgresRepository:
             db_pool: asyncpg connection pool
         """
         self._db_pool = db_pool
+
+
+class PostgresPromptAuditRepository(PostgresRepository, PromptAuditRepository):
+    """PostgreSQL implementation of PromptAuditRepository."""
+
+    async def store_audit(
+        self,
+        prompt_key: str,
+        response_content: str,
+        main_discord_message_id: int | None,
+        rendered_prompt: str | None = None,
+        template_version: int | None = None,
+        message_id: UUID | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        cost_usd: float | None = None,
+        latency_ms: int | None = None,
+        finish_reason: str | None = None,
+        cache_discount_usd: float | None = None,
+        native_tokens_cached: int | None = None,
+        native_tokens_reasoning: int | None = None,
+        upstream_id: str | None = None,
+        cancelled: bool | None = None,
+        moderation_latency_ms: int | None = None,
+        execution_metadata: dict[str, Any] | None = None,
+        archetype_matched: str | None = None,
+        archetype_confidence: float | None = None,
+        reasoning: dict[str, Any] | None = None,
+        dream_discord_message_id: int | None = None,
+    ) -> UUID:
+        """Store a prompt audit entry."""
+        import json
+
+        execution_metadata_json = (
+            json.dumps(execution_metadata) if execution_metadata else None
+        )
+        reasoning_json = json.dumps(reasoning) if reasoning else None
+
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO prompt_audits (
+                    prompt_key, template_version, message_id,
+                    rendered_prompt, response_content,
+                    model, provider, prompt_tokens, completion_tokens,
+                    cost_usd, latency_ms, finish_reason,
+                    cache_discount_usd, native_tokens_cached,
+                    native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
+                    execution_metadata, archetype_matched, archetype_confidence, reasoning,
+                    main_discord_message_id, dream_discord_message_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+                RETURNING id
+                """,
+                prompt_key,
+                template_version,
+                message_id,
+                rendered_prompt,
+                response_content,
+                model,
+                provider,
+                prompt_tokens,
+                completion_tokens,
+                cost_usd,
+                latency_ms,
+                finish_reason,
+                cache_discount_usd,
+                native_tokens_cached,
+                native_tokens_reasoning,
+                upstream_id,
+                cancelled,
+                moderation_latency_ms,
+                execution_metadata_json,
+                archetype_matched,
+                archetype_confidence,
+                reasoning_json,
+                main_discord_message_id,
+                dream_discord_message_id,
+            )
+            return row["id"]
+
+    async def update_dream_message(
+        self, audit_id: UUID, dream_discord_message_id: int
+    ) -> bool:
+        """Update audit with dream channel message ID."""
+        async with self._db_pool.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE prompt_audits
+                SET dream_discord_message_id = $1
+                WHERE id = $2
+                """,
+                dream_discord_message_id,
+                audit_id,
+            )
+            return result == "UPDATE 1"
+
+    async def link_feedback(
+        self, dream_discord_message_id: int, feedback_id: UUID
+    ) -> bool:
+        """Link feedback to prompt audit via dream channel message ID."""
+        async with self._db_pool.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE prompt_audits
+                SET feedback_id = $1
+                WHERE dream_discord_message_id = $2
+                """,
+                feedback_id,
+                dream_discord_message_id,
+            )
+            return result == "UPDATE 1"
+
+    async def link_feedback_by_id(self, audit_id: UUID, feedback_id: UUID) -> bool:
+        """Link feedback to prompt audit via audit UUID."""
+        async with self._db_pool.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE prompt_audits
+                SET feedback_id = $1
+                WHERE id = $2
+                """,
+                feedback_id,
+                audit_id,
+            )
+            return result == "UPDATE 1"
+
+    async def get_by_dream_message(
+        self, dream_discord_message_id: int
+    ) -> dict[str, Any] | None:
+        """Get audit by dream channel message ID."""
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    id, prompt_key, template_version, message_id,
+                    rendered_prompt, response_content,
+                    model, provider, prompt_tokens, completion_tokens,
+                    cost_usd, latency_ms,
+                    finish_reason, cache_discount_usd, native_tokens_cached,
+                    native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
+                    execution_metadata, archetype_matched, archetype_confidence, reasoning,
+                    main_discord_message_id, dream_discord_message_id,
+                    feedback_id, created_at
+                FROM prompt_audits
+                WHERE dream_discord_message_id = $1
+                """,
+                dream_discord_message_id,
+            )
+            return dict(row) if row else None
+
+    async def get_with_feedback(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        """Get prompt audits that have feedback."""
+        async with self._db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    id, prompt_key, template_version, message_id,
+                    rendered_prompt, response_content,
+                    model, provider, prompt_tokens, completion_tokens,
+                    cost_usd, latency_ms,
+                    finish_reason, cache_discount_usd, native_tokens_cached,
+                    native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
+                    execution_metadata, archetype_matched, archetype_confidence, reasoning,
+                    main_discord_message_id, dream_discord_message_id,
+                    feedback_id, created_at
+                FROM prompt_audits
+                WHERE feedback_id IS NOT NULL
+                ORDER BY created_at DESC
+                LIMIT $1 OFFSET $2
+                """,
+                limit,
+                offset,
+            )
+            return [dict(row) for row in rows]
+
+
+class PostgresUserFeedbackRepository(PostgresRepository, UserFeedbackRepository):
+    """PostgreSQL implementation of UserFeedbackRepository."""
+
+    async def store_feedback(
+        self,
+        content: str,
+        sentiment: str | None = None,
+        referenced_discord_message_id: int | None = None,
+        user_discord_message_id: int | None = None,
+        audit_id: UUID | None = None,
+    ) -> UUID:
+        """Store user feedback."""
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO user_feedback (
+                    content, sentiment, referenced_discord_message_id, user_discord_message_id, audit_id
+                )
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id
+                """,
+                content,
+                sentiment,
+                referenced_discord_message_id,
+                user_discord_message_id,
+                audit_id,
+            )
+            return row["id"]
+
+    async def get_by_user_message(
+        self, user_discord_message_id: int
+    ) -> dict[str, Any] | None:
+        """Get feedback by the user's Discord message ID."""
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, audit_id, created_at
+                FROM user_feedback
+                WHERE user_discord_message_id = $1
+                """,
+                user_discord_message_id,
+            )
+            return dict(row) if row else None
+
+    async def delete_feedback(self, feedback_id: UUID) -> bool:
+        """Delete feedback by its UUID."""
+        async with self._db_pool.pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                DELETE FROM user_feedback WHERE id = $1
+                """,
+                feedback_id,
+            )
+            return result == "DELETE 1"
+
+    async def get_all(self) -> list[dict[str, Any]]:
+        """Get all user feedback entries."""
+        async with self._db_pool.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, content, sentiment, referenced_discord_message_id, user_discord_message_id, audit_id, created_at
+                FROM user_feedback
+                ORDER BY created_at DESC
+                """
+            )
+            return [dict(row) for row in rows]
+
+
+class PostgresPromptRegistryRepository(PostgresRepository, PromptRegistryRepository):
+    """PostgreSQL implementation of PromptRegistryRepository."""
+
+    async def get_template(self, prompt_key: str) -> dict[str, Any] | None:
+        """Get the latest active prompt template by key."""
+        async with self._db_pool.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT prompt_key, template, temperature, version, active
+                FROM prompt_registry
+                WHERE prompt_key = $1
+                ORDER BY version DESC
+                LIMIT 1
+                """,
+                prompt_key,
+            )
+            return dict(row) if row else None

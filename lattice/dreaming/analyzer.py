@@ -12,6 +12,10 @@ import structlog
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import (
+        PromptAuditRepository,
+        UserFeedbackRepository,
+    )
 
 
 logger = structlog.get_logger(__name__)
@@ -80,6 +84,8 @@ class PromptMetrics:
 
 async def analyze_prompt_effectiveness(
     db_pool: "DatabasePool",
+    prompt_audit_repo: "PromptAuditRepository | None" = None,
+    user_feedback_repo: "UserFeedbackRepository | None" = None,
     min_uses: int = 10,
     lookback_days: int = 30,
     min_feedback: int = 10,
@@ -88,6 +94,8 @@ async def analyze_prompt_effectiveness(
 
     Args:
         db_pool: Database pool for dependency injection (required)
+        prompt_audit_repo: Prompt audit repository
+        user_feedback_repo: User feedback repository
         min_uses: Minimum number of uses to consider for analysis
         lookback_days: Number of days to look back for analysis
         min_feedback: Minimum number of feedback items to consider for analysis
@@ -198,6 +206,7 @@ async def analyze_prompt_effectiveness(
 async def get_feedback_samples(
     prompt_key: str,
     db_pool: "DatabasePool",
+    user_feedback_repo: "UserFeedbackRepository",
     limit: int = 10,
     sentiment_filter: str | None = None,
 ) -> list[str]:
@@ -209,6 +218,7 @@ async def get_feedback_samples(
     Args:
         prompt_key: The prompt key to get feedback for
         db_pool: Database pool for dependency injection (required)
+        user_feedback_repo: User feedback repository
         limit: Maximum number of samples to return
         sentiment_filter: Filter by sentiment ('positive', 'negative', 'neutral')
 
@@ -242,6 +252,7 @@ async def get_feedback_samples(
 async def get_feedback_with_context(
     prompt_key: str,
     db_pool: "DatabasePool",
+    prompt_audit_repo: "PromptAuditRepository | None" = None,
     limit: int = 10,
     include_rendered_prompt: bool = True,
     max_prompt_chars: int = 5000,
@@ -259,6 +270,7 @@ async def get_feedback_with_context(
     Args:
         prompt_key: The prompt key to get feedback for
         db_pool: Database pool for dependency injection (required)
+        prompt_audit_repo: Prompt audit repository
         limit: Maximum number of samples to return
         include_rendered_prompt: Whether to include the rendered prompt (default True)
         max_prompt_chars: Maximum characters of rendered prompt to include (default 5000)
@@ -267,8 +279,6 @@ async def get_feedback_with_context(
         List of dicts containing message, rendered_prompt (if requested), response, and feedback
     """
     async with db_pool.pool.acquire() as conn:
-        # Use separate queries based on whether we need rendered_prompt
-        # This avoids dynamic SQL construction which triggers security warnings
         if include_rendered_prompt:
             rows = await conn.fetch(
                 """
@@ -317,7 +327,6 @@ async def get_feedback_with_context(
         for row in rows:
             result = dict(row)
 
-            # Truncate rendered_prompt if it exists and exceeds max_prompt_chars
             if include_rendered_prompt and result.get("rendered_prompt"):
                 if len(result["rendered_prompt"]) > max_prompt_chars:
                     result["rendered_prompt"] = (

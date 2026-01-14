@@ -15,7 +15,10 @@ if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
     from lattice.utils.auditing_middleware import AuditingLLMClient
     from lattice.core.context import ChannelContextCache, UserContextCache
-    from lattice.memory.repositories import MessageRepository
+    from lattice.memory.repositories import (
+        CanonicalRepository,
+        MessageRepository,
+    )
 
 
 from lattice.core import memory_orchestrator, response_generator
@@ -60,6 +63,7 @@ class MessageHandler:
         context_cache: "ChannelContextCache",
         user_context_cache: "UserContextCache",
         message_repo: "MessageRepository",
+        canonical_repo: "CanonicalRepository | None" = None,
         user_timezone: str = "UTC",
     ) -> None:
         """Initialize the message handler.
@@ -73,6 +77,7 @@ class MessageHandler:
             context_cache: In-memory context cache for dependency injection
             user_context_cache: User-level cache for goals/activities
             message_repo: Message repository
+            canonical_repo: Canonical repository for entities/predicates
             user_timezone: The user's timezone
         """
         self.bot = bot
@@ -80,10 +85,11 @@ class MessageHandler:
         self.dream_channel_id = dream_channel_id
         self.db_pool = db_pool
         self.llm_client = llm_client
-        self.user_timezone = user_timezone
         self.context_cache = context_cache
         self.user_context_cache = user_context_cache
         self.message_repo = message_repo
+        self.canonical_repo = canonical_repo
+        self.user_timezone = user_timezone
         self._memory_healthy = False
         self._consecutive_failures = 0
         self._max_consecutive_failures = MAX_CONSECUTIVE_FAILURES
@@ -186,6 +192,7 @@ class MessageHandler:
                 bot=self.bot,
                 user_context_cache=self.user_context_cache,
                 message_repo=self.message_repo,
+                canonical_repo=self.canonical_repo,
             )
         except Exception:
             logger.exception("Error in immediate consolidation")
@@ -217,6 +224,7 @@ class MessageHandler:
                 bot=self.bot,
                 user_context_cache=self.user_context_cache,
                 message_repo=self.message_repo,
+                canonical_repo=self.canonical_repo,
             )
         except asyncio.CancelledError:
             logger.debug("Consolidation timer cancelled by new user message")

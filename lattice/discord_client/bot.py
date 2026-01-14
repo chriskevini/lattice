@@ -54,6 +54,8 @@ class LatticeBot(commands.Bot):
         message_repo: "MessageRepository",
         semantic_repo: "SemanticMemoryRepository",
         canonical_repo: "CanonicalRepository",
+        audit_repo: Any = None,
+        feedback_repo: Any = None,
     ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
@@ -66,6 +68,8 @@ class LatticeBot(commands.Bot):
         self.message_repo = message_repo
         self.semantic_repo = semantic_repo
         self.canonical_repo = canonical_repo
+        self.audit_repo = audit_repo
+        self.feedback_repo = feedback_repo
 
         # Initialize the pipeline
         self.pipeline = UnifiedPipeline(
@@ -103,6 +107,7 @@ class LatticeBot(commands.Bot):
             context_cache=self.context_cache,
             user_context_cache=self.user_context_cache,
             message_repo=self.message_repo,
+            canonical_repo=self.canonical_repo,
         )
 
         self._error_manager = ErrorManager(
@@ -178,6 +183,8 @@ class LatticeBot(commands.Bot):
                 dream_channel_id=self.dream_channel_id,
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
+                prompt_audit_repo=self.audit_repo,
+                user_feedback_repo=self.feedback_repo,
             )
             await self._dreaming_scheduler.start()
 

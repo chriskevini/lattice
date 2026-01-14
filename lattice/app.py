@@ -1,16 +1,20 @@
 import structlog
 
 from lattice.discord_client.bot import LatticeBot
-from lattice.utils.database import DatabasePool
-from lattice.utils.llm import _LLMClient, AuditingLLMClient
-from lattice.utils.config import config
-from lattice.core.context import ChannelContextCache, UserContextCache
 from lattice.memory.context import (
     PostgresCanonicalRepository,
     PostgresContextRepository,
     PostgresMessageRepository,
     PostgresSemanticMemoryRepository,
 )
+from lattice.memory.repositories import (
+    PostgresPromptAuditRepository,
+    PostgresUserFeedbackRepository,
+)
+from lattice.utils.database import DatabasePool
+from lattice.utils.llm import _LLMClient, AuditingLLMClient
+from lattice.utils.config import config
+from lattice.core.context import ChannelContextCache, UserContextCache
 
 
 logger = structlog.get_logger(__name__)
@@ -31,6 +35,8 @@ class LatticeApp:
         self.message_repo = PostgresMessageRepository(db_pool=self.db_pool)
         self.semantic_repo = PostgresSemanticMemoryRepository(db_pool=self.db_pool)
         self.canonical_repo = PostgresCanonicalRepository(db_pool=self.db_pool)
+        self.audit_repo = PostgresPromptAuditRepository(db_pool=self.db_pool)
+        self.feedback_repo = PostgresUserFeedbackRepository(db_pool=self.db_pool)
         self.context_cache = ChannelContextCache(repository=self.context_repo, ttl=10)
         self.user_context_cache = UserContextCache(
             repository=self.context_repo, ttl_minutes=30
@@ -43,6 +49,8 @@ class LatticeApp:
             message_repo=self.message_repo,
             semantic_repo=self.semantic_repo,
             canonical_repo=self.canonical_repo,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
         )
 
     async def start(self) -> None:
