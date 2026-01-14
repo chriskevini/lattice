@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
     from lattice.memory.repositories import PromptAuditRepository
 
 
@@ -80,7 +79,6 @@ class PromptMetrics:
 
 
 async def analyze_prompt_effectiveness(
-    db_pool: "DatabasePool",
     prompt_audit_repo: "PromptAuditRepository",
     min_uses: int = 10,
     lookback_days: int = 30,
@@ -89,7 +87,6 @@ async def analyze_prompt_effectiveness(
     """Analyze prompt effectiveness from audit data.
 
     Args:
-        db_pool: Database pool for dependency injection (required)
         prompt_audit_repo: Prompt audit repository for data access (required)
         min_uses: Minimum number of uses to consider for analysis
         lookback_days: Number of days to look back for analysis
@@ -134,7 +131,6 @@ async def analyze_prompt_effectiveness(
 
 async def get_feedback_samples(
     prompt_key: str,
-    db_pool: "DatabasePool",
     prompt_audit_repo: "PromptAuditRepository",
     limit: int = 10,
     sentiment_filter: str | None = None,
@@ -146,7 +142,6 @@ async def get_feedback_samples(
 
     Args:
         prompt_key: The prompt key to get feedback for
-        db_pool: Database pool for dependency injection (required)
         prompt_audit_repo: Prompt audit repository for data access (required)
         limit: Maximum number of samples to return
         sentiment_filter: Filter by sentiment ('positive', 'negative', 'neutral')
@@ -163,7 +158,6 @@ async def get_feedback_samples(
 
 async def get_feedback_with_context(
     prompt_key: str,
-    db_pool: "DatabasePool",
     prompt_audit_repo: "PromptAuditRepository",
     limit: int = 10,
     include_rendered_prompt: bool = True,
@@ -177,11 +171,9 @@ async def get_feedback_with_context(
     3. The bot's response
     4. The user's feedback
     5. Sentiment
-    6. Database pool for dependency injection
 
     Args:
         prompt_key: The prompt key to get feedback for
-        db_pool: Database pool for dependency injection (required)
         prompt_audit_repo: Prompt audit repository (required)
         limit: Maximum number of samples to return
         include_rendered_prompt: Whether to include the rendered prompt (default True)

@@ -15,7 +15,11 @@ from lattice.core.context_strategy import context_strategy
 from lattice.memory.episodic import EpisodicMessage
 from lattice.utils.llm import AuditResult
 from lattice.memory.procedural import PromptTemplate
-from lattice.memory.repositories import ContextRepository
+from lattice.memory.repositories import (
+    ContextRepository,
+    CanonicalRepository,
+    PromptRegistryRepository,
+)
 
 
 @pytest.fixture
@@ -28,13 +32,21 @@ def mock_repo() -> MagicMock:
 
 
 @pytest.fixture
-def mock_canonical_repo() -> AsyncMock:
+def mock_canonical_repo() -> MagicMock:
     """Create a mock canonical repository."""
-    repo = AsyncMock()
+    repo = MagicMock(spec=CanonicalRepository)
     repo.get_entities_list = AsyncMock(return_value=["Mother", "boyfriend"])
     repo.get_predicates_list = AsyncMock(return_value=[])
     repo.get_entities_set = AsyncMock(return_value=set())
     repo.get_predicates_set = AsyncMock(return_value=set())
+    return repo
+
+
+@pytest.fixture
+def mock_prompt_repo() -> MagicMock:
+    """Create a mock prompt repository."""
+    repo = MagicMock(spec=PromptRegistryRepository)
+    repo.get_template = AsyncMock()
     return repo
 
 
@@ -50,14 +62,6 @@ def user_context_cache(mock_repo) -> UserContextCache:
     """Create a fresh user context cache for each test."""
     cache = UserContextCache(repository=mock_repo, ttl_minutes=30)
     return cache
-
-
-@pytest.fixture
-def mock_pool() -> MagicMock:
-    """Create a mock database pool."""
-    mock = MagicMock()
-    mock.pool.acquire = MagicMock()
-    return mock
 
 
 @pytest.fixture
@@ -100,17 +104,6 @@ def mock_llm_response() -> str:
     )
 
 
-def _create_mock_pool(mock_conn: AsyncMock) -> MagicMock:
-    """Create a mock database pool with the given connection."""
-    mock_pool = MagicMock()
-    mock_pool.pool = mock_pool
-    mock_acquire_cm = MagicMock()
-    mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_acquire_cm.__aexit__ = AsyncMock()
-    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
-    return mock_pool
-
-
 class TestContextStrategyFunction:
     """Tests for the context_strategy function."""
 
@@ -120,7 +113,8 @@ class TestContextStrategyFunction:
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
         context_cache: ChannelContextCache,
-        mock_canonical_repo: AsyncMock,
+        mock_canonical_repo: MagicMock,
+        mock_prompt_repo: MagicMock,
     ) -> None:
         """Test successful context strategy."""
         message_id = uuid.uuid4()
@@ -129,15 +123,15 @@ class TestContextStrategyFunction:
             "context_flags": ["goal_context"],
         }
         mock_generation_result.content = json.dumps(extraction_data)
-
-        mock_conn = AsyncMock()
-        mock_pool = _create_mock_pool(mock_conn)
+        mock_prompt_repo.get_template.return_value = {
+            "prompt_key": "CONTEXT_STRATEGY",
+            "template": mock_prompt_template.template,
+            "temperature": mock_prompt_template.temperature,
+            "version": mock_prompt_template.version,
+            "active": mock_prompt_template.active,
+        }
 
         with (
-            patch(
-                "lattice.core.context_strategy.get_prompt",
-                return_value=mock_prompt_template,
-            ),
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
                 return_value=extraction_data,
@@ -156,7 +150,6 @@ class TestContextStrategyFunction:
             ]
 
             strategy = await context_strategy(
-                db_pool=mock_pool,
                 message_id=message_id,
                 user_message="I need to finish the lattice project by Friday",
                 recent_messages=recent_messages,
@@ -164,6 +157,7 @@ class TestContextStrategyFunction:
                 context_cache=context_cache,
                 channel_id=123,
                 canonical_repo=mock_canonical_repo,
+                prompt_repo=mock_prompt_repo,
             )
 
             assert strategy.entities == ["lattice project", "Friday"]
@@ -171,29 +165,27 @@ class TestContextStrategyFunction:
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_prompt_template(
-        self, context_cache: ChannelContextCache
+        self,
+        context_cache: ChannelContextCache,
+        mock_canonical_repo: MagicMock,
+        mock_prompt_repo: MagicMock,
     ) -> None:
         """Test context strategy with missing prompt template."""
         message_id = uuid.uuid4()
+        mock_prompt_repo.get_template.return_value = None
 
-        mock_conn = AsyncMock()
-        mock_pool = _create_mock_pool(mock_conn)
-
-        with patch(
-            "lattice.core.context_strategy.get_prompt",
-            return_value=None,
-        ):
-            with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
-                await context_strategy(
-                    db_pool=mock_pool,
-                    message_id=message_id,
-                    user_message="Test message",
-                    recent_messages=[],
-                    discord_message_id=12345,
-                    context_cache=context_cache,
-                    llm_client=AsyncMock(),
-                    channel_id=123,
-                )
+        with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
+            await context_strategy(
+                message_id=message_id,
+                user_message="Test message",
+                recent_messages=[],
+                discord_message_id=12345,
+                context_cache=context_cache,
+                llm_client=AsyncMock(),
+                channel_id=123,
+                prompt_repo=mock_prompt_repo,
+                canonical_repo=mock_canonical_repo,
+            )
 
     @pytest.mark.asyncio
     async def test_context_strategy_invalid_json(
@@ -201,21 +193,22 @@ class TestContextStrategyFunction:
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
         context_cache: ChannelContextCache,
-        mock_canonical_repo: AsyncMock,
+        mock_canonical_repo: MagicMock,
+        mock_prompt_repo: MagicMock,
     ) -> None:
         """Test context strategy with invalid JSON response."""
         message_id = uuid.uuid4()
+        mock_prompt_repo.get_template.return_value = {
+            "prompt_key": "CONTEXT_STRATEGY",
+            "template": mock_prompt_template.template,
+            "temperature": mock_prompt_template.temperature,
+            "version": mock_prompt_template.version,
+            "active": mock_prompt_template.active,
+        }
 
         from lattice.utils.json_parser import JSONParseError
 
-        mock_conn = AsyncMock()
-        mock_pool = _create_mock_pool(mock_conn)
-
         with (
-            patch(
-                "lattice.core.context_strategy.get_prompt",
-                return_value=mock_prompt_template,
-            ),
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
             ) as mock_parse,
@@ -234,7 +227,6 @@ class TestContextStrategyFunction:
 
             with pytest.raises(JSONParseError):
                 await context_strategy(
-                    db_pool=mock_pool,
                     message_id=message_id,
                     user_message="Test message",
                     recent_messages=[],
@@ -243,6 +235,7 @@ class TestContextStrategyFunction:
                     context_cache=context_cache,
                     channel_id=123,
                     canonical_repo=mock_canonical_repo,
+                    prompt_repo=mock_prompt_repo,
                 )
 
 
@@ -255,7 +248,8 @@ class TestChannelContextCacheIntegration:
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
         context_cache: ChannelContextCache,
-        mock_canonical_repo: AsyncMock,
+        mock_canonical_repo: MagicMock,
+        mock_prompt_repo: MagicMock,
     ) -> None:
         """Test that context strategy merges with cached context."""
         message_id = uuid.uuid4()
@@ -264,15 +258,15 @@ class TestChannelContextCacheIntegration:
             "context_flags": ["goal_context"],
         }
         mock_generation_result.content = json.dumps(extraction_data)
-
-        mock_conn = AsyncMock()
-        mock_pool = _create_mock_pool(mock_conn)
+        mock_prompt_repo.get_template.return_value = {
+            "prompt_key": "CONTEXT_STRATEGY",
+            "template": mock_prompt_template.template,
+            "temperature": mock_prompt_template.temperature,
+            "version": mock_prompt_template.version,
+            "active": mock_prompt_template.active,
+        }
 
         with (
-            patch(
-                "lattice.core.context_strategy.get_prompt",
-                return_value=mock_prompt_template,
-            ),
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
                 return_value=extraction_data,
@@ -292,7 +286,6 @@ class TestChannelContextCacheIntegration:
             ]
 
             strategy = await context_strategy(
-                db_pool=mock_pool,
                 message_id=message_id,
                 user_message="I need to finish by Friday",
                 recent_messages=recent_messages,
@@ -300,6 +293,7 @@ class TestChannelContextCacheIntegration:
                 context_cache=context_cache,
                 channel_id=123,
                 canonical_repo=mock_canonical_repo,
+                prompt_repo=mock_prompt_repo,
             )
 
             assert strategy.entities == ["project", "Friday"]
@@ -317,7 +311,6 @@ class TestChannelContextCacheIntegration:
             ):
                 message_id_2 = uuid.uuid4()
                 strategy_2 = await context_strategy(
-                    db_pool=mock_pool,
                     message_id=message_id_2,
                     user_message="Planning for weekend",
                     recent_messages=recent_messages,
@@ -325,6 +318,7 @@ class TestChannelContextCacheIntegration:
                     context_cache=context_cache,
                     channel_id=123,
                     canonical_repo=mock_canonical_repo,
+                    prompt_repo=mock_prompt_repo,
                 )
 
                 assert "project" in strategy_2.entities

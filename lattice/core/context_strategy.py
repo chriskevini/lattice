@@ -22,11 +22,13 @@ logger = structlog.get_logger(__name__)
 from lattice.memory.episodic import EpisodicMessage  # noqa: E402
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
     from lattice.core.context import ChannelContextCache
     from lattice.memory.repositories import (
         SemanticMemoryRepository,
         CanonicalRepository,
+        PromptRegistryRepository,
+        PromptAuditRepository,
+        UserFeedbackRepository,
     )
 
 
@@ -72,7 +74,6 @@ def build_smaller_episodic_context(
 
 
 async def context_strategy(
-    db_pool: "DatabasePool",
     message_id: UUID,
     user_message: str,
     recent_messages: list[EpisodicMessage],
@@ -85,12 +86,18 @@ async def context_strategy(
     llm_client: Any | None = None,
     bot: Any | None = None,
     canonical_repo: "CanonicalRepository | None" = None,
+    prompt_repo: "PromptRegistryRepository | None" = None,
+    audit_repo: "PromptAuditRepository | None" = None,
+    feedback_repo: "UserFeedbackRepository | None" = None,
 ) -> ContextStrategy:
     """Perform context strategy analysis on conversation window."""
     from lattice.memory.canonical import get_canonical_entities_list
     from lattice.utils.date_resolution import get_now
 
-    prompt_template = await get_prompt(db_pool=db_pool, prompt_key="CONTEXT_STRATEGY")
+    if not prompt_repo:
+        raise ValueError("prompt_repo is required")
+
+    prompt_template = await get_prompt(repo=prompt_repo, prompt_key="CONTEXT_STRATEGY")
     if not prompt_template:
         msg = "CONTEXT_STRATEGY prompt template not found in prompt_registry"
         raise ValueError(msg)
@@ -132,7 +139,8 @@ async def context_strategy(
         "temperature": prompt_template.temperature,
         "audit_view": audit_view,
         "audit_view_params": audit_view_params,
-        "db_pool": db_pool,
+        "audit_repo": audit_repo,
+        "feedback_repo": feedback_repo,
         "bot": bot,
     }
 
@@ -169,11 +177,10 @@ async def context_strategy(
 
 
 async def retrieve_context(
-    db_pool: "DatabasePool",
     entities: list[str],
     context_flags: list[str],
+    semantic_repo: "SemanticMemoryRepository",
     memory_depth: int = 2,
-    semantic_repo: "SemanticMemoryRepository | None" = None,
     user_timezone: str | None = None,
 ) -> dict[str, Any]:
     """Retrieve context based on entities and context flags."""
@@ -192,94 +199,75 @@ async def retrieve_context(
     if "activity_context" in context_flags or "goal_context" in context_flags:
         additional_entities = []
 
-        if semantic_repo:
-            repo_for_queries = semantic_repo
-        elif db_pool and db_pool.is_initialized():
-            from lattice.memory.context import PostgresSemanticMemoryRepository
+        if "activity_context" in context_flags:
+            activity_memories = await semantic_repo.find_memories(
+                subject="User", predicate="did activity", limit=20
+            )
+            if activity_memories:
+                renderer = get_renderer("activity_context")
+                activities = [
+                    f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
+                    for m in activity_memories
+                    if m.get("object")
+                ]
+                context["activity_context"] = "Recent user activities:\n" + "\n".join(
+                    activities
+                )
+            additional_entities.extend(
+                [
+                    m.get("object", "")
+                    for m in activity_memories
+                    if m.get("object") and isinstance(m.get("object"), str)
+                ]
+            )
 
-            repo_for_queries = PostgresSemanticMemoryRepository(db_pool)
-        else:
-            repo_for_queries = None
-
-        if repo_for_queries:
-            if "activity_context" in context_flags:
-                activity_memories = await repo_for_queries.find_memories(
-                    subject="User", predicate="did activity", limit=20
-                )
-                if activity_memories:
-                    renderer = get_renderer("activity_context")
-                    activities = [
-                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
-                        for m in activity_memories
-                        if m.get("object")
-                    ]
-                    context["activity_context"] = (
-                        "Recent user activities:\n" + "\n".join(activities)
-                    )
-                additional_entities.extend(
-                    [
-                        m.get("object", "")
-                        for m in activity_memories
-                        if m.get("object") and isinstance(m.get("object"), str)
-                    ]
-                )
-
-            if "goal_context" in context_flags:
-                goal_memories = await repo_for_queries.find_memories(
-                    predicate="has goal", limit=10
-                )
-                if goal_memories:
-                    renderer = get_renderer("goal_context")
-                    goals = [
-                        f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
-                        for m in goal_memories
-                        if m.get("object")
-                    ]
-                    context["goal_context"] = "Current goals:\n" + "\n".join(goals)
-                additional_entities.extend(
-                    [m.get("object", "") for m in goal_memories if m.get("object")]
-                )
+        if "goal_context" in context_flags:
+            goal_memories = await semantic_repo.find_memories(
+                predicate="has goal", limit=10
+            )
+            if goal_memories:
+                renderer = get_renderer("goal_context")
+                goals = [
+                    f"- {renderer(m.get('subject', ''), m.get('predicate', ''), m.get('object', ''), m.get('created_at'), user_timezone)}"
+                    for m in goal_memories
+                    if m.get("object")
+                ]
+                context["goal_context"] = "Current goals:\n" + "\n".join(goals)
+            additional_entities.extend(
+                [m.get("object", "") for m in goal_memories if m.get("object")]
+            )
 
         if additional_entities:
             entities = list(entities) + additional_entities
 
     if entities and memory_depth > 0:
-        if semantic_repo:
-            traverser = GraphTraversal(repo=semantic_repo)
-        elif db_pool and db_pool.is_initialized():
-            from lattice.memory.context import PostgresSemanticMemoryRepository
+        traverser = GraphTraversal(repo=semantic_repo)
 
-            repo = PostgresSemanticMemoryRepository(db_pool)
-            traverser = GraphTraversal(repo=repo)
-        else:
-            traverser = None
+        traverse_tasks = [
+            traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
+            for entity_name in entities
+        ]
 
-        if traverser:
-            traverse_tasks = [
-                traverser.traverse_from_entity(entity_name, max_hops=memory_depth)
-                for entity_name in entities
-            ]
-
-            if traverse_tasks:
-                traverse_results = await asyncio.gather(*traverse_tasks)
-                seen_memory_ids: set[tuple[str, str, str]] = set()
-                for result in traverse_results:
-                    for memory in result:
-                        subject = memory.get("subject", "")
-                        predicate = memory.get("predicate", "")
-                        obj = memory.get("object", "")
-                        # Ensure all are strings
-                        if (
-                            isinstance(subject, str)
-                            and isinstance(predicate, str)
-                            and isinstance(obj, str)
-                        ):
-                            memory_key = (subject, predicate, obj)
-                            if memory_key not in seen_memory_ids and all(memory_key):
-                                semantic_memories.append(memory)
-                                seen_memory_ids.add(memory_key)
-                                if origin_id := memory.get("origin_id"):
-                                    context["memory_origins"].add(origin_id)
+        if traverse_tasks:
+            traverse_results = await asyncio.gather(*traverse_tasks)
+            seen_memory_ids: set[tuple[str, str, str]] = set()
+            for result in traverse_results:
+                for memory in result:
+                    subject = memory.get("subject", "")
+                    predicate = memory.get("predicate", "")
+                    obj = memory.get("object", "")
+                    # Ensure all are strings
+                    if (
+                        isinstance(subject, str)
+                        and isinstance(predicate, str)
+                        and isinstance(obj, str)
+                    ):
+                        memory_key = (subject, predicate, obj)
+                        if memory_key not in seen_memory_ids and all(memory_key):
+                            semantic_memories.append(memory)
+                            seen_memory_ids.add(memory_key)
+                            if origin_id := memory.get("origin_id"):
+                                context["memory_origins"].add(origin_id)
 
     if semantic_memories:
         renderer = get_renderer("semantic_context")

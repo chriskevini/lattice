@@ -82,6 +82,30 @@ class TestLatticeBot:
         return repo
 
     @pytest.fixture
+    def mock_prompt_repo(self) -> MagicMock:
+        from lattice.memory.repositories import PromptRegistryRepository
+
+        repo = MagicMock(spec=PromptRegistryRepository)
+        repo.get_prompt = AsyncMock(return_value=None)
+        return repo
+
+    @pytest.fixture
+    def mock_audit_repo(self) -> MagicMock:
+        from lattice.memory.repositories import PromptAuditRepository
+
+        repo = MagicMock(spec=PromptAuditRepository)
+        repo.store_audit_entry = AsyncMock(return_value=uuid4())
+        return repo
+
+    @pytest.fixture
+    def mock_feedback_repo(self) -> MagicMock:
+        from lattice.memory.repositories import UserFeedbackRepository
+
+        repo = MagicMock(spec=UserFeedbackRepository)
+        repo.store_feedback = AsyncMock(return_value=uuid4())
+        return repo
+
+    @pytest.fixture
     def bot(
         self,
         mock_db_pool,
@@ -91,6 +115,9 @@ class TestLatticeBot:
         mock_message_repo,
         mock_semantic_repo,
         mock_canonical_repo,
+        mock_prompt_repo,
+        mock_audit_repo,
+        mock_feedback_repo,
     ) -> LatticeBot:
         config = get_config()
         config.discord_main_channel_id = 123
@@ -103,6 +130,9 @@ class TestLatticeBot:
             message_repo=mock_message_repo,
             semantic_repo=mock_semantic_repo,
             canonical_repo=mock_canonical_repo,
+            prompt_repo=mock_prompt_repo,
+            audit_repo=mock_audit_repo,
+            feedback_repo=mock_feedback_repo,
         )
 
     def test_bot_initialization(
@@ -114,6 +144,9 @@ class TestLatticeBot:
         mock_message_repo,
         mock_semantic_repo,
         mock_canonical_repo,
+        mock_prompt_repo,
+        mock_audit_repo,
+        mock_feedback_repo,
     ) -> None:
         """Test bot initialization with default settings."""
         config = get_config()
@@ -128,6 +161,9 @@ class TestLatticeBot:
             message_repo=mock_message_repo,
             semantic_repo=mock_semantic_repo,
             canonical_repo=mock_canonical_repo,
+            prompt_repo=mock_prompt_repo,
+            audit_repo=mock_audit_repo,
+            feedback_repo=mock_feedback_repo,
         )
 
         assert bot.main_channel_id == 123
@@ -145,6 +181,9 @@ class TestLatticeBot:
         mock_message_repo,
         mock_semantic_repo,
         mock_canonical_repo,
+        mock_prompt_repo,
+        mock_audit_repo,
+        mock_feedback_repo,
     ) -> None:
         """Test bot initialization with missing channel IDs logs warnings."""
         config = get_config()
@@ -158,6 +197,9 @@ class TestLatticeBot:
             message_repo=mock_message_repo,
             semantic_repo=mock_semantic_repo,
             canonical_repo=mock_canonical_repo,
+            prompt_repo=mock_prompt_repo,
+            audit_repo=mock_audit_repo,
+            feedback_repo=mock_feedback_repo,
         )
 
         assert bot.main_channel_id == 0

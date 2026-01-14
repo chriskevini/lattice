@@ -9,6 +9,7 @@ from lattice.memory.context import (
 )
 from lattice.memory.repositories import (
     PostgresPromptAuditRepository,
+    PostgresPromptRegistryRepository,
     PostgresUserFeedbackRepository,
 )
 from lattice.utils.database import DatabasePool
@@ -30,13 +31,18 @@ class LatticeApp:
     def __init__(self) -> None:
         self.db_pool = DatabasePool()
         self.llm_client = _LLMClient(provider=config.llm_provider)
-        self.auditing_llm_client = AuditingLLMClient(llm_client=self.llm_client)
+        self.audit_repo = PostgresPromptAuditRepository(db_pool=self.db_pool)
+        self.feedback_repo = PostgresUserFeedbackRepository(db_pool=self.db_pool)
+        self.prompt_repo = PostgresPromptRegistryRepository(db_pool=self.db_pool)
+        self.auditing_llm_client = AuditingLLMClient(
+            llm_client=self.llm_client,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
+        )
         self.context_repo = PostgresContextRepository(db_pool=self.db_pool)
         self.message_repo = PostgresMessageRepository(db_pool=self.db_pool)
         self.semantic_repo = PostgresSemanticMemoryRepository(db_pool=self.db_pool)
         self.canonical_repo = PostgresCanonicalRepository(db_pool=self.db_pool)
-        self.audit_repo = PostgresPromptAuditRepository(db_pool=self.db_pool)
-        self.feedback_repo = PostgresUserFeedbackRepository(db_pool=self.db_pool)
         self.context_cache = ChannelContextCache(repository=self.context_repo, ttl=10)
         self.user_context_cache = UserContextCache(
             repository=self.context_repo, ttl_minutes=30
@@ -49,6 +55,7 @@ class LatticeApp:
             message_repo=self.message_repo,
             semantic_repo=self.semantic_repo,
             canonical_repo=self.canonical_repo,
+            prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
         )

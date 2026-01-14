@@ -18,6 +18,9 @@ if TYPE_CHECKING:
     from lattice.memory.repositories import (
         CanonicalRepository,
         MessageRepository,
+        PromptRegistryRepository,
+        PromptAuditRepository,
+        UserFeedbackRepository,
     )
 
 
@@ -63,6 +66,9 @@ class MessageHandler:
         context_cache: "ChannelContextCache",
         user_context_cache: "UserContextCache",
         message_repo: "MessageRepository",
+        prompt_repo: "PromptRegistryRepository",
+        audit_repo: "PromptAuditRepository",
+        feedback_repo: "UserFeedbackRepository",
         canonical_repo: "CanonicalRepository | None" = None,
         user_timezone: str = "UTC",
     ) -> None:
@@ -77,6 +83,9 @@ class MessageHandler:
             context_cache: In-memory context cache for dependency injection
             user_context_cache: User-level cache for goals/activities
             message_repo: Message repository
+            prompt_repo: Prompt repository
+            audit_repo: Audit repository
+            feedback_repo: Feedback repository
             canonical_repo: Canonical repository for entities/predicates
             user_timezone: The user's timezone
         """
@@ -88,6 +97,9 @@ class MessageHandler:
         self.context_cache = context_cache
         self.user_context_cache = user_context_cache
         self.message_repo = message_repo
+        self.prompt_repo = prompt_repo
+        self.audit_repo = audit_repo
+        self.feedback_repo = feedback_repo
         self.canonical_repo = canonical_repo
         self.user_timezone = user_timezone
         self._memory_healthy = False
@@ -111,28 +123,41 @@ class MessageHandler:
 
             user_id = str(self.bot.user.id) if self.bot and self.bot.user else "user"
             prompt_template = await get_prompt(
-                db_pool=self.db_pool, prompt_key="CONTEXTUAL_NUDGE"
+                repo=self.prompt_repo, prompt_key="CONTEXTUAL_NUDGE"
             )
             nudge_plan = await prepare_contextual_nudge(
                 llm_client=self.llm_client,
                 user_context_cache=self.user_context_cache,
                 user_id=user_id,
                 prompt_template=prompt_template,
-                db_pool=self.db_pool,
                 bot=self.bot,
                 semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
+                audit_repo=self.audit_repo,
+                feedback_repo=self.feedback_repo,
+            )
+            nudge_plan = await prepare_contextual_nudge(
+                llm_client=self.llm_client,
+                user_context_cache=self.user_context_cache,
+                user_id=user_id,
+                prompt_template=prompt_template,
+                bot=self.bot,
+                semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
+                audit_repo=self.audit_repo,
+                feedback_repo=self.feedback_repo,
             )
 
             if nudge_plan.content and nudge_plan.channel_id:
                 from lattice.core.pipeline import UnifiedPipeline
 
                 pipeline = UnifiedPipeline(
-                    db_pool=self.db_pool,
                     bot=self.bot,
                     context_cache=self.context_cache,
                     message_repo=self.message_repo,
-                    semantic_repo=self.bot.semantic_repo,  # type: ignore
-                    canonical_repo=self.bot.canonical_repo,  # type: ignore
+                    semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
+                    canonical_repo=self.bot.canonical_repo,  # type: ignore[attr-defined]
+                    prompt_repo=self.prompt_repo,
+                    audit_repo=self.audit_repo,
+                    feedback_repo=self.feedback_repo,
                     llm_client=self.llm_client,
                 )
                 result = await pipeline.dispatch_autonomous_nudge(
@@ -160,7 +185,7 @@ class MessageHandler:
                         from lattice.memory import prompt_audits
 
                         await prompt_audits.store_prompt_audit(
-                            db_pool=self.db_pool,
+                            repo=self.audit_repo,
                             prompt_key="CONTEXTUAL_NUDGE",
                             rendered_prompt=nudge_plan.rendered_prompt,
                             response_content=result.content,
@@ -193,6 +218,9 @@ class MessageHandler:
                 user_context_cache=self.user_context_cache,
                 message_repo=self.message_repo,
                 canonical_repo=self.canonical_repo,
+                prompt_repo=self.prompt_repo,
+                audit_repo=self.audit_repo,
+                feedback_repo=self.feedback_repo,
             )
         except Exception:
             logger.exception("Error in immediate consolidation")
@@ -225,6 +253,9 @@ class MessageHandler:
                 user_context_cache=self.user_context_cache,
                 message_repo=self.message_repo,
                 canonical_repo=self.canonical_repo,
+                prompt_repo=self.prompt_repo,
+                audit_repo=self.audit_repo,
+                feedback_repo=self.feedback_repo,
             )
         except asyncio.CancelledError:
             logger.debug("Consolidation timer cancelled by new user message")
@@ -381,7 +412,6 @@ class MessageHandler:
                 )
 
                 strategy = await context_strategy(
-                    db_pool=self.db_pool,
                     message_id=user_message_id,
                     user_message=message.content,
                     recent_messages=recent_msgs_for_strategy,
@@ -396,6 +426,10 @@ class MessageHandler:
                     },
                     llm_client=self.llm_client,
                     bot=self.bot,
+                    canonical_repo=self.canonical_repo,
+                    prompt_repo=self.prompt_repo,
+                    audit_repo=self.audit_repo,
+                    feedback_repo=self.feedback_repo,
                 )
 
                 if strategy:
@@ -430,9 +464,9 @@ class MessageHandler:
 
             # Retrieve semantic context
             context_result = await retrieve_context(
-                db_pool=self.db_pool,
                 entities=entities,
                 context_flags=context_flags,
+                semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
                 memory_depth=2 if entities else 0,
                 user_timezone=self.user_timezone,
             )
@@ -452,9 +486,10 @@ class MessageHandler:
                 episodic_limit=RESPONSE_EPISODIC_LIMIT,
                 memory_depth=0,
                 entity_names=[],
-                db_pool=self.db_pool,
                 message_repo=self.message_repo,
+                semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
             )
+
             # Format episodic context (excluding current message)
             from zoneinfo import ZoneInfo
 
@@ -488,7 +523,6 @@ class MessageHandler:
                 user_message=message.content,
                 episodic_context=episodic_context,
                 semantic_context=semantic_context,
-                db_pool=self.db_pool,
                 unresolved_entities=strategy.unresolved_entities if strategy else None,
                 user_tz=self.user_timezone,
                 audit_view=True,
@@ -498,6 +532,9 @@ class MessageHandler:
                 },
                 llm_client=self.llm_client,
                 bot=self.bot,
+                prompt_repo=self.prompt_repo,
+                audit_repo=self.audit_repo,
+                feedback_repo=self.feedback_repo,
             )
 
             # Split response for Discord length limits

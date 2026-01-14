@@ -16,7 +16,10 @@ from lattice.memory import prompt_audits, user_feedback
 from lattice.utils.llm_client import GenerationResult
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import (
+        PromptAuditRepository,
+        UserFeedbackRepository,
+    )
 
 
 logger = structlog.get_logger(__name__)
@@ -149,7 +152,8 @@ class FeedbackModal(discord.ui.Modal):
         audit_id: UUID,
         message_id: int | None,
         bot_message_id: int | None,
-        db_pool: "DatabasePool",
+        audit_repo: "PromptAuditRepository",
+        feedback_repo: "UserFeedbackRepository",
     ) -> None:
         """Initialize feedback modal.
 
@@ -157,13 +161,15 @@ class FeedbackModal(discord.ui.Modal):
             audit_id: Prompt audit UUID
             message_id: Discord message ID this feedback is for
             bot_message_id: Discord message ID of the bot's message to react to
-            db_pool: Database pool for dependency injection
+            audit_repo: Audit repository for dependency injection
+            feedback_repo: Feedback repository for dependency injection
         """
         super().__init__(title="Give Feedback")
         self.audit_id = audit_id
         self.message_id = message_id
         self.bot_message_id = bot_message_id
-        self.db_pool = db_pool
+        self.audit_repo = audit_repo
+        self.feedback_repo = feedback_repo
 
         self.add_item(
             discord.ui.InputText(
@@ -227,12 +233,12 @@ class FeedbackModal(discord.ui.Modal):
             audit_id=self.audit_id,
         )
         feedback_id = await user_feedback.store_feedback(
-            db_pool=self.db_pool, feedback=feedback
+            repo=self.feedback_repo, feedback=feedback
         )
 
         if self.audit_id:
             linked = await prompt_audits.link_feedback_to_audit_by_id(
-                db_pool=self.db_pool, audit_id=self.audit_id, feedback_id=feedback_id
+                repo=self.audit_repo, audit_id=self.audit_id, feedback_id=feedback_id
             )
             if not linked:
                 logger.warning(
@@ -275,7 +281,8 @@ class AuditView(discord.ui.DesignerView):
 
     def __init__(
         self,
-        db_pool: "DatabasePool",
+        audit_repo: "PromptAuditRepository",
+        feedback_repo: "UserFeedbackRepository",
         audit_id: UUID | None = None,
         message_id: int | None = None,
         prompt_key: str | None = None,
@@ -286,7 +293,8 @@ class AuditView(discord.ui.DesignerView):
         """Initialize audit view.
 
         Args:
-            db_pool: Database pool for dependency injection
+            audit_repo: Audit repository for dependency injection
+            feedback_repo: Feedback repository for dependency injection
             audit_id: Prompt audit UUID
             message_id: Discord message ID
             prompt_key: Prompt template key
@@ -295,7 +303,8 @@ class AuditView(discord.ui.DesignerView):
             raw_output: Raw LLM output
         """
         super().__init__(timeout=None)
-        self.db_pool = db_pool
+        self.audit_repo = audit_repo
+        self.feedback_repo = feedback_repo
         self.audit_id = audit_id
         self.message_id = message_id
         self.prompt_key = prompt_key
@@ -470,7 +479,11 @@ class AuditView(discord.ui.DesignerView):
                 interaction.message.id if interaction.message else self.message_id
             )
             modal = FeedbackModal(
-                self.audit_id, self.message_id, bot_message_id, self.db_pool
+                self.audit_id,
+                self.message_id,
+                bot_message_id,
+                self.audit_repo,
+                self.feedback_repo,
             )
             await interaction.response.send_modal(modal)
             logger.debug(
@@ -503,12 +516,12 @@ class AuditView(discord.ui.DesignerView):
                 audit_id=self.audit_id,
             )
             feedback_id = await user_feedback.store_feedback(
-                db_pool=self.db_pool, feedback=feedback
+                repo=self.feedback_repo, feedback=feedback
             )
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
-                    db_pool=self.db_pool,
+                    repo=self.audit_repo,
                     audit_id=self.audit_id,
                     feedback_id=feedback_id,
                 )
@@ -553,12 +566,12 @@ class AuditView(discord.ui.DesignerView):
                 audit_id=self.audit_id,
             )
             feedback_id = await user_feedback.store_feedback(
-                db_pool=self.db_pool, feedback=feedback
+                repo=self.feedback_repo, feedback=feedback
             )
 
             if self.audit_id:
                 linked = await prompt_audits.link_feedback_to_audit_by_id(
-                    db_pool=self.db_pool,
+                    repo=self.audit_repo,
                     audit_id=self.audit_id,
                     feedback_id=feedback_id,
                 )
@@ -621,7 +634,8 @@ class AuditViewBuilder:
         metadata_parts: list[str],
         audit_id: UUID | None,
         rendered_prompt: str,
-        db_pool: "DatabasePool",
+        audit_repo: "PromptAuditRepository",
+        feedback_repo: "UserFeedbackRepository",
         result: GenerationResult | None = None,
         message_id: int | None = None,
         warnings: list[str] | None = None,
@@ -636,7 +650,8 @@ class AuditViewBuilder:
             metadata_parts: List of metadata strings to be joined by " | "
             audit_id: Prompt audit UUID
             rendered_prompt: Full rendered prompt
-            db_pool: Database pool for dependency injection
+            audit_repo: Audit repository for dependency injection
+            feedback_repo: Feedback repository for dependency injection
             result: Optional full result for rich rendering
             message_id: Optional main Discord message ID for feedback
 
@@ -698,7 +713,8 @@ class AuditViewBuilder:
                 )
 
         view = AuditView(
-            db_pool=db_pool,
+            audit_repo=audit_repo,
+            feedback_repo=feedback_repo,
             audit_id=audit_id,
             message_id=message_id,
             prompt_key=prompt_key,

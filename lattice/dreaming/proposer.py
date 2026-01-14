@@ -14,6 +14,11 @@ import structlog
 if TYPE_CHECKING:
     from lattice.dreaming.analyzer import PromptMetrics
     from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import (
+        PromptRegistryRepository,
+        PromptAuditRepository,
+        UserFeedbackRepository,
+    )
 
 
 from lattice.memory.procedural import get_prompt
@@ -159,17 +164,21 @@ def _validate_proposal_fields(data: dict[str, Any]) -> str | None:
 
 async def propose_optimization(
     metrics: "PromptMetrics",
-    db_pool: Any,
     llm_client: Any,
-    prompt_audit_repo: Any = None,
+    prompt_repo: "PromptRegistryRepository",
+    prompt_audit_repo: "PromptAuditRepository",
+    audit_repo: "PromptAuditRepository",
+    feedback_repo: "UserFeedbackRepository",
 ) -> OptimizationProposal | None:
     """Generate optimization proposal for an underperforming prompt.
 
     Args:
         metrics: Prompt metrics indicating performance issues
-        db_pool: Database pool for dependency injection (required)
         llm_client: LLM client for dependency injection (required)
+        prompt_repo: Prompt repository
         prompt_audit_repo: Prompt audit repository
+        audit_repo: Audit repository for optimization LLM call
+        feedback_repo: Feedback repository for optimization LLM call
 
     Returns:
         OptimizationProposal if generated, None otherwise
@@ -178,7 +187,7 @@ async def propose_optimization(
         raise ValueError("llm_client is required for propose_optimization")
 
     # Get current template
-    prompt_template = await get_prompt(db_pool=db_pool, prompt_key=metrics.prompt_key)
+    prompt_template = await get_prompt(repo=prompt_repo, prompt_key=metrics.prompt_key)
     if not prompt_template:
         logger.warning(
             "Cannot propose optimization - prompt not found",
@@ -188,7 +197,7 @@ async def propose_optimization(
 
     # Get optimization prompt template from database
     optimization_prompt_template = await get_prompt(
-        db_pool=db_pool, prompt_key="PROMPT_OPTIMIZATION"
+        repo=prompt_repo, prompt_key="PROMPT_OPTIMIZATION"
     )
     if not optimization_prompt_template:
         logger.warning(
@@ -203,7 +212,6 @@ async def propose_optimization(
     feedback_samples = await get_feedback_with_context(
         prompt_key=metrics.prompt_key,
         limit=MAX_FEEDBACK_SAMPLES,
-        db_pool=db_pool,
         prompt_audit_repo=prompt_audit_repo,
     )
 
@@ -241,7 +249,6 @@ async def propose_optimization(
     try:
         result = await llm_client.complete(
             prompt=rendered_prompt,
-            db_pool=db_pool,
             prompt_key="PROMPT_OPTIMIZATION",
             main_discord_message_id=None,
             temperature=optimization_prompt_template.temperature,
@@ -249,6 +256,8 @@ async def propose_optimization(
             audit_view_params={
                 "input_text": f"Optimizing {metrics.prompt_key}",
             },
+            audit_repo=audit_repo,
+            feedback_repo=feedback_repo,
         )
     except Exception as e:
         logger.exception("LLM call for optimization proposal failed", error=str(e))

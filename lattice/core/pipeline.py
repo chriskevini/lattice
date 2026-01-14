@@ -3,12 +3,14 @@ from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
     from lattice.core.context import ChannelContextCache
     from lattice.memory.repositories import (
         CanonicalRepository,
         MessageRepository,
         SemanticMemoryRepository,
+        PromptRegistryRepository,
+        PromptAuditRepository,
+        UserFeedbackRepository,
     )
 
 
@@ -26,20 +28,24 @@ class UnifiedPipeline:
 
     def __init__(
         self,
-        db_pool: "DatabasePool",
         bot: Any,
         context_cache: "ChannelContextCache",
         message_repo: "MessageRepository",
         semantic_repo: "SemanticMemoryRepository",
         canonical_repo: "CanonicalRepository",
+        prompt_repo: "PromptRegistryRepository",
+        audit_repo: "PromptAuditRepository",
+        feedback_repo: "UserFeedbackRepository",
         llm_client: Any = None,
     ) -> None:
-        self.db_pool = db_pool
         self.bot = bot
         self.context_cache = context_cache
         self.message_repo = message_repo
         self.semantic_repo = semantic_repo
         self.canonical_repo = canonical_repo
+        self.prompt_repo = prompt_repo
+        self.audit_repo = audit_repo
+        self.feedback_repo = feedback_repo
         self.llm_client = llm_client
 
     async def send_response(
@@ -96,7 +102,6 @@ class UnifiedPipeline:
         await self.context_cache.advance(channel_id)
 
         strategy = await context_strategy(
-            db_pool=self.db_pool,
             message_id=message_id,
             user_message=content,
             recent_messages=history,
@@ -106,11 +111,13 @@ class UnifiedPipeline:
             discord_message_id=discord_message_id,
             llm_client=self.llm_client,
             canonical_repo=self.canonical_repo,
+            prompt_repo=self.prompt_repo,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
         )
 
         # 3. Retrieve
         context = await retrieve_context(
-            db_pool=self.db_pool,
             entities=strategy.entities,
             context_flags=strategy.context_flags,
             semantic_repo=self.semantic_repo,
@@ -124,7 +131,9 @@ class UnifiedPipeline:
             episodic_context=formatted_history,
             semantic_context=context["semantic_context"],
             llm_client=self.llm_client,
-            db_pool=self.db_pool,
+            prompt_repo=self.prompt_repo,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
         )
 
         # 5. Store & Send

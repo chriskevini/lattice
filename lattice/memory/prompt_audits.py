@@ -3,7 +3,6 @@
 Stores complete audit trail for Dreaming Cycle to analyze prompt effectiveness.
 """
 
-import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -13,7 +12,7 @@ from uuid import UUID
 import structlog
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import PromptAuditRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -70,7 +69,7 @@ class PromptAudit:
 
 
 async def store_prompt_audit(
-    db_pool: "DatabasePool",
+    repo: "PromptAuditRepository",
     prompt_key: str,
     response_content: str,
     main_discord_message_id: int | None,
@@ -99,7 +98,7 @@ async def store_prompt_audit(
     """Store a prompt audit entry.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Repository for dependency injection
         prompt_key: The prompt template key used
         response_content: The bot's response
         main_discord_message_id: Discord message ID in main channel
@@ -128,161 +127,96 @@ async def store_prompt_audit(
     Returns:
         UUID of the stored audit entry
     """
-    execution_metadata_json = (
-        json.dumps(execution_metadata) if execution_metadata else None
+    audit_id = await repo.store_audit(
+        prompt_key=prompt_key,
+        response_content=response_content,
+        main_discord_message_id=main_discord_message_id,
+        rendered_prompt=rendered_prompt,
+        template_version=template_version,
+        message_id=message_id,
+        model=model,
+        provider=provider,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_usd=cost_usd,
+        latency_ms=latency_ms,
+        finish_reason=finish_reason,
+        cache_discount_usd=cache_discount_usd,
+        native_tokens_cached=native_tokens_cached,
+        native_tokens_reasoning=native_tokens_reasoning,
+        upstream_id=upstream_id,
+        cancelled=cancelled,
+        moderation_latency_ms=moderation_latency_ms,
+        execution_metadata=execution_metadata,
+        archetype_matched=archetype_matched,
+        archetype_confidence=archetype_confidence,
+        reasoning=reasoning,
+        dream_discord_message_id=dream_discord_message_id,
     )
-    reasoning_json = json.dumps(reasoning) if reasoning else None
 
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO prompt_audits (
-                prompt_key,
-                template_version,
-                message_id,
-                rendered_prompt,
-                response_content,
-                model,
-                provider,
-                prompt_tokens,
-                completion_tokens,
-                cost_usd,
-                latency_ms,
-                finish_reason,
-                cache_discount_usd,
-                native_tokens_cached,
-                native_tokens_reasoning,
-                upstream_id,
-                cancelled,
-                moderation_latency_ms,
-                execution_metadata,
-                archetype_matched,
-                archetype_confidence,
-                reasoning,
-                main_discord_message_id,
-                dream_discord_message_id
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
-            RETURNING id
-            """,
-            prompt_key,
-            template_version,
-            message_id,
-            rendered_prompt,
-            response_content,
-            model,
-            provider,
-            prompt_tokens,
-            completion_tokens,
-            cost_usd,
-            latency_ms,
-            finish_reason,
-            cache_discount_usd,
-            native_tokens_cached,
-            native_tokens_reasoning,
-            upstream_id,
-            cancelled,
-            moderation_latency_ms,
-            execution_metadata_json,
-            archetype_matched,
-            archetype_confidence,
-            reasoning_json,
-            main_discord_message_id,
-            dream_discord_message_id,
-        )
+    logger.info(
+        "Stored prompt audit",
+        audit_id=str(audit_id),
+        prompt_key=prompt_key,
+        main_message_id=main_discord_message_id,
+        dream_message_id=dream_discord_message_id,
+    )
 
-        if row is None:
-            # This should not happen with RETURNING, but for robustness
-            msg = "Failed to store prompt audit"
-            raise RuntimeError(msg)
-
-        audit_id = row["id"]
-
-        logger.info(
-            "Stored prompt audit",
-            audit_id=str(audit_id),
-            prompt_key=prompt_key,
-            main_message_id=main_discord_message_id,
-            dream_message_id=dream_discord_message_id,
-        )
-
-        return audit_id
+    return audit_id
 
 
 async def update_audit_dream_message(
-    db_pool: "DatabasePool", audit_id: UUID, dream_discord_message_id: int
+    repo: "PromptAuditRepository", audit_id: UUID, dream_discord_message_id: int
 ) -> bool:
     """Update audit with dream channel message ID.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Repository for dependency injection
         audit_id: UUID of the audit entry
         dream_discord_message_id: Discord message ID in dream channel
 
     Returns:
         True if updated, False if not found
     """
-    async with db_pool.pool.acquire() as conn:
-        result = await conn.execute(
-            """
-            UPDATE prompt_audits
-            SET dream_discord_message_id = $1
-            WHERE id = $2
-            """,
-            dream_discord_message_id,
-            audit_id,
+    updated = await repo.update_dream_message(audit_id, dream_discord_message_id)
+
+    if updated:
+        logger.info(
+            "Updated audit with dream message",
+            audit_id=str(audit_id),
+            dream_message_id=dream_discord_message_id,
         )
 
-        updated = result == "UPDATE 1"
-
-        if updated:
-            logger.info(
-                "Updated audit with dream message",
-                audit_id=str(audit_id),
-                dream_message_id=dream_discord_message_id,
-            )
-
-        return updated
+    return updated
 
 
 async def link_feedback_to_audit(
-    db_pool: "DatabasePool", dream_discord_message_id: int, feedback_id: UUID
+    repo: "PromptAuditRepository", dream_discord_message_id: int, feedback_id: UUID
 ) -> bool:
     """Link feedback to prompt audit via dream channel message ID.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Repository for dependency injection
         dream_discord_message_id: Discord message ID in dream channel
         feedback_id: UUID of the feedback entry
 
     Returns:
         True if linked, False if audit not found
     """
-    async with db_pool.pool.acquire() as conn:
-        result = await conn.execute(
-            """
-            UPDATE prompt_audits
-            SET feedback_id = $1
-            WHERE dream_discord_message_id = $2
-            """,
-            feedback_id,
-            dream_discord_message_id,
+    updated = await repo.link_feedback(dream_discord_message_id, feedback_id)
+
+    if updated:
+        logger.info(
+            "Linked feedback to audit",
+            feedback_id=str(feedback_id),
+            dream_message_id=dream_discord_message_id,
         )
 
-        updated = result == "UPDATE 1"
-
-        if updated:
-            logger.info(
-                "Linked feedback to audit",
-                feedback_id=str(feedback_id),
-                dream_message_id=dream_discord_message_id,
-            )
-
-        return updated
+    return updated
 
 
 async def link_feedback_to_audit_by_id(
-    db_pool: "DatabasePool", audit_id: UUID, feedback_id: UUID
+    repo: "PromptAuditRepository", audit_id: UUID, feedback_id: UUID
 ) -> bool:
     """Link feedback to prompt audit via audit UUID.
 
@@ -292,72 +226,90 @@ async def link_feedback_to_audit_by_id(
     so they may have NULL for dream_discord_message_id.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Repository for dependency injection
         audit_id: UUID of the prompt audit entry
         feedback_id: UUID of the feedback entry
 
     Returns:
         True if linked, False if audit not found
     """
-    async with db_pool.pool.acquire() as conn:
-        result = await conn.execute(
-            """
-            UPDATE prompt_audits
-            SET feedback_id = $1
-            WHERE id = $2
-            """,
-            feedback_id,
-            audit_id,
+    updated = await repo.link_feedback_by_id(audit_id, feedback_id)
+
+    if updated:
+        logger.info(
+            "Linked feedback to audit",
+            feedback_id=str(feedback_id),
+            audit_id=str(audit_id),
         )
 
-        updated = result == "UPDATE 1"
-
-        if updated:
-            logger.info(
-                "Linked feedback to audit",
-                feedback_id=str(feedback_id),
-                audit_id=str(audit_id),
-            )
-
-        return updated
+    return updated
 
 
 async def get_audit_by_dream_message(
-    db_pool: "DatabasePool", dream_discord_message_id: int
+    repo: "PromptAuditRepository", dream_discord_message_id: int
 ) -> PromptAudit | None:
     """Get audit by dream channel message ID.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Repository for dependency injection
         dream_discord_message_id: Discord message ID in dream channel
 
     Returns:
         PromptAudit if found, None otherwise
     """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT
-                id, prompt_key, template_version, message_id,
-                rendered_prompt, response_content,
-                model, provider, prompt_tokens, completion_tokens,
-                cost_usd, latency_ms,
-                finish_reason, cache_discount_usd, native_tokens_cached,
-                native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
-                execution_metadata, archetype_matched, archetype_confidence,
-                reasoning,
-                main_discord_message_id, dream_discord_message_id,
-                feedback_id, created_at
-            FROM prompt_audits
-            WHERE dream_discord_message_id = $1
-            """,
-            dream_discord_message_id,
-        )
+    row = await repo.get_by_dream_message(dream_discord_message_id)
 
-        if not row:
-            return None
+    if not row:
+        return None
 
-        return PromptAudit(
+    return PromptAudit(
+        audit_id=row["id"],
+        prompt_key=row["prompt_key"],
+        template_version=row["template_version"],
+        message_id=row["message_id"],
+        rendered_prompt=row["rendered_prompt"],
+        response_content=row["response_content"],
+        model=row["model"],
+        provider=row["provider"],
+        prompt_tokens=row["prompt_tokens"],
+        completion_tokens=row["completion_tokens"],
+        cost_usd=row["cost_usd"],
+        latency_ms=row["latency_ms"],
+        finish_reason=row["finish_reason"],
+        cache_discount_usd=row["cache_discount_usd"],
+        native_tokens_cached=row["native_tokens_cached"],
+        native_tokens_reasoning=row["native_tokens_reasoning"],
+        upstream_id=row["upstream_id"],
+        cancelled=row["cancelled"],
+        moderation_latency_ms=row["moderation_latency_ms"],
+        execution_metadata=row["execution_metadata"],
+        archetype_matched=row["archetype_matched"],
+        archetype_confidence=row["archetype_confidence"],
+        reasoning=row["reasoning"],
+        main_discord_message_id=row["main_discord_message_id"],
+        dream_discord_message_id=row["dream_discord_message_id"],
+        feedback_id=row["feedback_id"],
+        created_at=row["created_at"],
+    )
+
+
+async def get_audits_with_feedback(
+    repo: "PromptAuditRepository", limit: int = 100, offset: int = 0
+) -> list[PromptAudit]:
+    """Get prompt audits that have feedback.
+
+    Args:
+        repo: Repository for dependency injection
+        limit: Maximum number of audits to return
+        offset: Offset for pagination
+
+    Returns:
+        List of prompt audits with feedback
+    """
+    rows = await repo.get_with_feedback(limit, offset)
+
+    return [
+        PromptAudit(
             audit_id=row["id"],
             prompt_key=row["prompt_key"],
             template_version=row["template_version"],
@@ -386,73 +338,5 @@ async def get_audit_by_dream_message(
             feedback_id=row["feedback_id"],
             created_at=row["created_at"],
         )
-
-
-async def get_audits_with_feedback(
-    db_pool: "DatabasePool", limit: int = 100, offset: int = 0
-) -> list[PromptAudit]:
-    """Get prompt audits that have feedback.
-
-    Args:
-        db_pool: Database pool for dependency injection
-        limit: Maximum number of audits to return
-        offset: Offset for pagination
-
-    Returns:
-        List of prompt audits with feedback
-    """
-    async with db_pool.pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT
-                id, prompt_key, template_version, message_id,
-                rendered_prompt, response_content,
-                model, provider, prompt_tokens, completion_tokens,
-                cost_usd, latency_ms,
-                finish_reason, cache_discount_usd, native_tokens_cached,
-                native_tokens_reasoning, upstream_id, cancelled, moderation_latency_ms,
-                execution_metadata, archetype_matched, archetype_confidence,
-                reasoning,
-                main_discord_message_id, dream_discord_message_id,
-                feedback_id, created_at
-            FROM prompt_audits
-            WHERE feedback_id IS NOT NULL
-            ORDER BY created_at DESC
-            LIMIT $1 OFFSET $2
-            """,
-            limit,
-            offset,
-        )
-
-        return [
-            PromptAudit(
-                audit_id=row["id"],
-                prompt_key=row["prompt_key"],
-                template_version=row["template_version"],
-                message_id=row["message_id"],
-                rendered_prompt=row["rendered_prompt"],
-                response_content=row["response_content"],
-                model=row["model"],
-                provider=row["provider"],
-                prompt_tokens=row["prompt_tokens"],
-                completion_tokens=row["completion_tokens"],
-                cost_usd=row["cost_usd"],
-                latency_ms=row["latency_ms"],
-                finish_reason=row["finish_reason"],
-                cache_discount_usd=row["cache_discount_usd"],
-                native_tokens_cached=row["native_tokens_cached"],
-                native_tokens_reasoning=row["native_tokens_reasoning"],
-                upstream_id=row["upstream_id"],
-                cancelled=row["cancelled"],
-                moderation_latency_ms=row["moderation_latency_ms"],
-                execution_metadata=row["execution_metadata"],
-                archetype_matched=row["archetype_matched"],
-                archetype_confidence=row["archetype_confidence"],
-                reasoning=row["reasoning"],
-                main_discord_message_id=row["main_discord_message_id"],
-                dream_discord_message_id=row["dream_discord_message_id"],
-                feedback_id=row["feedback_id"],
-                created_at=row["created_at"],
-            )
-            for row in rows
-        ]
+        for row in rows
+    ]

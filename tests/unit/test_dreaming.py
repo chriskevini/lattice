@@ -1,7 +1,6 @@
 """Tests for dreaming cycle modules (analyzer, proposer, approval)."""
 
 from decimal import Decimal
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -41,21 +40,12 @@ class TestAnalyzer:
             }
         ]
 
-        mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=mock_rows)
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
-
         mock_prompt_audit_repo = AsyncMock()
         mock_prompt_audit_repo.analyze_prompt_effectiveness = AsyncMock(
             return_value=mock_rows
         )
 
         metrics = await analyze_prompt_effectiveness(
-            db_pool=mock_pool,
             prompt_audit_repo=mock_prompt_audit_repo,
             min_uses=10,
             lookback_days=30,
@@ -71,19 +61,11 @@ class TestAnalyzer:
     @pytest.mark.asyncio
     async def test_analyze_prompt_effectiveness_empty_results(self) -> None:
         """Test that empty results return empty list."""
-        mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[])
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire().__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.pool.acquire().__aexit__ = AsyncMock()
-
         mock_prompt_audit_repo = AsyncMock()
         mock_prompt_audit_repo.analyze_prompt_effectiveness = AsyncMock(return_value=[])
 
         metrics = await analyze_prompt_effectiveness(
-            db_pool=mock_pool, prompt_audit_repo=mock_prompt_audit_repo
+            prompt_audit_repo=mock_prompt_audit_repo
         )
 
         assert len(metrics) == 0
@@ -130,33 +112,48 @@ class TestProposer:
             "justification": "Will help reduce response length"
         }"""
 
-        mock_db_pool = MagicMock()
+        mock_prompt_repo = AsyncMock()
+        mock_prompt_audit_repo = AsyncMock()
+        mock_audit_repo = AsyncMock()
+        mock_feedback_repo = AsyncMock()
 
-        def get_prompt_side_effect(prompt_key: str, db_pool: Any = None):
+        async def get_prompt_side_effect(prompt_key: str):
             if prompt_key == "BASIC_RESPONSE":
-                return mock_template
+                return {
+                    "prompt_key": "BASIC_RESPONSE",
+                    "template": mock_template.template,
+                    "temperature": 0.7,
+                    "version": mock_template.version,
+                    "active": True,
+                }
             elif prompt_key == "PROMPT_OPTIMIZATION":
-                return mock_optimization_template
-            elif prompt_key == "MEMORY_CONSOLIDATION":
-                return mock_template
-            elif prompt_key == "CONTEXT_STRATEGY":
-                return mock_template
+                return {
+                    "prompt_key": "PROMPT_OPTIMIZATION",
+                    "template": mock_optimization_template.template,
+                    "temperature": mock_optimization_template.temperature,
+                    "version": mock_optimization_template.version,
+                    "active": True,
+                }
             return None
+
+        mock_prompt_repo.get_template.side_effect = get_prompt_side_effect
 
         mock_llm_client = MagicMock()
         mock_llm_client.complete = AsyncMock(return_value=mock_llm_result)
 
         with (
-            patch("lattice.dreaming.proposer.get_prompt") as mock_get_prompt,
             patch(
                 "lattice.dreaming.proposer.get_feedback_with_context",
                 return_value=[{"feedback_content": "good", "response_content": "hi"}],
             ),
         ):
-            mock_get_prompt.side_effect = get_prompt_side_effect
-
             proposal = await propose_optimization(
-                metrics, db_pool=mock_db_pool, llm_client=mock_llm_client
+                metrics,
+                prompt_repo=mock_prompt_repo,
+                prompt_audit_repo=mock_prompt_audit_repo,
+                audit_repo=mock_audit_repo,
+                feedback_repo=mock_feedback_repo,
+                llm_client=mock_llm_client,
             )
 
             assert proposal is not None

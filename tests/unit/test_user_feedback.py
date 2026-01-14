@@ -15,18 +15,7 @@ from lattice.memory.user_feedback import (
     get_feedback_by_user_message,
     store_feedback,
 )
-
-
-def create_mock_pool_with_conn(mock_conn: AsyncMock) -> MagicMock:
-    """Create a mock pool with the given connection."""
-    mock_acquire_cm = MagicMock()
-    mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_acquire_cm.__aexit__ = AsyncMock(return_value=None)
-
-    mock_pool = MagicMock()
-    mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
-
-    return mock_pool
+from lattice.memory.repositories import UserFeedbackRepository
 
 
 class TestUserFeedbackInit:
@@ -99,24 +88,13 @@ class TestStoreFeedback:
         )
         expected_id = uuid4()
 
-        mock_row = MagicMock()
-        mock_row.__getitem__.side_effect = lambda key: {"id": expected_id}[key]
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.store_feedback = AsyncMock(return_value=expected_id)
 
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-        mock_pool = create_mock_pool_with_conn(mock_conn)
-
-        result_id = await store_feedback(db_pool=mock_pool, feedback=feedback)
+        result_id = await store_feedback(repo=mock_repo, feedback=feedback)
 
         assert result_id == expected_id
-        mock_conn.fetchrow.assert_called_once()
-        call_args = mock_conn.fetchrow.call_args
-        assert "INSERT INTO user_feedback" in call_args[0][0]
-        assert call_args[0][1] == "Test feedback"
-        assert call_args[0][2] == "positive"
-        assert call_args[0][3] == 12345
-        assert call_args[0][4] == 67890
-        assert call_args[0][5] is None
+        mock_repo.store_feedback.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_store_feedback_with_none_sentiment(self) -> None:
@@ -124,18 +102,12 @@ class TestStoreFeedback:
         feedback = UserFeedback(content="Feedback without sentiment")
         expected_id = uuid4()
 
-        mock_row = MagicMock()
-        mock_row.__getitem__.side_effect = lambda key: {"id": expected_id}[key]
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.store_feedback = AsyncMock(return_value=expected_id)
 
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-        mock_pool = create_mock_pool_with_conn(mock_conn)
-
-        result_id = await store_feedback(db_pool=mock_pool, feedback=feedback)
+        result_id = await store_feedback(repo=mock_repo, feedback=feedback)
 
         assert result_id == expected_id
-        call_args = mock_conn.fetchrow.call_args
-        assert call_args[0][2] is None
 
 
 class TestGetFeedbackByUserMessage:
@@ -157,15 +129,11 @@ class TestGetFeedbackByUserMessage:
             "created_at": created_at,
         }
 
-        mock_row = MagicMock()
-        mock_row.__getitem__.side_effect = lambda key: feedback_data[key]
-
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-        mock_pool = create_mock_pool_with_conn(mock_conn)
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.get_by_user_message = AsyncMock(return_value=feedback_data)
 
         result = await get_feedback_by_user_message(
-            db_pool=mock_pool, user_discord_message_id=22222
+            repo=mock_repo, user_discord_message_id=22222
         )
 
         assert result is not None
@@ -176,20 +144,14 @@ class TestGetFeedbackByUserMessage:
         assert result.user_discord_message_id == 22222
         assert result.created_at == created_at
 
-        call_args = mock_conn.fetchrow.call_args
-        assert "sentiment" in call_args[0][0]
-        assert "WHERE user_discord_message_id = $1" in call_args[0][0]
-        assert call_args[0][1] == 22222
-
     @pytest.mark.asyncio
     async def test_get_feedback_not_found(self) -> None:
         """Test retrieving non-existent feedback returns None."""
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value=None)
-        mock_pool = create_mock_pool_with_conn(mock_conn)
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.get_by_user_message = AsyncMock(return_value=None)
 
         result = await get_feedback_by_user_message(
-            db_pool=mock_pool, user_discord_message_id=99999
+            repo=mock_repo, user_discord_message_id=99999
         )
 
         assert result is None
@@ -210,15 +172,11 @@ class TestGetFeedbackByUserMessage:
             "created_at": created_at,
         }
 
-        mock_row = MagicMock()
-        mock_row.__getitem__.side_effect = lambda key: feedback_data[key]
-
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(return_value=mock_row)
-        mock_pool = create_mock_pool_with_conn(mock_conn)
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.get_by_user_message = AsyncMock(return_value=feedback_data)
 
         result = await get_feedback_by_user_message(
-            db_pool=mock_pool, user_discord_message_id=22222
+            repo=mock_repo, user_discord_message_id=22222
         )
 
         assert result is not None
@@ -234,28 +192,23 @@ class TestDeleteFeedback:
         """Test successful feedback deletion."""
         feedback_id = uuid4()
 
-        mock_conn = AsyncMock()
-        mock_conn.execute = AsyncMock(return_value="DELETE 1")
-        mock_pool = create_mock_pool_with_conn(mock_conn)
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.delete_feedback = AsyncMock(return_value=True)
 
-        result = await delete_feedback(db_pool=mock_pool, feedback_id=feedback_id)
+        result = await delete_feedback(repo=mock_repo, feedback_id=feedback_id)
 
         assert result is True
-        mock_conn.execute.assert_called_once()
-        call_args = mock_conn.execute.call_args
-        assert "DELETE FROM user_feedback WHERE id = $1" in call_args[0][0]
-        assert call_args[0][1] == feedback_id
+        mock_repo.delete_feedback.assert_called_once_with(feedback_id)
 
     @pytest.mark.asyncio
     async def test_delete_feedback_not_found(self) -> None:
         """Test deleting non-existent feedback returns False."""
         feedback_id = uuid4()
 
-        mock_conn = AsyncMock()
-        mock_conn.execute = AsyncMock(return_value="DELETE 0")
-        mock_pool = create_mock_pool_with_conn(mock_conn)
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.delete_feedback = AsyncMock(return_value=False)
 
-        result = await delete_feedback(db_pool=mock_pool, feedback_id=feedback_id)
+        result = await delete_feedback(repo=mock_repo, feedback_id=feedback_id)
 
         assert result is False
 
@@ -292,17 +245,10 @@ class TestGetAllFeedback:
             },
         ]
 
-        mock_rows = []
-        for data in feedback_data_list:
-            mock_row = MagicMock()
-            mock_row.__getitem__.side_effect = lambda key, d=data: d[key]
-            mock_rows.append(mock_row)
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.get_all = AsyncMock(return_value=feedback_data_list)
 
-        mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=mock_rows)
-        mock_pool = create_mock_pool_with_conn(mock_conn)
-
-        results = await get_all_feedback(db_pool=mock_pool)
+        results = await get_all_feedback(repo=mock_repo)
 
         assert len(results) == 2
         assert results[0].feedback_id == id2
@@ -314,17 +260,12 @@ class TestGetAllFeedback:
         assert results[1].sentiment == "positive"
         assert results[1].created_at == time1
 
-        call_args = mock_conn.fetch.call_args
-        assert "sentiment" in call_args[0][0]
-        assert "ORDER BY created_at DESC" in call_args[0][0]
-
     @pytest.mark.asyncio
     async def test_get_all_feedback_empty(self) -> None:
         """Test retrieving all feedback when none exist."""
-        mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(return_value=[])
-        mock_pool = create_mock_pool_with_conn(mock_conn)
+        mock_repo = MagicMock(spec=UserFeedbackRepository)
+        mock_repo.get_all = AsyncMock(return_value=[])
 
-        results = await get_all_feedback(db_pool=mock_pool)
+        results = await get_all_feedback(repo=mock_repo)
 
         assert results == []
