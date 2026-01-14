@@ -72,9 +72,12 @@ class TestSemanticMemoryStorage:
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Store semantic memory
+        # Store semantic memory with batch_id for cleanup
+        batch_id = "test_batch_12345"
         memories = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
-        await episodic.store_semantic_memories(message_repo, message_id, memories)
+        await episodic.store_semantic_memories(
+            message_repo, message_id, memories, source_batch_id=batch_id
+        )
 
         # Verify memory was stored
         async with db_pool.pool.acquire() as conn:
@@ -82,10 +85,11 @@ class TestSemanticMemoryStorage:
                 """
                 SELECT subject, predicate, object
                 FROM semantic_memories
-                WHERE source_batch_id IS NULL
+                WHERE source_batch_id = $1
                 ORDER BY created_at DESC
                 LIMIT 1
-                """
+                """,
+                batch_id,
             )
 
             assert len(rows) >= 1
@@ -100,7 +104,6 @@ class TestSemanticMemoryStorage:
                     break
             assert found, "Memory not found in database"
 
-    @pytest.mark.xfail(reason="Needs update for unique constraint behavior")
     async def test_store_multiple_memories(
         self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
     ) -> None:
@@ -138,7 +141,6 @@ class TestSemanticMemoryStorage:
             # With unique constraint, both distinct memories are stored
             assert rows[0]["count"] == 2
 
-    @pytest.mark.xfail(reason="Needs update for unique constraint behavior")
     async def test_skip_invalid_memories(
         self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
     ) -> None:
@@ -154,7 +156,7 @@ class TestSemanticMemoryStorage:
         # Mix of valid and invalid memories
         batch_id = "test_batch_12348"
         memories = [
-            {"subject": "user", "predicate": "works_at", "object": "OpenAI"},  # Valid
+            {"subject": "user", "predicate": "likes", "object": "Coffee"},  # Valid
             {
                 "subject": "",
                 "predicate": "likes",
@@ -163,7 +165,7 @@ class TestSemanticMemoryStorage:
             {
                 "subject": "user",
                 "predicate": "",
-                "object": "Coffee",
+                "object": "Tea",
             },  # Invalid - empty predicate
             {
                 "subject": "user",
@@ -191,8 +193,8 @@ class TestSemanticMemoryStorage:
             # Should have stored only the valid memory
             assert len(rows) == 1
             assert rows[0]["subject"] == "user"
-            assert rows[0]["predicate"] == "works_at"
-            assert rows[0]["object"] == "OpenAI"
+            assert rows[0]["predicate"] == "likes"
+            assert rows[0]["object"] == "Coffee"
 
     async def test_empty_memories_list(
         self, db_pool: DatabasePool, message_repo: PostgresMessageRepository

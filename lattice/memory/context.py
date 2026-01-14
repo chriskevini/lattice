@@ -183,15 +183,18 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         """Insert a single semantic memory, returns 1 if inserted, 0 if duplicate.
 
         Uses RETURNING clause to robustly detect if row was inserted.
-        Partial unique index on (subject, predicate, object) WHERE superseded_by IS NULL
-        prevents duplicate active memories while allowing versioning.
+        Partial unique index unique_active_semantic_triple on (subject, predicate, object)
+        WHERE superseded_by IS NULL prevents duplicate active memories while allowing versioning.
+
+        Note: ON CONFLICT with partial indexes requires specifying all columns.
+        PostgreSQL will automatically use the partial unique index when inserting rows
+        that match the index predicate (superseded_by IS NULL, which is default for new rows).
         """
         result = await conn.fetchval(
             """
             INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT (subject, predicate, object) 
-            WHERE superseded_by IS NULL
+            ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
             DO NOTHING
             RETURNING id
             """,
