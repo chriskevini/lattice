@@ -36,32 +36,35 @@ class TestMultiHopReasoningIntegration:
         """
         # Create mock repository
         mock_repo = MagicMock(spec=SemanticMemoryRepository)
-        mock_repo.find_memories = AsyncMock(
+        mock_repo.traverse_from_entity = AsyncMock(
             return_value=[
                 {
                     "subject": "Alice",
                     "predicate": "works_at",
                     "object": "Acme Corp",
                     "created_at": get_now("UTC"),
+                    "depth": 1,
                 },
                 {
                     "subject": "Acme Corp",
                     "predicate": "acquired_by",
                     "object": "TechCorp",
                     "created_at": get_now("UTC"),
+                    "depth": 2,
                 },
                 {
                     "subject": "TechCorp",
                     "predicate": "in",
                     "object": "Technology Industry",
                     "created_at": get_now("UTC"),
+                    "depth": 3,
                 },
             ]
         )
 
         # Create traverser with mock repository
         traverser = GraphTraversal(mock_repo, max_depth=3)
-        result = await traverser.find_semantic_memories(subject="Alice")
+        result = await traverser.traverse_from_entity(entity_name="Alice", max_hops=3)
 
         assert len(result) == 3
         assert result[0]["subject"] == "Alice"

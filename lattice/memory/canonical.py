@@ -9,10 +9,10 @@ Usage Guide:
 
 Example:
     # For display/context (preserves order)
-    entities = await get_canonical_entities_list()
+    entities = await get_canonical_entities_list(repo)
 
     # For membership checks (O(1) lookup)
-    if "Friday" in await get_canonical_entities_set():
+    if "Friday" in await get_canonical_entities_set(repo):
         ...
 
 Tables:
@@ -21,16 +21,8 @@ Tables:
 """
 
 import structlog
-from typing import TYPE_CHECKING, Any
 
 from lattice.memory.repositories import CanonicalRepository
-
-if TYPE_CHECKING:
-    from lattice.memory.repositories import CanonicalRepository
-    from lattice.utils.database import DatabasePool
-else:
-    CanonicalRepository = Any
-    DatabasePool = Any
 
 
 logger = structlog.get_logger(__name__)
@@ -42,254 +34,106 @@ class CanonicalRegistryError(Exception):
     pass
 
 
-async def get_canonical_entities_list(
-    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
-) -> list[str]:
+async def get_canonical_entities_list(repo: CanonicalRepository) -> list[str]:
     """Fetch all canonical entity names from database.
 
     Args:
         repo: Canonical repository
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         List of entity names sorted by creation date (newest first)
     """
-    if repo:
-        return await repo.get_entities_list()
-    if db_pool:
-        # Fallback for tests not yet using repositories
-        from lattice.memory.repositories import PostgresRepository
-
-        class TempCanonicalRepo(PostgresRepository):
-            async def get_entities_list(self):
-                async with self._db_pool.pool.acquire() as conn:
-                    rows = await conn.fetch(
-                        "SELECT name FROM entities ORDER BY created_at DESC"
-                    )
-                    return [row["name"] for row in rows]
-
-            async def get_predicates_list(self):
-                return []
-
-            async def get_entities_set(self):
-                return set()
-
-            async def get_predicates_set(self):
-                return set()
-
-            async def store_entities(self, names):
-                return 0
-
-            async def store_predicates(self, names):
-                return 0
-
-            async def entity_exists(self, name):
-                return False
-
-            async def predicate_exists(self, name):
-                return False
-
-        temp_repo = TempCanonicalRepo(db_pool)
-        return await temp_repo.get_entities_list()
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.get_entities_list()
 
 
-async def get_canonical_predicates_list(
-    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
-) -> list[str]:
+async def get_canonical_predicates_list(repo: CanonicalRepository) -> list[str]:
     """Fetch all canonical predicate names from database.
 
     Args:
         repo: Canonical repository
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         List of predicate names sorted by creation date (newest first)
     """
-    if repo:
-        return await repo.get_predicates_list()
-    if db_pool:
-        # Fallback for tests not yet using repositories
-        from lattice.memory.repositories import PostgresRepository
-
-        class TempCanonicalRepo(PostgresRepository):
-            async def get_entities_list(self):
-                return []
-
-            async def get_predicates_list(self):
-                async with self._db_pool.pool.acquire() as conn:
-                    rows = await conn.fetch(
-                        "SELECT name FROM predicates ORDER BY created_at DESC"
-                    )
-                    return [row["name"] for row in rows]
-
-            async def get_entities_set(self):
-                return set()
-
-            async def get_predicates_set(self):
-                return set()
-
-            async def store_entities(self, names):
-                return 0
-
-            async def store_predicates(self, names):
-                return 0
-
-            async def entity_exists(self, name):
-                return False
-
-            async def predicate_exists(self, name):
-                return False
-
-        temp_repo = TempCanonicalRepo(db_pool)
-        return await temp_repo.get_predicates_list()
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.get_predicates_list()
 
 
-async def get_canonical_entities_set(
-    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
-) -> set[str]:
+async def get_canonical_entities_set(repo: CanonicalRepository) -> set[str]:
     """Fetch all canonical entities as a set for O(1) lookup.
 
     Args:
         repo: Canonical repository
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Set of entity names for fast membership testing
     """
-    if repo:
-        return await repo.get_entities_set()
-    if db_pool:
-        # Fallback for tests not yet using repositories
-        from lattice.memory.context import PostgresCanonicalRepository
-
-        repo = PostgresCanonicalRepository(db_pool)
-        return await repo.get_entities_set()
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.get_entities_set()
 
 
-async def get_canonical_predicates_set(
-    repo: CanonicalRepository | None = None, db_pool: DatabasePool | None = None
-) -> set[str]:
+async def get_canonical_predicates_set(repo: CanonicalRepository) -> set[str]:
     """Fetch all canonical predicates as a set for O(1) lookup.
 
     Args:
         repo: Canonical repository
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Set of predicate names for fast membership testing
     """
-    if repo:
-        return await repo.get_predicates_set()
-    if db_pool:
-        # Fallback for tests not yet using repositories
-        from lattice.memory.context import PostgresCanonicalRepository
-
-        repo = PostgresCanonicalRepository(db_pool)
-        return await repo.get_predicates_set()
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.get_predicates_set()
 
 
-async def store_canonical_entities(
-    repo: CanonicalRepository | None = None,
-    names: list[str] = [],
-    db_pool: DatabasePool | None = None,
-) -> int:
+async def store_canonical_entities(repo: CanonicalRepository, names: list[str]) -> int:
     """Store new canonical entities, ignoring duplicates.
 
     Args:
         repo: Canonical repository
         names: List of entity names to store
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Number of entities actually inserted
     """
-    if repo:
-        return await repo.store_entities(names)
-    if db_pool:
-        from lattice.memory.context import PostgresCanonicalRepository
-
-        repo = PostgresCanonicalRepository(db_pool)
-        return await repo.store_entities(names)
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.store_entities(names)
 
 
 async def store_canonical_predicates(
-    repo: CanonicalRepository | None = None,
-    names: list[str] = [],
-    db_pool: DatabasePool | None = None,
+    repo: CanonicalRepository, names: list[str]
 ) -> int:
     """Store new canonical predicates, ignoring duplicates.
 
     Args:
         repo: Canonical repository
         names: List of predicate names to store
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Number of predicates actually inserted
     """
-    if repo:
-        return await repo.store_predicates(names)
-    if db_pool:
-        from lattice.memory.context import PostgresCanonicalRepository
-
-        repo = PostgresCanonicalRepository(db_pool)
-        return await repo.store_predicates(names)
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.store_predicates(names)
 
 
-async def entity_exists(
-    repo: CanonicalRepository | None = None,
-    name: str = "",
-    db_pool: DatabasePool | None = None,
-) -> bool:
+async def entity_exists(repo: CanonicalRepository, name: str) -> bool:
     """Check if an entity name already exists.
 
     Args:
         repo: Canonical repository
         name: Entity name to check
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         True if entity exists
     """
-    if repo:
-        return await repo.entity_exists(name)
-    if db_pool:
-        from lattice.memory.context import PostgresCanonicalRepository
-
-        repo = PostgresCanonicalRepository(db_pool)
-        return await repo.entity_exists(name)
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.entity_exists(name)
 
 
-async def predicate_exists(
-    repo: CanonicalRepository | None = None,
-    name: str = "",
-    db_pool: DatabasePool | None = None,
-) -> bool:
+async def predicate_exists(repo: CanonicalRepository, name: str) -> bool:
     """Check if a predicate name already exists.
 
     Args:
         repo: Canonical repository
         name: Predicate name to check
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         True if predicate exists
     """
-    if repo:
-        return await repo.predicate_exists(name)
-    if db_pool:
-        from lattice.memory.context import PostgresCanonicalRepository
-
-        repo = PostgresCanonicalRepository(db_pool)
-        return await repo.predicate_exists(name)
-    raise ValueError("Either repo or db_pool must be provided")
+    return await repo.predicate_exists(name)
 
 
 def _is_entity_like(text: str) -> bool:
@@ -369,10 +213,9 @@ def extract_canonical_forms(
 
 
 async def store_canonical_forms(
-    repo: CanonicalRepository | None = None,
-    new_entities: list[str] = [],
-    new_predicates: list[str] = [],
-    db_pool: DatabasePool | None = None,
+    repo: CanonicalRepository,
+    new_entities: list[str],
+    new_predicates: list[str],
 ) -> dict[str, int]:
     """Store new canonical entities and predicates in database.
 
@@ -380,17 +223,12 @@ async def store_canonical_forms(
         repo: Canonical repository
         new_entities: Sorted list of new entity names to store
         new_predicates: Sorted list of new predicate names to store
-        db_pool: Optional database pool (for legacy support)
 
     Returns:
         Dictionary with 'entities' and 'predicates' counts of items stored
     """
-    entity_count = await store_canonical_entities(
-        repo=repo, names=new_entities, db_pool=db_pool
-    )
-    predicate_count = await store_canonical_predicates(
-        repo=repo, names=new_predicates, db_pool=db_pool
-    )
+    entity_count = await store_canonical_entities(repo=repo, names=new_entities)
+    predicate_count = await store_canonical_predicates(repo=repo, names=new_predicates)
 
     if new_entities or new_predicates:
         logger.info(

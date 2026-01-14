@@ -33,8 +33,14 @@ async def db_pool():
         await pool.close()
 
 
+@pytest.fixture
+def mock_prompt_audit_repo():
+    """Create a mock prompt audit repository for tests."""
+    return AsyncMock()
+
+
 @pytest.mark.asyncio
-async def test_full_dreaming_cycle_workflow(db_pool) -> None:
+async def test_full_dreaming_cycle_workflow(db_pool, mock_prompt_audit_repo) -> None:
     """Test the complete dreaming cycle: analyze → propose → store → approve."""
 
     mock_analysis_rows = [
@@ -61,8 +67,14 @@ async def test_full_dreaming_cycle_workflow(db_pool) -> None:
     mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
     mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+    mock_prompt_audit_repo.analyze_prompt_effectiveness = AsyncMock(
+        return_value=mock_analysis_rows
+    )
+
     with patch.object(db_pool, "_pool", mock_internal_pool):
-        metrics = await analyze_prompt_effectiveness(min_uses=10, db_pool=db_pool)
+        metrics = await analyze_prompt_effectiveness(
+            min_uses=10, db_pool=db_pool, prompt_audit_repo=mock_prompt_audit_repo
+        )
 
         assert len(metrics) == 1
         assert metrics[0].prompt_key == "BASIC_RESPONSE"
@@ -171,7 +183,9 @@ async def test_full_dreaming_cycle_workflow(db_pool) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dreaming_cycle_no_proposals_when_performing_well(db_pool) -> None:
+async def test_dreaming_cycle_no_proposals_when_performing_well(
+    db_pool, mock_prompt_audit_repo
+) -> None:
     """Test that no proposals are generated when prompts are performing well."""
 
     mock_rows = [
@@ -185,7 +199,7 @@ async def test_dreaming_cycle_no_proposals_when_performing_well(db_pool) -> None
             "negative_feedback": 1,
             "success_rate": 0.99,
             "avg_latency_ms": 120.0,
-            "avg_tokens": 150.0,
+            "avg_tokens": 200.0,
             "avg_cost_usd": Decimal("0.001"),
             "priority_score": 5.0,
         }
@@ -198,8 +212,14 @@ async def test_dreaming_cycle_no_proposals_when_performing_well(db_pool) -> None
     mock_internal_pool.acquire.return_value.__aenter__.return_value = mock_conn
     mock_internal_pool.acquire.return_value.__aexit__ = AsyncMock()
 
+    mock_prompt_audit_repo.analyze_prompt_effectiveness = AsyncMock(
+        return_value=mock_rows
+    )
+
     with patch.object(db_pool, "_pool", mock_internal_pool):
-        metrics = await analyze_prompt_effectiveness(db_pool=db_pool)
+        metrics = await analyze_prompt_effectiveness(
+            db_pool=db_pool, prompt_audit_repo=mock_prompt_audit_repo
+        )
 
         assert len(metrics) == 1
         assert metrics[0].success_rate == 0.99

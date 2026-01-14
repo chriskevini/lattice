@@ -226,6 +226,7 @@ class TestRunConsolidationBatch:
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         mock_bot = MagicMock()
+        mock_canonical_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt", return_value=mock_prompt
@@ -260,6 +261,7 @@ class TestRunConsolidationBatch:
                                         result = await run_consolidation_batch(
                                             db_pool=mock_pool,
                                             message_repo=mock_repo,
+                                            canonical_repo=mock_canonical_repo,
                                             llm_client=mock_llm_client,
                                             bot=mock_bot,
                                         )
@@ -316,6 +318,7 @@ class TestRunConsolidationBatch:
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         mock_bot = MagicMock()
+        mock_canonical_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt",
@@ -364,6 +367,7 @@ class TestRunConsolidationBatch:
                                             await run_consolidation_batch(
                                                 db_pool=mock_pool,
                                                 message_repo=mock_repo,
+                                                canonical_repo=mock_canonical_repo,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
                                             )
@@ -434,6 +438,7 @@ class TestCanonicalFormIntegration:
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         mock_bot = MagicMock()
+        mock_canonical_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt",
@@ -495,6 +500,7 @@ class TestCanonicalFormIntegration:
                                             await run_consolidation_batch(
                                                 db_pool=mock_pool,
                                                 message_repo=mock_repo,
+                                                canonical_repo=mock_canonical_repo,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
                                             )
@@ -562,6 +568,7 @@ class TestCanonicalFormIntegration:
         mock_llm_client.complete = AsyncMock(return_value=mock_result)
 
         mock_bot = MagicMock()
+        mock_canonical_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt",
@@ -615,6 +622,7 @@ class TestCanonicalFormIntegration:
                                             await run_consolidation_batch(
                                                 db_pool=mock_pool,
                                                 message_repo=mock_repo,
+                                                canonical_repo=mock_canonical_repo,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
                                             )

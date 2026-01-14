@@ -28,6 +28,17 @@ def mock_repo() -> MagicMock:
 
 
 @pytest.fixture
+def mock_canonical_repo() -> AsyncMock:
+    """Create a mock canonical repository."""
+    repo = AsyncMock()
+    repo.get_entities_list = AsyncMock(return_value=["Mother", "boyfriend"])
+    repo.get_predicates_list = AsyncMock(return_value=[])
+    repo.get_entities_set = AsyncMock(return_value=set())
+    repo.get_predicates_set = AsyncMock(return_value=set())
+    return repo
+
+
+@pytest.fixture
 def context_cache(mock_repo) -> ChannelContextCache:
     """Create a fresh context cache for each test."""
     cache = ChannelContextCache(repository=mock_repo, ttl=10)
@@ -109,6 +120,7 @@ class TestContextStrategyFunction:
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
         context_cache: ChannelContextCache,
+        mock_canonical_repo: AsyncMock,
     ) -> None:
         """Test successful context strategy."""
         message_id = uuid.uuid4()
@@ -125,10 +137,6 @@ class TestContextStrategyFunction:
             patch(
                 "lattice.core.context_strategy.get_prompt",
                 return_value=mock_prompt_template,
-            ),
-            patch(
-                "lattice.memory.canonical.get_canonical_entities_list",
-                return_value=["Mother", "boyfriend"],
             ),
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
@@ -155,6 +163,7 @@ class TestContextStrategyFunction:
                 llm_client=mock_client,
                 context_cache=context_cache,
                 channel_id=123,
+                canonical_repo=mock_canonical_repo,
             )
 
             assert strategy.entities == ["lattice project", "Friday"]
@@ -192,6 +201,7 @@ class TestContextStrategyFunction:
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
         context_cache: ChannelContextCache,
+        mock_canonical_repo: AsyncMock,
     ) -> None:
         """Test context strategy with invalid JSON response."""
         message_id = uuid.uuid4()
@@ -205,10 +215,6 @@ class TestContextStrategyFunction:
             patch(
                 "lattice.core.context_strategy.get_prompt",
                 return_value=mock_prompt_template,
-            ),
-            patch(
-                "lattice.memory.canonical.get_canonical_entities_list",
-                return_value=[],
             ),
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
@@ -236,6 +242,7 @@ class TestContextStrategyFunction:
                     llm_client=mock_client,
                     context_cache=context_cache,
                     channel_id=123,
+                    canonical_repo=mock_canonical_repo,
                 )
 
 
@@ -248,6 +255,7 @@ class TestChannelContextCacheIntegration:
         mock_prompt_template: PromptTemplate,
         mock_generation_result: AuditResult,
         context_cache: ChannelContextCache,
+        mock_canonical_repo: AsyncMock,
     ) -> None:
         """Test that context strategy merges with cached context."""
         message_id = uuid.uuid4()
@@ -264,10 +272,6 @@ class TestChannelContextCacheIntegration:
             patch(
                 "lattice.core.context_strategy.get_prompt",
                 return_value=mock_prompt_template,
-            ),
-            patch(
-                "lattice.memory.canonical.get_canonical_entities_list",
-                return_value=[],
             ),
             patch(
                 "lattice.core.context_strategy.parse_llm_json_response",
@@ -295,6 +299,7 @@ class TestChannelContextCacheIntegration:
                 llm_client=mock_client,
                 context_cache=context_cache,
                 channel_id=123,
+                canonical_repo=mock_canonical_repo,
             )
 
             assert strategy.entities == ["project", "Friday"]
@@ -319,6 +324,7 @@ class TestChannelContextCacheIntegration:
                     llm_client=mock_client,
                     context_cache=context_cache,
                     channel_id=123,
+                    canonical_repo=mock_canonical_repo,
                 )
 
                 assert "project" in strategy_2.entities
