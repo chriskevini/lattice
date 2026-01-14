@@ -319,11 +319,13 @@ async def run_consolidation_batch(
             )
 
         message_id = messages[-1]["id"]
+        message_timestamp = messages[0].get("timestamp")
         await store_semantic_memories(
             repo=message_repo,
             message_id=message_id,
             memories=extracted_memories,
             source_batch_id=batch_id,
+            message_timestamp=message_timestamp,
         )
         logger.info(
             "Stored consolidated memories",

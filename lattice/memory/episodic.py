@@ -147,6 +147,7 @@ async def store_semantic_memories(
     message_id: UUID,
     memories: list[dict[str, str]],
     source_batch_id: str | None = None,
+    message_timestamp: datetime | None = None,
 ) -> int:
     """Store extracted memories in semantic_memories table.
 
@@ -155,6 +156,7 @@ async def store_semantic_memories(
         message_id: UUID of origin message
         memories: List of {"subject": str, "predicate": str, "object": str}
         source_batch_id: Optional batch identifier for traceability
+        message_timestamp: Optional original message timestamp to use for created_at
 
     Returns:
         Number of memories stored
@@ -166,5 +168,8 @@ async def store_semantic_memories(
         return 0
 
     return await repo.store_semantic_memories(
-        message_id=message_id, memories=memories, source_batch_id=source_batch_id
+        message_id=message_id,
+        memories=memories,
+        source_batch_id=source_batch_id,
+        message_timestamp=message_timestamp,
     )

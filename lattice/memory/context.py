@@ -143,6 +143,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         message_id: UUID,
         memories: list[dict[str, str]],
         source_batch_id: str | None = None,
+        message_timestamp: datetime | None = None,
     ) -> int:
         """Store extracted memories in semantic_memories table."""
         if not memories:
@@ -161,7 +162,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                     continue
 
                 count += await self._insert_semantic_memory(
-                    conn, subject, predicate, obj, source_batch_id
+                    conn, subject, predicate, obj, source_batch_id, message_timestamp
                 )
 
                 if predicate == ALIAS_PREDICATE:
@@ -169,7 +170,12 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
 
             for alias_from, alias_to, batch_id in alias_triples:
                 count += await self._insert_semantic_memory(
-                    conn, alias_to, ALIAS_PREDICATE, alias_from, batch_id
+                    conn,
+                    alias_to,
+                    ALIAS_PREDICATE,
+                    alias_from,
+                    batch_id,
+                    message_timestamp,
                 )
 
         return count
@@ -201,6 +207,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         predicate: str,
         obj: str,
         source_batch_id: str | None,
+        message_timestamp: datetime | None = None,
     ) -> int:
         """Insert a single semantic memory, returns 1 if inserted, 0 if duplicate.
 
@@ -212,19 +219,35 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         PostgreSQL will automatically use the partial unique index when inserting rows
         that match the index predicate (superseded_by IS NULL, which is default for new rows).
         """
-        result = await conn.fetchval(
-            """
-            INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
-            DO NOTHING
-            RETURNING id
-            """,
-            subject,
-            predicate,
-            obj,
-            source_batch_id,
-        )
+        if message_timestamp:
+            result = await conn.fetchval(
+                """
+                INSERT INTO semantic_memories (subject, predicate, object, source_batch_id, created_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
+                DO NOTHING
+                RETURNING id
+                """,
+                subject,
+                predicate,
+                obj,
+                source_batch_id,
+                message_timestamp,
+            )
+        else:
+            result = await conn.fetchval(
+                """
+                INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (subject, predicate, object) WHERE superseded_by IS NULL
+                DO NOTHING
+                RETURNING id
+                """,
+                subject,
+                predicate,
+                obj,
+                source_batch_id,
+            )
         return 1 if result is not None else 0
 
 

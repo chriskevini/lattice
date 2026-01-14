@@ -390,7 +390,10 @@ class TestStoreSemanticMemories:
         )
 
         mock_repo.store_semantic_memories.assert_called_once_with(
-            message_id=message_id, memories=memories, source_batch_id=None
+            message_id=message_id,
+            memories=memories,
+            source_batch_id=None,
+            message_timestamp=None,
         )
 
     @pytest.mark.asyncio
