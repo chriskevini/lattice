@@ -1,7 +1,6 @@
 """Tests for dreaming cycle modules (analyzer, proposer, approval)."""
 
 from decimal import Decimal
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 

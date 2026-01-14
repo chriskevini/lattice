@@ -17,9 +17,7 @@ from lattice.core.response_generator import (
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
 from lattice.memory.repositories import (
-    PromptAuditRepository,
     PromptRegistryRepository,
-    UserFeedbackRepository,
 )
 from lattice.utils.llm import AuditResult
 
