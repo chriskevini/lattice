@@ -180,20 +180,27 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         obj: str,
         source_batch_id: str | None,
     ) -> int:
-        """Insert a single semantic memory, returns 1 if inserted, 0 if duplicate."""
-        result = await conn.execute(
+        """Insert a single semantic memory, returns 1 if inserted, 0 if duplicate.
+
+        Uses RETURNING clause to robustly detect if row was inserted.
+        Partial unique index on (subject, predicate, object) WHERE superseded_by IS NULL
+        prevents duplicate active memories while allowing versioning.
+        """
+        result = await conn.fetchval(
             """
             INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (subject, predicate, object) 
+            WHERE superseded_by IS NULL
+            DO NOTHING
+            RETURNING id
             """,
             subject,
             predicate,
             obj,
             source_batch_id,
         )
-        parts = result.split()
-        return 0 if parts[-1] == "0" else 1
+        return 1 if result is not None else 0
 
 
 class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryRepository):
