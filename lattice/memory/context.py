@@ -148,6 +148,8 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             return 0
 
         count = 0
+        alias_triples = []
+
         async with self._db_pool.pool.acquire() as conn, conn.transaction():
             for memory in memories:
                 subject = memory.get("subject", "").strip()
@@ -170,6 +172,37 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                     source_batch_id,
                 )
                 count += 1
+
+                if predicate == "has alias":
+                    alias_triples.append((subject, obj))
+
+            for alias_from, alias_to in alias_triples:
+                existing = await conn.fetchval(
+                    """
+                    SELECT 1 FROM semantic_memories
+                    WHERE subject = $1 AND predicate = $2 AND object = $3
+                    LIMIT 1
+                    """,
+                    alias_to,
+                    "has alias",
+                    alias_from,
+                )
+
+                if not existing:
+                    await conn.execute(
+                        """
+                        INSERT INTO semantic_memories (
+                            subject, predicate, object, source_batch_id
+                        )
+                        VALUES ($1, $2, $3, $4)
+                        """,
+                        alias_to,
+                        "has alias",
+                        alias_from,
+                        source_batch_id,
+                    )
+                    count += 1
+
         return count
 
 

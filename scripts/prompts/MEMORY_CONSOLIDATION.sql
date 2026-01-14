@@ -16,8 +16,7 @@ Extract important information from user messages as semantic triples.
 - Select only the most salient user messages to extract from
 - If user says "I" or "my", the subject is "User"
 - If user says "you", the subject is "Assistant"
-- Match to canonical forms when confident ("mom" → "Mother")
-- Proper nouns and people are capitalized (Mother, IKEA, etc.)
+- Extract facts exactly as the user wrote them - preserve their capitalization and phrasing
 - Predicates are space-separated common English phrases ("lives in")
 - Activities: "did activity", "lasted for" (n minutes), "at location"
 - Goals: "has goal", "due by" (ISO date), "has priority" (high/medium/low), "has status" (active/completed/someday/cancelled)
@@ -25,6 +24,7 @@ Extract important information from user messages as semantic triples.
 - Convert durations to minutes ("3 hours" → "180 minutes")
 - Extract dates as entities in ISO format
 - Use clarifications from conversation
+- Extract "has alias" triples when the same entity is referred to by different names in the conversation
 
 ## Context
 **Date resolution hints:**
@@ -44,7 +44,8 @@ Return ONLY valid JSON. No prose.
 Date resolution hints: Friday → 2026-01-09
 User: "Spent 2 hours at the gym this morning."
 User: "finally finished that report that was due friday."
-User: "my mom loves cooking."
+User: "my mom loves cooking.""
+User: "Mother made cookies too."
 User: "I'm in New York right now."
 Output:
 {
@@ -55,7 +56,9 @@ Output:
     {"subject": "User", "predicate": "has goal", "object": "finish report"},
     {"subject": "finish report", "predicate": "due by", "object": "2026-01-09"},
     {"subject": "finish report", "predicate": "has status", "object": "completed"},
-    {"subject": "Mother", "predicate": "likes", "object": "cooking"},
+    {"subject": "mom", "predicate": "likes", "object": "cooking"},
+    {"subject": "Mother", "predicate": "made", "object": "cookies"},
+    {"subject": "mom", "predicate": "has alias", "object": "Mother"},
     {"subject": "User", "predicate": "lives in city", "object": "New York"},
     {"subject": "User", "predicate": "lives in timezone", "object": "America/New_York"}
   ]

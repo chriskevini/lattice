@@ -288,11 +288,16 @@ async def retrieve_context(
                 memory.get("object"),
             )
             if subject and predicate and obj:
-                relationships.append(
-                    renderer(
-                        subject, predicate, obj, memory.get("created_at"), user_timezone
+                if predicate != "has alias":
+                    relationships.append(
+                        renderer(
+                            subject,
+                            predicate,
+                            obj,
+                            memory.get("created_at"),
+                            user_timezone,
+                        )
                     )
-                )
 
         if relationships:
             context["semantic_context"] = (
