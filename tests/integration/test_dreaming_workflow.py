@@ -39,8 +39,38 @@ def mock_prompt_audit_repo():
     return AsyncMock()
 
 
+@pytest.fixture
+def prompt_repo(db_pool):
+    """Fixture providing a PromptRegistryRepository."""
+    from lattice.memory.repositories import PostgresPromptRegistryRepository
+
+    return PostgresPromptRegistryRepository(db_pool)
+
+
+@pytest.fixture
+def audit_repo(db_pool):
+    """Fixture providing a PromptAuditRepository."""
+    from lattice.memory.repositories import PostgresPromptAuditRepository
+
+    return PostgresPromptAuditRepository(db_pool)
+
+
+@pytest.fixture
+def feedback_repo(db_pool):
+    """Fixture providing a UserFeedbackRepository."""
+    from lattice.memory.repositories import PostgresUserFeedbackRepository
+
+    return PostgresUserFeedbackRepository(db_pool)
+
+
 @pytest.mark.asyncio
-async def test_full_dreaming_cycle_workflow(db_pool, mock_prompt_audit_repo) -> None:
+async def test_full_dreaming_cycle_workflow(
+    db_pool,
+    mock_prompt_audit_repo,
+    prompt_repo,
+    audit_repo,
+    feedback_repo,
+) -> None:
     """Test the complete dreaming cycle: analyze → propose → store → approve."""
 
     mock_analysis_rows = [
@@ -73,7 +103,8 @@ async def test_full_dreaming_cycle_workflow(db_pool, mock_prompt_audit_repo) -> 
 
     with patch.object(db_pool, "_pool", mock_internal_pool):
         metrics = await analyze_prompt_effectiveness(
-            min_uses=10, db_pool=db_pool, prompt_audit_repo=mock_prompt_audit_repo
+            prompt_audit_repo=mock_prompt_audit_repo,
+            min_uses=10,
         )
 
         assert len(metrics) == 1
@@ -129,7 +160,12 @@ async def test_full_dreaming_cycle_workflow(db_pool, mock_prompt_audit_repo) -> 
         ]
 
         proposal = await propose_optimization(
-            metrics[0], db_pool=db_pool, llm_client=mock_llm
+            metrics[0],
+            llm_client=mock_llm,
+            prompt_repo=prompt_repo,
+            prompt_audit_repo=mock_prompt_audit_repo,
+            audit_repo=audit_repo,
+            feedback_repo=feedback_repo,
         )
 
         assert proposal is not None
@@ -218,7 +254,7 @@ async def test_dreaming_cycle_no_proposals_when_performing_well(
 
     with patch.object(db_pool, "_pool", mock_internal_pool):
         metrics = await analyze_prompt_effectiveness(
-            db_pool=db_pool, prompt_audit_repo=mock_prompt_audit_repo
+            prompt_audit_repo=mock_prompt_audit_repo,
         )
 
         assert len(metrics) == 1

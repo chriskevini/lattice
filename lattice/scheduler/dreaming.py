@@ -216,7 +216,6 @@ class DreamingScheduler:
                 min_uses=min_uses,
                 lookback_days=dream_config.lookback_days,
                 min_feedback=min_feedback,
-                db_pool=self.db_pool,
                 prompt_audit_repo=self.prompt_audit_repo,  # type: ignore[arg-type]
             )
 
@@ -248,9 +247,11 @@ class DreamingScheduler:
 
                 proposal = await propose_optimization(
                     metrics=prompt_metrics,
-                    db_pool=self.db_pool,
                     llm_client=self.llm_client,
-                    prompt_audit_repo=self.prompt_audit_repo,
+                    prompt_repo=self.bot.prompt_repo,
+                    prompt_audit_repo=self.prompt_audit_repo,  # type: ignore[arg-type]
+                    audit_repo=self.bot.audit_repo,
+                    feedback_repo=self.bot.feedback_repo,
                 )
 
                 if proposal:

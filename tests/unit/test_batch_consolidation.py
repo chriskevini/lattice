@@ -139,6 +139,9 @@ class TestRunConsolidationBatch:
         result = await run_consolidation_batch(
             db_pool=mock_pool,
             message_repo=mock_repo,
+            prompt_repo=MagicMock(),
+            audit_repo=MagicMock(),
+            feedback_repo=MagicMock(),
             llm_client=MagicMock(),
             bot=MagicMock(),
         )
@@ -175,6 +178,9 @@ class TestRunConsolidationBatch:
             result = await run_consolidation_batch(
                 db_pool=mock_pool,
                 message_repo=mock_repo,
+                prompt_repo=MagicMock(),
+                audit_repo=MagicMock(),
+                feedback_repo=MagicMock(),
                 llm_client=MagicMock(),
                 bot=MagicMock(),
             )
@@ -227,6 +233,9 @@ class TestRunConsolidationBatch:
 
         mock_bot = MagicMock()
         mock_canonical_repo = MagicMock()
+        mock_prompt_repo = MagicMock()
+        mock_audit_repo = MagicMock()
+        mock_feedback_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt", return_value=mock_prompt
@@ -262,6 +271,9 @@ class TestRunConsolidationBatch:
                                             db_pool=mock_pool,
                                             message_repo=mock_repo,
                                             canonical_repo=mock_canonical_repo,
+                                            prompt_repo=mock_prompt_repo,
+                                            audit_repo=mock_audit_repo,
+                                            feedback_repo=mock_feedback_repo,
                                             llm_client=mock_llm_client,
                                             bot=mock_bot,
                                         )
@@ -319,6 +331,9 @@ class TestRunConsolidationBatch:
 
         mock_bot = MagicMock()
         mock_canonical_repo = MagicMock()
+        mock_prompt_repo = MagicMock()
+        mock_audit_repo = MagicMock()
+        mock_feedback_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt",
@@ -368,6 +383,9 @@ class TestRunConsolidationBatch:
                                                 db_pool=mock_pool,
                                                 message_repo=mock_repo,
                                                 canonical_repo=mock_canonical_repo,
+                                                prompt_repo=mock_prompt_repo,
+                                                audit_repo=mock_audit_repo,
+                                                feedback_repo=mock_feedback_repo,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
                                             )
@@ -439,6 +457,9 @@ class TestCanonicalFormIntegration:
 
         mock_bot = MagicMock()
         mock_canonical_repo = MagicMock()
+        mock_prompt_repo = MagicMock()
+        mock_audit_repo = MagicMock()
+        mock_feedback_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt",
@@ -501,6 +522,9 @@ class TestCanonicalFormIntegration:
                                                 db_pool=mock_pool,
                                                 message_repo=mock_repo,
                                                 canonical_repo=mock_canonical_repo,
+                                                prompt_repo=mock_prompt_repo,
+                                                audit_repo=mock_audit_repo,
+                                                feedback_repo=mock_feedback_repo,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
                                             )
@@ -569,6 +593,9 @@ class TestCanonicalFormIntegration:
 
         mock_bot = MagicMock()
         mock_canonical_repo = MagicMock()
+        mock_prompt_repo = MagicMock()
+        mock_audit_repo = MagicMock()
+        mock_feedback_repo = MagicMock()
 
         with patch(
             "lattice.memory.batch_consolidation.get_prompt",
@@ -623,6 +650,9 @@ class TestCanonicalFormIntegration:
                                                 db_pool=mock_pool,
                                                 message_repo=mock_repo,
                                                 canonical_repo=mock_canonical_repo,
+                                                prompt_repo=mock_prompt_repo,
+                                                audit_repo=mock_audit_repo,
+                                                feedback_repo=mock_feedback_repo,
                                                 llm_client=mock_llm_client,
                                                 bot=mock_bot,
                                             )

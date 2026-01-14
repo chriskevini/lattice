@@ -220,26 +220,16 @@ class TestProceduralMemoryFunctions:
     @pytest.mark.asyncio
     async def test_get_prompt_found(self) -> None:
         """Test retrieving an existing prompt template."""
-        mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(
-            return_value={
-                "prompt_key": "test_key",
-                "template": "You are helpful.",
-                "temperature": 0.7,
-                "version": 1,
-                "active": True,
-            }
-        )
+        mock_repo = AsyncMock()
+        mock_repo.get_template.return_value = {
+            "prompt_key": "test_key",
+            "template": "You are helpful.",
+            "temperature": 0.7,
+            "version": 1,
+            "active": True,
+        }
 
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock()
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
-
-        result = await get_prompt(db_pool=mock_pool, prompt_key="test_key")
+        result = await get_prompt(repo=mock_repo, prompt_key="test_key")
 
         assert result is not None
         assert result.prompt_key == "test_key"
@@ -248,18 +238,10 @@ class TestProceduralMemoryFunctions:
     @pytest.mark.asyncio
     async def test_get_prompt_not_found(self) -> None:
         """Test retrieving a non-existent prompt template."""
-        mock_conn = MagicMock()
-        mock_conn.fetchrow = AsyncMock(return_value=None)
+        mock_repo = AsyncMock()
+        mock_repo.get_template.return_value = None
 
-        mock_acquire_cm = MagicMock()
-        mock_acquire_cm.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire_cm.__aexit__ = AsyncMock()
-
-        mock_pool = MagicMock()
-        mock_pool.pool = mock_pool
-        mock_pool.pool.acquire = MagicMock(return_value=mock_acquire_cm)
-
-        result = await get_prompt(db_pool=mock_pool, prompt_key="nonexistent")
+        result = await get_prompt(repo=mock_repo, prompt_key="nonexistent")
 
         assert result is None
 

@@ -17,6 +17,7 @@ from lattice.memory import episodic
 from lattice.memory.context import (
     PostgresCanonicalRepository,
     PostgresMessageRepository,
+    PostgresSemanticMemoryRepository,
 )
 
 
@@ -27,9 +28,39 @@ def canonical_repo(db_pool) -> PostgresCanonicalRepository:
 
 
 @pytest.fixture
+def semantic_repo(db_pool) -> PostgresSemanticMemoryRepository:
+    """Fixture providing a SemanticMemoryRepository."""
+    return PostgresSemanticMemoryRepository(db_pool)
+
+
+@pytest.fixture
 def episodic_repo(db_pool) -> PostgresMessageRepository:
     """Fixture providing a MessageRepository."""
     return PostgresMessageRepository(db_pool)
+
+
+@pytest.fixture
+def prompt_repo(db_pool):
+    """Fixture providing a PromptRegistryRepository."""
+    from lattice.memory.repositories import PostgresPromptRegistryRepository
+
+    return PostgresPromptRegistryRepository(db_pool)
+
+
+@pytest.fixture
+def audit_repo(db_pool):
+    """Fixture providing a PromptAuditRepository."""
+    from lattice.memory.repositories import PostgresPromptAuditRepository
+
+    return PostgresPromptAuditRepository(db_pool)
+
+
+@pytest.fixture
+def feedback_repo(db_pool):
+    """Fixture providing a UserFeedbackRepository."""
+    from lattice.memory.repositories import PostgresUserFeedbackRepository
+
+    return PostgresUserFeedbackRepository(db_pool)
 
 
 @pytest.fixture
@@ -78,6 +109,9 @@ class TestContextStrategyPipeline:
         db_pool,
         context_cache: ChannelContextCache,
         canonical_repo,
+        prompt_repo,
+        audit_repo,
+        feedback_repo,
         unique_discord_id,
     ) -> None:
         """Test complete pipeline flow for a declaration message."""
@@ -175,7 +209,6 @@ class TestContextStrategyPipeline:
                 )
 
                 extraction = await context_strategy(
-                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=[],
@@ -184,6 +217,9 @@ class TestContextStrategyPipeline:
                     discord_message_id=discord_id,
                     llm_client=extraction_llm,
                     canonical_repo=canonical_repo,
+                    prompt_repo=prompt_repo,
+                    audit_repo=audit_repo,
+                    feedback_repo=feedback_repo,
                 )
 
                 assert extraction is not None
@@ -198,7 +234,9 @@ class TestContextStrategyPipeline:
                     episodic_context="Recent conversation history",
                     semantic_context="Relevant facts",
                     llm_client=response_llm,
-                    db_pool=db_pool,
+                    prompt_repo=prompt_repo,
+                    audit_repo=audit_repo,
+                    feedback_repo=feedback_repo,
                 )
 
                 assert result is not None
@@ -215,6 +253,9 @@ class TestContextStrategyPipeline:
         db_pool,
         context_cache: ChannelContextCache,
         canonical_repo,
+        prompt_repo,
+        audit_repo,
+        feedback_repo,
         unique_discord_id,
     ) -> None:
         """Test context strategy detects activity queries."""
@@ -293,7 +334,6 @@ class TestContextStrategyPipeline:
                     )
                 recent_messages: list[episodic.EpisodicMessage] = []
                 planning = await context_strategy(
-                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=recent_messages,
@@ -302,6 +342,9 @@ class TestContextStrategyPipeline:
                     discord_message_id=discord_id,
                     llm_client=planning_llm,
                     canonical_repo=canonical_repo,
+                    prompt_repo=prompt_repo,
+                    audit_repo=audit_repo,
+                    feedback_repo=feedback_repo,
                 )
 
             assert planning is not None
@@ -314,6 +357,9 @@ class TestContextStrategyPipeline:
         db_pool,
         context_cache: ChannelContextCache,
         canonical_repo,
+        prompt_repo,
+        audit_repo,
+        feedback_repo,
         unique_discord_id,
     ) -> None:
         """Test context strategy returns empty when topic switches."""
@@ -409,7 +455,6 @@ class TestContextStrategyPipeline:
                 ]
 
                 planning = await context_strategy(
-                    db_pool=db_pool,
                     message_id=message_id,
                     user_message=message_content,
                     recent_messages=recent_messages,
@@ -417,6 +462,9 @@ class TestContextStrategyPipeline:
                     channel_id=67890,
                     llm_client=planning_llm,
                     canonical_repo=canonical_repo,
+                    prompt_repo=prompt_repo,
+                    audit_repo=audit_repo,
+                    feedback_repo=feedback_repo,
                 )
 
             assert planning is not None
@@ -426,7 +474,10 @@ class TestContextStrategyPipeline:
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_template(
-        self, context_cache: ChannelContextCache, canonical_repo
+        self,
+        context_cache: ChannelContextCache,
+        canonical_repo,
+        prompt_repo,
     ) -> None:
         """Test context strategy fails gracefully when template missing."""
         with (
@@ -436,7 +487,6 @@ class TestContextStrategyPipeline:
 
             with pytest.raises(ValueError, match="CONTEXT_STRATEGY prompt template"):
                 await context_strategy(
-                    db_pool=AsyncMock(),
                     message_id=uuid.uuid4(),
                     user_message="Test message",
                     recent_messages=[],
@@ -444,11 +494,15 @@ class TestContextStrategyPipeline:
                     channel_id=123,
                     discord_message_id=123,
                     canonical_repo=canonical_repo,
+                    prompt_repo=prompt_repo,
                 )
 
     @pytest.mark.asyncio
     async def test_context_strategy_missing_fields(
-        self, context_cache: ChannelContextCache, canonical_repo
+        self,
+        context_cache: ChannelContextCache,
+        canonical_repo,
+        prompt_repo,
     ) -> None:
         """Test context strategy handles missing fields gracefully."""
         message_id = uuid.uuid4()
@@ -490,12 +544,7 @@ class TestContextStrategyPipeline:
             )
             planning_llm.complete.return_value = planning_result
 
-            mock_pool = MagicMock()
-            mock_pool.pool.acquire.return_value.__aenter__ = AsyncMock()
-            mock_pool.pool.acquire.return_value.__aexit__ = AsyncMock()
-
             planning = await context_strategy(
-                db_pool=mock_pool,
                 message_id=message_id,
                 user_message="Test message",
                 recent_messages=[],
@@ -504,6 +553,7 @@ class TestContextStrategyPipeline:
                 discord_message_id=channel_id,
                 llm_client=planning_llm,
                 canonical_repo=canonical_repo,
+                prompt_repo=prompt_repo,
             )
 
             assert planning is not None
@@ -519,13 +569,13 @@ class TestRetrieveContext:
     """
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_returns_structure(self, db_pool) -> None:
+    async def test_retrieve_context_returns_structure(self, semantic_repo) -> None:
         """Test retrieve_context returns expected dict structure."""
         context = await retrieve_context(
             entities=[],
             context_flags=[],
             memory_depth=2,
-            db_pool=db_pool,
+            semantic_repo=semantic_repo,
         )
 
         assert isinstance(context, dict)
@@ -533,50 +583,50 @@ class TestRetrieveContext:
         assert "goal_context" in context
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_empty_inputs(self, db_pool) -> None:
+    async def test_retrieve_context_empty_inputs(self, semantic_repo) -> None:
         """Test retrieve_context with no entities and no flags."""
         context = await retrieve_context(
             entities=[],
             context_flags=[],
             memory_depth=2,
-            db_pool=db_pool,
+            semantic_repo=semantic_repo,
         )
 
         assert context["semantic_context"] == "No relevant context found."
         assert context["goal_context"] in ("", "No active goals.")
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_activity_flag(self, db_pool) -> None:
+    async def test_retrieve_context_activity_flag(self, semantic_repo) -> None:
         """Test retrieve_context with activity_context flag."""
         context = await retrieve_context(
             entities=[],
             context_flags=["activity_context"],
             memory_depth=2,
-            db_pool=db_pool,
+            semantic_repo=semantic_repo,
         )
 
         assert "semantic_context" in context
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_goal_flag(self, db_pool) -> None:
+    async def test_retrieve_context_goal_flag(self, semantic_repo) -> None:
         """Test retrieve_context with goal_context flag."""
         context = await retrieve_context(
             entities=[],
             context_flags=["goal_context"],
             memory_depth=0,
-            db_pool=db_pool,
+            semantic_repo=semantic_repo,
         )
 
         assert "goal_context" in context
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_multiple_flags(self, db_pool) -> None:
+    async def test_retrieve_context_multiple_flags(self, semantic_repo) -> None:
         """Test retrieve_context with multiple context flags."""
         context = await retrieve_context(
             entities=["test"],
             context_flags=["goal_context", "activity_context"],
             memory_depth=2,
-            db_pool=db_pool,
+            semantic_repo=semantic_repo,
         )
 
         assert "semantic_context" in context

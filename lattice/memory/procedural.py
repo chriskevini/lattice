@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import PromptRegistryRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -76,37 +76,27 @@ class PromptTemplate:
 
 
 async def get_prompt(
-    db_pool: "DatabasePool", *, prompt_key: str
+    repo: "PromptRegistryRepository", *, prompt_key: str
 ) -> PromptTemplate | None:
     """Retrieve the latest active prompt template by key.
 
     Args:
-        db_pool: Database pool for dependency injection
+        repo: Repository for dependency injection
         prompt_key: The unique identifier for the template
 
     Returns:
         The prompt template, or None if not found
     """
-    async with db_pool.pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT prompt_key, template, temperature, version, active
-            FROM prompt_registry
-            WHERE prompt_key = $1
-            ORDER BY version DESC
-            LIMIT 1
-            """,
-            prompt_key,
-        )
+    row = await repo.get_template(prompt_key)
 
-        if not row:
-            logger.warning("Prompt template not found", prompt_key=prompt_key)
-            return None
+    if not row:
+        logger.warning("Prompt template not found", prompt_key=prompt_key)
+        return None
 
-        return PromptTemplate(
-            prompt_key=row["prompt_key"],
-            template=row["template"],
-            temperature=row["temperature"],
-            version=row["version"],
-            active=row["active"],
-        )
+    return PromptTemplate(
+        prompt_key=row["prompt_key"],
+        template=row["template"],
+        temperature=row["temperature"],
+        version=row["version"],
+        active=row["active"],
+    )

@@ -13,7 +13,7 @@ from lattice.core.constants import DEFAULT_EPISODIC_LIMIT
 from lattice.memory import episodic
 from lattice.memory.graph import GraphTraversal
 
-from lattice.memory.repositories import MessageRepository
+from lattice.memory.repositories import MessageRepository, SemanticMemoryRepository
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
@@ -100,8 +100,8 @@ async def store_bot_message(
 async def retrieve_context(
     query: str,
     channel_id: int,
-    db_pool: "DatabasePool",
     message_repo: MessageRepository,
+    semantic_repo: SemanticMemoryRepository,
     episodic_limit: int = DEFAULT_EPISODIC_LIMIT,
     memory_depth: int = 1,
     entity_names: list[str] | None = None,
@@ -116,8 +116,8 @@ async def retrieve_context(
     Args:
         query: Query text (used for logging)
         channel_id: Discord channel ID for episodic search
-        db_pool: Database pool for dependency injection (required for GraphTraversal)
         message_repo: Message repository
+        semantic_repo: Semantic memory repository
         episodic_limit: Maximum recent messages to retrieve (default from DEFAULT_EPISODIC_LIMIT)
         memory_depth: Maximum depth for graph traversal (0 = disabled)
         entity_names: Entity names to traverse graph from (from entity extraction)
@@ -138,10 +138,7 @@ async def retrieve_context(
 
     semantic_context: list[dict[str, Any]] = []
     if memory_depth > 0 and entity_names:
-        from lattice.memory.context import PostgresSemanticMemoryRepository
-
-        repo = PostgresSemanticMemoryRepository(db_pool)
-        traverser = GraphTraversal(repo, max_depth=memory_depth)
+        traverser = GraphTraversal(semantic_repo, max_depth=memory_depth)
 
         traverse_tasks = [
             traverser.traverse_from_entity(entity_name, max_hops=memory_depth)

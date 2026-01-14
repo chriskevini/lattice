@@ -19,7 +19,10 @@ from lattice.utils.config import config
 from lattice.utils.llm_client import GenerationResult
 
 if TYPE_CHECKING:
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import (
+        PromptAuditRepository,
+        UserFeedbackRepository,
+    )
 
 
 logger = structlog.get_logger(__name__)
@@ -73,20 +76,28 @@ class AuditingLLMClient:
     - Unified mirror/display generation
     """
 
-    def __init__(self, llm_client: Any, db_pool: Any = None) -> None:
+    def __init__(
+        self,
+        llm_client: Any,
+        audit_repo: Any = None,
+        feedback_repo: Any = None,
+    ) -> None:
         """Initialize the auditing client with underlying LLM client.
 
         Args:
             llm_client: The underlying LLM client to wrap.
-            db_pool: Optional database pool for auditing.
+            audit_repo: Optional repository for auditing.
+            feedback_repo: Optional repository for feedback.
         """
         self._client = llm_client
-        self.db_pool = db_pool
+        self.audit_repo = audit_repo
+        self.feedback_repo = feedback_repo
 
     async def complete(
         self,
         prompt: str,
-        db_pool: Optional["DatabasePool"] = None,
+        audit_repo: Optional["PromptAuditRepository"] = None,
+        feedback_repo: Optional["UserFeedbackRepository"] = None,
         prompt_key: str | None = None,
         template_version: int | None = None,
         main_discord_message_id: int | None = None,
@@ -102,7 +113,8 @@ class AuditingLLMClient:
 
         Args:
             prompt: The prompt to complete
-            db_pool: Database pool for dependency injection
+            audit_repo: Audit repository for dependency injection
+            feedback_repo: Feedback repository for dependency injection
             prompt_key: Optional identifier for the prompt template/purpose
             template_version: Optional version of the template used
             main_discord_message_id: Discord message ID for audit linkage
@@ -121,9 +133,11 @@ class AuditingLLMClient:
         Returns:
             AuditResult with content, metadata, and audit_id
         """
-        effective_db_pool = db_pool or self.db_pool
-        if effective_db_pool is None:
-            msg = "db_pool must be provided either at initialization or in complete()"
+        effective_audit_repo = audit_repo or self.audit_repo
+        if effective_audit_repo is None:
+            msg = (
+                "audit_repo must be provided either at initialization or in complete()"
+            )
             raise ValueError(msg)
 
         try:
@@ -136,7 +150,7 @@ class AuditingLLMClient:
             from lattice.memory import prompt_audits
 
             audit_id = await prompt_audits.store_prompt_audit(
-                db_pool=effective_db_pool,
+                repo=effective_audit_repo,
                 prompt_key=prompt_key or "UNKNOWN",
                 response_content=result.content,
                 main_discord_message_id=main_discord_message_id,
@@ -238,7 +252,8 @@ class AuditingLLMClient:
                             metadata_parts=metadata,
                             audit_id=audit_id,
                             rendered_prompt=prompt,
-                            db_pool=effective_db_pool,
+                            audit_repo=effective_audit_repo,
+                            feedback_repo=feedback_repo or self.feedback_repo,
                             result=result,
                             message_id=main_discord_message_id,
                             warnings=warnings,
@@ -305,7 +320,7 @@ class AuditingLLMClient:
             from lattice.memory import prompt_audits
 
             failed_audit_id = await prompt_audits.store_prompt_audit(
-                db_pool=effective_db_pool,
+                repo=effective_audit_repo,
                 prompt_key=prompt_key or "UNKNOWN",
                 rendered_prompt=prompt,
                 response_content=f"ERROR: {type(e).__name__}: {str(e)}",

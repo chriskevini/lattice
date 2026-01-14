@@ -27,7 +27,10 @@ from lattice.core.pipeline import UnifiedPipeline
 from lattice.memory.repositories import (
     CanonicalRepository,
     MessageRepository,
+    PromptAuditRepository,
+    PromptRegistryRepository,
     SemanticMemoryRepository,
+    UserFeedbackRepository,
 )
 
 if TYPE_CHECKING:
@@ -54,8 +57,9 @@ class LatticeBot(commands.Bot):
         message_repo: "MessageRepository",
         semantic_repo: "SemanticMemoryRepository",
         canonical_repo: "CanonicalRepository",
-        audit_repo: Any = None,
-        feedback_repo: Any = None,
+        prompt_repo: "PromptRegistryRepository",
+        audit_repo: "PromptAuditRepository",
+        feedback_repo: "UserFeedbackRepository",
     ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
@@ -68,17 +72,20 @@ class LatticeBot(commands.Bot):
         self.message_repo = message_repo
         self.semantic_repo = semantic_repo
         self.canonical_repo = canonical_repo
+        self.prompt_repo = prompt_repo
         self.audit_repo = audit_repo
         self.feedback_repo = feedback_repo
 
         # Initialize the pipeline
         self.pipeline = UnifiedPipeline(
-            db_pool=db_pool,
             bot=self,
             context_cache=context_cache,
             message_repo=message_repo,
             semantic_repo=semantic_repo,
             canonical_repo=canonical_repo,
+            prompt_repo=prompt_repo,
+            audit_repo=audit_repo,
+            feedback_repo=feedback_repo,
             llm_client=llm_client,
         )
 
@@ -107,6 +114,9 @@ class LatticeBot(commands.Bot):
             context_cache=self.context_cache,
             user_context_cache=self.user_context_cache,
             message_repo=self.message_repo,
+            prompt_repo=self.prompt_repo,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
             canonical_repo=self.canonical_repo,
         )
 

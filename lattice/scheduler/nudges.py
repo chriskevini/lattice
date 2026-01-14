@@ -14,7 +14,11 @@ from lattice.utils.date_resolution import get_now
 from lattice.utils.placeholder_injector import PlaceholderInjector
 
 if TYPE_CHECKING:
-    from lattice.memory.repositories import SemanticMemoryRepository
+    from lattice.memory.repositories import (
+        SemanticMemoryRepository,
+        PromptAuditRepository,
+        UserFeedbackRepository,
+    )
 
 
 logger = structlog.get_logger(__name__)
@@ -54,6 +58,8 @@ async def prepare_contextual_nudge(
     db_pool: Any = None,
     bot: Any | None = None,
     semantic_repo: "SemanticMemoryRepository | None" = None,
+    audit_repo: "PromptAuditRepository | None" = None,
+    feedback_repo: "UserFeedbackRepository | None" = None,
 ) -> NudgePlan:
     """Prepare a contextual nudge using AI.
 
@@ -65,6 +71,8 @@ async def prepare_contextual_nudge(
         db_pool: Database pool for fallback fetches (optional)
         bot: Discord bot instance for dependency injection
         semantic_repo: Semantic memory repository for goal retrieval (optional)
+        audit_repo: Audit repository for dependency injection
+        feedback_repo: Feedback repository for dependency injection
 
     Returns:
         NudgePlan with nudge content
@@ -88,7 +96,6 @@ async def prepare_contextual_nudge(
     activity = user_context_cache.get_activities(user_id)
     if activity is None and semantic_repo:
         context_result = await retrieve_context(
-            db_pool=db_pool,
             semantic_repo=semantic_repo,
             entities=[],
             context_flags=["activity_context"],
@@ -122,7 +129,6 @@ async def prepare_contextual_nudge(
     try:
         result = await llm_client.complete(
             prompt=prompt,
-            db_pool=db_pool,
             prompt_key="CONTEXTUAL_NUDGE",
             template_version=prompt_template.version,
             main_discord_message_id=None,
@@ -131,6 +137,8 @@ async def prepare_contextual_nudge(
             audit_view_params={
                 "input_text": "Contextual nudge",
             },
+            audit_repo=audit_repo,
+            feedback_repo=feedback_repo,
             bot=bot,
         )
     except (ValueError, ImportError, Exception):

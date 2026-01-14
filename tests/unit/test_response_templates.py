@@ -5,7 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
 from lattice.utils.date_resolution import get_now
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from lattice.core.context import ContextStrategy
@@ -16,6 +16,11 @@ from lattice.core.response_generator import (
 )
 from lattice.memory.episodic import EpisodicMessage
 from lattice.memory.procedural import PromptTemplate
+from lattice.memory.repositories import (
+    PromptAuditRepository,
+    PromptRegistryRepository,
+    UserFeedbackRepository,
+)
 from lattice.utils.llm import AuditResult
 
 
@@ -229,11 +234,11 @@ class TestUnifiedResponseTemplate:
             return_value=mock_template,
         ):
             await generate_response(
-                db_pool=mock_pool,
                 user_message="I need to finish the lattice project by Friday",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
                 llm_client=mock_client,
+                prompt_repo=MagicMock(spec=PromptRegistryRepository),
             )
 
             mock_client.complete.assert_called_once()
@@ -260,11 +265,11 @@ class TestGenerateResponseWithTemplates:
             return_value=mock_prompt_template,
         ):
             result, rendered_prompt, context_info = await generate_response(
-                db_pool=mock_pool,
                 user_message="I need to finish the lattice project by Friday",
                 episodic_context="Recent conversation history",
                 semantic_context="I need to finish the lattice project by Friday",
                 llm_client=mock_client,
+                prompt_repo=MagicMock(spec=PromptRegistryRepository),
             )
 
             # Verify template selection
@@ -304,11 +309,11 @@ class TestGenerateResponseWithTemplates:
             return_value=mock_template,
         ):
             result, rendered_prompt, context_info = await generate_response(
-                db_pool=mock_pool,
                 user_message="What's the deadline for the lattice project?",
                 episodic_context="Recent conversation history",
                 semantic_context="Relevant facts",
                 llm_client=mock_client,
+                prompt_repo=MagicMock(spec=PromptRegistryRepository),
             )
 
             # Verify extraction fields in rendered prompt

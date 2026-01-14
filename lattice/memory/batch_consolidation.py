@@ -40,6 +40,9 @@ if TYPE_CHECKING:
     from lattice.memory.repositories import (
         CanonicalRepository,
         MessageRepository,
+        PromptRegistryRepository,
+        PromptAuditRepository,
+        UserFeedbackRepository,
     )
 
 
@@ -106,6 +109,9 @@ async def run_consolidation_batch(
     db_pool: "DatabasePool",
     message_repo: "MessageRepository",
     canonical_repo: "CanonicalRepository | None" = None,
+    prompt_repo: "PromptRegistryRepository | None" = None,
+    audit_repo: "PromptAuditRepository | None" = None,
+    feedback_repo: "UserFeedbackRepository | None" = None,
     llm_client: Any = None,
     bot: Any = None,
     user_context_cache: Any = None,
@@ -122,6 +128,9 @@ async def run_consolidation_batch(
         db_pool: Database pool for dependency injection (required)
         message_repo: Message repository
         canonical_repo: Canonical repository for entity/predicate storage
+        prompt_repo: Prompt repository for dependency injection
+        audit_repo: Audit repository for dependency injection
+        feedback_repo: Feedback repository for dependency injection
         llm_client: LLM client for dependency injection
         bot: Discord bot instance for dependency injection
         user_context_cache: User-level cache for timezone updates
@@ -164,8 +173,11 @@ async def run_consolidation_batch(
             for m in messages
         )
 
+    if not prompt_repo:
+        raise ValueError("prompt_repo is required for run_consolidation_batch")
+
     prompt_template = await get_prompt(
-        db_pool=db_pool, prompt_key="MEMORY_CONSOLIDATION"
+        repo=prompt_repo, prompt_key="MEMORY_CONSOLIDATION"
     )
     if not prompt_template:
         logger.warning("MEMORY_CONSOLIDATION prompt not found")
@@ -205,12 +217,13 @@ async def run_consolidation_batch(
 
     result = await active_llm_client.complete(
         prompt=rendered_prompt,
-        db_pool=db_pool,
         prompt_key="MEMORY_CONSOLIDATION",
         main_discord_message_id=None,
         temperature=prompt_template.temperature,
         max_tokens=MAX_CONSOLIDATION_TOKENS,
         audit_view=True,
+        audit_repo=audit_repo,
+        feedback_repo=feedback_repo,
         bot=active_bot,
         execution_metadata={"batch_message_count": message_count},
     )

@@ -12,13 +12,19 @@ from lattice.utils.llm import AuditResult
 
 
 if TYPE_CHECKING:
-    from lattice.memory.repositories import SemanticMemoryRepository
-    from lattice.utils.database import DatabasePool
+    from lattice.memory.repositories import (
+        SemanticMemoryRepository,
+        PromptRegistryRepository,
+        PromptAuditRepository,
+        UserFeedbackRepository,
+    )
 
 
 logger = structlog.get_logger(__name__)
 
+
 MAX_GRAPH_TRIPLES = 10
+
 
 MAX_GOALS_CONTEXT = 50
 
@@ -126,7 +132,6 @@ async def generate_response(
     user_message: str,
     episodic_context: str,
     semantic_context: str,
-    db_pool: "DatabasePool",
     unresolved_entities: list[str] | None = None,
     user_tz: str = "UTC",
     audit_view: bool = False,
@@ -134,6 +139,9 @@ async def generate_response(
     llm_client: Any | None = None,
     main_discord_message_id: int | None = None,
     bot: Any | None = None,
+    prompt_repo: "PromptRegistryRepository | None" = None,
+    audit_repo: "PromptAuditRepository | None" = None,
+    feedback_repo: "UserFeedbackRepository | None" = None,
 ) -> tuple[AuditResult, str, dict[str, Any]]:
     """Generate a response using the unified prompt template.
 
@@ -141,7 +149,6 @@ async def generate_response(
         user_message: The user's message
         episodic_context: Recent conversation history pre-formatted
         semantic_context: Relevant facts from graph pre-formatted
-        db_pool: Database pool for dependency injection
         unresolved_entities: Entities requiring clarification
         user_tz: IANA timezone string for date resolution
         audit_view: Whether to send an AuditView to the dream channel
@@ -149,14 +156,20 @@ async def generate_response(
         llm_client: LLM client for dependency injection
         main_discord_message_id: Discord message ID for audit linkage
         bot: Discord bot instance for dependency injection
+        prompt_repo: Prompt repository for dependency injection
+        audit_repo: Audit repository for dependency injection
+        feedback_repo: Feedback repository for dependency injection
 
     Returns:
         Tuple of (AuditResult, rendered_prompt, context_info)
     """
     # Get unified response template
     template_name = "UNIFIED_RESPONSE"
+    if not prompt_repo:
+        raise ValueError("prompt_repo is required")
+
     prompt_template = await procedural.get_prompt(
-        db_pool=db_pool, prompt_key=template_name
+        repo=prompt_repo, prompt_key=template_name
     )
 
     if not prompt_template:
@@ -219,13 +232,14 @@ async def generate_response(
     try:
         result = await llm_client.complete(
             prompt=filled_prompt,
-            db_pool=db_pool,
             prompt_key=template_name,
             template_version=prompt_template.version,
             main_discord_message_id=main_discord_message_id,
             temperature=temperature,
             audit_view=audit_view,
             audit_view_params=audit_view_params,
+            audit_repo=audit_repo,
+            feedback_repo=feedback_repo,
             bot=bot,
         )
     except Exception as e:
