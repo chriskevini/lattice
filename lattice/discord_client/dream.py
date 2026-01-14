@@ -11,6 +11,7 @@ from uuid import UUID
 import discord
 import structlog
 
+from lattice.core.response_generator import split_response
 from lattice.memory import prompt_audits, user_feedback
 from lattice.utils.llm_client import GenerationResult
 
@@ -423,7 +424,11 @@ class AuditView(discord.ui.DesignerView):
                 )
                 return
 
-            await thread.send(f"**Rendered Prompt**\n{self.rendered_prompt}")
+            prompt_chunks = split_response(self.rendered_prompt, max_length=1900)
+            for i, chunk in enumerate(prompt_chunks):
+                await thread.send(
+                    f"**Rendered Prompt** ({i + 1}/{len(prompt_chunks)})\n{chunk}"
+                )
 
             if len(self.raw_output) <= 19000:
                 await thread.send(f"**Raw Output**\n{self.raw_output}")
