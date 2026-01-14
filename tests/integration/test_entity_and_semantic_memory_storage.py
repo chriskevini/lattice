@@ -8,10 +8,7 @@ Note: After issue #131, semantic memories use text-based storage
 The entities table is no longer used for semantic memory storage.
 """
 
-import os
-import time
-from typing import AsyncGenerator
-from uuid import uuid4
+from typing import Protocol
 
 import pytest
 
@@ -21,20 +18,12 @@ from lattice.memory.context import PostgresMessageRepository
 from lattice.utils.database import DatabasePool
 
 
-# Skip all tests if DATABASE_URL not set (CI environment)
-pytestmark = pytest.mark.skipif(
-    not os.getenv("DATABASE_URL"),
-    reason="DATABASE_URL not set - requires real database for integration tests",
-)
+class UniqueIdGenerator(Protocol):
+    """Protocol for unique ID generators from conftest."""
 
-
-@pytest.fixture
-async def db_pool() -> AsyncGenerator[DatabasePool, None]:
-    """Fixture to provide a managed DatabasePool for each test."""
-    pool = DatabasePool()
-    await pool.initialize()
-    yield pool
-    await pool.close()
+    def next_id(self) -> int:
+        """Generate the next unique ID."""
+        ...
 
 
 @pytest.fixture
@@ -43,39 +32,35 @@ def message_repo(db_pool: DatabasePool) -> PostgresMessageRepository:
     return PostgresMessageRepository(db_pool)
 
 
-@pytest.fixture(autouse=True)
-async def cleanup_test_data(db_pool: DatabasePool) -> None:
-    """Fixture to clean up test data before each test."""
-    async with db_pool.pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM raw_messages WHERE discord_message_id IN (12345, 12346, 12348, 12349, 12350, 12351, 12352, 12353, 12354)"
-        )
-        # Also clean up semantic memories associated with these test batches
-        await conn.execute(
-            "DELETE FROM semantic_memories WHERE source_batch_id LIKE 'test_batch_%'"
-        )
-
-
 @pytest.mark.asyncio
 class TestSemanticMemoryStorage:
     """Test semantic memory storage functionality."""
 
     async def test_store_simple_memory(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test storing a simple semantic memory."""
-        # Create a test message
+        # Create a test message with unique ID
+        msg_id = unique_discord_id.next_id()
         message = episodic.EpisodicMessage(
             content="Alice works at OpenAI",
-            discord_message_id=12345,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Store semantic memory with batch_id for cleanup
-        batch_id = "test_batch_12345"
-        memories = [{"subject": "user", "predicate": "works_at", "object": "OpenAI"}]
+        # Store semantic memory with unique batch_id and unique values to avoid conflicts
+        batch_id = f"{unique_batch_id}_simple"
+        # Use unique object to avoid conflict with existing data
+        unique_object = f"TestCompany_{unique_batch_id[:8]}"
+        memories = [
+            {"subject": "TestUser", "predicate": "works_at", "object": unique_object}
+        ]
         await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
         )
@@ -97,32 +82,46 @@ class TestSemanticMemoryStorage:
             found = False
             for row in rows:
                 if (
-                    row["subject"] == "user"
+                    row["subject"] == "TestUser"
                     and row["predicate"] == "works_at"
-                    and row["object"] == "OpenAI"
+                    and row["object"] == unique_object
                 ):
                     found = True
                     break
             assert found, "Memory not found in database"
 
     async def test_store_multiple_memories(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test storing multiple memories from same message."""
-        # Create test message
+        # Create test message with unique ID
+        msg_id = unique_discord_id.next_id()
         message = episodic.EpisodicMessage(
             content="Alice works at OpenAI and likes Python",
-            discord_message_id=12346,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Store multiple memories with a batch ID for tracking
-        batch_id = "test_batch_12346"
+        # Store multiple memories with unique batch ID and unique values
+        batch_id = f"{unique_batch_id}_multiple"
+        unique_suffix = unique_batch_id[:8]
         memories = [
-            {"subject": "user", "predicate": "works_at", "object": "OpenAI"},
-            {"subject": "user", "predicate": "likes", "object": "Python"},
+            {
+                "subject": f"TestUser_{unique_suffix}",
+                "predicate": "works_at",
+                "object": f"TestCompany_{unique_suffix}",
+            },
+            {
+                "subject": f"TestUser_{unique_suffix}",
+                "predicate": "likes",
+                "object": f"TestLang_{unique_suffix}",
+            },
         ]
         await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
@@ -143,21 +142,31 @@ class TestSemanticMemoryStorage:
             assert rows[0]["count"] == 2
 
     async def test_skip_invalid_memories(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test that invalid memories are skipped gracefully."""
+        msg_id = unique_discord_id.next_id()
         message = episodic.EpisodicMessage(
             content="Test message",
-            discord_message_id=12348,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Mix of valid and invalid memories
-        batch_id = "test_batch_12348"
+        # Mix of valid and invalid memories - use unique values
+        batch_id = f"{unique_batch_id}_invalid"
+        unique_suffix = unique_batch_id[:8]
         memories = [
-            {"subject": "user", "predicate": "likes", "object": "Coffee"},  # Valid
+            {
+                "subject": f"TestUser_{unique_suffix}",
+                "predicate": "likes",
+                "object": f"Coffee_{unique_suffix}",
+            },  # Valid
             {
                 "subject": "",
                 "predicate": "likes",
@@ -193,24 +202,29 @@ class TestSemanticMemoryStorage:
 
             # Should have stored only the valid memory
             assert len(rows) == 1
-            assert rows[0]["subject"] == "user"
+            assert rows[0]["subject"] == f"TestUser_{unique_suffix}"
             assert rows[0]["predicate"] == "likes"
-            assert rows[0]["object"] == "Coffee"
+            assert rows[0]["object"] == f"Coffee_{unique_suffix}"
 
     async def test_empty_memories_list(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test that empty memories list is handled gracefully."""
+        msg_id = unique_discord_id.next_id()
         message = episodic.EpisodicMessage(
             content="No memories here",
-            discord_message_id=12349,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
         # Should not raise exception
-        batch_id = "test_batch_12349"
+        batch_id = f"{unique_batch_id}_empty"
         await episodic.store_semantic_memories(
             message_repo, message_id, [], source_batch_id=batch_id
         )
@@ -228,31 +242,38 @@ class TestSemanticMemoryStorage:
             assert rows[0]["count"] == 0
 
     async def test_text_based_memory_search(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test searching for memories by text matching."""
-        # Use a unique batch ID to avoid collisions in parallel test execution
-        unique_suffix = str(uuid4())[:8]
-        batch_id = f"test_batch_12350_{unique_suffix}"
+        batch_id = f"{unique_batch_id}_search"
+        msg_id = unique_discord_id.next_id()
 
         message = episodic.EpisodicMessage(
             content="Test memory search",
-            discord_message_id=12350,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
         # Store a memory with unique identifiers
+        unique_suffix = unique_batch_id[:8]
+        unique_subject = f"SearchUser_{unique_suffix}"
+        unique_location = f"Richmond_{unique_suffix}"
         memories = [
-            {"subject": "user", "predicate": "lives_in", "object": "Richmond, BC"}
+            {
+                "subject": unique_subject,
+                "predicate": "lives_in",
+                "object": unique_location,
+            }
         ]
         await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
         )
-
-        # Small delay to ensure data is committed and visible across connections
-        time.sleep(0.1)
 
         # Search by subject
         async with db_pool.pool.acquire() as conn:
@@ -262,7 +283,7 @@ class TestSemanticMemoryStorage:
                 FROM semantic_memories
                 WHERE subject ILIKE $1 AND source_batch_id = $2
                 """,
-                "%user%",
+                f"%SearchUser_{unique_suffix}%",
                 batch_id,
             )
             assert len(rows) == 1
@@ -276,31 +297,37 @@ class TestSemanticMemoryStorage:
                 FROM semantic_memories
                 WHERE object ILIKE $1 AND source_batch_id = $2
                 """,
-                "%Richmond%",
+                f"%Richmond_{unique_suffix}%",
                 batch_id,
             )
             assert len(rows) == 1
-            assert rows[0]["subject"] == "user"
+            assert rows[0]["subject"] == unique_subject
 
     async def test_bidirectional_alias_storage(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test that 'has alias' triples create bidirectional relationships."""
-        # Use a unique batch ID
-        unique_suffix = str(uuid4())[:8]
-        batch_id = f"test_batch_alias_{unique_suffix}"
+        batch_id = f"{unique_batch_id}_alias"
+        msg_id = unique_discord_id.next_id()
+        unique_suffix = unique_batch_id[:8]
 
         message = episodic.EpisodicMessage(
             content="Test alias storage",
-            discord_message_id=12351,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Store alias triple
+        # Store alias triple with unique values
+        alias_from = f"mom_{unique_suffix}"
+        alias_to = f"Mother_{unique_suffix}"
         memories = [
-            {"subject": "mom", "predicate": ALIAS_PREDICATE, "object": "Mother"}
+            {"subject": alias_from, "predicate": ALIAS_PREDICATE, "object": alias_to}
         ]
         await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
@@ -321,15 +348,20 @@ class TestSemanticMemoryStorage:
             assert len(rows) == 2
             # Check both directions exist regardless of order
             triples = [(r["subject"], r["predicate"], r["object"]) for r in rows]
-            assert ("mom", ALIAS_PREDICATE, "Mother") in triples
-            assert ("Mother", ALIAS_PREDICATE, "mom") in triples
+            assert (alias_from, ALIAS_PREDICATE, alias_to) in triples
+            assert (alias_to, ALIAS_PREDICATE, alias_from) in triples
 
     async def test_duplicate_alias_handling(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test that duplicate alias triples are ignored."""
-        unique_suffix = str(uuid4())[:8]
-        batch_id = f"test_batch_dup_{unique_suffix}"
+        batch_id = f"{unique_batch_id}_dup"
+        msg_id = unique_discord_id.next_id()
+        unique_suffix = unique_batch_id[:8]
 
         # First verify the batch doesn't exist
         async with db_pool.pool.acquire() as conn:
@@ -341,16 +373,18 @@ class TestSemanticMemoryStorage:
 
         message = episodic.EpisodicMessage(
             content="Test duplicate handling",
-            discord_message_id=12352,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Store same alias twice
+        # Store same alias twice with unique values
+        alias_from = f"bf_{unique_suffix}"
+        alias_to = f"boyfriend_{unique_suffix}"
         memories = [
-            {"subject": "bf", "predicate": ALIAS_PREDICATE, "object": "boyfriend"},
-            {"subject": "bf", "predicate": ALIAS_PREDICATE, "object": "boyfriend"},
+            {"subject": alias_from, "predicate": ALIAS_PREDICATE, "object": alias_to},
+            {"subject": alias_from, "predicate": ALIAS_PREDICATE, "object": alias_to},
         ]
         result_count = await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
@@ -370,14 +404,14 @@ class TestSemanticMemoryStorage:
                 batch_id,
             )
             assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}"
-            assert rows[0]["subject"] == "bf"
+            assert rows[0]["subject"] == alias_from
             assert rows[0]["predicate"] == ALIAS_PREDICATE
-            assert rows[0]["object"] == "boyfriend"
-            assert rows[1]["subject"] == "boyfriend"
+            assert rows[0]["object"] == alias_to
+            assert rows[1]["subject"] == alias_to
             assert rows[1]["predicate"] == ALIAS_PREDICATE
-            assert rows[1]["object"] == "bf"
+            assert rows[1]["object"] == alias_from
 
-        # Verify the count of unique triples stored (before cleanup)
+        # Verify the count of unique triples stored
         async with db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
@@ -390,31 +424,30 @@ class TestSemanticMemoryStorage:
             # Only 2 unique triples should exist (bf->boyfriend and boyfriend->bf)
             assert rows[0]["count"] == 2
 
-        # Clean up test data manually
-        async with db_pool.pool.acquire() as conn:
-            await conn.execute(
-                "DELETE FROM semantic_memories WHERE source_batch_id = $1",
-                batch_id,
-            )
-
     async def test_self_alias_skipped(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test that self-aliases (entity aliased to itself) don't create duplicate entries."""
-        unique_suffix = str(uuid4())[:8]
-        batch_id = f"test_batch_self_{unique_suffix}"
+        batch_id = f"{unique_batch_id}_self"
+        msg_id = unique_discord_id.next_id()
+        unique_suffix = unique_batch_id[:8]
 
         message = episodic.EpisodicMessage(
             content="Testing self-alias",
-            discord_message_id=12353,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Try to create self-alias
+        # Try to create self-alias with unique value
+        self_alias = f"Alice_{unique_suffix}"
         memories = [
-            {"subject": "Alice", "predicate": ALIAS_PREDICATE, "object": "Alice"}
+            {"subject": self_alias, "predicate": ALIAS_PREDICATE, "object": self_alias}
         ]
         result_count = await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
@@ -430,29 +463,37 @@ class TestSemanticMemoryStorage:
                 batch_id,
             )
             assert len(rows) == 1
-            assert rows[0]["subject"] == "Alice"
-            assert rows[0]["object"] == "Alice"
+            assert rows[0]["subject"] == self_alias
+            assert rows[0]["object"] == self_alias
 
     async def test_circular_aliases(
-        self, db_pool: DatabasePool, message_repo: PostgresMessageRepository
+        self,
+        db_pool: DatabasePool,
+        message_repo: PostgresMessageRepository,
+        unique_discord_id: UniqueIdGenerator,
+        unique_batch_id: str,
     ) -> None:
         """Test that circular aliases (A->B, B->C, C->A) are handled gracefully."""
-        unique_suffix = str(uuid4())[:8]
-        batch_id = f"test_batch_circular_{unique_suffix}"
+        batch_id = f"{unique_batch_id}_circular"
+        msg_id = unique_discord_id.next_id()
+        unique_suffix = unique_batch_id[:8]
 
         message = episodic.EpisodicMessage(
             content="Testing circular aliases",
-            discord_message_id=12354,
+            discord_message_id=msg_id,
             channel_id=67890,
             is_bot=False,
         )
         message_id = await episodic.store_message(message_repo, message)
 
-        # Create circular chain: mom -> Mother -> mama -> mom
+        # Create circular chain with unique values: mom -> Mother -> mama -> mom
+        mom = f"mom_{unique_suffix}"
+        mother = f"Mother_{unique_suffix}"
+        mama = f"mama_{unique_suffix}"
         memories = [
-            {"subject": "mom", "predicate": ALIAS_PREDICATE, "object": "Mother"},
-            {"subject": "Mother", "predicate": ALIAS_PREDICATE, "object": "mama"},
-            {"subject": "mama", "predicate": ALIAS_PREDICATE, "object": "mom"},
+            {"subject": mom, "predicate": ALIAS_PREDICATE, "object": mother},
+            {"subject": mother, "predicate": ALIAS_PREDICATE, "object": mama},
+            {"subject": mama, "predicate": ALIAS_PREDICATE, "object": mom},
         ]
         result_count = await episodic.store_semantic_memories(
             message_repo, message_id, memories, source_batch_id=batch_id
@@ -475,15 +516,15 @@ class TestSemanticMemoryStorage:
             triples = {(r["subject"], r["object"]) for r in rows}
 
             # Check all forward and reverse exist
-            assert ("mom", "Mother") in triples
-            assert ("Mother", "mom") in triples
-            assert ("Mother", "mama") in triples
-            assert ("mama", "Mother") in triples
-            assert ("mama", "mom") in triples
-            assert ("mom", "mama") in triples
+            assert (mom, mother) in triples
+            assert (mother, mom) in triples
+            assert (mother, mama) in triples
+            assert (mama, mother) in triples
+            assert (mama, mom) in triples
+            assert (mom, mama) in triples
 
 
 if __name__ == "__main__":
-    import pytest
+    import pytest as pytest_main
 
-    pytest.main([__file__, "-v"])
+    pytest_main.main([__file__, "-v"])

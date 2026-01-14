@@ -186,7 +186,7 @@ class MessageHandler:
         try:
             from lattice.memory import batch_consolidation
 
-            await batch_consolidation.run_batch_consolidation(
+            await batch_consolidation.run_consolidation_batch(
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
                 bot=self.bot,
@@ -218,7 +218,7 @@ class MessageHandler:
 
             from lattice.memory import batch_consolidation
 
-            await batch_consolidation.run_batch_consolidation(
+            await batch_consolidation.run_consolidation_batch(
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
                 bot=self.bot,
