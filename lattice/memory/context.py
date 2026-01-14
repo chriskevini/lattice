@@ -175,7 +175,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
 
     async def _insert_semantic_memory(
         self,
-        conn,
+        conn: Any,
         subject: str,
         predicate: str,
         obj: str,
@@ -186,13 +186,14 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             """
             INSERT INTO semantic_memories (subject, predicate, object, source_batch_id)
             VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
             """,
             subject,
             predicate,
             obj,
             source_batch_id,
         )
-        return 1 if "INSERT" in result else 0
+        return 1 if "INSERT 0" not in result else 0
 
 
 class PostgresSemanticMemoryRepository(PostgresRepository, SemanticMemoryRepository):
