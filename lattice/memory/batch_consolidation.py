@@ -16,6 +16,7 @@ Architecture:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
 
 import structlog
 
@@ -139,6 +140,7 @@ async def run_consolidation_batch(
         if not messages:
             return False
 
+        message_count = len(messages)
         batch_id_val = messages[-1]["discord_message_id"]
         if "Mock" in str(type(batch_id_val)):
             batch_id = "100"
@@ -154,8 +156,6 @@ async def run_consolidation_batch(
                 val = first_message.get("user_timezone")
             if isinstance(val, str):
                 user_tz = val
-
-        from zoneinfo import ZoneInfo
 
         tz = ZoneInfo(user_tz)
 
@@ -213,6 +213,7 @@ async def run_consolidation_batch(
         max_tokens=MAX_CONSOLIDATION_TOKENS,
         audit_view=True,
         bot=active_bot,
+        execution_metadata={"batch_message_count": message_count},
     )
 
     extracted_memories: list[dict[str, str]] = []
@@ -268,8 +269,6 @@ async def run_consolidation_batch(
         if tz_triple:
             timezone_str = tz_triple["object"]
             try:
-                from zoneinfo import ZoneInfo
-
                 ZoneInfo(timezone_str)
                 user_id = str(bot.user.id) if bot and bot.user else "user"
                 await user_context_cache.set_timezone(user_id, timezone_str)

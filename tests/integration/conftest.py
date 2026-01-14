@@ -120,7 +120,10 @@ async def cleanup_isolated_data(
     """Autouse fixture for worker-prefixed data cleanup.
 
     Cleans up test data both before and after each test to ensure isolation.
-    Only cleans up data that belongs to this worker's ID range and batch prefix.
+
+    Two cleanup strategies are used:
+    - Messages: cleaned by ID range (each worker gets 100_000 IDs for collision-free parallel execution)
+    - Semantic memories: cleaned by batch prefix pattern (test_batch_{worker_id}_%)
 
     This runs automatically for all integration tests.
     """
