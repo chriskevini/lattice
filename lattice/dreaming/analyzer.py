@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
+    from lattice.utils.database import DatabasePool
     from lattice.memory.repositories import PromptAuditRepository
 
 

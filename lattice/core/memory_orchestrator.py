@@ -16,7 +16,7 @@ from lattice.memory.graph import GraphTraversal
 from lattice.memory.repositories import MessageRepository, SemanticMemoryRepository
 
 if TYPE_CHECKING:
-    pass
+    from lattice.utils.database import DatabasePool
 
 
 logger = structlog.get_logger(__name__)

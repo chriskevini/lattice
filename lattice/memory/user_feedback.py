@@ -4,7 +4,7 @@ Stores feedback submitted via Discord buttons and modals in the dream channel.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast, Any
 from uuid import UUID, uuid4
 
 import structlog
