@@ -184,7 +184,6 @@ class LatticeBot(commands.Bot):
                 db_pool=self.db_pool,
                 llm_client=self.llm_client,
                 prompt_audit_repo=self.audit_repo,
-                user_feedback_repo=self.feedback_repo,
             )
             await self._dreaming_scheduler.start()
 

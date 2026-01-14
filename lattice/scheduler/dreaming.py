@@ -28,10 +28,7 @@ from lattice.utils.date_resolution import get_now
 
 if TYPE_CHECKING:
     from lattice.utils.database import DatabasePool
-    from lattice.memory.repositories import (
-        PromptAuditRepository,
-        UserFeedbackRepository,
-    )
+    from lattice.memory.repositories import PromptAuditRepository
 
 
 logger = structlog.get_logger(__name__)
@@ -69,7 +66,6 @@ class DreamingScheduler:
         db_pool: "DatabasePool | None" = None,
         llm_client: Any | None = None,
         prompt_audit_repo: "PromptAuditRepository | None" = None,
-        user_feedback_repo: "UserFeedbackRepository | None" = None,
     ) -> None:
         """Initialize the dreaming scheduler.
 
@@ -79,8 +75,7 @@ class DreamingScheduler:
             dream_time: Time of day to run dreaming cycle (default: 3:00 AM UTC)
             db_pool: Database pool for dependency injection (required)
             llm_client: LLM client for dependency injection
-            prompt_audit_repo: Prompt audit repository
-            user_feedback_repo: User feedback repository
+            prompt_audit_repo: Prompt audit repository for data access
         """
         if db_pool is None:
             msg = "db_pool is required for DreamingScheduler"
@@ -95,7 +90,6 @@ class DreamingScheduler:
         self.db_pool = db_pool
         self.llm_client = llm_client
         self.prompt_audit_repo = prompt_audit_repo
-        self.user_feedback_repo = user_feedback_repo
 
         self._running: bool = False
         self._scheduler_task: asyncio.Task[None] | None = None
@@ -215,7 +209,6 @@ class DreamingScheduler:
                 min_feedback=min_feedback,
                 db_pool=self.db_pool,
                 prompt_audit_repo=self.prompt_audit_repo,
-                user_feedback_repo=self.user_feedback_repo,
             )
 
             if not metrics:
