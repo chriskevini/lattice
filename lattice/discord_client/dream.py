@@ -312,16 +312,9 @@ class AuditView(discord.ui.DesignerView):
         self.rendered_prompt = rendered_prompt
         self.raw_output = raw_output
 
-        details_button: Any = discord.ui.Button(
-            emoji="🔍",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"audit:details:{audit_id}" if audit_id else "audit:details",
-        )
-        details_button.callback = self._make_details_callback()
-
         feedback_button: Any = discord.ui.Button(
             emoji="💬",
-            style=discord.ButtonStyle.primary,
+            style=discord.ButtonStyle.secondary,
             custom_id=f"audit:feedback:{audit_id}" if audit_id else "audit:feedback",
         )
         feedback_button.callback = self._make_feedback_callback()
@@ -345,7 +338,6 @@ class AuditView(discord.ui.DesignerView):
         quick_negative_button.callback = self._make_quick_negative_callback()
 
         action_row: Any = discord.ui.ActionRow(
-            details_button,
             feedback_button,
             quick_positive_button,
             quick_negative_button,
@@ -382,86 +374,6 @@ class AuditView(discord.ui.DesignerView):
             await interaction.followup.send(view=view, ephemeral=True)
 
         return view_prompt_callback
-
-    def _make_details_callback(self) -> Any:
-        """Create details button callback that creates a thread with full content."""
-
-        async def details_callback(interaction: discord.Interaction) -> None:
-            """Handle Details button click - creates thread with full content."""
-            if not self.raw_output or not self.rendered_prompt:
-                await interaction.response.send_message(
-                    "Content not available.",
-                    ephemeral=True,
-                )
-                return
-
-            thread_name = f"Audit: {self.prompt_key or 'unknown'}"[:100]
-
-            if not isinstance(interaction.channel, discord.TextChannel):
-                await interaction.response.send_message(
-                    "Cannot create thread in this channel type.",
-                    ephemeral=True,
-                )
-                return
-
-            channel = interaction.channel
-
-            try:
-                thread = await channel.create_thread(
-                    name=thread_name,
-                    auto_archive_duration=1440,
-                )
-            except discord.Forbidden:
-                logger.warning(
-                    "Permission denied when creating audit thread",
-                    audit_id=str(self.audit_id),
-                )
-                await interaction.response.send_message(
-                    "Cannot create thread: missing permissions.",
-                    ephemeral=True,
-                )
-                return
-            except discord.HTTPException as e:
-                logger.warning(
-                    "Failed to create audit thread",
-                    audit_id=str(self.audit_id),
-                    error=str(e),
-                )
-                await interaction.response.send_message(
-                    "Failed to create thread. Please try again.",
-                    ephemeral=True,
-                )
-                return
-
-            prompt_chunks = split_response(self.rendered_prompt, max_length=1900)
-            for i, chunk in enumerate(prompt_chunks):
-                await thread.send(
-                    f"**Rendered Prompt** ({i + 1}/{len(prompt_chunks)})\n{chunk}"
-                )
-
-            if len(self.raw_output) <= 19000:
-                await thread.send(f"**Raw Output**\n{self.raw_output}")
-            else:
-                chunks = [
-                    self.raw_output[i : i + 19000]
-                    for i in range(0, len(self.raw_output), 19000)
-                ]
-                for i, chunk in enumerate(chunks):
-                    await thread.send(
-                        f"**Raw Output** ({i + 1}/{len(chunks)})\n{chunk}"
-                    )
-
-            await interaction.response.send_message(
-                f"🔍 {thread.jump_url}",
-                ephemeral=True,
-            )
-            logger.debug(
-                "Audit details thread created",
-                audit_id=str(self.audit_id),
-                thread_id=thread.id,
-            )
-
-        return details_callback
 
     def _make_feedback_callback(self) -> Any:
         """Create feedback button callback."""
@@ -626,7 +538,7 @@ class AuditViewBuilder:
     }
 
     @staticmethod
-    def build_standard_audit(
+    async def build_standard_audit(
         prompt_key: str,
         version: int,
         input_text: str,
@@ -639,7 +551,8 @@ class AuditViewBuilder:
         result: GenerationResult | None = None,
         message_id: int | None = None,
         warnings: list[str] | None = None,
-    ) -> tuple[discord.Embed, AuditView]:
+        channel: discord.TextChannel | None = None,
+    ) -> tuple[discord.Embed, AuditView, str | None]:
         """Build a unified audit message for any LLM call.
 
         Args:
@@ -654,9 +567,10 @@ class AuditViewBuilder:
             feedback_repo: Feedback repository for dependency injection
             result: Optional full result for rich rendering
             message_id: Optional main Discord message ID for feedback
+            channel: Optional channel to create details thread
 
         Returns:
-            Tuple of (embed, view) for the audit message
+            Tuple of (embed, view, thread_url)
         """
         emoji, color = AuditViewBuilder._STYLE_MAP.get(
             prompt_key, ("🤖", discord.Color.default())
@@ -667,6 +581,35 @@ class AuditViewBuilder:
             title=f"{title_prefix}{emoji} {prompt_key} v{version}",
             color=color,
         )
+
+        thread_url: str | None = None
+        if channel and rendered_prompt:
+            thread_name = f"Audit: {prompt_key or 'unknown'}"[:100]
+            try:
+                thread = await channel.create_thread(
+                    name=thread_name,
+                    auto_archive_duration=1440,
+                )
+                thread_url = thread.jump_url
+
+                prompt_chunks = split_response(rendered_prompt, max_length=1900)
+                for chunk in prompt_chunks:
+                    await thread.send(f"**Rendered Prompt**\n{chunk}")
+
+                raw_output = result.content if result else output_text
+                if len(raw_output) <= 19000:
+                    await thread.send(f"**Raw Output**\n{raw_output}")
+                else:
+                    chunks = [
+                        raw_output[i : i + 19000]
+                        for i in range(0, len(raw_output), 19000)
+                    ]
+                    for chunk in chunks:
+                        await thread.send(f"**Raw Output**\n{chunk}")
+            except discord.Forbidden:
+                logger.warning("Permission denied when creating audit thread")
+            except discord.HTTPException as e:
+                logger.warning("Failed to create audit thread", error=str(e))
 
         embed.add_field(
             name="📥",
@@ -723,7 +666,10 @@ class AuditViewBuilder:
             raw_output=result.content if result else output_text,
         )
 
-        return embed, view
+        if thread_url:
+            embed.set_footer(text=f"[View Full Details]({thread_url})")
+
+        return embed, view, thread_url
 
     @staticmethod
     def format_memories(memories: list[dict[str, Any]]) -> str:

@@ -25,7 +25,7 @@ class TestAuditViewBuilder:
     ) -> None:
         """Test building a reactive audit embed."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="UNIFIED_RESPONSE",
             version=3,
             input_text="I'm planning to ship v2 by end of month.",
@@ -59,7 +59,7 @@ class TestAuditViewBuilder:
     ) -> None:
         """Test standard audit without cost info."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="UNIFIED_RESPONSE",
             version=1,
             input_text="Hello!",
@@ -78,7 +78,7 @@ class TestAuditViewBuilder:
     ) -> None:
         """Test building a proactive audit embed."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
             version=1,
             input_text="User set deadline 3 days ago. No progress updates in 48h.",
@@ -111,7 +111,7 @@ class TestAuditViewBuilder:
             },
         ]
 
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="I'm planning to ship v2 by end of month.",
@@ -131,7 +131,7 @@ class TestAuditViewBuilder:
     ) -> None:
         """Test extraction audit with no memories."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="Hello!",
@@ -150,7 +150,7 @@ class TestAuditViewBuilder:
     ) -> None:
         """Test building a reasoning audit embed."""
         audit_id = uuid4()
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
             version=1,
             input_text="deadline: 3 days, no progress updates, user prefers check-ins",
@@ -170,7 +170,7 @@ class TestAuditViewBuilder:
         """Test that correct emojis are used for different template types."""
         audit_id = uuid4()
 
-        reactive_embed, _ = AuditViewBuilder.build_standard_audit(
+        reactive_embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="UNIFIED_RESPONSE",
             version=1,
             input_text="test",
@@ -184,7 +184,7 @@ class TestAuditViewBuilder:
         assert reactive_embed.title is not None
         assert reactive_embed.title.startswith("💬")
 
-        proactive_embed, _ = AuditViewBuilder.build_standard_audit(
+        proactive_embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
             version=1,
             input_text="test",
@@ -198,7 +198,7 @@ class TestAuditViewBuilder:
         assert proactive_embed.title is not None
         assert proactive_embed.title.startswith("🌟")
 
-        extraction_embed, _ = AuditViewBuilder.build_standard_audit(
+        extraction_embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="test",
@@ -219,7 +219,7 @@ class TestAuditViewBuilder:
         """Test that correct colors are used for different template types."""
         audit_id = uuid4()
 
-        reactive_embed, _ = AuditViewBuilder.build_standard_audit(
+        reactive_embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="UNIFIED_RESPONSE",
             version=1,
             input_text="test",
@@ -232,7 +232,7 @@ class TestAuditViewBuilder:
         )
         assert reactive_embed.color == discord.Color.blurple()
 
-        proactive_embed, _ = AuditViewBuilder.build_standard_audit(
+        proactive_embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="PROACTIVE_CHECKIN",
             version=1,
             input_text="test",
@@ -245,7 +245,7 @@ class TestAuditViewBuilder:
         )
         assert proactive_embed.color == discord.Color.gold()
 
-        extraction_embed, _ = AuditViewBuilder.build_standard_audit(
+        extraction_embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="test",
@@ -266,7 +266,7 @@ class TestAuditViewBuilder:
         audit_id = uuid4()
         long_message = "x" * 2000
 
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="UNIFIED_RESPONSE",
             version=1,
             input_text=long_message,
@@ -287,7 +287,7 @@ class TestAuditViewBuilder:
         """Test that warnings are displayed in embed with warning indicator."""
         audit_id = uuid4()
 
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="MEMORY_CONSOLIDATION",
             version=1,
             input_text="test input",
@@ -315,7 +315,7 @@ class TestAuditViewBuilder:
         """Test that no warning indicator when no warnings."""
         audit_id = uuid4()
 
-        embed, _ = AuditViewBuilder.build_standard_audit(
+        embed, _, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="CONTEXTUAL_NUDGE",
             version=1,
             input_text="test input",
@@ -335,7 +335,7 @@ class TestAuditViewBuilder:
     ) -> None:
         """Test building an audit embed without a Discord message ID."""
         audit_id = uuid4()
-        embed, view = AuditViewBuilder.build_standard_audit(
+        embed, view, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key="CONTEXTUAL_NUDGE",
             version=1,
             input_text="Deterministic contextual nudge",
@@ -576,265 +576,6 @@ class TestAuditViewCustomIds:
         custom_ids = [button.custom_id for button in buttons]
 
         # Should use fallback custom_ids without audit_id suffix
-        assert "audit:details" in custom_ids
         assert "audit:feedback" in custom_ids
         assert "audit:quick_positive" in custom_ids
         assert "audit:quick_negative" in custom_ids
-
-
-class TestAuditViewCallbacks:
-    """Integration tests for AuditView button callbacks."""
-
-    @pytest.fixture
-    def mock_audit_repo(self) -> AsyncMock:
-        return AsyncMock()
-
-    @pytest.fixture
-    def mock_feedback_repo(self) -> AsyncMock:
-        return AsyncMock()
-
-    @pytest.mark.asyncio
-    async def test_details_callback_executes(
-        self, mock_audit_repo: AsyncMock, mock_feedback_repo: AsyncMock
-    ) -> None:
-        """Test that details callback creates thread correctly."""
-        audit_id = uuid4()
-        view = AuditView(
-            audit_repo=mock_audit_repo,
-            feedback_repo=mock_feedback_repo,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="This is test prompt content",
-            raw_output="This is raw output content",
-        )
-
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_channel = AsyncMock(spec=discord.TextChannel)
-        mock_channel.create_thread = AsyncMock()
-        mock_thread = AsyncMock()
-        mock_thread.jump_url = "https://discord.com/threads/123/456"
-        mock_channel.create_thread.return_value = mock_thread
-        mock_interaction.channel = mock_channel
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        callback = view._make_details_callback()
-        await callback(mock_interaction)
-
-        mock_channel.create_thread.assert_called_once()
-        mock_interaction.response.send_message.assert_called_once()
-        assert "🔍" in mock_interaction.response.send_message.call_args[0][0]
-
-    @pytest.mark.asyncio
-    async def test_details_callback_handles_empty_content(
-        self, mock_audit_repo: AsyncMock, mock_feedback_repo: AsyncMock
-    ) -> None:
-        """Test that details callback handles empty content gracefully."""
-        audit_id = uuid4()
-        view = AuditView(
-            audit_repo=mock_audit_repo,
-            feedback_repo=mock_feedback_repo,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt=None,
-            raw_output="test output",
-        )
-
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        callback = view._make_details_callback()
-        await callback(mock_interaction)
-
-        mock_interaction.response.send_message.assert_called_once()
-        assert "not available" in mock_interaction.response.send_message.call_args[0][0]
-        assert mock_interaction.response.send_message.call_args[1]["ephemeral"] is True
-
-    @pytest.mark.asyncio
-    async def test_details_callback_handles_forbidden_error(
-        self, mock_audit_repo: AsyncMock, mock_feedback_repo: AsyncMock
-    ) -> None:
-        """Test that details callback handles Forbidden error gracefully."""
-        audit_id = uuid4()
-        view = AuditView(
-            audit_repo=mock_audit_repo,
-            feedback_repo=mock_feedback_repo,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="test prompt",
-            raw_output="test output",
-        )
-
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_channel = AsyncMock(spec=discord.TextChannel)
-        mock_channel.create_thread = AsyncMock(
-            side_effect=discord.Forbidden(
-                response=AsyncMock(status=403),
-                message="Missing Permissions",
-            )
-        )
-        mock_interaction.channel = mock_channel
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        callback = view._make_details_callback()
-        await callback(mock_interaction)
-
-        mock_interaction.response.send_message.assert_called_once()
-        assert (
-            "missing permissions"
-            in mock_interaction.response.send_message.call_args[0][0].lower()
-        )
-
-    @pytest.mark.asyncio
-    async def test_details_callback_handles_http_exception(
-        self, mock_audit_repo: AsyncMock, mock_feedback_repo: AsyncMock
-    ) -> None:
-        """Test that details callback handles HTTPException gracefully."""
-        audit_id = uuid4()
-        view = AuditView(
-            audit_repo=mock_audit_repo,
-            feedback_repo=mock_feedback_repo,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="test prompt",
-            raw_output="test output",
-        )
-
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_channel = AsyncMock(spec=discord.TextChannel)
-        mock_channel.create_thread = AsyncMock(
-            side_effect=discord.HTTPException(
-                response=AsyncMock(status=500),
-                message="Internal Server Error",
-            )
-        )
-        mock_interaction.channel = mock_channel
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        callback = view._make_details_callback()
-        await callback(mock_interaction)
-
-        mock_interaction.response.send_message.assert_called_once()
-        assert (
-            "Failed to create thread"
-            in mock_interaction.response.send_message.call_args[0][0]
-        )
-
-    @pytest.mark.asyncio
-    async def test_details_callback_handles_invalid_channel_type(
-        self, mock_audit_repo: AsyncMock, mock_feedback_repo: AsyncMock
-    ) -> None:
-        """Test that details callback handles non-TextChannel gracefully."""
-        audit_id = uuid4()
-        view = AuditView(
-            audit_repo=mock_audit_repo,
-            feedback_repo=mock_feedback_repo,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="test prompt",
-            raw_output="test output",
-        )
-
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_interaction.channel = None
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        callback = view._make_details_callback()
-        await callback(mock_interaction)
-
-        mock_interaction.response.send_message.assert_called_once()
-        assert (
-            "channel type"
-            in mock_interaction.response.send_message.call_args[0][0].lower()
-        )
-
-    @pytest.mark.asyncio
-    async def test_details_callback_splits_large_output(
-        self, mock_audit_repo: AsyncMock, mock_feedback_repo: AsyncMock
-    ) -> None:
-        """Test that details callback splits large raw output into chunks."""
-        audit_id = uuid4()
-        large_output = "x" * 40000
-        view = AuditView(
-            audit_repo=mock_audit_repo,
-            feedback_repo=mock_feedback_repo,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="TEST_PROMPT",
-            version=1,
-            rendered_prompt="test prompt",
-            raw_output=large_output,
-        )
-
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_channel = AsyncMock(spec=discord.TextChannel)
-        mock_channel.create_thread = AsyncMock()
-        mock_thread = AsyncMock()
-        mock_thread.jump_url = "https://discord.com/threads/123/456"
-        mock_thread.send = AsyncMock()
-        mock_channel.create_thread.return_value = mock_thread
-        mock_interaction.channel = mock_channel
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        callback = view._make_details_callback()
-        await callback(mock_interaction)
-
-        mock_channel.create_thread.assert_called_once()
-        # 1 for prompt + 3 for raw output chunks (40000 / 19000 = 2.1 -> 3 chunks)
-        assert mock_thread.send.call_count == 4
-        # call_args_list[0] = prompt, [1] = chunk 1/3, [2] = chunk 2/3, [3] = chunk 3/3
-        assert "(1/3)" in mock_thread.send.call_args_list[1][0][0]
-        assert "(2/3)" in mock_thread.send.call_args_list[2][0][0]
-        assert "(3/3)" in mock_thread.send.call_args_list[3][0][0]
-
-    @pytest.mark.asyncio
-    async def test_details_callback_thread_name_truncated(
-        self, mock_audit_repo: AsyncMock, mock_feedback_repo: AsyncMock
-    ) -> None:
-        """Test that thread name is truncated to 100 characters."""
-        audit_id = uuid4()
-        view = AuditView(
-            audit_repo=mock_audit_repo,
-            feedback_repo=mock_feedback_repo,
-            audit_id=audit_id,
-            message_id=12345,
-            prompt_key="A" * 200,
-            version=1,
-            rendered_prompt="test prompt",
-            raw_output="test output",
-        )
-
-        mock_interaction = AsyncMock(spec=discord.Interaction)
-        mock_channel = AsyncMock(spec=discord.TextChannel)
-        mock_channel.create_thread = AsyncMock()
-        mock_thread = AsyncMock()
-        mock_thread.jump_url = "https://discord.com/threads/123/456"
-        mock_channel.create_thread.return_value = mock_thread
-        mock_interaction.channel = mock_channel
-        mock_interaction.response = AsyncMock()
-        mock_interaction.response.send_message = AsyncMock()
-
-        callback = view._make_details_callback()
-        await callback(mock_interaction)
-
-        create_thread_call = mock_channel.create_thread.call_args
-        thread_name = create_thread_call[1]["name"]
-        # Thread name is "Audit: {prompt_key}" truncated to 100 chars
-        # "Audit: " is 7 chars, so we get "Audit: " + 93 A's = 100 chars
-        assert len(thread_name) == 100
-        assert thread_name == f"Audit: {'A' * 93}"

@@ -87,7 +87,7 @@ class AuditMirror:
         if params.get("main_message_url"):
             metadata.append(f"[LINK]({params['main_message_url']})")
 
-        embed, view = AuditViewBuilder.build_standard_audit(
+        embed, view, _ = await AuditViewBuilder.build_standard_audit(
             prompt_key=prompt_key,
             version=template_version,
             input_text=params.get("input_text", rendered_prompt[:200] + "..."),
@@ -97,6 +97,7 @@ class AuditMirror:
             rendered_prompt=rendered_prompt,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            channel=dream_channel,
         )
 
         try:

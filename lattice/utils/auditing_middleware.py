@@ -244,7 +244,8 @@ class AuditingLLMClient:
                     )
 
                     try:
-                        embed, view = AuditViewBuilder.build_standard_audit(
+                        channel = bot.get_channel(effective_dream_channel_id)
+                        embed, view, _ = await AuditViewBuilder.build_standard_audit(
                             prompt_key=prompt_key or "UNKNOWN",
                             version=template_version or 1,
                             input_text=params.get("input_text", prompt[:200] + "..."),
@@ -257,9 +258,9 @@ class AuditingLLMClient:
                             result=result,
                             message_id=main_discord_message_id,
                             warnings=warnings,
+                            channel=channel,
                         )
 
-                        channel = bot.get_channel(effective_dream_channel_id)
                         if channel:
                             await channel.send(embed=embed, view=view)
                             bot.add_view(view)
