@@ -112,6 +112,15 @@ class MessageHandler:
         self._nudge_task: Optional[asyncio.Task] = None
         self._consolidation_task: Optional[asyncio.Task] = None
 
+        from lattice.discord_client.thread_handler import ThreadPromptHandler
+
+        self._thread_handler = ThreadPromptHandler(
+            bot=bot,
+            prompt_repo=prompt_repo,
+            audit_repo=audit_repo,
+            llm_client=llm_client._client,  # type: ignore[attr-defined]
+        )
+
     async def _await_silence_then_nudge(self) -> None:
         """Wait for silence then send a contextual nudge."""
         try:
@@ -323,6 +332,13 @@ class MessageHandler:
                 )
                 await self.bot.invoke(ctx)
             return  # Never store dream channel messages or generate responses
+
+        # Handle audit thread messages for prompt management
+        import discord
+
+        if isinstance(message.channel, discord.Thread):
+            await self._thread_handler.handle(message)
+            return
 
         # Only process main channel messages beyond this point
         if message.channel.id != self.main_channel_id:

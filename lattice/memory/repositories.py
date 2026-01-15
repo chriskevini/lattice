@@ -552,15 +552,34 @@ class PromptRegistryRepository(Protocol):
     Handles storage and retrieval of prompt templates for bot behavior.
     """
 
-    async def get_template(self, prompt_key: str) -> dict[str, Any] | None:
-        """Get the latest active prompt template by key.
+    async def get_template(
+        self, prompt_key: str, version: int | None = None
+    ) -> dict[str, Any] | None:
+        """Get a prompt template by key.
 
         Args:
             prompt_key: The unique identifier for the template
+            version: Optional specific version. If None, returns latest active.
 
         Returns:
             Template dict with keys: prompt_key, template, temperature, version, active
             or None if not found
+        """
+        ...
+
+    async def update_template(
+        self, prompt_key: str, template: str, version: int, temperature: float = 0.2
+    ) -> int:
+        """Insert a new template version.
+
+        Args:
+            prompt_key: The unique identifier for the template
+            template: The new template content
+            version: The version number for this template
+            temperature: LLM temperature setting
+
+        Returns:
+            The inserted version number
         """
         ...
 
@@ -1172,20 +1191,50 @@ class PostgresUserFeedbackRepository(PostgresRepository, UserFeedbackRepository)
 class PostgresPromptRegistryRepository(PostgresRepository, PromptRegistryRepository):
     """PostgreSQL implementation of PromptRegistryRepository."""
 
-    async def get_template(self, prompt_key: str) -> dict[str, Any] | None:
-        """Get the latest active prompt template by key."""
+    async def get_template(
+        self, prompt_key: str, version: int | None = None
+    ) -> dict[str, Any] | None:
+        """Get a prompt template by key. If version=None, returns latest active."""
         async with self._db_pool.pool.acquire() as conn:
-            row = await conn.fetchrow(
+            if version is None:
+                row = await conn.fetchrow(
+                    """
+                    SELECT prompt_key, template, temperature, version, active
+                    FROM prompt_registry
+                    WHERE prompt_key = $1
+                    ORDER BY version DESC
+                    LIMIT 1
+                    """,
+                    prompt_key,
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    SELECT prompt_key, template, temperature, version, active
+                    FROM prompt_registry
+                    WHERE prompt_key = $1 AND version = $2
+                    """,
+                    prompt_key,
+                    version,
+                )
+            return dict(row) if row else None
+
+    async def update_template(
+        self, prompt_key: str, template: str, version: int, temperature: float = 0.2
+    ) -> int:
+        """Insert a new template version."""
+        async with self._db_pool.pool.acquire() as conn:
+            await conn.execute(
                 """
-                SELECT prompt_key, template, temperature, version, active
-                FROM prompt_registry
-                WHERE prompt_key = $1
-                ORDER BY version DESC
-                LIMIT 1
+                INSERT INTO prompt_registry (prompt_key, version, template, temperature)
+                VALUES ($1, $2, $3, $4)
                 """,
                 prompt_key,
+                version,
+                template,
+                temperature,
             )
-            return dict(row) if row else None
+            return version
 
 
 class PostgresSystemMetricsRepository(PostgresRepository, SystemMetricsRepository):
