@@ -20,13 +20,17 @@ def generate_diff(
     old_lines = old.splitlines(keepends=True) if old else []
     new_lines = new.splitlines(keepends=True) if new else []
 
-    diff = difflib.unified_diff(
-        old_lines,
-        new_lines,
-        fromfile=from_version,
-        tofile=to_version,
+    diff_lines = list(
+        difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile=from_version,
+            tofile=to_version,
+        )
     )
 
     return (
-        "".join(diff) if diff else f"No changes (from {from_version} to {to_version})"
+        "".join(diff_lines)
+        if diff_lines
+        else f"No changes (from {from_version} to {to_version})"
     )

@@ -26,13 +26,33 @@ logger = structlog.get_logger(__name__)
 
 
 def extract_prompt_key(thread_name: str) -> Optional[str]:
-    """Extract prompt_key from thread name like 'Audit: CONTEXT_STRATEGY'."""
+    """Extract prompt_key from audit thread name.
+
+    Thread names follow the pattern "Audit: {prompt_key}" (e.g., "Audit: CONTEXT_STRATEGY").
+
+    Args:
+        thread_name: The name of the Discord thread.
+
+    Returns:
+        The extracted prompt_key if pattern matches, None otherwise.
+    """
     match = re.match(r"Audit:\s*(\w+)", thread_name)
     return match.group(1) if match else None
 
 
 async def get_audit_context(channel: discord.Thread) -> tuple[str, str]:
-    """Fetch rendered prompt and raw output from audit thread."""
+    """Fetch rendered prompt and raw output from audit thread.
+
+    Scans the thread history for messages authored by the bot containing
+    "**Rendered Prompt**" and "**Raw Output**" markers.
+
+    Args:
+        channel: The Discord thread to search.
+
+    Returns:
+        A tuple of (rendered_prompt, raw_output). Both may be empty strings
+        if not found.
+    """
     rendered_prompt = ""
     raw_output = ""
     async for msg in channel.history(limit=10, oldest_first=True):
@@ -45,7 +65,18 @@ async def get_audit_context(channel: discord.Thread) -> tuple[str, str]:
 
 
 async def get_thread_messages(channel: discord.Thread, limit: int = 5) -> str:
-    """Fetch recent user messages from thread (not episodic memory)."""
+    """Fetch recent user messages from thread for context.
+
+    Excludes bot messages to capture only human user discussion.
+
+    Args:
+        channel: The Discord thread to search.
+        limit: Maximum number of messages to retrieve (default 5).
+
+    Returns:
+        Formatted string of user messages, most recent last. Empty string
+        if no user messages found.
+    """
     messages = []
     async for msg in channel.history(limit=limit, oldest_first=True):
         if not msg.author.bot:
@@ -86,7 +117,16 @@ class ThreadPromptHandler:
         self._pending_edits: dict[int, PendingEdit] = {}
 
     def _get_thread_key(self, channel: discord.Thread) -> int:
-        """Generate a stable key for pending edits."""
+        """Generate a stable key for pending edits dictionary.
+
+        Uses thread ID which remains constant for the lifetime of the thread.
+
+        Args:
+            channel: The Discord thread.
+
+        Returns:
+            The thread's integer ID for use as a dictionary key.
+        """
         return channel.id
 
     async def handle(self, message: discord.Message) -> None:
@@ -267,7 +307,18 @@ class ThreadPromptHandler:
         explanation: str,
         original_template: str,
     ) -> None:
-        """Store a pending edit for later confirmation."""
+        """Store a pending edit for later confirmation.
+
+        Creates a PendingEdit entry keyed by the thread ID, allowing
+        multiple concurrent edits across different threads.
+
+        Args:
+            message: The Discord message triggering the edit.
+            prompt_key: The prompt identifier being edited.
+            modified_template: The proposed new template content.
+            explanation: Human-readable explanation of changes.
+            original_template: The original template content for diff generation.
+        """
         channel = message.channel
         if isinstance(channel, discord.Thread):
             thread_key = self._get_thread_key(channel)

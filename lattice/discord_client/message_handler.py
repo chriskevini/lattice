@@ -334,8 +334,6 @@ class MessageHandler:
             return  # Never store dream channel messages or generate responses
 
         # Handle audit thread messages for prompt management
-        import discord
-
         if isinstance(message.channel, discord.Thread):
             await self._thread_handler.handle(message)
             return
