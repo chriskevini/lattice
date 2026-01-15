@@ -606,6 +606,14 @@ class AuditViewBuilder:
                     ]
                     for chunk in chunks:
                         await thread.send(f"**Raw Output**\n{chunk}")
+
+                await thread.send(
+                    "💡 **Prompt Editing**\n"
+                    "Send a message below to propose changes to this template.\n"
+                    "• I'll show a diff with the proposed changes\n"
+                    "• Reply 'apply' to confirm or 'cancel' to discard\n"
+                    "• Reply 'rollback' to revert to the previous version"
+                )
             except discord.Forbidden:
                 logger.warning("Permission denied when creating audit thread")
             except discord.HTTPException as e:
