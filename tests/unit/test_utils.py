@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from zoneinfo import ZoneInfo
 
-from lattice.utils.config import get_config
 from lattice.utils.database import (
     get_next_check_at,
     get_system_metrics,
