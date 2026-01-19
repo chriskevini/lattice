@@ -332,7 +332,7 @@ class TestGetConfig:
         }
 
         with patch.dict("os.environ", env1, clear=True):
-            config1 = get_config()
+            _config1 = get_config()
 
         # Change environment but don't reload
         with patch.dict("os.environ", env2, clear=True):
@@ -399,22 +399,22 @@ class TestConfigDataclass:
     def test_config_field_types(self) -> None:
         """Test that Config fields have correct types."""
         fields = Config.__dataclass_fields__
-        assert fields["discord_token"].type == str | None
-        assert fields["discord_main_channel_id"].type == int
-        assert fields["discord_dream_channel_id"].type == int
-        assert fields["discord_guild_id"].type == str | None
-        assert fields["database_url"].type == str | None
-        assert fields["db_pool_min_size"].type == int
-        assert fields["db_pool_max_size"].type == int
-        assert fields["llm_provider"].type == str
-        assert fields["openrouter_api_key"].type == str | None
-        assert fields["openrouter_model"].type == str
-        assert fields["openrouter_timeout"].type == int
-        assert fields["gemini_api_key"].type == str | None
-        assert fields["environment"].type == str
-        assert fields["log_level"].type == str
-        assert fields["structured_logs"].type == bool
-        assert fields["health_port"].type == int
+        assert fields["discord_token"].type == str | None  # noqa: E721
+        assert fields["discord_main_channel_id"].type == int  # noqa: E721
+        assert fields["discord_dream_channel_id"].type == int  # noqa: E721
+        assert fields["discord_guild_id"].type == str | None  # noqa: E721
+        assert fields["database_url"].type == str | None  # noqa: E721
+        assert fields["db_pool_min_size"].type == int  # noqa: E721
+        assert fields["db_pool_max_size"].type == int  # noqa: E721
+        assert fields["llm_provider"].type == str  # noqa: E721
+        assert fields["openrouter_api_key"].type == str | None  # noqa: E721
+        assert fields["openrouter_model"].type == str  # noqa: E721
+        assert fields["openrouter_timeout"].type == int  # noqa: E721
+        assert fields["gemini_api_key"].type == str | None  # noqa: E721
+        assert fields["environment"].type == str  # noqa: E721
+        assert fields["log_level"].type == str  # noqa: E721
+        assert fields["structured_logs"].type == bool  # noqa: E721
+        assert fields["health_port"].type == int  # noqa: E721
 
     def test_config_default_values_through_load(self) -> None:
         """Test that defaults work correctly through load()."""

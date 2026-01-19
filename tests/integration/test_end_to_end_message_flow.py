@@ -16,7 +16,6 @@ Uses worker-isolated data from conftest.py for safe parallel test execution.
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,7 +36,6 @@ from lattice.memory.repositories import (
     PostgresSystemMetricsRepository,
     PostgresUserFeedbackRepository,
 )
-from lattice.utils.date_resolution import get_now
 from lattice.utils.llm import AuditResult
 
 
@@ -426,7 +424,7 @@ class TestEndToEndMessageFlow:
             unresolved_entities=[],
         )
 
-        response_llm = create_mock_llm_client(
+        _response_llm = create_mock_llm_client(
             response_content="Based on your recent activities, here are the things you did last week...",
             prompt_key="UNIFIED_RESPONSE",
         )
@@ -549,7 +547,7 @@ class TestEndToEndMessageFlow:
             unresolved_entities=["Python"],
         )
 
-        response_llm = create_mock_llm_client(
+        _response_llm = create_mock_llm_client(
             response_content="Your Python goal is to learn Python programming. You're making good progress!",
             prompt_key="UNIFIED_RESPONSE",
         )
@@ -715,7 +713,7 @@ class TestEndToEndMessageFlow:
             cursor_before = await _get_consolidation_cursor(system_metrics_repo)
             cursor_before_int = int(cursor_before) if cursor_before.isdigit() else 0
 
-            result = await run_consolidation_batch(
+            _result = await run_consolidation_batch(
                 system_metrics_repo=system_metrics_repo,
                 message_repo=episodic_repo,
                 canonical_repo=canonical_repo,
@@ -840,7 +838,7 @@ class TestEndToEndMessageFlow:
             )
             history = [m for m in recent_messages if m.message_id != message_id]
 
-            strategy = await context_strategy(
+            _strategy = await context_strategy(
                 message_id=message_id,
                 user_message=user_message_content,
                 recent_messages=history,

@@ -604,7 +604,7 @@ class TestAuditingLLMClientCompleteAuditView:
                 audit_repo=mock_audit_repo,
             )
 
-            result = await client.complete(
+            await client.complete(
                 prompt="Test prompt",
                 audit_repo=mock_audit_repo,
                 audit_view=True,
@@ -829,7 +829,7 @@ class TestAuditingLLMClientCompleteErrorHandling:
             audit_repo=mock_audit_repo,
         )
 
-        result = await client.complete(
+        await client.complete(
             prompt="Test prompt",
             audit_repo=mock_audit_repo,
             template_version=3,
