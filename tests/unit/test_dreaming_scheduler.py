@@ -4,7 +4,7 @@ Tests the autonomous prompt optimization cycle scheduler.
 """
 
 import asyncio
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, time
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 

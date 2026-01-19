@@ -5,8 +5,7 @@ prompt effectiveness metrics from audit data and feedback.
 """
 
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from unittest.mock import AsyncMock
 
 import pytest
 

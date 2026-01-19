@@ -1,6 +1,6 @@
 """Unit tests for lattice/utils/source_links.py."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest

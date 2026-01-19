@@ -9,8 +9,6 @@ from typing import Any
 
 import structlog
 
-from lattice.utils.config import config
-
 
 logger = structlog.get_logger(__name__)
 

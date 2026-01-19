@@ -1,10 +1,7 @@
 """Unit tests for Discord command handler implementation."""
 
-from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import discord
 import pytest
 
 from lattice.discord_client.command_handler import CommandHandler

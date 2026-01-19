@@ -4,7 +4,7 @@ Tests the active hours calculation and adaptive scheduling logic
 based on user message patterns.
 """
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
