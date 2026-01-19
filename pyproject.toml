@@ -261,6 +261,8 @@ omit = [
     "*/__pycache__/*",
     "*/.venv/*",
 ]
+parallel = true
+concurrency = ["multiprocessing"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -271,6 +273,12 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+fail_under = 75
+partial_branches = true
+
+[tool.coverage.html]
+show_contexts = true
+skip_empty = false
 
 # ============================================================================
 # BANDIT CONFIGURATION - Security linting

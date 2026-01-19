@@ -143,3 +143,65 @@ class TestTimezoneEdgeCases:
             "User", "did activity", "coding", dt, "America/New_York"
         )
         assert result == "[2026-01-12 05:30:00] coding"
+
+
+class TestGetRendererEdgeCases:
+    """Additional tests for get_renderer function edge cases."""
+
+    def test_get_renderer_none_type(self) -> None:
+        """Test that None type returns render_basic as default."""
+        renderer = get_renderer(None)  # type: ignore
+        assert renderer == render_basic
+
+    def test_get_renderer_case_sensitive(self) -> None:
+        """Test that context type lookup is case-sensitive."""
+        renderer = get_renderer("ACTIVITY_CONTEXT")
+        assert renderer == render_basic  # Not found, defaults to basic
+
+    def test_get_renderer_whitespace(self) -> None:
+        """Test that whitespace-only string returns default."""
+        renderer = get_renderer("   ")
+        assert renderer == render_basic
+
+    def test_get_renderer_with_underscores(self) -> None:
+        """Test renderer lookup with underscores."""
+        renderer = get_renderer("activity_context")
+        assert renderer == render_activity
+
+    def test_get_renderer_custom_types_return_basic(self) -> None:
+        """Test that custom/unknown types return basic renderer."""
+        custom_types = ["custom", "unknown", "random", "test_context"]
+        for ctx_type in custom_types:
+            renderer = get_renderer(ctx_type)
+            assert renderer == render_basic
+
+
+class TestRendererExamples:
+    """Tests for renderer examples from docstrings."""
+
+    def test_render_activity_docstring_example(self) -> None:
+        """Test the example from render_activity docstring."""
+        from datetime import datetime, timezone
+
+        dt = datetime(2026, 1, 12, 10, 30, tzinfo=timezone.utc)
+        result = render_activity("User", "did activity", "coding", dt)
+        assert result == "[2026-01-12 10:30:00] coding"
+
+    def test_render_goal_docstring_example(self) -> None:
+        """Test the example from render_goal docstring."""
+        result = render_goal("User", "has goal", "run marathon", None)
+        assert result == "run marathon"
+
+    def test_render_basic_docstring_example(self) -> None:
+        """Test the example from render_basic docstring."""
+        result = render_basic("User", "lives in city", "Portland", None)
+        assert result == "User lives in city Portland"
+
+    def test_get_renderer_docstring_example(self) -> None:
+        """Test the example from get_renderer docstring."""
+        from datetime import datetime, timezone
+
+        renderer = get_renderer("activity_context")
+        dt = datetime(2026, 1, 12, tzinfo=timezone.utc)
+        result = renderer("User", "did activity", "coding", dt, None)
+        assert result == "[2026-01-12 00:00:00] coding"

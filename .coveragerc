@@ -1,0 +1,29 @@
+[run]
+source = lattice
+omit =
+    */tests/*
+    */__pycache__/*
+    */.venv/*
+    */.git/*
+    */dist/*
+    */build/*
+parallel = true
+concurrency = multiprocessing
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if TYPE_CHECKING:
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+fail_under = 75
+show_missing = true
+
+[html]
+show_contexts = true
+skip_empty = false
+
+[xml]
+output = coverage.xml

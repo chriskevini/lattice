@@ -1,4 +1,4 @@
-.PHONY: help install test lint format type-check security clean run docker-up docker-down docker-logs docker-rebuild nuke-db
+.PHONY: help install test test-fast test-integration test-coverage coverage-html coverage-report lint format type-check security clean run docker-up docker-down docker-logs docker-rebuild nuke-db
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -115,6 +115,16 @@ install: ## Install dependencies and setup pre-commit hooks
 test: ## Run all tests with coverage
 	uv run pytest --cov --cov-report=term-missing
 
+test-coverage: ## Run tests with detailed coverage report (terminal + HTML + XML)
+	uv run pytest --cov=lattice --cov-report=term --cov-report=html --cov-report=xml --cov-report=term-missing
+
+coverage-html: ## Generate HTML coverage report
+	uv run coverage html
+	@echo "HTML coverage report generated in htmlcov/index.html"
+
+coverage-report: ## Show coverage summary
+	uv run coverage report -m --show-missing
+
 test-fast: ## Run tests without coverage (faster)
 	uv run pytest -x
 
@@ -167,7 +177,7 @@ clean: ## Clean up cache and build files
 	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".uv" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf dist/ build/ htmlcov/ .coverage
+	rm -rf dist/ build/ htmlcov/ .coverage .coverage.xml
 
 # ============================================================================
 # Git Helpers
