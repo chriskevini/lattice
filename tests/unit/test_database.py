@@ -21,12 +21,19 @@ class TestDatabasePoolInitialization:
     """Tests for DatabasePool initialization and lifecycle."""
 
     @pytest.fixture(autouse=True)
-    def mock_config(self) -> None:
+    def mock_config(self) -> Generator:
         """Mock config for database tests."""
         config = get_config(reload=True)
+        original_url = config.database_url
+        original_min = config.db_pool_min_size
+        original_max = config.db_pool_max_size
         config.database_url = "postgresql://test:test@localhost/test"
         config.db_pool_min_size = 2
         config.db_pool_max_size = 5
+        yield config
+        config.database_url = original_url
+        config.db_pool_min_size = original_min
+        config.db_pool_max_size = original_max
 
     def test_initial_state_uninitialized(self) -> None:
         """Test that DatabasePool starts in uninitialized state."""
@@ -128,12 +135,19 @@ class TestDatabasePoolClose:
     """Tests for DatabasePool close method."""
 
     @pytest.fixture(autouse=True)
-    def mock_config(self) -> None:
+    def mock_config(self) -> Generator:
         """Mock config for database tests."""
         config = get_config(reload=True)
+        original_url = config.database_url
+        original_min = config.db_pool_min_size
+        original_max = config.db_pool_max_size
         config.database_url = "postgresql://test:test@localhost/test"
         config.db_pool_min_size = 2
         config.db_pool_max_size = 5
+        yield config
+        config.database_url = original_url
+        config.db_pool_min_size = original_min
+        config.db_pool_max_size = original_max
 
     @pytest.mark.asyncio
     async def test_close_when_not_initialized(self) -> None:
@@ -522,12 +536,19 @@ class TestConnectionHandling:
     """Tests for connection pool handling and edge cases."""
 
     @pytest.fixture(autouse=True)
-    def mock_config(self) -> None:
+    def mock_config(self) -> Generator:
         """Mock config for database tests."""
         config = get_config(reload=True)
+        original_url = config.database_url
+        original_min = config.db_pool_min_size
+        original_max = config.db_pool_max_size
         config.database_url = "postgresql://test:test@localhost/test"
         config.db_pool_min_size = 2
         config.db_pool_max_size = 5
+        yield config
+        config.database_url = original_url
+        config.db_pool_min_size = original_min
+        config.db_pool_max_size = original_max
 
     @pytest.mark.asyncio
     async def test_get_system_metrics_handles_connection_error(self) -> None:
@@ -613,20 +634,26 @@ class TestPoolExhaustionHandling:
     """Tests for connection pool exhaustion scenarios."""
 
     @pytest.fixture(autouse=True)
-    def mock_config(self) -> None:
+    def mock_config(self) -> Generator:
         """Mock config for database tests."""
         config = get_config(reload=True)
+        original_url = config.database_url
+        original_min = config.db_pool_min_size
+        original_max = config.db_pool_max_size
         config.database_url = "postgresql://test:test@localhost/test"
         config.db_pool_min_size = 2
         config.db_pool_max_size = 5
+        yield config
+        config.database_url = original_url
+        config.db_pool_min_size = original_min
+        config.db_pool_max_size = original_max
 
     @pytest.mark.asyncio
-    async def test_initialize_with_zero_min_size(self) -> None:
+    async def test_initialize_with_zero_min_size(self, mock_config) -> None:
         """Test initialization with min_size=0 is handled correctly."""
         pool = DatabasePool()
         mock_pool = AsyncMock()
-        config = get_config()
-        config.db_pool_min_size = 0
+        mock_config.db_pool_min_size = 0
 
         with patch(
             "asyncpg.create_pool", new=AsyncMock(return_value=mock_pool)
@@ -653,12 +680,19 @@ class TestEdgeCases:
     """Edge case tests for database operations."""
 
     @pytest.fixture(autouse=True)
-    def mock_config(self) -> None:
+    def mock_config(self) -> Generator:
         """Mock config for database tests."""
         config = get_config(reload=True)
+        original_url = config.database_url
+        original_min = config.db_pool_min_size
+        original_max = config.db_pool_max_size
         config.database_url = "postgresql://test:test@localhost/test"
         config.db_pool_min_size = 2
         config.db_pool_max_size = 5
+        yield config
+        config.database_url = original_url
+        config.db_pool_min_size = original_min
+        config.db_pool_max_size = original_max
 
     @pytest.mark.asyncio
     async def test_get_next_check_at_with_microseconds(self) -> None:

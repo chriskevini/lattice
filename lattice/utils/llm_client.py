@@ -179,12 +179,12 @@ class _LLMClient:
             msg = "openai package not installed. Run: pip install openai"
             raise ImportError(msg) from e
 
-        api_key = config.openrouter_api_key
+        api_key = self.config.openrouter_api_key
         if not api_key:
             msg = "OPENROUTER_API_KEY not set in environment"
             raise ValueError(msg)
 
-        model_str = config.openrouter_model
+        model_str = self.config.openrouter_model
         model_list = [m.strip() for m in model_str.split(",") if m.strip()]
         primary_model = model_list[0] if model_list else model_str
         fallback_models = model_list[1:] if len(model_list) > 1 else []
@@ -196,7 +196,7 @@ class _LLMClient:
             )
 
         effective_timeout = (
-            timeout if timeout is not None else config.openrouter_timeout
+            timeout if timeout is not None else self.config.openrouter_timeout
         )
 
         extra_body = None

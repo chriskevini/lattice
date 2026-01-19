@@ -1,5 +1,6 @@
 """Unit tests for LLM client utilities."""
 
+from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,19 +11,26 @@ from lattice.utils.llm import (
     _LLMClient,
 )
 
-
 from lattice.utils.config import get_config
 
 
 @pytest.fixture(autouse=True)
-def mock_config():
+def mock_config() -> Generator:
     """Reset config before each test."""
     config = get_config(reload=True)
+    original_provider = config.llm_provider
+    original_api_key = config.openrouter_api_key
+    original_model = config.openrouter_model
+    original_timeout = config.openrouter_timeout
     config.llm_provider = "placeholder"
     config.openrouter_api_key = None
     config.openrouter_model = "nvidia/nemotron-3-nano-30b-a3b:free"
     config.openrouter_timeout = 30
     yield config
+    config.llm_provider = original_provider
+    config.openrouter_api_key = original_api_key
+    config.openrouter_model = original_model
+    config.openrouter_timeout = original_timeout
 
 
 class TestGenerationResult:
