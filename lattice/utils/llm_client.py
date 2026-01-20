@@ -371,7 +371,9 @@ class _LLMClient:
         )
 
     async def embed(self, text: str) -> list[float]:
-        """Generate embedding for text using OpenRouter.
+        """Generate embedding for text.
+
+        Supports OpenRouter or local embedding servers (Ollama, etc.)
 
         Args:
             text: The text to embed.
@@ -379,19 +381,24 @@ class _LLMClient:
         Returns:
             List of embedding values.
         """
+        from lattice.utils.config import config
 
-        if self.provider == "placeholder":
+        embedding_provider = config.embedding_provider
+
+        if embedding_provider == "placeholder":
             return self._placeholder_embed(text)
-        elif self.provider == "openrouter":
+        elif embedding_provider == "openrouter":
             return await self._openrouter_embed(text)
+        elif embedding_provider == "local":
+            return await self._local_embed(text)
         else:
-            msg = (
-                f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
-            )
+            msg = f"Unknown EMBEDDING_PROVIDER: {embedding_provider}. Valid: placeholder, openrouter, local"
             raise ValueError(msg)
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts using OpenRouter.
+        """Generate embeddings for multiple texts.
+
+        Supports OpenRouter or local embedding servers.
 
         Args:
             texts: List of texts to embed.
@@ -399,16 +406,73 @@ class _LLMClient:
         Returns:
             List of embedding vectors.
         """
+        from lattice.utils.config import config
 
-        if self.provider == "placeholder":
+        embedding_provider = config.embedding_provider
+
+        if embedding_provider == "placeholder":
             return [self._placeholder_embed(text) for text in texts]
-        elif self.provider == "openrouter":
+        elif embedding_provider == "openrouter":
             return await self._openrouter_embed_batch(texts)
+        elif embedding_provider == "local":
+            return await self._local_embed_batch(texts)
         else:
-            msg = (
-                f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
-            )
+            msg = f"Unknown EMBEDDING_PROVIDER: {embedding_provider}. Valid: placeholder, openrouter, local"
             raise ValueError(msg)
+
+    async def _local_embed(self, text: str) -> list[float]:
+        """Generate embedding using local server (Ollama, etc.)
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            List of embedding values.
+        """
+        import aiohttp
+
+        from lattice.utils.config import config
+
+        base_url = config.embedding_local_url.rstrip("/")
+        model = config.embedding_model
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{base_url}/api/embeddings",
+                json={"model": model, "input": text},
+            ) as response:
+                if response.status != 200:
+                    msg = f"Local embedding server returned {response.status}"
+                    raise ValueError(msg)
+                data = await response.json()
+                return data["embedding"]
+
+    async def _local_embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for multiple texts using local server.
+
+        Args:
+            texts: List of texts to embed.
+
+        Returns:
+            List of embedding vectors.
+        """
+        import aiohttp
+
+        from lattice.utils.config import config
+
+        base_url = config.embedding_local_url.rstrip("/")
+        model = config.embedding_model
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{base_url}/api/embeddings",
+                json={"model": model, "input": texts},
+            ) as response:
+                if response.status != 200:
+                    msg = f"Local embedding server returned {response.status}"
+                    raise ValueError(msg)
+                data = await response.json()
+                return [item["embedding"] for item in data["embedding"]]
 
     def _placeholder_embed(self, text: str) -> list[float]:
         """Placeholder embedding for development/testing.
