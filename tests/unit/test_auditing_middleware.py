@@ -1,8 +1,7 @@
 """Unit tests for auditing middleware."""
 
-from typing import Any
-from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
-from uuid import UUID, uuid4
+from unittest.mock import AsyncMock, Mock, patch
+from uuid import uuid4
 
 import pytest
 

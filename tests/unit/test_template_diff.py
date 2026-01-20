@@ -1,7 +1,5 @@
 """Unit tests for template diff utilities."""
 
-import pytest
-
 from lattice.utils.template_diff import generate_diff
 
 

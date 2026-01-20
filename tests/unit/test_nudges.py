@@ -1,6 +1,5 @@
 """Unit tests for contextual nudge generation."""
 
-from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
@@ -342,7 +341,7 @@ class TestPrepareContextualNudge:
         mock_injector.inject = AsyncMock(return_value=("prompt", {}))
         mock_injector_class.return_value = mock_injector
 
-        result = await prepare_contextual_nudge(
+        _ = await prepare_contextual_nudge(
             llm_client=mock_llm_client,
             user_context_cache=mock_user_cache,
             user_id="123",
@@ -400,7 +399,7 @@ class TestPrepareContextualNudge:
         mock_injector.inject = AsyncMock(return_value=("prompt", {}))
         mock_injector_class.return_value = mock_injector
 
-        result = await prepare_contextual_nudge(
+        _ = await prepare_contextual_nudge(
             llm_client=mock_llm_client,
             user_context_cache=mock_user_cache,
             user_id="123",
@@ -450,7 +449,7 @@ class TestPrepareContextualNudge:
         mock_injector.inject = AsyncMock(return_value=("prompt", {}))
         mock_injector_class.return_value = mock_injector
 
-        result = await prepare_contextual_nudge(
+        _ = await prepare_contextual_nudge(
             llm_client=mock_llm_client,
             user_context_cache=mock_user_cache,
             user_id="123",
