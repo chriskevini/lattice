@@ -1,7 +1,6 @@
 """Unit tests for adaptive active hours scheduling."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
@@ -11,7 +10,6 @@ from lattice.scheduler.adaptive import (
     ANALYSIS_WINDOW_DAYS,
     DEFAULT_ACTIVE_END,
     DEFAULT_ACTIVE_START,
-    MIN_MESSAGES_REQUIRED,
     ActiveHoursResult,
     calculate_active_hours,
     is_within_active_hours,

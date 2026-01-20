@@ -20,7 +20,6 @@ from lattice.core import memory_orchestrator, response_generator
 from lattice.core.context import ChannelContextCache
 from lattice.core.context_strategy import context_strategy, retrieve_context
 from lattice.core.pipeline import UnifiedPipeline
-from lattice.memory import episodic
 from lattice.memory.context import (
     PostgresCanonicalRepository,
     PostgresContextRepository,
