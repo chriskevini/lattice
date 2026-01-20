@@ -85,7 +85,9 @@ class Config:
             ),
             openrouter_timeout=_get_env_int("OPENROUTER_TIMEOUT", 30),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
-            embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
+            embedding_model=os.getenv(
+                "EMBEDDING_MODEL", "sentence-transformers/google/gemma-3-300m-onnx:int8"
+            ),
             embedding_dimension=_get_env_int("EMBEDDING_DIMENSION", 384),
             embedding_provider=os.getenv("EMBEDDING_PROVIDER", "openrouter"),
             embedding_model_cache_folder=os.getenv("EMBEDDING_MODEL_CACHE_FOLDER"),
