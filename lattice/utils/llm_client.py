@@ -54,7 +54,6 @@ class _LLMClient:
         self.provider = provider or self.config.llm_provider
         self._client: Any = None
         self._local_embed_model: Any = None
-        self._local_embed_model: Any = None
 
     async def complete(
         self,
