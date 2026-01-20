@@ -216,20 +216,20 @@ class PostgresEmbeddingMemoryRepository(PostgresRepository):
                     param_idx = 3
                     for k, v in filter_metadata.items():
                         conditions.append(
-                            f"metadata->>$%d = $%d" % (param_idx, param_idx)
+                            "metadata->>$%d = $%d" % (param_idx, param_idx)
                         )
                         params.append(v)
                         param_idx += 1
 
-                    query = f"""
+                    query = """
                         SELECT id, content, embedding, metadata, source_batch_id, created_at,
                                ts_rank(to_tsvector('english', content), plainto_tsquery('english', $1)) as similarity
                         FROM memory_embeddings
                         WHERE to_tsvector('english', content) @@ plainto_tsquery('english', $1)
-                          AND {" AND ".join(conditions)}
+                          AND %s
                         ORDER BY similarity DESC
                         LIMIT $2
-                    """
+                    """ % " AND ".join(conditions)
                     rows = await conn.fetch(
                         query,
                         query_embedding
@@ -237,21 +237,6 @@ class PostgresEmbeddingMemoryRepository(PostgresRepository):
                         else " ".join(str(x) for x in query_embedding[:10]),
                         limit,
                         *params,
-                    )
-                    rows = await conn.fetch(
-                        f"""
-                        SELECT id, content, embedding, metadata, source_batch_id, created_at,
-                               ts_rank(to_tsvector('english', content), plainto_tsquery('english', $1)) as similarity
-                        FROM memory_embeddings
-                        WHERE to_tsvector('english', content) @@ plainto_tsquery('english', $1)
-                          AND {metadata_filter}
-                        ORDER BY similarity DESC
-                        LIMIT $2
-                        """,
-                        query_embedding
-                        if isinstance(query_embedding, str)
-                        else " ".join(str(x) for x in query_embedding[:10]),
-                        limit,
                     )
                 else:
                     rows = await conn.fetch(
