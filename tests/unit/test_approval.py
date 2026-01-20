@@ -5,7 +5,7 @@ MemoryReviewView and TemplateComparisonView with their interactive buttons.
 """
 
 import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import UUID, uuid4
 
 import discord
@@ -423,7 +423,7 @@ class TestTemplateComparisonViewInit:
     ):
         """Test initialization extracts changes from proposal_metadata."""
         with patch.object(TemplateComparisonView, "add_item", return_value=None):
-            view = TemplateComparisonView(
+            _ = TemplateComparisonView(
                 proposal=sample_proposal,
                 proposal_repo=mock_proposal_repo,
                 llm_client=mock_llm_client,
@@ -446,7 +446,7 @@ class TestTemplateComparisonViewInit:
         )
 
         with patch.object(TemplateComparisonView, "add_item", return_value=None):
-            view = TemplateComparisonView(
+            _ = TemplateComparisonView(
                 proposal=empty_proposal,
                 proposal_repo=mock_proposal_repo,
                 llm_client=mock_llm_client,
