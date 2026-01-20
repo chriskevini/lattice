@@ -19,7 +19,16 @@ def embedding_to_bytes(embedding: list[float]) -> bytes:
     """Convert embedding list to bytes for storage."""
     import struct
 
-    return struct.pack(f"{len(embedding)}f", *embedding)
+    expected_dimension = config.embedding_dimension
+    actual_dimension = len(embedding)
+
+    if actual_dimension != expected_dimension:
+        logger.warning(
+            f"Embedding dimension mismatch: expected {expected_dimension}, got {actual_dimension}. "
+            "Data may cause issues with vector operations."
+        )
+
+    return struct.pack(f"{actual_dimension}f", *embedding)
 
 
 def bytes_to_embedding(data: bytes, dimension: int) -> list[float]:
@@ -106,30 +115,31 @@ class PostgresEmbeddingMemoryRepository(PostgresRepository):
         if not items:
             return 0
 
-        count = 0
         async with self._db_pool.pool.acquire() as conn:
-            for item in items:
-                content = item.get("content", "").strip()
-                embedding = item.get("embedding", [])
-                metadata = item.get("metadata")
+            async with conn.transaction():
+                count = 0
+                for item in items:
+                    content = item.get("content", "").strip()
+                    embedding = item.get("embedding", [])
+                    metadata = item.get("metadata")
 
-                if not content or not embedding:
-                    continue
+                    if not content or not embedding:
+                        continue
 
-                embedding_bytes = embedding_to_bytes(embedding)
-                metadata_json = json.dumps(metadata) if metadata else None
+                    embedding_bytes = embedding_to_bytes(embedding)
+                    metadata_json = json.dumps(metadata) if metadata else None
 
-                await conn.execute(
-                    """
-                    INSERT INTO memory_embeddings (content, embedding, metadata, source_batch_id)
-                    VALUES ($1, $2, $3, $4)
-                    """,
-                    content,
-                    embedding_bytes,
-                    metadata_json,
-                    source_batch_id,
-                )
-                count += 1
+                    await conn.execute(
+                        """
+                        INSERT INTO memory_embeddings (content, embedding, metadata, source_batch_id)
+                        VALUES ($1, $2, $3, $4)
+                        """,
+                        content,
+                        embedding_bytes,
+                        metadata_json,
+                        source_batch_id,
+                    )
+                    count += 1
 
         return count
 
@@ -201,8 +211,32 @@ class PostgresEmbeddingMemoryRepository(PostgresRepository):
                 )
 
                 if filter_metadata:
-                    metadata_filter = " AND ".join(
-                        f"metadata->>'{k}' = '{v}'" for k, v in filter_metadata.items()
+                    conditions = []
+                    params = []
+                    param_idx = 3
+                    for k, v in filter_metadata.items():
+                        conditions.append(
+                            f"metadata->>$%d = $%d" % (param_idx, param_idx)
+                        )
+                        params.append(v)
+                        param_idx += 1
+
+                    query = f"""
+                        SELECT id, content, embedding, metadata, source_batch_id, created_at,
+                               ts_rank(to_tsvector('english', content), plainto_tsquery('english', $1)) as similarity
+                        FROM memory_embeddings
+                        WHERE to_tsvector('english', content) @@ plainto_tsquery('english', $1)
+                          AND {" AND ".join(conditions)}
+                        ORDER BY similarity DESC
+                        LIMIT $2
+                    """
+                    rows = await conn.fetch(
+                        query,
+                        query_embedding
+                        if isinstance(query_embedding, str)
+                        else " ".join(str(x) for x in query_embedding[:10]),
+                        limit,
+                        *params,
                     )
                     rows = await conn.fetch(
                         f"""

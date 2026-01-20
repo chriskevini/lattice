@@ -53,6 +53,8 @@ class _LLMClient:
         self.config = config or default_config
         self.provider = provider or self.config.llm_provider
         self._client: Any = None
+        self._local_embed_model: Any = None
+        self._local_embed_model: Any = None
 
     async def complete(
         self,
@@ -432,12 +434,13 @@ class _LLMClient:
         from lattice.utils.config import config
         from sentence_transformers import SentenceTransformer
 
-        model_name = config.embedding_model
-        cache_folder = config.embedding_model_cache_folder
+        if self._local_embed_model is None:
+            self._local_embed_model = SentenceTransformer(
+                config.embedding_model,
+                cache_folder=config.embedding_model_cache_folder,
+            )
 
-        model = SentenceTransformer(model_name, cache_folder=cache_folder)
-        embedding = model.encode(text, normalize_embeddings=True)
-
+        embedding = self._local_embed_model.encode(text, normalize_embeddings=True)
         return embedding.tolist()
 
     async def _local_embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -452,12 +455,13 @@ class _LLMClient:
         from lattice.utils.config import config
         from sentence_transformers import SentenceTransformer
 
-        model_name = config.embedding_model
-        cache_folder = config.embedding_model_cache_folder
+        if self._local_embed_model is None:
+            self._local_embed_model = SentenceTransformer(
+                config.embedding_model,
+                cache_folder=config.embedding_model_cache_folder,
+            )
 
-        model = SentenceTransformer(model_name, cache_folder=cache_folder)
-        embeddings = model.encode(texts, normalize_embeddings=True)
-
+        embeddings = self._local_embed_model.encode(texts, normalize_embeddings=True)
         return embeddings.tolist()
 
     def _placeholder_embed(self, text: str) -> list[float]:

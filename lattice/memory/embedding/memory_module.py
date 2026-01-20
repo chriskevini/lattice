@@ -168,7 +168,7 @@ Return as JSON: {{"memories": ["memory 1", "memory 2", ...]}}
             return count
 
         except Exception as e:
-            logger.error("Failed to consolidate embeddings", error=str(e))
+            logger.error("Failed to consolidate embeddings", exc_info=e)
             return 0
 
     async def store(
