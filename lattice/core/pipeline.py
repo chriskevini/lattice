@@ -223,7 +223,6 @@ class UnifiedPipeline:
                 timezone=timezone,
                 message_repo=self.message_repo,
             )
-            pass
 
         return sent_msg
 
