@@ -433,7 +433,7 @@ class _LLMClient:
         from sentence_transformers import SentenceTransformer
 
         model_name = config.embedding_model
-        cache_folder = config.embedding_model_cache_folder or "/app/models"
+        cache_folder = config.embedding_model_cache_folder
 
         model = SentenceTransformer(model_name, cache_folder=cache_folder)
         embedding = model.encode(text, normalize_embeddings=True)
@@ -453,7 +453,7 @@ class _LLMClient:
         from sentence_transformers import SentenceTransformer
 
         model_name = config.embedding_model
-        cache_folder = config.embedding_model_cache_folder or "/app/models"
+        cache_folder = config.embedding_model_cache_folder
 
         model = SentenceTransformer(model_name, cache_folder=cache_folder)
         embeddings = model.encode(texts, normalize_embeddings=True)
