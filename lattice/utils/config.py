@@ -51,7 +51,7 @@ class Config:
     embedding_model: str
     embedding_dimension: int
     embedding_provider: str
-    embedding_local_url: str
+    embedding_model_cache_folder: str | None
 
     # Memory Settings
     enable_triple_memory: bool
@@ -88,9 +88,7 @@ class Config:
             embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
             embedding_dimension=_get_env_int("EMBEDDING_DIMENSION", 384),
             embedding_provider=os.getenv("EMBEDDING_PROVIDER", "openrouter"),
-            embedding_local_url=os.getenv(
-                "EMBEDDING_LOCAL_URL", "http://localhost:11434"
-            ),
+            embedding_model_cache_folder=os.getenv("EMBEDDING_MODEL_CACHE_FOLDER"),
             enable_triple_memory=_get_env_bool("ENABLE_TRIPLE_MEMORY", True),
             enable_embedding_memory=_get_env_bool("ENABLE_EMBEDDING_MEMORY", False),
             embedding_similarity_threshold=float(

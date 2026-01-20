@@ -373,7 +373,7 @@ class _LLMClient:
     async def embed(self, text: str) -> list[float]:
         """Generate embedding for text.
 
-        Supports OpenRouter or local embedding servers (Ollama, etc.)
+        Supports OpenRouter or local sentence-transformers model.
 
         Args:
             text: The text to embed.
@@ -398,7 +398,7 @@ class _LLMClient:
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts.
 
-        Supports OpenRouter or local embedding servers.
+        Supports OpenRouter or local sentence-transformers model.
 
         Args:
             texts: List of texts to embed.
@@ -421,7 +421,7 @@ class _LLMClient:
             raise ValueError(msg)
 
     async def _local_embed(self, text: str) -> list[float]:
-        """Generate embedding using local server (Ollama, etc.)
+        """Generate embedding using sentence-transformers model.
 
         Args:
             text: The text to embed.
@@ -429,26 +429,21 @@ class _LLMClient:
         Returns:
             List of embedding values.
         """
-        import aiohttp
-
         from lattice.utils.config import config
+        from sentence_transformers import SentenceTransformer
 
-        base_url = config.embedding_local_url.rstrip("/")
-        model = config.embedding_model
+        model_name = config.embedding_model
+        cache_folder = (
+            config.embedding_model_cache_folder or "~/.cache/sentence-transformers"
+        )
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{base_url}/api/embeddings",
-                json={"model": model, "input": text},
-            ) as response:
-                if response.status != 200:
-                    msg = f"Local embedding server returned {response.status}"
-                    raise ValueError(msg)
-                data = await response.json()
-                return data["embedding"]
+        model = SentenceTransformer(model_name, cache_folder=cache_folder)
+        embedding = model.encode(text, normalize_embeddings=True)
+
+        return embedding.tolist()
 
     async def _local_embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts using local server.
+        """Generate embeddings for multiple texts using sentence-transformers.
 
         Args:
             texts: List of texts to embed.
@@ -456,23 +451,18 @@ class _LLMClient:
         Returns:
             List of embedding vectors.
         """
-        import aiohttp
-
         from lattice.utils.config import config
+        from sentence_transformers import SentenceTransformer
 
-        base_url = config.embedding_local_url.rstrip("/")
-        model = config.embedding_model
+        model_name = config.embedding_model
+        cache_folder = (
+            config.embedding_model_cache_folder or "~/.cache/sentence-transformers"
+        )
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{base_url}/api/embeddings",
-                json={"model": model, "input": texts},
-            ) as response:
-                if response.status != 200:
-                    msg = f"Local embedding server returned {response.status}"
-                    raise ValueError(msg)
-                data = await response.json()
-                return [item["embedding"] for item in data["embedding"]]
+        model = SentenceTransformer(model_name, cache_folder=cache_folder)
+        embeddings = model.encode(texts, normalize_embeddings=True)
+
+        return embeddings.tolist()
 
     def _placeholder_embed(self, text: str) -> list[float]:
         """Placeholder embedding for development/testing.
