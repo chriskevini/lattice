@@ -3,7 +3,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
 
 from lattice.utils.config import Config, _get_env_bool, _get_env_int, get_config
 

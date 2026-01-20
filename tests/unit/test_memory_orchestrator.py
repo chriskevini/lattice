@@ -3,8 +3,8 @@
 import asyncio
 from datetime import datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
-from uuid import UUID, uuid4
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -13,7 +13,6 @@ from lattice.core.memory_orchestrator import (
     store_bot_message,
     store_user_message,
 )
-from lattice.memory.episodic import EpisodicMessage
 
 
 class TestStoreUserMessage:
@@ -208,16 +207,6 @@ class TestRetrieveContext:
     async def test_retrieves_episodic_messages_only_when_depth_zero(self) -> None:
         """Test retrieving only episodic messages when memory_depth is 0."""
         message_id = uuid4()
-        mock_messages = [
-            EpisodicMessage(
-                message_id=message_id,
-                content="Recent message",
-                discord_message_id=123,
-                channel_id=456,
-                is_bot=False,
-                timestamp=datetime.now(),
-            )
-        ]
 
         mock_message_repo = MagicMock()
         mock_message_repo.get_recent_messages = AsyncMock(
