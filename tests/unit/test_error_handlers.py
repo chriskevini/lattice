@@ -59,7 +59,9 @@ class TestErrorManager:
             assert embed.color == discord.Color.red()
 
     @pytest.mark.asyncio
-    async def test_on_error_includes_error_details_in_embed(self, mock_logger: MagicMock) -> None:
+    async def test_on_error_includes_error_details_in_embed(
+        self, mock_logger: MagicMock
+    ) -> None:
         """Test that error details are included in the embed."""
         mock_bot = MagicMock()
         mock_channel = MagicMock(spec=discord.TextChannel)
@@ -87,7 +89,9 @@ class TestErrorManager:
         assert "Detailed error message" in message_field.value
 
     @pytest.mark.asyncio
-    async def test_on_error_truncates_long_messages(self, mock_logger: MagicMock) -> None:
+    async def test_on_error_truncates_long_messages(
+        self, mock_logger: MagicMock
+    ) -> None:
         """Test that very long error messages are truncated."""
         mock_bot = MagicMock()
         mock_channel = MagicMock(spec=discord.TextChannel)
@@ -113,7 +117,9 @@ class TestErrorManager:
         assert len(message_field.value) <= 510  # 500 + some margin for ```
 
     @pytest.mark.asyncio
-    async def test_on_error_does_nothing_when_no_dream_channel_id(self, mock_logger: MagicMock) -> None:
+    async def test_on_error_does_nothing_when_no_dream_channel_id(
+        self, mock_logger: MagicMock
+    ) -> None:
         """Test that on_error does nothing when dream_channel_id is not set."""
         mock_bot = MagicMock()
         error_manager = ErrorManager(mock_bot, 0)  # No dream channel ID
@@ -127,7 +133,9 @@ class TestErrorManager:
         mock_bot.get_channel.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_on_error_handles_channel_not_found(self, mock_logger: MagicMock) -> None:
+    async def test_on_error_handles_channel_not_found(
+        self, mock_logger: MagicMock
+    ) -> None:
         """Test that on_error handles case when channel is not found."""
         mock_bot = MagicMock()
         mock_bot.get_channel = MagicMock(return_value=None)
@@ -143,7 +151,9 @@ class TestErrorManager:
         mock_bot.get_channel.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_error_handles_non_text_channel(self, mock_logger: MagicMock) -> None:
+    async def test_on_error_handles_non_text_channel(
+        self, mock_logger: MagicMock
+    ) -> None:
         """Test that on_error handles case when channel is not a TextChannel."""
         mock_bot = MagicMock()
         # Return a non-TextChannel object
@@ -165,7 +175,9 @@ class TestErrorManager:
         )
 
     @pytest.mark.asyncio
-    async def test_on_error_handles_discord_exception_when_sending(self, mock_logger: MagicMock) -> None:
+    async def test_on_error_handles_discord_exception_when_sending(
+        self, mock_logger: MagicMock
+    ) -> None:
         """Test that on_error handles DiscordException when sending fails."""
         mock_bot = MagicMock()
         mock_channel = MagicMock(spec=discord.TextChannel)
@@ -184,7 +196,9 @@ class TestErrorManager:
         mock_channel.send.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_error_sets_footer_with_event_name(self, mock_logger: MagicMock) -> None:
+    async def test_on_error_sets_footer_with_event_name(
+        self, mock_logger: MagicMock
+    ) -> None:
         """Test that on_error sets embed footer with event name."""
         mock_bot = MagicMock()
         mock_channel = MagicMock(spec=discord.TextChannel)
