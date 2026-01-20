@@ -74,9 +74,9 @@ class Test_LLMClientInit:
     """Tests for _LLMClient initialization."""
 
     def test_init_with_default_provider(self, mock_config) -> None:
-        """Test _LLMClient initializes with default placeholder provider."""
-        mock_config.llm_provider = "placeholder"
-        client = _LLMClient()
+        """Test _LLMClient initializes with default provider from config."""
+        # Use the config's current provider setting
+        client = _LLMClient(config=mock_config)
 
         assert client.provider == "placeholder"
         assert client._client is None
@@ -161,11 +161,11 @@ class Test_LLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_missing_api_key(self, mock_config) -> None:
         """Test that OpenRouter mode raises ValueError if API key not set."""
-        client = _LLMClient(provider="openrouter")
+        mock_config.openrouter_api_key = None
+        client = _LLMClient(provider="openrouter", config=mock_config)
 
         mock_openai_module = MagicMock()
 
-        mock_config.openrouter_api_key = None
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
             with pytest.raises(ValueError, match="OPENROUTER_API_KEY not set"):
                 await client._openrouter_complete("test", 0.7, None, None)
@@ -217,7 +217,8 @@ class Test_LLMClientOpenRouter:
     @pytest.mark.asyncio
     async def test_openrouter_complete_with_custom_model(self, mock_config) -> None:
         """Test OpenRouter uses custom model from environment."""
-        client = _LLMClient(provider="openrouter")
+        mock_config.openrouter_model = "custom/model"
+        client = _LLMClient(provider="openrouter", config=mock_config)
 
         mock_usage = MagicMock()
         mock_usage.prompt_tokens = 5
@@ -241,7 +242,6 @@ class Test_LLMClientOpenRouter:
         mock_openai_module.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
 
         mock_config.openrouter_api_key = "test-key"
-        mock_config.openrouter_model = "custom/model"
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
             result = await client._openrouter_complete("test", 0.7, None, None)
 
