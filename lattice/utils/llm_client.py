@@ -143,6 +143,70 @@ class _LLMClient:
             temperature=temperature,
         )
 
+    async def _execute_with_retry(self, create_kwargs: dict[str, Any]) -> Any:
+        """Execute OpenRouter request with retry on rate limit.
+
+        Args:
+            create_kwargs: Arguments to pass to chat.completions.create
+
+        Returns:
+            ChatCompletion response
+        """
+        import asyncio
+        import openai
+
+        max_retries = 3
+        base_delay = 1.0
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self._client.chat.completions.create(**create_kwargs)
+                return response
+            except openai.RateLimitError as e:
+                if attempt >= max_retries:
+                    logger.warning(
+                        "Rate limit retry exhausted",
+                        attempt=attempt,
+                        max_retries=max_retries,
+                    )
+                    raise
+
+                reset_header = e.response and e.response.headers.get(
+                    "X-RateLimit-Reset"
+                )
+                if reset_header:
+                    try:
+                        reset_ms = int(reset_header)
+                        reset_seconds = max(reset_ms / 1000, base_delay)
+                    except ValueError:
+                        reset_seconds = base_delay * (2**attempt)
+                else:
+                    reset_seconds = base_delay * (2**attempt)
+
+                logger.warning(
+                    "Rate limited, retrying",
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                    delay_seconds=reset_seconds,
+                )
+                await asyncio.sleep(reset_seconds)
+            except openai.APIConnectionError:
+                if attempt >= max_retries:
+                    logger.warning(
+                        "API connection error retry exhausted",
+                        attempt=attempt,
+                        max_retries=max_retries,
+                    )
+                    raise
+                delay = base_delay * (2**attempt)
+                logger.warning(
+                    "API connection error, retrying",
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                    delay_seconds=delay,
+                )
+                await asyncio.sleep(delay)
+
     async def _openrouter_complete(
         self,
         prompt: str,
@@ -219,7 +283,7 @@ class _LLMClient:
         if extra_body:
             create_kwargs["extra_body"] = extra_body
 
-        response = await self._client.chat.completions.create(**create_kwargs)
+        response = await self._execute_with_retry(create_kwargs)
         latency_ms = int((time.monotonic() - start_time) * 1000)
 
         usage = response.usage

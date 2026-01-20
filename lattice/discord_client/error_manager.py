@@ -38,7 +38,6 @@ class ErrorManager:
 
             logger.exception(
                 "Unhandled exception in event handler",
-                event=event_method,
                 error=error_short,
             )
 
@@ -49,6 +48,9 @@ class ErrorManager:
             if not dream_channel or not isinstance(dream_channel, discord.TextChannel):
                 return
 
+            error_content = str(exc)[:450]
+            error_short_truncated = error_short[:1800]
+
             embed = discord.Embed(
                 title="🚨🚨🚨 CRASH DETECTED 🚨🚨🚨",
                 description=f"An unhandled exception occurred in `{event_method}`",
@@ -58,10 +60,10 @@ class ErrorManager:
                 name="Error Type", value=f"```{type(exc).__name__}```", inline=False
             )
             embed.add_field(
-                name="Message", value=f"```{str(exc)[:500]}```", inline=False
+                name="Message", value=f"```{error_content}```", inline=False
             )
             embed.add_field(
-                name="Traceback", value=f"```{error_short[:1800]}```", inline=False
+                name="Traceback", value=f"```{error_short_truncated}```", inline=False
             )
             embed.set_footer(text=f"Event: {event_method}")
 
