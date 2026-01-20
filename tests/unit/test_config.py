@@ -376,6 +376,14 @@ class TestConfigDataclass:
             "openrouter_model",
             "openrouter_timeout",
             "gemini_api_key",
+            # Embedding
+            "embedding_model",
+            "embedding_dimension",
+            "embedding_provider",
+            # Memory
+            "enable_triple_memory",
+            "enable_embedding_memory",
+            "embedding_similarity_threshold",
             # Application
             "environment",
             "log_level",
