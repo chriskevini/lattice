@@ -188,7 +188,10 @@ class TestConfigLoad:
                 assert config.openrouter_model == "anthropic/claude-3.5-sonnet"
                 assert config.openrouter_timeout == 30
                 assert config.gemini_api_key is None
-                assert config.embedding_model == "text-embedding-3-small"
+                assert (
+                    config.embedding_model
+                    == "sentence-transformers/google/gemma-3-300m-onnx:int4"
+                )
                 assert config.embedding_dimension == 384
                 assert config.embedding_provider == "openrouter"
                 assert config.embedding_model_cache_folder is None
