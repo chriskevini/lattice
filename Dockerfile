@@ -18,14 +18,6 @@ RUN pip install --no-cache-dir --disable-pip-version-check uv && \
 
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Download embedding model at build time
-# This avoids slow first-run download in production
-ENV EMBEDDING_MODEL=sentence-transformers/google/gemma-3-300m-onnx
-ENV EMBEDDING_MODEL_CACHE_DIR=/app/models
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('google/gemma-3-300m-onnx')" && \
-    mkdir -p /app/models && \
-    cp -r ~/.cache/sentence-transformers/google--gemma-3-300m-onnx /app/models/ 2>/dev/null || true
-
 # Production stage
 FROM python:3.12-slim
 
@@ -41,10 +33,6 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
-
-# Copy embedding model from builder
-COPY --from=builder /app/models /app/models
-ENV EMBEDDING_MODEL_CACHE_DIR=/app/models
 
 # Set working directory
 WORKDIR /app
