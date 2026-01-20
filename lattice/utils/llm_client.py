@@ -369,3 +369,148 @@ class _LLMClient:
             cancelled=cancelled,
             moderation_latency_ms=moderation_latency_ms,
         )
+
+    async def embed(self, text: str) -> list[float]:
+        """Generate embedding for text using OpenRouter.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            List of embedding values.
+        """
+
+        if self.provider == "placeholder":
+            return self._placeholder_embed(text)
+        elif self.provider == "openrouter":
+            return await self._openrouter_embed(text)
+        else:
+            msg = (
+                f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
+            )
+            raise ValueError(msg)
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for multiple texts using OpenRouter.
+
+        Args:
+            texts: List of texts to embed.
+
+        Returns:
+            List of embedding vectors.
+        """
+
+        if self.provider == "placeholder":
+            return [self._placeholder_embed(text) for text in texts]
+        elif self.provider == "openrouter":
+            return await self._openrouter_embed_batch(texts)
+        else:
+            msg = (
+                f"Unknown LLM provider: {self.provider}. Valid: placeholder, openrouter"
+            )
+            raise ValueError(msg)
+
+    def _placeholder_embed(self, text: str) -> list[float]:
+        """Placeholder embedding for development/testing.
+
+        Returns a fixed-size zero vector.
+
+        WARNING: This is a development/testing placeholder that returns dummy data.
+        Set LLM_PROVIDER=openrouter for real embeddings.
+
+        Args:
+            text: The text that was sent
+
+        Returns:
+            List of zeros with configured dimension
+        """
+        from lattice.utils.config import config
+
+        logger.warning(
+            "Placeholder LLM used for embedding - returns zero vector. "
+            "Set LLM_PROVIDER=openrouter for real embeddings."
+        )
+        dimension = config.embedding_dimension
+        return [0.0] * dimension
+
+    async def _openrouter_embed(self, text: str) -> list[float]:
+        """Generate embedding using OpenRouter API.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            List of embedding values.
+        """
+        import openai
+
+        api_key = config.openrouter_api_key
+        if not api_key:
+            msg = "OPENROUTER_API_KEY not set in environment"
+            raise ValueError(msg)
+
+        if self._client is None:
+            self._client = openai.AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+
+        model = config.embedding_model
+        dimension = config.embedding_dimension
+
+        response = await self._client.embeddings.create(
+            model=model,
+            input=text,
+        )
+
+        embedding = response.data[0].embedding
+
+        if len(embedding) != dimension:
+            logger.warning(
+                f"Embedding dimension mismatch: expected {dimension}, got {len(embedding)}. "
+                "This may cause issues with vector operations."
+            )
+
+        return embedding
+
+    async def _openrouter_embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for multiple texts using OpenRouter API.
+
+        Args:
+            texts: List of texts to embed.
+
+        Returns:
+            List of embedding vectors.
+        """
+        import openai
+
+        api_key = config.openrouter_api_key
+        if not api_key:
+            msg = "OPENROUTER_API_KEY not set in environment"
+            raise ValueError(msg)
+
+        if self._client is None:
+            self._client = openai.AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+
+        model = config.embedding_model
+        dimension = config.embedding_dimension
+
+        # Batch embed - OpenRouter supports batching
+        response = await self._client.embeddings.create(
+            model=model,
+            input=texts,
+        )
+
+        embeddings = [data.embedding for data in response.data]
+
+        # Check dimensions
+        for i, emb in enumerate(embeddings):
+            if len(emb) != dimension:
+                logger.warning(
+                    f"Embedding {i} dimension mismatch: expected {dimension}, got {len(emb)}"
+                )
+
+        return embeddings

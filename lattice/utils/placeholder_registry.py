@@ -181,6 +181,17 @@ class PlaceholderRegistry:
 
         self.register(
             PlaceholderDef(
+                name="embedding_context",
+                description="Similar memories from embedding store",
+                resolver=lambda ctx: ctx.get(
+                    "embedding_context", "No embedding context available."
+                ),
+                category="context",
+            )
+        )
+
+        self.register(
+            PlaceholderDef(
                 name="bigger_episodic_context",
                 description="Extended conversation history for consolidation",
                 resolver=lambda ctx: ctx.get("bigger_episodic_context", ""),

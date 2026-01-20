@@ -132,6 +132,7 @@ async def generate_response(
     user_message: str,
     episodic_context: str,
     semantic_context: str,
+    embedding_context: str = "",
     unresolved_entities: list[str] | None = None,
     user_tz: str = "UTC",
     audit_view: bool = False,
@@ -149,6 +150,7 @@ async def generate_response(
         user_message: The user's message
         episodic_context: Recent conversation history pre-formatted
         semantic_context: Relevant facts from graph pre-formatted
+        embedding_context: Relevant memories from embedding store
         unresolved_entities: Entities requiring clarification
         user_tz: IANA timezone string for date resolution
         audit_view: Whether to send an AuditView to the dream channel
@@ -195,6 +197,7 @@ async def generate_response(
     template_params = {
         "episodic_context": episodic_context or "No recent conversation.",
         "semantic_context": semantic_context or "No relevant context found.",
+        "embedding_context": embedding_context or "No embedding context available.",
         "user_message": user_message,
         "unresolved_entities": ", ".join(unresolved_entities)
         if unresolved_entities

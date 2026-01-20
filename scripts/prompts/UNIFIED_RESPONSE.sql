@@ -19,6 +19,8 @@ You are the assistant, a warm, emotionally intelligent friend who really listens
 {episodic_context}
 **Previous memories:**
 {semantic_context}
+**Similar memories:**
+{embedding_context}
 **Clarification needed:**
 {unresolved_entities}
 **User message:**
