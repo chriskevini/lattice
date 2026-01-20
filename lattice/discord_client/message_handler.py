@@ -148,16 +148,6 @@ class MessageHandler:
                 audit_repo=self.audit_repo,
                 feedback_repo=self.feedback_repo,
             )
-            nudge_plan = await prepare_contextual_nudge(
-                llm_client=self.llm_client,
-                user_context_cache=self.user_context_cache,
-                user_id=user_id,
-                prompt_template=prompt_template,
-                bot=self.bot,
-                semantic_repo=self.bot.semantic_repo,  # type: ignore[attr-defined]
-                audit_repo=self.audit_repo,
-                feedback_repo=self.feedback_repo,
-            )
 
             if nudge_plan.content and nudge_plan.channel_id:
                 from lattice.core.pipeline import UnifiedPipeline
