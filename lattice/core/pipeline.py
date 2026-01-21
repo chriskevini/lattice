@@ -69,12 +69,14 @@ class UnifiedPipeline:
         self,
         channel_id: int,
         agent_name: str,
+        avatar_url: str | None = None,
     ) -> Any:
         """Get or create a webhook for an agent.
 
         Args:
             channel_id: Discord channel ID
-            agent_name: Name of the agent (e.g., "Semantic Agent")
+            agent_name: Name of the agent
+            avatar_url: Optional avatar image URL
 
         Returns:
             Discord webhook object
@@ -95,7 +97,10 @@ class UnifiedPipeline:
                 break
 
         if not webhook:
-            webhook = await channel.create_webhook(name=agent_name)
+            webhook = await channel.create_webhook(
+                name=agent_name,
+                avatar=avatar_url if avatar_url else None,
+            )
 
         AGENT_WEBHOOKS[cache_key] = webhook
         return webhook
@@ -105,18 +110,20 @@ class UnifiedPipeline:
         channel_id: int,
         agent_name: str,
         content: str,
+        avatar_url: str | None = None,
     ) -> Any:
         """Send a message as a named agent via webhook.
 
         Args:
             channel_id: Discord channel ID
-            agent_name: Name to display (e.g., "Semantic Agent")
+            agent_name: Name to display
             content: Message content
+            avatar_url: Optional avatar image URL
 
         Returns:
             Discord message object or None if failed
         """
-        webhook = await self._get_webhook(channel_id, agent_name)
+        webhook = await self._get_webhook(channel_id, agent_name, avatar_url)
         if not webhook:
             return None
 
@@ -146,7 +153,6 @@ class UnifiedPipeline:
         """
         from lattice.core.context_strategy import retrieve_context
 
-        # Triple-based retrieval
         triple_task = retrieve_context(
             entities=strategy.entities,
             context_flags=strategy.context_flags,
@@ -154,7 +160,6 @@ class UnifiedPipeline:
             user_timezone=timezone,
         )
 
-        # Embedding-based retrieval (if enabled)
         if self.embedding_module:
             embedding_task = self.embedding_module.retrieve_context(
                 query=content,
@@ -167,13 +172,11 @@ class UnifiedPipeline:
             triple_ctx = await triple_task
             embedding_ctx = None
 
-        # Handle exceptions
         if isinstance(triple_ctx, Exception):
             triple_ctx = {"semantic_context": "", "memory_origins": set()}
         if isinstance(embedding_ctx, Exception):
             embedding_ctx = {"text": "", "memories": [], "count": 0}
 
-        # Build combined context
         semantic_part = triple_ctx.get("semantic_context", "") if triple_ctx else ""
         embedding_part = embedding_ctx.get("text", "") if embedding_ctx else ""
 
@@ -205,7 +208,10 @@ class UnifiedPipeline:
         channel_id: int,
         timezone: str = "UTC",
     ) -> Any:
-        """Process a user message through the full pipeline.
+        """Process a user message through the pipeline.
+
+        Uses dual-agent mode if ENABLE_DUAL_AGENT_RESPONSE is true,
+        otherwise uses single-agent mode.
 
         Args:
             content: Message content
@@ -214,12 +220,36 @@ class UnifiedPipeline:
             timezone: IANA timezone string
 
         Returns:
-            The sent response message, or None if failed
+            The sent response message(s), or None if failed
         """
+        from lattice.utils.config import config
+
+        if config.enable_dual_agent_response:
+            return await self.process_message_dual_agent(
+                content=content,
+                discord_message_id=discord_message_id,
+                channel_id=channel_id,
+                timezone=timezone,
+            )
+        else:
+            return await self._process_message_single(
+                content=content,
+                discord_message_id=discord_message_id,
+                channel_id=channel_id,
+                timezone=timezone,
+            )
+
+    async def _process_message_single(
+        self,
+        content: str,
+        discord_message_id: int,
+        channel_id: int,
+        timezone: str = "UTC",
+    ) -> Any:
+        """Single-agent message processing (original behavior)."""
         from lattice.core import memory_orchestrator, response_generator
         from lattice.core.context_strategy import context_strategy
 
-        # 1. Ingest
         message_id = await memory_orchestrator.store_user_message(
             content=content,
             discord_message_id=discord_message_id,
@@ -228,7 +258,6 @@ class UnifiedPipeline:
             message_repo=self.message_repo,
         )
 
-        # 2. Analyze
         recent_messages = await memory_orchestrator.episodic.get_recent_messages(
             channel_id=channel_id,
             limit=10,
@@ -253,10 +282,8 @@ class UnifiedPipeline:
             feedback_repo=self.feedback_repo,
         )
 
-        # 3. Retrieve (parallel from both systems)
         context = await self._retrieve_parallel(content, strategy, timezone)
 
-        # 4. Generate
         formatted_history = memory_orchestrator.episodic.format_messages(history)
         result, _, context_info = await response_generator.generate_response(
             user_message=content,
@@ -269,7 +296,6 @@ class UnifiedPipeline:
             feedback_repo=self.feedback_repo,
         )
 
-        # 5. Store & Send
         sent_msg = await self.send_response(channel_id, result.content)
         if sent_msg:
             await memory_orchestrator.store_bot_message(
@@ -302,7 +328,7 @@ class UnifiedPipeline:
         """Process a message with dual-agent parallel response generation.
 
         Generates independent responses from both memory systems and sends
-        them via webhooks as "Semantic Agent" and "Embedding Agent".
+        them via webhooks as configured agent names.
 
         Args:
             content: Message content
@@ -315,8 +341,8 @@ class UnifiedPipeline:
         """
         from lattice.core import memory_orchestrator, response_generator
         from lattice.core.context_strategy import context_strategy
+        from lattice.utils.config import config
 
-        # 1. Ingest user message
         message_id = await memory_orchestrator.store_user_message(
             content=content,
             discord_message_id=discord_message_id,
@@ -325,7 +351,6 @@ class UnifiedPipeline:
             message_repo=self.message_repo,
         )
 
-        # 2. Analyze
         recent_messages = await memory_orchestrator.episodic.get_recent_messages(
             channel_id=channel_id,
             limit=10,
@@ -350,10 +375,8 @@ class UnifiedPipeline:
             feedback_repo=self.feedback_repo,
         )
 
-        # 3. Retrieve (parallel from both systems)
         context = await self._retrieve_parallel(content, strategy, timezone)
 
-        # 4. Generate (parallel from both memory systems)
         formatted_history = memory_orchestrator.episodic.format_messages(history)
 
         semantic_task = response_generator.generate_response(
@@ -382,13 +405,15 @@ class UnifiedPipeline:
             semantic_task, embedding_task
         )
 
-        # 5. Send via webhooks (parallel)
         sent_tasks = []
         if self.semantic_repo:
             sent_tasks.append(
                 (
                     self.send_as_agent(
-                        channel_id, "Lattice", semantic_result[0].content
+                        channel_id,
+                        config.lattice_agent_name,
+                        semantic_result[0].content,
+                        config.lattice_agent_avatar,
                     ),
                     "lattice",
                 )
@@ -397,7 +422,10 @@ class UnifiedPipeline:
             sent_tasks.append(
                 (
                     self.send_as_agent(
-                        channel_id, "Vector", embedding_result[0].content
+                        channel_id,
+                        config.vector_agent_name,
+                        embedding_result[0].content,
+                        config.vector_agent_avatar,
                     ),
                     "vector",
                 )
@@ -414,7 +442,6 @@ class UnifiedPipeline:
                     "Failed to send agent message", sender=sender, error=str(e)
                 )
 
-        # 6. Store (parallel)
         store_tasks = []
         for sent_msg, sender in sent_messages:
             model_result = (
