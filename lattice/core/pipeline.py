@@ -1,4 +1,5 @@
 import asyncio
+import os
 import structlog
 from typing import TYPE_CHECKING, Any
 
@@ -19,8 +20,8 @@ logger = structlog.get_logger(__name__)
 
 AGENT_WEBHOOKS: dict[str, Any] = {}
 
-LATTICE_AVATAR_PATH = "/app/avatars/lattice.png"
-VECTOR_AVATAR_PATH = "/app/avatars/vector.png"
+LATTICE_AVATAR_URL = os.getenv("LATTICE_AVATAR_URL", "")
+VECTOR_AVATAR_URL = os.getenv("VECTOR_AVATAR_URL", "")
 
 
 class UnifiedPipeline:
@@ -104,15 +105,24 @@ class UnifiedPipeline:
                 webhook = wh
                 break
 
-        if not webhook:
-            avatar_bytes = None
-            if avatar_source:
-                avatar_bytes = self._load_avatar_image(avatar_source)
+        avatar_bytes = None
+        if avatar_source:
+            avatar_bytes = await self._load_avatar_image(avatar_source)
 
+        if not webhook:
             webhook = await channel.create_webhook(
                 name=agent_name,
                 avatar=avatar_bytes,
             )
+        elif avatar_bytes:
+            try:
+                await webhook.edit(avatar=avatar_bytes)
+            except Exception as e:
+                logger.warning(
+                    "Failed to update webhook avatar",
+                    agent=agent_name,
+                    error=str(e),
+                )
 
         AGENT_WEBHOOKS[cache_key] = webhook
         return webhook
@@ -476,7 +486,7 @@ class UnifiedPipeline:
                         channel_id,
                         "Lattice",
                         semantic_result[0].content,
-                        avatar_source=LATTICE_AVATAR_PATH,
+                        avatar_source=LATTICE_AVATAR_URL or None,
                     ),
                     "lattice",
                 )
@@ -488,7 +498,7 @@ class UnifiedPipeline:
                         channel_id,
                         "Vector",
                         embedding_result[0].content,
-                        avatar_source=VECTOR_AVATAR_PATH,
+                        avatar_source=VECTOR_AVATAR_URL or None,
                     ),
                     "vector",
                 )
