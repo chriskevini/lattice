@@ -26,11 +26,12 @@ class TestDatabasePool:
             mock_pool = MagicMock()
             mock_create_pool.return_value = AsyncMock(return_value=mock_pool)()
 
-            with patch("lattice.utils.database.config") as mock_config:
-                mock_config.database_url = "postgresql://test:test@localhost/test"
-                mock_config.db_pool_min_size = 2
-                mock_config.db_pool_max_size = 5
+            mock_config = MagicMock()
+            mock_config.database_url = "postgresql://test:test@localhost/test"
+            mock_config.db_pool_min_size = 2
+            mock_config.db_pool_max_size = 5
 
+            with patch("lattice.utils.database.get_config", return_value=mock_config):
                 db_pool = DatabasePool()
                 await db_pool.initialize()
 
@@ -46,9 +47,10 @@ class TestDatabasePool:
     @pytest.mark.asyncio
     async def test_initialize_raises_when_database_url_not_set(self) -> None:
         """Test that initialize raises ValueError when DATABASE_URL is not set."""
-        with patch("lattice.utils.database.config") as mock_config:
-            mock_config.database_url = None
+        mock_config = MagicMock()
+        mock_config.database_url = None
 
+        with patch("lattice.utils.database.get_config", return_value=mock_config):
             db_pool = DatabasePool()
 
             with pytest.raises(
@@ -468,11 +470,12 @@ class TestDatabasePoolErrorHandling:
         with patch("lattice.utils.database.asyncpg.create_pool") as mock_create_pool:
             mock_create_pool.side_effect = Exception("Connection failed")
 
-            with patch("lattice.utils.database.config") as mock_config:
-                mock_config.database_url = "postgresql://test:test@localhost/test"
-                mock_config.db_pool_min_size = 2
-                mock_config.db_pool_max_size = 5
+            mock_config = MagicMock()
+            mock_config.database_url = "postgresql://test:test@localhost/test"
+            mock_config.db_pool_min_size = 2
+            mock_config.db_pool_max_size = 5
 
+            with patch("lattice.utils.database.get_config", return_value=mock_config):
                 db_pool = DatabasePool()
 
                 with pytest.raises(Exception, match="Connection failed"):

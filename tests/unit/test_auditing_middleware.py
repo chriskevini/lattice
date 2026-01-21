@@ -354,14 +354,12 @@ class TestAuditingLLMClient:
 
     @pytest.mark.asyncio
     @patch("lattice.utils.auditing_middleware.logger")
-    @patch("lattice.utils.auditing_middleware.config")
     @patch("lattice.memory.prompt_audits.store_prompt_audit")
     @patch("lattice.discord_client.dream.AuditViewBuilder.build_standard_audit")
     async def test_complete_sends_audit_view_when_requested(
         self,
         mock_build_audit: AsyncMock,
         mock_store_audit: AsyncMock,
-        mock_config: Mock,
         mock_logger: Mock,
     ) -> None:
         """Test complete() sends AuditView to dream channel when audit_view=True."""
@@ -398,9 +396,6 @@ class TestAuditingLLMClient:
         mock_view = Mock()
         mock_build_audit.return_value = (mock_embed, mock_view, None)
 
-        # Disable config dream channel
-        mock_config.discord_dream_channel_id = None
-
         auditing_client = AuditingLLMClient(
             llm_client=mock_client, audit_repo=mock_audit_repo
         )
@@ -421,14 +416,12 @@ class TestAuditingLLMClient:
 
     @pytest.mark.asyncio
     @patch("lattice.utils.auditing_middleware.logger")
-    @patch("lattice.utils.auditing_middleware.config")
     @patch("lattice.memory.prompt_audits.store_prompt_audit")
     @patch("lattice.discord_client.dream.AuditViewBuilder.build_standard_audit")
     async def test_complete_handles_audit_view_failure_gracefully(
         self,
         mock_build_audit: AsyncMock,
         mock_store_audit: AsyncMock,
-        mock_config: Mock,
         mock_logger: Mock,
     ) -> None:
         """Test complete() handles AuditView failures without crashing."""
@@ -457,7 +450,6 @@ class TestAuditingLLMClient:
         mock_bot.get_channel = Mock(return_value=mock_channel)
 
         mock_build_audit.return_value = (Mock(), Mock(), None)
-        mock_config.discord_dream_channel_id = None
 
         auditing_client = AuditingLLMClient(
             llm_client=mock_client, audit_repo=mock_audit_repo
@@ -516,14 +508,12 @@ class TestAuditingLLMClient:
 
     @pytest.mark.asyncio
     @patch("lattice.utils.auditing_middleware.logger")
-    @patch("lattice.utils.auditing_middleware.config")
     @patch("lattice.memory.prompt_audits.store_prompt_audit")
     @patch("lattice.discord_client.dream.AuditViewBuilder.build_standard_audit")
     async def test_complete_builds_metadata_with_cost_and_tokens(
         self,
         mock_build_audit: AsyncMock,
         mock_store_audit: AsyncMock,
-        mock_config: Mock,
         mock_logger: Mock,
     ) -> None:
         """Test complete() builds metadata with cost, tokens, and latency."""
@@ -558,7 +548,6 @@ class TestAuditingLLMClient:
         mock_embed = Mock()
         mock_view = Mock()
         mock_build_audit.return_value = (mock_embed, mock_view, None)
-        mock_config.discord_dream_channel_id = None
 
         auditing_client = AuditingLLMClient(
             llm_client=mock_client, audit_repo=mock_audit_repo
@@ -588,14 +577,12 @@ class TestAuditingLLMClient:
 
     @pytest.mark.asyncio
     @patch("lattice.utils.auditing_middleware.logger")
-    @patch("lattice.utils.auditing_middleware.config")
     @patch("lattice.memory.prompt_audits.store_prompt_audit")
     @patch("lattice.discord_client.dream.AuditViewBuilder.build_standard_audit")
     async def test_complete_includes_warnings_in_audit_view(
         self,
         mock_build_audit: AsyncMock,
         mock_store_audit: AsyncMock,
-        mock_config: Mock,
         mock_logger: Mock,
     ) -> None:
         """Test complete() includes warnings in AuditView."""
@@ -625,7 +612,6 @@ class TestAuditingLLMClient:
         mock_bot.add_view = Mock()
 
         mock_build_audit.return_value = (Mock(), Mock(), None)
-        mock_config.discord_dream_channel_id = None
 
         auditing_client = AuditingLLMClient(
             llm_client=mock_client, audit_repo=mock_audit_repo
