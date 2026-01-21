@@ -10,7 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from lattice.memory.repositories import PostgresRepository
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +19,7 @@ def embedding_to_bytes(embedding: list[float]) -> bytes:
     """Convert embedding list to bytes for storage."""
     import struct
 
-    expected_dimension = config.embedding_dimension
+    expected_dimension = get_config().embedding_dimension
     actual_dimension = len(embedding)
 
     if actual_dimension != expected_dimension:
@@ -161,7 +161,7 @@ class PostgresEmbeddingMemoryRepository(PostgresRepository):
         Returns:
             List of memories with similarity scores, ordered by similarity
         """
-        threshold = threshold or config.embedding_similarity_threshold
+        threshold = threshold or get_config().embedding_similarity_threshold
 
         async with self._db_pool.pool.acquire() as conn:
             # Check if pgvector is available

@@ -4,7 +4,7 @@ import re
 from uuid import UUID
 
 from lattice.memory.episodic import EpisodicMessage
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 
 
 def build_source_map(
@@ -21,6 +21,7 @@ def build_source_map(
         Dictionary mapping message UUID to Discord jump URL
     """
     if guild_id is None:
+        config = get_config()
         guild_id_str = config.discord_guild_id
         if not guild_id_str:
             return {}

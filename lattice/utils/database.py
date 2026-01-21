@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfoNotFoundError
 import asyncpg
 import structlog
 
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 
 
 if TYPE_CHECKING:
@@ -31,6 +31,7 @@ class DatabasePool:
 
     async def initialize(self) -> None:
         """Create the connection pool."""
+        config = get_config()
         database_url = config.database_url
         if not database_url:
             msg = "DATABASE_URL environment variable not set"

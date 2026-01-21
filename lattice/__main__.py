@@ -9,11 +9,12 @@ import structlog
 
 from lattice.discord_client.bot import LatticeBot
 from lattice.core.health import HealthServer
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 
 
 def setup_logging() -> None:
     """Configure structured logging."""
+    config = get_config()
     log_level = config.log_level
 
     structlog.configure(
@@ -46,6 +47,7 @@ def setup_logging() -> None:
 async def main() -> None:
     """Run the Lattice bot."""
     logger = structlog.get_logger()
+    config = get_config()
 
     discord_token = config.discord_token
     database_url = config.database_url
@@ -82,6 +84,7 @@ async def main() -> None:
         PostgresMessageRepository,
         PostgresSemanticMemoryRepository,
     )
+    from lattice.memory.embedding.memory_module import EmbeddingMemoryModule
     from lattice.memory.repositories import (
         PostgresDreamingProposalRepository,
         PostgresPromptAuditRepository,
@@ -93,6 +96,9 @@ async def main() -> None:
     db_pool = DatabasePool()
     await db_pool.initialize()
 
+    config = get_config()
+    llm_client = _LLMClient(provider=config.llm_provider)
+
     context_repo = PostgresContextRepository(db_pool=db_pool)
     message_repo = PostgresMessageRepository(db_pool=db_pool)
     semantic_repo = PostgresSemanticMemoryRepository(db_pool=db_pool)
@@ -103,12 +109,20 @@ async def main() -> None:
     system_metrics_repo = PostgresSystemMetricsRepository(db_pool=db_pool)
     proposal_repo = PostgresDreamingProposalRepository(db_pool=db_pool)
 
+    embedding_module: EmbeddingMemoryModule | None = None
+    if config.enable_embedding_memory:
+        embedding_module = EmbeddingMemoryModule(
+            db_pool=db_pool,
+            llm_client=llm_client,
+            prompt_repo=prompt_repo,
+        )
+
     context_cache = ChannelContextCache(repository=context_repo, ttl=10)
     user_context_cache = UserContextCache(repository=context_repo, ttl_minutes=30)
 
     bot = LatticeBot(
         db_pool=db_pool,
-        llm_client=AuditingLLMClient(_LLMClient()),
+        llm_client=AuditingLLMClient(llm_client),
         context_cache=context_cache,
         user_context_cache=user_context_cache,
         message_repo=message_repo,
@@ -119,6 +133,7 @@ async def main() -> None:
         feedback_repo=feedback_repo,
         system_metrics_repo=system_metrics_repo,
         proposal_repo=proposal_repo,
+        embedding_module=embedding_module,
     )
     health_server = HealthServer(port=config.health_port)
 

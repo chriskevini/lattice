@@ -19,7 +19,7 @@ from lattice.discord_client.command_handler import CommandHandler
 from lattice.discord_client.error_manager import ErrorManager
 from lattice.discord_client.message_handler import MessageHandler
 from lattice.scheduler.dreaming import DreamingScheduler
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 from lattice.utils.database import get_user_timezone
 from lattice.core.context import ChannelContextCache, UserContextCache
 from lattice.core.pipeline import UnifiedPipeline
@@ -83,6 +83,11 @@ class LatticeBot(commands.Bot):
         self.system_metrics_repo = system_metrics_repo
         self.proposal_repo = proposal_repo
         self.embedding_module = embedding_module
+        logger.info(
+            "LatticeBot __init__",
+            embedding_module=bool(embedding_module),
+            type=type(embedding_module).__name__ if embedding_module else None,
+        )
 
         # Initialize the pipeline
         self.pipeline = UnifiedPipeline(
@@ -98,6 +103,7 @@ class LatticeBot(commands.Bot):
             embedding_module=embedding_module,
         )
 
+        config = get_config()
         self.main_channel_id = config.discord_main_channel_id
         if not self.main_channel_id:
             logger.warning("DISCORD_MAIN_CHANNEL_ID not set")

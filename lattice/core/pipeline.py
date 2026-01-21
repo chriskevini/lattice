@@ -19,6 +19,9 @@ logger = structlog.get_logger(__name__)
 
 AGENT_WEBHOOKS: dict[str, Any] = {}
 
+LATTICE_AVATAR_PATH = "/app/avatars/lattice.png"
+VECTOR_AVATAR_PATH = "/app/avatars/vector.png"
+
 
 class UnifiedPipeline:
     """Message sending utility for Discord interactions.
@@ -52,6 +55,11 @@ class UnifiedPipeline:
         self.feedback_repo = feedback_repo
         self.llm_client = llm_client
         self.embedding_module = embedding_module
+        logger.info(
+            "UnifiedPipeline initialized",
+            embedding_module=bool(embedding_module),
+            type=type(embedding_module).__name__ if embedding_module else None,
+        )
 
     async def send_response(
         self,
@@ -258,7 +266,14 @@ class UnifiedPipeline:
         Returns:
             The sent response message(s), or None if failed
         """
-        from lattice.utils.config import config
+        from lattice.utils.config import get_config
+
+        config = get_config()
+        logger.info(
+            "process_message called",
+            enable_embedding_memory=config.enable_embedding_memory,
+            pipeline_embedding_module=bool(self.embedding_module),
+        )
 
         if config.enable_embedding_memory:
             return await self.process_message_dual_agent(
@@ -316,6 +331,7 @@ class UnifiedPipeline:
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            bot=self.bot,
         )
 
         context = await self._retrieve_parallel(content, strategy, timezone)
@@ -330,6 +346,7 @@ class UnifiedPipeline:
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            bot=self.bot,
         )
 
         sent_msg = await self.send_response(channel_id, result.content)
@@ -408,6 +425,7 @@ class UnifiedPipeline:
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            bot=self.bot,
         )
 
         context = await self._retrieve_parallel(content, strategy, timezone)
@@ -423,6 +441,7 @@ class UnifiedPipeline:
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            bot=self.bot,
         )
 
         embedding_task = response_generator.generate_response(
@@ -434,6 +453,7 @@ class UnifiedPipeline:
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
             feedback_repo=self.feedback_repo,
+            bot=self.bot,
         )
 
         semantic_result, embedding_result = await asyncio.gather(
@@ -456,6 +476,7 @@ class UnifiedPipeline:
                         channel_id,
                         "Lattice",
                         semantic_result[0].content,
+                        avatar_source=LATTICE_AVATAR_PATH,
                     ),
                     "lattice",
                 )
@@ -467,6 +488,7 @@ class UnifiedPipeline:
                         channel_id,
                         "Vector",
                         embedding_result[0].content,
+                        avatar_source=VECTOR_AVATAR_PATH,
                     ),
                     "vector",
                 )

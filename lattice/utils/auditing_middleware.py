@@ -15,7 +15,7 @@ from uuid import UUID
 
 import structlog
 
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 from lattice.utils.llm_client import GenerationResult
 
 if TYPE_CHECKING:
@@ -180,6 +180,7 @@ class AuditingLLMClient:
             )
 
             # Post to dream channel if requested or if it's a tracked message.
+            config = get_config()
             dream_channel_id_from_config = config.discord_dream_channel_id
 
             should_post = audit_view or (

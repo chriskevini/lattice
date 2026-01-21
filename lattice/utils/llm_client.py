@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 
 
 logger = structlog.get_logger(__name__)
@@ -45,12 +45,12 @@ class _LLMClient:
 
         Args:
             provider: LLM provider to use ('placeholder', 'openrouter').
-                     Defaults to config.llm_provider.
-            config: Optional config object. Defaults to global config.
+                     Defaults to self.config.llm_provider.
+            config: Optional config object. Defaults to global self.config.
         """
-        from lattice.utils.config import config as default_config
+        from lattice.utils.config import get_config as default_config
 
-        self.config = config or default_config
+        self.config = config or default_config()
         self.provider = provider or self.config.llm_provider
         self._client: Any = None
         self._local_embed_model: Any = None
@@ -68,7 +68,7 @@ class _LLMClient:
             prompt: The prompt to complete
             temperature: Sampling temperature (0.0-1.0)
             max_tokens: Maximum tokens to generate
-            timeout: Request timeout in seconds (default: config.openrouter_timeout)
+            timeout: Request timeout in seconds (default: self.config.openrouter_timeout)
 
         Returns:
             GenerationResult with content and metadata
@@ -221,7 +221,7 @@ class _LLMClient:
             prompt: The prompt to complete
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
-            timeout: Request timeout in seconds (default: config.openrouter_timeout)
+            timeout: Request timeout in seconds (default: self.config.openrouter_timeout)
 
         Returns:
             GenerationResult with content and metadata
@@ -241,12 +241,12 @@ class _LLMClient:
             msg = "openai package not installed. Run: pip install openai"
             raise ImportError(msg) from e
 
-        api_key = config.openrouter_api_key
+        api_key = self.config.openrouter_api_key
         if not api_key:
             msg = "OPENROUTER_API_KEY not set in environment"
             raise ValueError(msg)
 
-        model_str = config.openrouter_model
+        model_str = self.config.openrouter_model
         model_list = [m.strip() for m in model_str.split(",") if m.strip()]
         primary_model = model_list[0] if model_list else model_str
         fallback_models = model_list[1:] if len(model_list) > 1 else []
@@ -258,7 +258,7 @@ class _LLMClient:
             )
 
         effective_timeout = (
-            timeout if timeout is not None else config.openrouter_timeout
+            timeout if timeout is not None else self.config.openrouter_timeout
         )
 
         extra_body = None
@@ -485,7 +485,7 @@ class _LLMClient:
         """
         import openai
 
-        api_key = config.openrouter_api_key
+        api_key = self.config.openrouter_api_key
         if not api_key:
             msg = "OPENROUTER_API_KEY not set in environment"
             raise ValueError(msg)
@@ -496,8 +496,8 @@ class _LLMClient:
                 api_key=api_key,
             )
 
-        model = config.embedding_model
-        dimension = config.embedding_dimension
+        model = self.config.embedding_model
+        dimension = self.config.embedding_dimension
 
         response = await self._client.embeddings.create(
             model=model,
@@ -525,7 +525,7 @@ class _LLMClient:
         """
         import openai
 
-        api_key = config.openrouter_api_key
+        api_key = self.config.openrouter_api_key
         if not api_key:
             msg = "OPENROUTER_API_KEY not set in environment"
             raise ValueError(msg)
@@ -536,8 +536,8 @@ class _LLMClient:
                 api_key=api_key,
             )
 
-        model = config.embedding_model
-        dimension = config.embedding_dimension
+        model = self.config.embedding_model
+        dimension = self.config.embedding_dimension
 
         # Batch embed - OpenRouter supports batching
         response = await self._client.embeddings.create(
