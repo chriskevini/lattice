@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+AGENT_WEBHOOKS: dict[str, Any] = {}
+
 
 class UnifiedPipeline:
     """Message sending utility for Discord interactions.
@@ -62,6 +64,69 @@ class UnifiedPipeline:
             return None
 
         return await channel.send(content)
+
+    async def _get_webhook(
+        self,
+        channel_id: int,
+        agent_name: str,
+    ) -> Any:
+        """Get or create a webhook for an agent.
+
+        Args:
+            channel_id: Discord channel ID
+            agent_name: Name of the agent (e.g., "Semantic Agent")
+
+        Returns:
+            Discord webhook object
+        """
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            logger.warning("Channel not found", channel_id=channel_id)
+            return None
+
+        cache_key = f"{channel_id}:{agent_name}"
+        if cache_key in AGENT_WEBHOOKS:
+            return AGENT_WEBHOOKS[cache_key]
+
+        webhook = None
+        for wh in channel.webhooks:
+            if wh.name == agent_name:
+                webhook = wh
+                break
+
+        if not webhook:
+            webhook = await channel.create_webhook(name=agent_name)
+
+        AGENT_WEBHOOKS[cache_key] = webhook
+        return webhook
+
+    async def send_as_agent(
+        self,
+        channel_id: int,
+        agent_name: str,
+        content: str,
+    ) -> Any:
+        """Send a message as a named agent via webhook.
+
+        Args:
+            channel_id: Discord channel ID
+            agent_name: Name to display (e.g., "Semantic Agent")
+            content: Message content
+
+        Returns:
+            Discord message object or None if failed
+        """
+        webhook = await self._get_webhook(channel_id, agent_name)
+        if not webhook:
+            return None
+
+        try:
+            return await webhook.send(content)
+        except Exception as e:
+            logger.error(
+                "Failed to send webhook message", agent=agent_name, error=str(e)
+            )
+            return None
 
     async def _retrieve_parallel(
         self,
@@ -211,6 +276,7 @@ class UnifiedPipeline:
                 content=result.content,
                 discord_message_id=sent_msg.id,
                 channel_id=channel_id,
+                sender="system",
                 generation_metadata={
                     "model": result.model,
                     "usage": {
@@ -225,6 +291,157 @@ class UnifiedPipeline:
             )
 
         return sent_msg
+
+    async def process_message_dual_agent(
+        self,
+        content: str,
+        discord_message_id: int,
+        channel_id: int,
+        timezone: str = "UTC",
+    ) -> list[Any]:
+        """Process a message with dual-agent parallel response generation.
+
+        Generates independent responses from both memory systems and sends
+        them via webhooks as "Semantic Agent" and "Embedding Agent".
+
+        Args:
+            content: Message content
+            discord_message_id: Discord's unique message ID
+            channel_id: Discord channel ID
+            timezone: IANA timezone string
+
+        Returns:
+            List of sent message objects (semantic, embedding)
+        """
+        from lattice.core import memory_orchestrator, response_generator
+        from lattice.core.context_strategy import context_strategy
+
+        # 1. Ingest user message
+        message_id = await memory_orchestrator.store_user_message(
+            content=content,
+            discord_message_id=discord_message_id,
+            channel_id=channel_id,
+            timezone=timezone,
+            message_repo=self.message_repo,
+        )
+
+        # 2. Analyze
+        recent_messages = await memory_orchestrator.episodic.get_recent_messages(
+            channel_id=channel_id,
+            limit=10,
+            repo=self.message_repo,
+        )
+        history = [m for m in recent_messages if m.message_id != message_id]
+
+        await self.context_cache.advance(channel_id)
+
+        strategy = await context_strategy(
+            message_id=message_id,
+            user_message=content,
+            recent_messages=history,
+            context_cache=self.context_cache,
+            channel_id=channel_id,
+            user_timezone=timezone,
+            discord_message_id=discord_message_id,
+            llm_client=self.llm_client,
+            canonical_repo=self.canonical_repo,
+            prompt_repo=self.prompt_repo,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
+        )
+
+        # 3. Retrieve (parallel from both systems)
+        context = await self._retrieve_parallel(content, strategy, timezone)
+
+        # 4. Generate (parallel from both memory systems)
+        formatted_history = memory_orchestrator.episodic.format_messages(history)
+
+        semantic_task = response_generator.generate_response(
+            user_message=content,
+            episodic_context=formatted_history,
+            semantic_context=context["semantic_context"],
+            embedding_context="",
+            llm_client=self.llm_client,
+            prompt_repo=self.prompt_repo,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
+        )
+
+        embedding_task = response_generator.generate_response(
+            user_message=content,
+            episodic_context=formatted_history,
+            semantic_context="",
+            embedding_context=context["embedding_context"],
+            llm_client=self.llm_client,
+            prompt_repo=self.prompt_repo,
+            audit_repo=self.audit_repo,
+            feedback_repo=self.feedback_repo,
+        )
+
+        semantic_result, embedding_result = await asyncio.gather(
+            semantic_task, embedding_task
+        )
+
+        # 5. Send via webhooks (parallel)
+        sent_tasks = []
+        if self.semantic_repo:
+            sent_tasks.append(
+                (
+                    self.send_as_agent(
+                        channel_id, "Lattice", semantic_result[0].content
+                    ),
+                    "lattice",
+                )
+            )
+        if self.embedding_module:
+            sent_tasks.append(
+                (
+                    self.send_as_agent(
+                        channel_id, "Vector", embedding_result[0].content
+                    ),
+                    "vector",
+                )
+            )
+
+        sent_messages = []
+        for task, sender in sent_tasks:
+            try:
+                msg = await task
+                if msg:
+                    sent_messages.append((msg, sender))
+            except Exception as e:
+                logger.error(
+                    "Failed to send agent message", sender=sender, error=str(e)
+                )
+
+        # 6. Store (parallel)
+        store_tasks = []
+        for sent_msg, sender in sent_messages:
+            model_result = (
+                semantic_result[0] if sender == "lattice" else embedding_result[0]
+            )
+            store_tasks.append(
+                memory_orchestrator.store_bot_message(
+                    content=sent_msg.content,
+                    discord_message_id=sent_msg.id,
+                    channel_id=channel_id,
+                    sender=sender,
+                    generation_metadata={
+                        "model": model_result.model,
+                        "usage": {
+                            "prompt_tokens": model_result.prompt_tokens,
+                            "completion_tokens": model_result.completion_tokens,
+                            "total_tokens": model_result.total_tokens,
+                        },
+                    },
+                    timezone=timezone,
+                    message_repo=self.message_repo,
+                )
+            )
+
+        await asyncio.gather(*store_tasks, return_exceptions=True)
+
+        return [m[0] for m in sent_messages]
 
     async def dispatch_autonomous_nudge(
         self,

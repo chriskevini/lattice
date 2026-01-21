@@ -33,6 +33,7 @@ class MessageRepository(Protocol):
         channel_id: int,
         is_bot: bool,
         is_proactive: bool = False,
+        sender: str | None = None,
         generation_metadata: dict[str, Any] | None = None,
         user_timezone: str | None = None,
     ) -> UUID:
@@ -44,6 +45,7 @@ class MessageRepository(Protocol):
             channel_id: Discord channel ID
             is_bot: Whether the message was sent by the bot
             is_proactive: Whether the bot initiated this message
+            sender: Sender identifier (e.g., "system", "lattice", "vector")
             generation_metadata: LLM generation metadata
             user_timezone: IANA timezone for this message
 
@@ -65,7 +67,7 @@ class MessageRepository(Protocol):
 
         Returns:
             List of recent messages with keys: id, discord_message_id,
-            channel_id, content, is_bot, is_proactive, timestamp, user_timezone
+            channel_id, content, is_bot, is_proactive, sender, timestamp, user_timezone
         """
         ...
 
@@ -82,7 +84,7 @@ class MessageRepository(Protocol):
 
         Returns:
             List of messages with keys: id, discord_message_id,
-            channel_id, content, is_bot, is_proactive, timestamp, user_timezone
+            channel_id, content, is_bot, is_proactive, sender, timestamp, user_timezone
         """
         ...
 

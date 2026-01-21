@@ -81,6 +81,7 @@ class TestEpisodicMemoryFunctions:
             channel_id=67890,
             is_bot=False,
             is_proactive=False,
+            sender=None,
             generation_metadata=None,
             user_timezone="UTC",
         )
@@ -97,6 +98,7 @@ class TestEpisodicMemoryFunctions:
                 "content": "Second message",
                 "is_bot": True,
                 "is_proactive": False,
+                "sender": "system",
                 "timestamp": datetime(2024, 1, 1, 10, 5, 0, tzinfo=UTC),
                 "user_timezone": "UTC",
             },
@@ -107,6 +109,7 @@ class TestEpisodicMemoryFunctions:
                 "content": "First message",
                 "is_bot": False,
                 "is_proactive": False,
+                "sender": None,
                 "timestamp": datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC),
                 "user_timezone": "UTC",
             },

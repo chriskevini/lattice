@@ -33,6 +33,7 @@ class EpisodicMessage:
         is_proactive: bool = False,
         message_id: UUID | None = None,
         timestamp: datetime | None = None,
+        sender: str | None = None,
         generation_metadata: dict[str, Any] | None = None,
         user_timezone: str | None = None,
     ) -> None:
@@ -46,6 +47,7 @@ class EpisodicMessage:
             is_proactive: Whether the bot initiated this message (vs replying)
             message_id: Internal UUID (auto-generated if None)
             timestamp: Message timestamp (defaults to now)
+            sender: Sender identifier (e.g., "lattice_bot", "semantic_agent")
             generation_metadata: LLM generation metadata (model, tokens, etc.)
             user_timezone: IANA timezone for this message (e.g., 'America/New_York')
         """
@@ -56,6 +58,7 @@ class EpisodicMessage:
         self.is_proactive = is_proactive
         self.message_id = message_id
         self.timestamp = timestamp or get_now("UTC")
+        self.sender = sender
         self.generation_metadata = generation_metadata
         self.user_timezone = user_timezone or "UTC"
 
@@ -81,6 +84,7 @@ async def store_message(repo: MessageRepository, message: "EpisodicMessage") -> 
         channel_id=message.channel_id,
         is_bot=message.is_bot,
         is_proactive=message.is_proactive,
+        sender=message.sender,
         generation_metadata=message.generation_metadata,
         user_timezone=message.user_timezone,
     )
@@ -90,6 +94,7 @@ async def store_message(repo: MessageRepository, message: "EpisodicMessage") -> 
         message_id=str(message_id),
         discord_id=message.discord_message_id,
         is_bot=message.is_bot,
+        sender=message.sender,
     )
 
     return message_id
@@ -136,8 +141,11 @@ def format_messages(messages: list[EpisodicMessage]) -> str:
     """
     formatted_lines = []
     for msg in messages:
-        role = "Assistant" if msg.is_bot else "User"
-        formatted_lines.append(f"{role}: {msg.content}")
+        if msg.is_bot:
+            sender_name = msg.sender if msg.sender else "system"
+            formatted_lines.append(f"Assistant ({sender_name}): {msg.content}")
+        else:
+            formatted_lines.append(f"User: {msg.content}")
 
     return "\n".join(formatted_lines)
 
