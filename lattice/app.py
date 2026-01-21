@@ -55,6 +55,7 @@ class LatticeApp:
         if config.enable_embedding_memory:
             self.embedding_module = EmbeddingMemoryModule(
                 db_pool=self.db_pool,
+                llm_client=self.llm_client,
                 prompt_repo=self.prompt_repo,
             )
 

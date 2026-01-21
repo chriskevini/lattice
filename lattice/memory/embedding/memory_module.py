@@ -10,8 +10,6 @@ from lattice.utils.json_parser import JSONParseError, parse_llm_json_response
 
 logger = structlog.get_logger(__name__)
 
-BATCH_SIZE = 18
-
 
 class EmbeddingMemoryModule:
     """High-level interface for embedding-based memory operations."""
@@ -19,15 +17,18 @@ class EmbeddingMemoryModule:
     def __init__(
         self,
         db_pool: Any,
+        llm_client: Any | None = None,
         prompt_repo: Any | None = None,
     ) -> None:
         """Initialize the embedding memory module.
 
         Args:
             db_pool: Database connection pool
+            llm_client: Optional LLM client for embedding generation
             prompt_repo: Optional prompt registry repository
         """
         self.repo = PostgresEmbeddingMemoryRepository(db_pool)
+        self.llm_client = llm_client
         self.prompt_repo = prompt_repo
         self.name = "embedding"
 
@@ -91,9 +92,11 @@ class EmbeddingMemoryModule:
         if not messages:
             return 0
 
-        from lattice.utils.llm_client import _LLMClient
+        llm_client = self.llm_client
+        if llm_client is None:
+            from lattice.utils.llm_client import _LLMClient
 
-        llm_client = _LLMClient()
+            llm_client = _LLMClient()
 
         prompt_template = None
         if self.prompt_repo:
@@ -187,10 +190,12 @@ Return as JSON: {{"memories": ["memory 1", "memory 2", ...]}}
         Returns:
             UUID of stored memory or None if failed
         """
-        from lattice.utils.llm_client import _LLMClient
-
         try:
-            llm_client = _LLMClient()
+            llm_client = self.llm_client
+            if llm_client is None:
+                from lattice.utils.llm_client import _LLMClient
+
+                llm_client = _LLMClient()
             embedding = await llm_client.embed(content)
 
             return await self.repo.store_memory(

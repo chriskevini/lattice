@@ -382,9 +382,7 @@ class _LLMClient:
         Returns:
             List of embedding values.
         """
-        from lattice.utils.config import config
-
-        embedding_provider = config.embedding_provider
+        embedding_provider = self.config.embedding_provider
 
         if embedding_provider == "placeholder":
             return self._placeholder_embed(text)
@@ -407,9 +405,7 @@ class _LLMClient:
         Returns:
             List of embedding vectors.
         """
-        from lattice.utils.config import config
-
-        embedding_provider = config.embedding_provider
+        embedding_provider = self.config.embedding_provider
 
         if embedding_provider == "placeholder":
             return [self._placeholder_embed(text) for text in texts]
@@ -430,15 +426,9 @@ class _LLMClient:
         Returns:
             List of embedding values.
         """
-        from lattice.utils.config import config
         from sentence_transformers import SentenceTransformer
 
-        if self._local_embed_model is None:
-            self._local_embed_model = SentenceTransformer(
-                config.embedding_model,
-                cache_folder=config.embedding_model_cache_folder,
-            )
-
+        self._ensure_local_model()
         embedding = self._local_embed_model.encode(text, normalize_embeddings=True)
         return embedding.tolist()
 
@@ -451,17 +441,21 @@ class _LLMClient:
         Returns:
             List of embedding vectors.
         """
-        from lattice.utils.config import config
+        from sentence_transformers import SentenceTransformer
+
+        self._ensure_local_model()
+        embeddings = self._local_embed_model.encode(texts, normalize_embeddings=True)
+        return embeddings.tolist()
+
+    def _ensure_local_model(self) -> None:
+        """Ensure local embedding model is loaded."""
         from sentence_transformers import SentenceTransformer
 
         if self._local_embed_model is None:
             self._local_embed_model = SentenceTransformer(
-                config.embedding_model,
-                cache_folder=config.embedding_model_cache_folder,
+                self.config.embedding_model,
+                cache_folder=self.config.embedding_model_cache_folder,
             )
-
-        embeddings = self._local_embed_model.encode(texts, normalize_embeddings=True)
-        return embeddings.tolist()
 
     def _placeholder_embed(self, text: str) -> list[float]:
         """Placeholder embedding for development/testing.
@@ -469,7 +463,7 @@ class _LLMClient:
         Returns a fixed-size zero vector.
 
         WARNING: This is a development/testing placeholder that returns dummy data.
-        Set LLM_PROVIDER=openrouter for real embeddings.
+        Set EMBEDDING_PROVIDER=openrouter or local for real embeddings.
 
         Args:
             text: The text that was sent
@@ -477,13 +471,11 @@ class _LLMClient:
         Returns:
             List of zeros with configured dimension
         """
-        from lattice.utils.config import config
-
         logger.warning(
             "Placeholder LLM used for embedding - returns zero vector. "
-            "Set LLM_PROVIDER=openrouter for real embeddings."
+            "Set EMBEDDING_PROVIDER=openrouter or local for real embeddings."
         )
-        dimension = config.embedding_dimension
+        dimension = self.config.embedding_dimension
         return [0.0] * dimension
 
     async def _openrouter_embed(self, text: str) -> list[float]:

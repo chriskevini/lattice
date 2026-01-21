@@ -105,7 +105,7 @@ class UnifiedPipeline:
         # Handle exceptions
         if isinstance(triple_ctx, Exception):
             triple_ctx = {"semantic_context": "", "memory_origins": set()}
-        if embedding_ctx and isinstance(embedding_ctx, Exception):
+        if isinstance(embedding_ctx, Exception):
             embedding_ctx = {"text": "", "memories": [], "count": 0}
 
         # Build combined context
