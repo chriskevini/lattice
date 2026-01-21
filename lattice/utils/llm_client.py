@@ -426,8 +426,6 @@ class _LLMClient:
         Returns:
             List of embedding values.
         """
-        from sentence_transformers import SentenceTransformer
-
         self._ensure_local_model()
         embedding = self._local_embed_model.encode(text, normalize_embeddings=True)
         return embedding.tolist()
@@ -441,8 +439,6 @@ class _LLMClient:
         Returns:
             List of embedding vectors.
         """
-        from sentence_transformers import SentenceTransformer
-
         self._ensure_local_model()
         embeddings = self._local_embed_model.encode(texts, normalize_embeddings=True)
         return embeddings.tolist()
