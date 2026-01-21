@@ -69,14 +69,14 @@ class UnifiedPipeline:
         self,
         channel_id: int,
         agent_name: str,
-        avatar_url: str | None = None,
+        avatar_source: str | None = None,
     ) -> Any:
         """Get or create a webhook for an agent.
 
         Args:
             channel_id: Discord channel ID
             agent_name: Name of the agent
-            avatar_url: Optional avatar image URL
+            avatar_source: URL or local file path to avatar image
 
         Returns:
             Discord webhook object
@@ -97,20 +97,55 @@ class UnifiedPipeline:
                 break
 
         if not webhook:
+            avatar_bytes = None
+            if avatar_source:
+                avatar_bytes = self._load_avatar_image(avatar_source)
+
             webhook = await channel.create_webhook(
                 name=agent_name,
-                avatar=avatar_url if avatar_url else None,
+                avatar=avatar_bytes,
             )
 
         AGENT_WEBHOOKS[cache_key] = webhook
         return webhook
+
+    async def _load_avatar_image(self, source: str) -> bytes | None:
+        """Load avatar image from URL or local file.
+
+        Args:
+            source: URL or local file path
+
+        Returns:
+            Image bytes or None if loading fails
+        """
+        import aiohttp
+
+        if source.startswith(("http://", "https://")):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(source) as response:
+                        if response.ok:
+                            return await response.read()
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch avatar from URL", url=source, error=str(e)
+                )
+        else:
+            try:
+                with open(source, "rb") as f:
+                    return f.read()
+            except Exception as e:
+                logger.warning(
+                    "Failed to read local avatar file", path=source, error=str(e)
+                )
+        return None
 
     async def send_as_agent(
         self,
         channel_id: int,
         agent_name: str,
         content: str,
-        avatar_url: str | None = None,
+        avatar_source: str | None = None,
     ) -> Any:
         """Send a message as a named agent via webhook.
 
@@ -118,12 +153,12 @@ class UnifiedPipeline:
             channel_id: Discord channel ID
             agent_name: Name to display
             content: Message content
-            avatar_url: Optional avatar image URL
+            avatar_source: URL or local file path for avatar
 
         Returns:
             Discord message object or None if failed
         """
-        webhook = await self._get_webhook(channel_id, agent_name, avatar_url)
+        webhook = await self._get_webhook(channel_id, agent_name, avatar_source)
         if not webhook:
             return None
 
