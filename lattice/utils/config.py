@@ -47,6 +47,17 @@ class Config:
     openrouter_timeout: int
     gemini_api_key: str | None
 
+    # Embedding Settings
+    embedding_model: str
+    embedding_dimension: int
+    embedding_provider: str
+    embedding_model_cache_folder: str | None
+
+    # Memory Settings
+    enable_triple_memory: bool
+    enable_embedding_memory: bool
+    embedding_similarity_threshold: float
+
     # Application Settings
     environment: str
     log_level: str
@@ -74,6 +85,17 @@ class Config:
             ),
             openrouter_timeout=_get_env_int("OPENROUTER_TIMEOUT", 30),
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
+            embedding_model=os.getenv(
+                "EMBEDDING_MODEL", "sentence-transformers/google/gemma-3-300m-onnx:int4"
+            ),
+            embedding_dimension=_get_env_int("EMBEDDING_DIMENSION", 384),
+            embedding_provider=os.getenv("EMBEDDING_PROVIDER", "openrouter"),
+            embedding_model_cache_folder=os.getenv("EMBEDDING_MODEL_CACHE_FOLDER"),
+            enable_triple_memory=_get_env_bool("ENABLE_TRIPLE_MEMORY", True),
+            enable_embedding_memory=_get_env_bool("ENABLE_EMBEDDING_MEMORY", False),
+            embedding_similarity_threshold=float(
+                os.getenv("EMBEDDING_SIMILARITY_THRESHOLD", "0.7")
+            ),
             environment=os.getenv("ENVIRONMENT", "production"),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             structured_logs=_get_env_bool("STRUCTURED_LOGS", True),

@@ -188,6 +188,16 @@ class TestConfigLoad:
                 assert config.openrouter_model == "anthropic/claude-3.5-sonnet"
                 assert config.openrouter_timeout == 30
                 assert config.gemini_api_key is None
+                assert (
+                    config.embedding_model
+                    == "sentence-transformers/google/gemma-3-300m-onnx:int4"
+                )
+                assert config.embedding_dimension == 384
+                assert config.embedding_provider == "openrouter"
+                assert config.embedding_model_cache_folder is None
+                assert config.enable_triple_memory is True
+                assert config.enable_embedding_memory is False
+                assert config.embedding_similarity_threshold == 0.7
                 assert config.environment == "production"
                 assert config.log_level == "INFO"
                 assert config.structured_logs is True
@@ -376,6 +386,15 @@ class TestConfigDataclass:
             "openrouter_model",
             "openrouter_timeout",
             "gemini_api_key",
+            # Embedding
+            "embedding_model",
+            "embedding_dimension",
+            "embedding_provider",
+            "embedding_model_cache_folder",
+            # Memory
+            "enable_triple_memory",
+            "enable_embedding_memory",
+            "embedding_similarity_threshold",
             # Application
             "environment",
             "log_level",

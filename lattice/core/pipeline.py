@@ -1,3 +1,4 @@
+import asyncio
 import structlog
 from typing import TYPE_CHECKING, Any
 
@@ -37,6 +38,7 @@ class UnifiedPipeline:
         audit_repo: "PromptAuditRepository",
         feedback_repo: "UserFeedbackRepository",
         llm_client: Any = None,
+        embedding_module: Any = None,
     ) -> None:
         self.bot = bot
         self.context_cache = context_cache
@@ -47,6 +49,7 @@ class UnifiedPipeline:
         self.audit_repo = audit_repo
         self.feedback_repo = feedback_repo
         self.llm_client = llm_client
+        self.embedding_module = embedding_module
 
     async def send_response(
         self,
@@ -59,6 +62,76 @@ class UnifiedPipeline:
             return None
 
         return await channel.send(content)
+
+    async def _retrieve_parallel(
+        self,
+        content: str,
+        strategy: Any,
+        timezone: str = "UTC",
+    ) -> dict[str, Any]:
+        """Retrieve context from both memory systems in parallel.
+
+        Args:
+            content: User message content
+            strategy: Context strategy with entities and flags
+            timezone: User timezone
+
+        Returns:
+            Dict with keys: semantic_context, embedding_context, combined_context
+        """
+        from lattice.core.context_strategy import retrieve_context
+
+        # Triple-based retrieval
+        triple_task = retrieve_context(
+            entities=strategy.entities,
+            context_flags=strategy.context_flags,
+            semantic_repo=self.semantic_repo,
+            user_timezone=timezone,
+        )
+
+        # Embedding-based retrieval (if enabled)
+        if self.embedding_module:
+            embedding_task = self.embedding_module.retrieve_context(
+                query=content,
+                limit=10,
+            )
+            triple_ctx, embedding_ctx = await asyncio.gather(
+                triple_task, embedding_task, return_exceptions=True
+            )
+        else:
+            triple_ctx = await triple_task
+            embedding_ctx = None
+
+        # Handle exceptions
+        if isinstance(triple_ctx, Exception):
+            triple_ctx = {"semantic_context": "", "memory_origins": set()}
+        if isinstance(embedding_ctx, Exception):
+            embedding_ctx = {"text": "", "memories": [], "count": 0}
+
+        # Build combined context
+        semantic_part = triple_ctx.get("semantic_context", "") if triple_ctx else ""
+        embedding_part = embedding_ctx.get("text", "") if embedding_ctx else ""
+
+        combined = ""
+        if semantic_part:
+            combined += f"## Triple-Based Context\n{semantic_part}\n\n"
+        if embedding_part:
+            combined += f"## Embedding-Based Context\n{embedding_part}"
+
+        if not combined:
+            combined = "No relevant context found."
+
+        return {
+            "semantic_context": semantic_part,
+            "embedding_context": embedding_part,
+            "combined_context": combined,
+            "semantic_memories": triple_ctx.get("memory_origins", set())
+            if triple_ctx
+            else set(),
+            "embedding_memories": embedding_ctx.get("memories", [])
+            if embedding_ctx
+            else [],
+        }
 
     async def process_message(
         self,
@@ -79,7 +152,7 @@ class UnifiedPipeline:
             The sent response message, or None if failed
         """
         from lattice.core import memory_orchestrator, response_generator
-        from lattice.core.context_strategy import context_strategy, retrieve_context
+        from lattice.core.context_strategy import context_strategy
 
         # 1. Ingest
         message_id = await memory_orchestrator.store_user_message(
@@ -96,7 +169,6 @@ class UnifiedPipeline:
             limit=10,
             repo=self.message_repo,
         )
-        # Filter out current message from recent history
         history = [m for m in recent_messages if m.message_id != message_id]
 
         await self.context_cache.advance(channel_id)
@@ -116,13 +188,8 @@ class UnifiedPipeline:
             feedback_repo=self.feedback_repo,
         )
 
-        # 3. Retrieve
-        context = await retrieve_context(
-            entities=strategy.entities,
-            context_flags=strategy.context_flags,
-            semantic_repo=self.semantic_repo,
-            user_timezone=timezone,
-        )
+        # 3. Retrieve (parallel from both systems)
+        context = await self._retrieve_parallel(content, strategy, timezone)
 
         # 4. Generate
         formatted_history = memory_orchestrator.episodic.format_messages(history)
@@ -130,6 +197,7 @@ class UnifiedPipeline:
             user_message=content,
             episodic_context=formatted_history,
             semantic_context=context["semantic_context"],
+            embedding_context=context["embedding_context"],
             llm_client=self.llm_client,
             prompt_repo=self.prompt_repo,
             audit_repo=self.audit_repo,
@@ -155,9 +223,6 @@ class UnifiedPipeline:
                 timezone=timezone,
                 message_repo=self.message_repo,
             )
-            # Persist context cache after each message is no longer needed
-            # as it is handled automatically in context_cache.update and advance
-            pass
 
         return sent_msg
 

@@ -7,6 +7,7 @@ from lattice.memory.context import (
     PostgresMessageRepository,
     PostgresSemanticMemoryRepository,
 )
+from lattice.memory.embedding.memory_module import EmbeddingMemoryModule
 from lattice.memory.repositories import (
     PostgresPromptAuditRepository,
     PostgresPromptRegistryRepository,
@@ -49,6 +50,15 @@ class LatticeApp:
         self.message_repo = PostgresMessageRepository(db_pool=self.db_pool)
         self.semantic_repo = PostgresSemanticMemoryRepository(db_pool=self.db_pool)
         self.canonical_repo = PostgresCanonicalRepository(db_pool=self.db_pool)
+
+        self.embedding_module: EmbeddingMemoryModule | None = None
+        if config.enable_embedding_memory:
+            self.embedding_module = EmbeddingMemoryModule(
+                db_pool=self.db_pool,
+                llm_client=self.llm_client,
+                prompt_repo=self.prompt_repo,
+            )
+
         self.context_cache = ChannelContextCache(repository=self.context_repo, ttl=10)
         self.user_context_cache = UserContextCache(
             repository=self.context_repo, ttl_minutes=30
@@ -66,6 +76,7 @@ class LatticeApp:
             feedback_repo=self.feedback_repo,
             system_metrics_repo=self.system_metrics_repo,
             proposal_repo=self.dreaming_proposal_repo,
+            embedding_module=self.embedding_module,
         )
 
     async def start(self) -> None:

@@ -53,6 +53,7 @@ class _LLMClient:
         self.config = config or default_config
         self.provider = provider or self.config.llm_provider
         self._client: Any = None
+        self._local_embed_model: Any = None
 
     async def complete(
         self,
@@ -227,13 +228,10 @@ class _LLMClient:
         """
         import os
 
-        # Check if we are in a test environment and return placeholder if openai is missing
-        # BUT only if we are NOT in the middle of a test specifically checking for the ImportError
         in_test = os.getenv("PYTEST_CURRENT_TEST") is not None
         try:
             import openai
         except ImportError as e:
-            # We allow overriding this fallback via an env var if we want to force the error in tests
             force_error = os.getenv("FORCE_OPENAI_IMPORT_ERROR") == "1"
             if in_test and not force_error:
                 logger.warning(
@@ -372,3 +370,188 @@ class _LLMClient:
             cancelled=cancelled,
             moderation_latency_ms=moderation_latency_ms,
         )
+
+    async def embed(self, text: str) -> list[float]:
+        """Generate embedding for text.
+
+        Supports OpenRouter or local sentence-transformers model.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            List of embedding values.
+        """
+        embedding_provider = self.config.embedding_provider
+
+        if embedding_provider == "placeholder":
+            return self._placeholder_embed(text)
+        elif embedding_provider == "openrouter":
+            return await self._openrouter_embed(text)
+        elif embedding_provider == "local":
+            return await self._local_embed(text)
+        else:
+            msg = f"Unknown EMBEDDING_PROVIDER: {embedding_provider}. Valid: placeholder, openrouter, local"
+            raise ValueError(msg)
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for multiple texts.
+
+        Supports OpenRouter or local sentence-transformers model.
+
+        Args:
+            texts: List of texts to embed.
+
+        Returns:
+            List of embedding vectors.
+        """
+        embedding_provider = self.config.embedding_provider
+
+        if embedding_provider == "placeholder":
+            return [self._placeholder_embed(text) for text in texts]
+        elif embedding_provider == "openrouter":
+            return await self._openrouter_embed_batch(texts)
+        elif embedding_provider == "local":
+            return await self._local_embed_batch(texts)
+        else:
+            msg = f"Unknown EMBEDDING_PROVIDER: {embedding_provider}. Valid: placeholder, openrouter, local"
+            raise ValueError(msg)
+
+    async def _local_embed(self, text: str) -> list[float]:
+        """Generate embedding using sentence-transformers model.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            List of embedding values.
+        """
+        self._ensure_local_model()
+        embedding = self._local_embed_model.encode(text, normalize_embeddings=True)
+        return embedding.tolist()
+
+    async def _local_embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for multiple texts using sentence-transformers.
+
+        Args:
+            texts: List of texts to embed.
+
+        Returns:
+            List of embedding vectors.
+        """
+        self._ensure_local_model()
+        embeddings = self._local_embed_model.encode(texts, normalize_embeddings=True)
+        return embeddings.tolist()
+
+    def _ensure_local_model(self) -> None:
+        """Ensure local embedding model is loaded."""
+        from sentence_transformers import SentenceTransformer
+
+        if self._local_embed_model is None:
+            self._local_embed_model = SentenceTransformer(
+                self.config.embedding_model,
+                cache_folder=self.config.embedding_model_cache_folder,
+            )
+
+    def _placeholder_embed(self, text: str) -> list[float]:
+        """Placeholder embedding for development/testing.
+
+        Returns a fixed-size zero vector.
+
+        WARNING: This is a development/testing placeholder that returns dummy data.
+        Set EMBEDDING_PROVIDER=openrouter or local for real embeddings.
+
+        Args:
+            text: The text that was sent
+
+        Returns:
+            List of zeros with configured dimension
+        """
+        logger.warning(
+            "Placeholder LLM used for embedding - returns zero vector. "
+            "Set EMBEDDING_PROVIDER=openrouter or local for real embeddings."
+        )
+        dimension = self.config.embedding_dimension
+        return [0.0] * dimension
+
+    async def _openrouter_embed(self, text: str) -> list[float]:
+        """Generate embedding using OpenRouter API.
+
+        Args:
+            text: The text to embed.
+
+        Returns:
+            List of embedding values.
+        """
+        import openai
+
+        api_key = config.openrouter_api_key
+        if not api_key:
+            msg = "OPENROUTER_API_KEY not set in environment"
+            raise ValueError(msg)
+
+        if self._client is None:
+            self._client = openai.AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+
+        model = config.embedding_model
+        dimension = config.embedding_dimension
+
+        response = await self._client.embeddings.create(
+            model=model,
+            input=text,
+        )
+
+        embedding = response.data[0].embedding
+
+        if len(embedding) != dimension:
+            logger.warning(
+                f"Embedding dimension mismatch: expected {dimension}, got {len(embedding)}. "
+                "This may cause issues with vector operations."
+            )
+
+        return embedding
+
+    async def _openrouter_embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings for multiple texts using OpenRouter API.
+
+        Args:
+            texts: List of texts to embed.
+
+        Returns:
+            List of embedding vectors.
+        """
+        import openai
+
+        api_key = config.openrouter_api_key
+        if not api_key:
+            msg = "OPENROUTER_API_KEY not set in environment"
+            raise ValueError(msg)
+
+        if self._client is None:
+            self._client = openai.AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+
+        model = config.embedding_model
+        dimension = config.embedding_dimension
+
+        # Batch embed - OpenRouter supports batching
+        response = await self._client.embeddings.create(
+            model=model,
+            input=texts,
+        )
+
+        embeddings = [data.embedding for data in response.data]
+
+        # Check dimensions
+        for i, emb in enumerate(embeddings):
+            if len(emb) != dimension:
+                logger.warning(
+                    f"Embedding {i} dimension mismatch: expected {dimension}, got {len(emb)}"
+                )
+
+        return embeddings

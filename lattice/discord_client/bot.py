@@ -64,6 +64,7 @@ class LatticeBot(commands.Bot):
         feedback_repo: "UserFeedbackRepository",
         system_metrics_repo: "SystemMetricsRepository",
         proposal_repo: "DreamingProposalRepository",
+        embedding_module: Any = None,
     ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
@@ -81,6 +82,7 @@ class LatticeBot(commands.Bot):
         self.feedback_repo = feedback_repo
         self.system_metrics_repo = system_metrics_repo
         self.proposal_repo = proposal_repo
+        self.embedding_module = embedding_module
 
         # Initialize the pipeline
         self.pipeline = UnifiedPipeline(
@@ -93,6 +95,7 @@ class LatticeBot(commands.Bot):
             audit_repo=audit_repo,
             feedback_repo=feedback_repo,
             llm_client=llm_client,
+            embedding_module=embedding_module,
         )
 
         self.main_channel_id = config.discord_main_channel_id
