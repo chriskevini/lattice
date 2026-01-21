@@ -40,6 +40,24 @@ def extract_prompt_key(thread_name: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+async def is_audit_thread(channel: discord.Thread) -> bool:
+    """Check if thread was created by audit system.
+
+    Audit threads contain bot messages with "**Rendered Prompt**" and "**Raw Output**" markers.
+
+    Args:
+        channel: The Discord thread to check.
+
+    Returns:
+        True if thread is an audit thread, False otherwise.
+    """
+    async for msg in channel.history(limit=5, oldest_first=True):
+        if msg.author.bot:
+            if "**Rendered Prompt**" in msg.content or "**Raw Output**" in msg.content:
+                return True
+    return False
+
+
 async def get_audit_context(channel: discord.Thread) -> tuple[str, str]:
     """Fetch rendered prompt and raw output from audit thread.
 
@@ -134,8 +152,14 @@ class ThreadPromptHandler:
         if message.author == self.bot.user:
             return
 
+        if message.webhook_id is not None:
+            return
+
         channel = message.channel
         if not isinstance(channel, discord.Thread):
+            return
+
+        if await is_audit_thread(channel):
             return
 
         thread_key = self._get_thread_key(channel)

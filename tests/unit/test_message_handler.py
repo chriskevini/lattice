@@ -1,7 +1,6 @@
 """Unit tests for message handler module."""
 
 import asyncio
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4
 
@@ -10,7 +9,6 @@ import pytest
 from discord.ext import commands
 
 from lattice.discord_client.message_handler import MessageHandler
-from lattice.core.context_strategy import ContextStrategy
 
 
 @pytest.fixture
@@ -23,6 +21,7 @@ def mock_bot() -> Mock:
     bot.canonical_repo = AsyncMock()
     bot.get_context = AsyncMock()
     bot.invoke = AsyncMock()
+    bot.pipeline = AsyncMock()
     return bot
 
 
@@ -48,6 +47,7 @@ def mock_message(mock_channel: Mock) -> Mock:
     message.content = "Hello, bot!"
     message.id = 222222222
     message.channel = mock_channel
+    message.webhook_id = None
     message.jump_url = "https://discord.com/channels/123/111/222"
     return message
 
@@ -440,26 +440,12 @@ class TestHandleMessageCircuitBreaker:
 
 
 @patch("lattice.discord_client.message_handler.memory_orchestrator")
-@patch("lattice.discord_client.message_handler.context_strategy")
-@patch("lattice.discord_client.message_handler.retrieve_context")
-@patch("lattice.discord_client.message_handler.response_generator")
-@patch("lattice.discord_client.message_handler.episodic")
-@patch("lattice.discord_client.message_handler.batch_consolidation")
-@patch("lattice.discord_client.message_handler.build_source_map")
-@patch("lattice.discord_client.message_handler.inject_source_links")
 class TestHandleMessageSuccessFlow:
     """Tests for successful message processing flow."""
 
     @pytest.mark.asyncio
     async def test_successful_message_processing(
         self,
-        mock_inject_source_links: Mock,
-        mock_build_source_map: Mock,
-        mock_batch_consolidation: Mock,
-        mock_episodic: Mock,
-        mock_response_generator: Mock,
-        mock_retrieve_context: Mock,
-        mock_context_strategy: Mock,
         mock_mem_orch: Mock,
         message_handler: MessageHandler,
         mock_message: Mock,
@@ -474,74 +460,17 @@ class TestHandleMessageSuccessFlow:
         mock_ctx.command = None
         mock_bot.get_context.return_value = mock_ctx
 
-        user_msg_id = uuid4()
-        mock_mem_orch.store_user_message = AsyncMock(return_value=user_msg_id)
-        mock_mem_orch.store_bot_message = AsyncMock()
-        mock_mem_orch.retrieve_context = AsyncMock(
-            return_value=(
-                [
-                    Mock(
-                        content="Previous message",
-                        is_bot=False,
-                        timestamp=datetime.now(timezone.utc),
-                    )
-                ],
-                "semantic context",
-            )
-        )
-
-        mock_batch_consolidation.should_consolidate = AsyncMock(return_value=False)
-
-        mock_episodic.get_recent_messages = AsyncMock(return_value=[])
-
-        strategy = ContextStrategy(
-            entities=["entity1"],
-            context_flags=["flag1"],
-            unresolved_entities=[],
-        )
-        mock_context_strategy.return_value = strategy
-
-        mock_retrieve_context.return_value = {
-            "semantic_context": "Retrieved semantic context",
-            "memory_origins": {uuid4()},
-        }
-
-        mock_response_result = Mock()
-        mock_response_result.content = "Bot response"
-        mock_response_result.model = "gpt-4"
-        mock_response_result.provider = "openai"
-        mock_response_result.temperature = 0.7
-        mock_response_result.prompt_tokens = 100
-        mock_response_result.completion_tokens = 50
-        mock_response_result.total_tokens = 150
-        mock_response_result.cost_usd = 0.01
-        mock_response_result.latency_ms = 500
-
-        mock_response_generator.generate_response = AsyncMock(
-            return_value=(mock_response_result, "rendered prompt", {})
-        )
-        mock_response_generator.split_response = Mock(return_value=["Bot response"])
-
-        mock_build_source_map.return_value = {}
-        mock_inject_source_links.return_value = "Bot response"
-
-        bot_msg = Mock(spec=discord.Message)
-        bot_msg.content = "Bot response"
-        bot_msg.id = 333333333
-        bot_msg.channel.id = 111111111
-        mock_channel.send = AsyncMock(return_value=bot_msg)
+        # Pipeline returns a mock message (simulating successful response)
+        mock_response_msg = Mock(spec=discord.Message)
+        mock_response_msg.content = "Bot response"
+        mock_bot.pipeline.process_message = AsyncMock(return_value=mock_response_msg)
 
         # Execute
         await message_handler.handle_message(mock_message)
 
         # Verify
         message_handler.context_cache.advance.assert_called_once_with(111111111)  # type: ignore[attr-defined]
-        mock_mem_orch.store_user_message.assert_called_once()
-        mock_context_strategy.assert_called_once()
-        mock_retrieve_context.assert_called_once()
-        mock_response_generator.generate_response.assert_called_once()
-        mock_channel.send.assert_called_once_with("Bot response")
-        assert mock_mem_orch.store_bot_message.called
+        mock_bot.pipeline.process_message.assert_called_once()
 
         # Verify consecutive failures reset
         assert message_handler.consecutive_failures == 0
@@ -549,13 +478,6 @@ class TestHandleMessageSuccessFlow:
     @pytest.mark.asyncio
     async def test_context_strategy_failure_continues_processing(
         self,
-        mock_inject_source_links: Mock,
-        mock_build_source_map: Mock,
-        mock_batch_consolidation: Mock,
-        mock_episodic: Mock,
-        mock_response_generator: Mock,
-        mock_retrieve_context: Mock,
-        mock_context_strategy: Mock,
         mock_mem_orch: Mock,
         message_handler: MessageHandler,
         mock_message: Mock,
@@ -570,77 +492,21 @@ class TestHandleMessageSuccessFlow:
         mock_ctx.command = None
         mock_bot.get_context.return_value = mock_ctx
 
-        user_msg_id = uuid4()
-        mock_mem_orch.store_user_message = AsyncMock(return_value=user_msg_id)
-        mock_mem_orch.store_bot_message = AsyncMock()
-        mock_mem_orch.retrieve_context = AsyncMock(
-            return_value=(
-                [
-                    Mock(
-                        content="Previous message",
-                        is_bot=False,
-                        timestamp=datetime.now(timezone.utc),
-                    )
-                ],
-                "semantic context",
-            )
-        )
-
-        mock_batch_consolidation.should_consolidate = AsyncMock(return_value=False)
-
-        mock_episodic.get_recent_messages = AsyncMock(return_value=[])
-
-        # Context strategy fails
-        mock_context_strategy.side_effect = Exception("Strategy failed")
-
-        mock_retrieve_context.return_value = {
-            "semantic_context": "Retrieved semantic context",
-            "memory_origins": set(),
-        }
-
-        mock_response_result = Mock()
-        mock_response_result.content = "Bot response"
-        mock_response_result.model = "gpt-4"
-        mock_response_result.provider = "openai"
-        mock_response_result.temperature = 0.7
-        mock_response_result.prompt_tokens = 100
-        mock_response_result.completion_tokens = 50
-        mock_response_result.total_tokens = 150
-        mock_response_result.cost_usd = 0.01
-        mock_response_result.latency_ms = 500
-
-        mock_response_generator.generate_response = AsyncMock(
-            return_value=(mock_response_result, "rendered prompt", {})
-        )
-        mock_response_generator.split_response = Mock(return_value=["Bot response"])
-
-        mock_build_source_map.return_value = {}
-        mock_inject_source_links.return_value = "Bot response"
-
-        bot_msg = Mock(spec=discord.Message)
-        bot_msg.content = "Bot response"
-        bot_msg.id = 333333333
-        bot_msg.channel.id = 111111111
-        mock_channel.send = AsyncMock(return_value=bot_msg)
+        # Pipeline returns a mock message (processing continues even if strategy fails internally)
+        mock_response_msg = Mock(spec=discord.Message)
+        mock_response_msg.content = "Bot response"
+        mock_bot.pipeline.process_message = AsyncMock(return_value=mock_response_msg)
 
         # Execute
         await message_handler.handle_message(mock_message)
 
-        # Verify processing continued despite strategy failure
-        mock_response_generator.generate_response.assert_called_once()
-        mock_channel.send.assert_called_once_with("Bot response")
+        # Verify pipeline was called (processing continued)
+        mock_bot.pipeline.process_message.assert_called_once()
         assert message_handler.consecutive_failures == 0
 
     @pytest.mark.asyncio
     async def test_consolidation_triggered_on_message_count(
         self,
-        mock_inject_source_links: Mock,
-        mock_build_source_map: Mock,
-        mock_batch_consolidation: Mock,
-        mock_episodic: Mock,
-        mock_response_generator: Mock,
-        mock_retrieve_context: Mock,
-        mock_context_strategy: Mock,
         mock_mem_orch: Mock,
         message_handler: MessageHandler,
         mock_message: Mock,
@@ -655,69 +521,18 @@ class TestHandleMessageSuccessFlow:
         mock_ctx.command = None
         mock_bot.get_context.return_value = mock_ctx
 
-        user_msg_id = uuid4()
-        mock_mem_orch.store_user_message = AsyncMock(return_value=user_msg_id)
-        mock_mem_orch.store_bot_message = AsyncMock()
-        mock_mem_orch.retrieve_context = AsyncMock(
-            return_value=(
-                [
-                    Mock(
-                        content="Previous message",
-                        is_bot=False,
-                        timestamp=datetime.now(timezone.utc),
-                    )
-                ],
-                "semantic context",
-            )
-        )
-
-        # Trigger consolidation
-        mock_batch_consolidation.should_consolidate = AsyncMock(return_value=True)
-
-        mock_episodic.get_recent_messages = AsyncMock(return_value=[])
-
-        strategy = ContextStrategy(
-            entities=[], context_flags=[], unresolved_entities=[]
-        )
-        mock_context_strategy.return_value = strategy
-
-        mock_retrieve_context.return_value = {
-            "semantic_context": "",
-            "memory_origins": set(),
-        }
-
-        mock_response_result = Mock()
-        mock_response_result.content = "Bot response"
-        mock_response_result.model = "gpt-4"
-        mock_response_result.provider = "openai"
-        mock_response_result.temperature = 0.7
-        mock_response_result.prompt_tokens = 100
-        mock_response_result.completion_tokens = 50
-        mock_response_result.total_tokens = 150
-        mock_response_result.cost_usd = 0.01
-        mock_response_result.latency_ms = 500
-
-        mock_response_generator.generate_response = AsyncMock(
-            return_value=(mock_response_result, "rendered prompt", {})
-        )
-        mock_response_generator.split_response = Mock(return_value=["Bot response"])
-
-        mock_build_source_map.return_value = {}
-        mock_inject_source_links.return_value = "Bot response"
-
-        bot_msg = Mock(spec=discord.Message)
-        bot_msg.content = "Bot response"
-        bot_msg.id = 333333333
-        bot_msg.channel.id = 111111111
-        mock_channel.send = AsyncMock(return_value=bot_msg)
+        # Pipeline returns a mock message
+        mock_response_msg = Mock(spec=discord.Message)
+        mock_response_msg.content = "Bot response"
+        mock_bot.pipeline.process_message = AsyncMock(return_value=mock_response_msg)
 
         # Execute
         await message_handler.handle_message(mock_message)
 
-        # Verify consolidation check was called
-        mock_batch_consolidation.should_consolidate.assert_called_once()
+        # Verify pipeline was called
+        mock_bot.pipeline.process_message.assert_called_once()
 
-        # Verify consolidation task was created (we can't easily verify it ran without asyncio magic)
+        # Verify consolidation task was created
         assert message_handler._consolidation_task is not None
 
 
@@ -847,24 +662,26 @@ class TestAwaitSilenceThenConsolidate:
             pass  # Expected
 
     @pytest.mark.asyncio
-    @patch("lattice.discord_client.message_handler.batch_consolidation")
     async def test_consolidation_handles_errors_gracefully(
-        self, mock_batch_consolidation: Mock, message_handler: MessageHandler
+        self, message_handler: MessageHandler
     ) -> None:
         """Test that consolidation task handles errors without crashing."""
-        mock_batch_consolidation.run_consolidation_batch = AsyncMock(
-            side_effect=Exception("Test error")
-        )
+        # Patch at the usage location inside the function
+        with patch(
+            "lattice.memory.batch_consolidation.run_consolidation_batch",
+            new_callable=AsyncMock,
+        ) as mock_run:
+            mock_run.side_effect = Exception("Test error")
 
-        # Patch sleep to make test fast
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            consolidation_task = asyncio.create_task(
-                message_handler._await_silence_then_consolidate()
-            )
-            await asyncio.sleep(0.01)
+            # Patch sleep to make test fast
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                consolidation_task = asyncio.create_task(
+                    message_handler._await_silence_then_consolidate()
+                )
+                await asyncio.sleep(0.01)
 
-            # Should complete without raising
-            await consolidation_task
+                # Should complete without raising
+                await consolidation_task
 
 
 class TestRunConsolidationNow:

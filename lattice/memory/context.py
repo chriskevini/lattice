@@ -62,6 +62,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         channel_id: int,
         is_bot: bool,
         is_proactive: bool = False,
+        sender: str | None = None,
         generation_metadata: dict[str, Any] | None = None,
         user_timezone: str | None = None,
     ) -> UUID:
@@ -70,9 +71,9 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             row = await conn.fetchrow(
                 """
                 INSERT INTO raw_messages (
-                    discord_message_id, channel_id, content, is_bot, is_proactive, generation_metadata, user_timezone
+                    discord_message_id, channel_id, content, is_bot, is_proactive, sender, generation_metadata, user_timezone
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
                 """,
                 discord_message_id,
@@ -80,6 +81,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
                 content,
                 is_bot,
                 is_proactive,
+                sender,
                 json.dumps(generation_metadata) if generation_metadata else None,
                 user_timezone or "UTC",
             )
@@ -95,7 +97,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             async with self._db_pool.pool.acquire() as conn:
                 rows = await conn.fetch(
                     """
-                    SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
+                    SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, sender, timestamp, user_timezone
                     FROM raw_messages
                     WHERE channel_id = $1
                     ORDER BY timestamp DESC
@@ -108,7 +110,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
             async with self._db_pool.pool.acquire() as conn:
                 rows = await conn.fetch(
                     """
-                    SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
+                    SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, sender, timestamp, user_timezone
                     FROM raw_messages
                     ORDER BY timestamp DESC
                     LIMIT $1
@@ -126,7 +128,7 @@ class PostgresMessageRepository(PostgresRepository, MessageRepository):
         async with self._db_pool.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, timestamp, user_timezone
+                SELECT id, discord_message_id, channel_id, content, is_bot, is_proactive, sender, timestamp, user_timezone
                 FROM raw_messages
                 WHERE discord_message_id > $1
                 ORDER BY timestamp ASC

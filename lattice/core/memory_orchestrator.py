@@ -66,6 +66,7 @@ async def store_bot_message(
     channel_id: int,
     message_repo: MessageRepository,
     is_proactive: bool = False,
+    sender: str | None = None,
     generation_metadata: dict[str, Any] | None = None,
     timezone: str = "UTC",
 ) -> UUID:
@@ -77,6 +78,7 @@ async def store_bot_message(
         channel_id: Discord channel ID
         message_repo: Message repository
         is_proactive: Whether the bot initiated this message
+        sender: Sender identifier (e.g., "lattice_bot", "semantic_agent", "embedding_agent")
         generation_metadata: LLM generation metadata
         timezone: IANA timezone string (e.g., 'America/New_York')
 
@@ -91,6 +93,7 @@ async def store_bot_message(
             channel_id=channel_id,
             is_bot=True,
             is_proactive=is_proactive,
+            sender=sender,
             generation_metadata=generation_metadata,
             user_timezone=timezone,
         ),

@@ -17,7 +17,7 @@ from lattice.memory.repositories import (
 )
 from lattice.utils.database import DatabasePool
 from lattice.utils.llm import _LLMClient, AuditingLLMClient
-from lattice.utils.config import config
+from lattice.utils.config import get_config
 from lattice.core.context import ChannelContextCache, UserContextCache
 
 
@@ -33,6 +33,7 @@ class LatticeApp:
 
     def __init__(self) -> None:
         self.db_pool = DatabasePool()
+        config = get_config()
         self.llm_client = _LLMClient(provider=config.llm_provider)
         self.audit_repo = PostgresPromptAuditRepository(db_pool=self.db_pool)
         self.feedback_repo = PostgresUserFeedbackRepository(db_pool=self.db_pool)
@@ -58,6 +59,11 @@ class LatticeApp:
                 llm_client=self.llm_client,
                 prompt_repo=self.prompt_repo,
             )
+        logger.info(
+            "LatticeApp __init__",
+            enable_embedding_memory=config.enable_embedding_memory,
+            embedding_module=bool(self.embedding_module),
+        )
 
         self.context_cache = ChannelContextCache(repository=self.context_repo, ttl=10)
         self.user_context_cache = UserContextCache(
@@ -82,6 +88,7 @@ class LatticeApp:
     async def start(self) -> None:
         """Start the application and all its components."""
         logger.info("Starting Lattice application")
+        config = get_config()
 
         try:
             await self.db_pool.initialize()
