@@ -1,7 +1,8 @@
 import asyncio
 import os
 import structlog
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable
 
 
 if TYPE_CHECKING:
@@ -22,6 +23,70 @@ AGENT_WEBHOOKS: dict[str, Any] = {}
 
 LATTICE_AVATAR_URL = os.getenv("LATTICE_AVATAR_URL", "")
 VECTOR_AVATAR_URL = os.getenv("VECTOR_AVATAR_URL", "")
+
+
+@dataclass
+class AgentConfig:
+    """Configuration for a response agent.
+
+    Attributes:
+        name: Display name in Discord
+        avatar_source: URL or local file path for avatar image
+        memory_key: Key for retrieving context from _retrieve_parallel result
+        sender_id: Identifier stored in database (e.g., "lattice", "vector")
+        context_getter: Callable to extract this agent's context from combined result
+        enabled_fn: Callable that returns True if agent should respond
+    """
+
+    name: str
+    avatar_source: str | None
+    memory_key: str
+    sender_id: str
+    context_getter: Callable[[dict[str, Any]], str]
+    enabled_fn: Callable[[], bool] = lambda: True
+
+
+def _get_lattice_context(result: dict[str, Any]) -> str:
+    """Extract semantic context from combined result."""
+    return result.get("semantic_context", "")
+
+
+def _get_vector_context(result: dict[str, Any]) -> str:
+    """Extract embedding context from combined result."""
+    return result.get("embedding_context", "")
+
+
+def _lattice_enabled() -> bool:
+    """Check if Lattice agent should respond."""
+    return True
+
+
+def _vector_enabled() -> bool:
+    """Check if Vector agent should respond."""
+    from lattice.utils.config import get_config
+
+    config = get_config()
+    return config.enable_embedding_memory
+
+
+DEFAULT_AGENTS: list[AgentConfig] = [
+    AgentConfig(
+        name="Lattice",
+        avatar_source=LATTICE_AVATAR_URL or None,
+        memory_key="semantic_context",
+        sender_id="lattice",
+        context_getter=_get_lattice_context,
+        enabled_fn=_lattice_enabled,
+    ),
+    AgentConfig(
+        name="Vector",
+        avatar_source=VECTOR_AVATAR_URL or None,
+        memory_key="embedding_context",
+        sender_id="vector",
+        context_getter=_get_vector_context,
+        enabled_fn=_vector_enabled,
+    ),
+]
 
 
 class UnifiedPipeline:
@@ -388,9 +453,9 @@ class UnifiedPipeline:
         channel_id: int,
         timezone: str = "UTC",
     ) -> list[Any]:
-        """Process a message with dual-agent parallel response generation.
+        """Process a message with multi-agent parallel response generation.
 
-        Generates independent responses from both memory systems and sends
+        Generates independent responses from configured agents and sends
         them via webhooks as configured agent names.
 
         Args:
@@ -400,7 +465,7 @@ class UnifiedPipeline:
             timezone: IANA timezone string
 
         Returns:
-            List of sent message objects (semantic, embedding)
+            List of sent message objects
         """
         from lattice.core import memory_orchestrator, response_generator
         from lattice.core.context_strategy import context_strategy
@@ -440,104 +505,99 @@ class UnifiedPipeline:
 
         context = await self._retrieve_parallel(content, strategy, timezone)
 
+        enabled_agents = [a for a in DEFAULT_AGENTS if a.enabled_fn()]
+        logger.info(
+            "Processing message with agents",
+            agent_count=len(enabled_agents),
+            agents=[a.name for a in enabled_agents],
+        )
+
         formatted_history = memory_orchestrator.episodic.format_messages(history)
 
-        semantic_task = response_generator.generate_response(
-            user_message=content,
-            episodic_context=formatted_history,
-            semantic_context=context["semantic_context"],
-            embedding_context="",
-            llm_client=self.llm_client,
-            prompt_repo=self.prompt_repo,
-            audit_repo=self.audit_repo,
-            feedback_repo=self.feedback_repo,
-            bot=self.bot,
-        )
-
-        embedding_task = response_generator.generate_response(
-            user_message=content,
-            episodic_context=formatted_history,
-            semantic_context="",
-            embedding_context=context["embedding_context"],
-            llm_client=self.llm_client,
-            prompt_repo=self.prompt_repo,
-            audit_repo=self.audit_repo,
-            feedback_repo=self.feedback_repo,
-            bot=self.bot,
-        )
-
-        semantic_result, embedding_result = await asyncio.gather(
-            semantic_task, embedding_task
-        )
-
-        sent_tasks = []
-        logger.info(
-            "Sending agent messages",
-            semantic_repo=bool(self.semantic_repo),
-            embedding_module=self.embedding_module,
-            embedding_module_type=type(self.embedding_module).__name__
-            if self.embedding_module
-            else None,
-        )
-        if self.semantic_repo:
-            sent_tasks.append(
-                (
-                    self.send_as_agent(
-                        channel_id,
-                        "Lattice",
-                        semantic_result[0].content,
-                        avatar_source=LATTICE_AVATAR_URL or None,
-                    ),
-                    "lattice",
-                )
+        async def generate_for_agent(agent: AgentConfig) -> tuple[Any, str]:
+            """Generate response for a single agent."""
+            agent_context = agent.context_getter(context)
+            result, _, _ = await response_generator.generate_response(
+                user_message=content,
+                episodic_context=formatted_history,
+                semantic_context=agent_context
+                if agent.memory_key == "semantic_context"
+                else "",
+                embedding_context=agent_context
+                if agent.memory_key == "embedding_context"
+                else "",
+                llm_client=self.llm_client,
+                prompt_repo=self.prompt_repo,
+                audit_repo=self.audit_repo,
+                feedback_repo=self.feedback_repo,
+                bot=self.bot,
             )
-        if self.embedding_module:
-            sent_tasks.append(
-                (
-                    self.send_as_agent(
-                        channel_id,
-                        "Vector",
-                        embedding_result[0].content,
-                        avatar_source=VECTOR_AVATAR_URL or None,
-                    ),
-                    "vector",
+            return result, agent.name
+
+        results = await asyncio.gather(
+            *[generate_for_agent(agent) for agent in enabled_agents],
+            return_exceptions=True,
+        )
+
+        response_tasks = []
+        agent_results: dict[str, Any] = {}
+        for result in results:
+            if isinstance(result, BaseException):
+                logger.error("Agent generation failed", error=str(result))
+                continue
+            if isinstance(result, tuple) and len(result) == 2:
+                model_result, agent_name = result
+                agent_results[agent_name] = model_result
+                agent_config = next(a for a in enabled_agents if a.name == agent_name)
+                response_tasks.append(
+                    (
+                        self.send_as_agent(
+                            channel_id,
+                            agent_config.name,
+                            model_result.content,
+                            avatar_source=agent_config.avatar_source,
+                        ),
+                        agent_config,
+                    )
                 )
-            )
+            else:
+                logger.error("Unexpected agent result", result=result)
 
         sent_messages = []
-        for task, sender in sent_tasks:
+        for task, agent_config in response_tasks:
             try:
                 msg = await task
                 if msg:
-                    sent_messages.append((msg, sender))
+                    sent_messages.append((msg, agent_config))
             except Exception as e:
                 logger.error(
-                    "Failed to send agent message", sender=sender, error=str(e)
+                    "Failed to send agent message",
+                    agent=agent_config.name,
+                    error=str(e),
                 )
 
         store_tasks = []
-        for sent_msg, sender in sent_messages:
-            model_result = (
-                semantic_result[0] if sender == "lattice" else embedding_result[0]
-            )
-            store_tasks.append(
-                memory_orchestrator.store_bot_message(
-                    content=sent_msg.content,
-                    discord_message_id=sent_msg.id,
-                    channel_id=channel_id,
-                    sender=sender,
-                    generation_metadata={
-                        "model": model_result.model,
-                        "usage": {
-                            "prompt_tokens": model_result.prompt_tokens,
-                            "completion_tokens": model_result.completion_tokens,
-                            "total_tokens": model_result.total_tokens,
+        for sent_msg, agent_config in sent_messages:
+            model_result = agent_results.get(agent_config.name)
+            if model_result:
+                store_tasks.append(
+                    memory_orchestrator.store_bot_message(
+                        content=sent_msg.content,
+                        discord_message_id=sent_msg.id,
+                        channel_id=channel_id,
+                        sender=agent_config.sender_id,
+                        generation_metadata={
+                            "model": model_result.model,
+                            "usage": {
+                                "prompt_tokens": model_result.prompt_tokens,
+                                "completion_tokens": model_result.completion_tokens,
+                                "total_tokens": model_result.total_tokens,
+                            },
                         },
-                    },
-                    timezone=timezone,
-                    message_repo=self.message_repo,
+                        timezone=timezone,
+                        message_repo=self.message_repo,
+                    )
                 )
-            )
 
         await asyncio.gather(*store_tasks, return_exceptions=True)
 
