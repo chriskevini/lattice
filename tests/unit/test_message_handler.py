@@ -1,7 +1,6 @@
 """Unit tests for message handler module."""
 
 import asyncio
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4
 
@@ -10,7 +9,6 @@ import pytest
 from discord.ext import commands
 
 from lattice.discord_client.message_handler import MessageHandler
-from lattice.core.context_strategy import ContextStrategy
 
 
 @pytest.fixture
@@ -49,6 +47,7 @@ def mock_message(mock_channel: Mock) -> Mock:
     message.content = "Hello, bot!"
     message.id = 222222222
     message.channel = mock_channel
+    message.webhook_id = None
     message.jump_url = "https://discord.com/channels/123/111/222"
     return message
 
