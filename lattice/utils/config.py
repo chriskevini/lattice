@@ -58,13 +58,6 @@ class Config:
     enable_embedding_memory: bool
     embedding_similarity_threshold: float
 
-    # Agent Settings
-    enable_dual_agent_response: bool
-    lattice_agent_name: str
-    lattice_agent_avatar: str | None
-    vector_agent_name: str
-    vector_agent_avatar: str | None
-
     # Application Settings
     environment: str
     log_level: str
@@ -103,13 +96,6 @@ class Config:
             embedding_similarity_threshold=float(
                 os.getenv("EMBEDDING_SIMILARITY_THRESHOLD", "0.7")
             ),
-            enable_dual_agent_response=_get_env_bool(
-                "ENABLE_DUAL_AGENT_RESPONSE", False
-            ),
-            lattice_agent_name=os.getenv("LATTICE_AGENT_NAME", "Lattice"),
-            lattice_agent_avatar=os.getenv("LATTICE_AGENT_AVATAR"),
-            vector_agent_name=os.getenv("VECTOR_AGENT_NAME", "Vector"),
-            vector_agent_avatar=os.getenv("VECTOR_AGENT_AVATAR"),
             environment=os.getenv("ENVIRONMENT", "production"),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             structured_logs=_get_env_bool("STRUCTURED_LOGS", True),

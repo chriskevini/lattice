@@ -395,12 +395,6 @@ class TestConfigDataclass:
             "enable_triple_memory",
             "enable_embedding_memory",
             "embedding_similarity_threshold",
-            # Agent
-            "enable_dual_agent_response",
-            "lattice_agent_name",
-            "lattice_agent_avatar",
-            "vector_agent_name",
-            "vector_agent_avatar",
             # Application
             "environment",
             "log_level",

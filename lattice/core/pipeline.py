@@ -245,7 +245,7 @@ class UnifiedPipeline:
     ) -> Any:
         """Process a user message through the pipeline.
 
-        Uses dual-agent mode if ENABLE_DUAL_AGENT_RESPONSE is true,
+        Uses dual-agent mode if both memory systems are enabled,
         otherwise uses single-agent mode.
 
         Args:
@@ -259,7 +259,7 @@ class UnifiedPipeline:
         """
         from lattice.utils.config import config
 
-        if config.enable_dual_agent_response:
+        if config.enable_embedding_memory:
             return await self.process_message_dual_agent(
                 content=content,
                 discord_message_id=discord_message_id,
@@ -376,7 +376,6 @@ class UnifiedPipeline:
         """
         from lattice.core import memory_orchestrator, response_generator
         from lattice.core.context_strategy import context_strategy
-        from lattice.utils.config import config
 
         message_id = await memory_orchestrator.store_user_message(
             content=content,
@@ -446,9 +445,8 @@ class UnifiedPipeline:
                 (
                     self.send_as_agent(
                         channel_id,
-                        config.lattice_agent_name,
+                        "Lattice",
                         semantic_result[0].content,
-                        config.lattice_agent_avatar,
                     ),
                     "lattice",
                 )
@@ -458,9 +456,8 @@ class UnifiedPipeline:
                 (
                     self.send_as_agent(
                         channel_id,
-                        config.vector_agent_name,
+                        "Vector",
                         embedding_result[0].content,
-                        config.vector_agent_avatar,
                     ),
                     "vector",
                 )
