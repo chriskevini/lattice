@@ -158,6 +158,7 @@ class UnifiedPipeline:
         Returns:
             Discord message object or None if failed
         """
+        logger.info("Sending as agent", agent=agent_name, channel_id=channel_id)
         webhook = await self._get_webhook(channel_id, agent_name, avatar_source)
         if not webhook:
             return None
@@ -440,6 +441,14 @@ class UnifiedPipeline:
         )
 
         sent_tasks = []
+        logger.info(
+            "Sending agent messages",
+            semantic_repo=bool(self.semantic_repo),
+            embedding_module=self.embedding_module,
+            embedding_module_type=type(self.embedding_module).__name__
+            if self.embedding_module
+            else None,
+        )
         if self.semantic_repo:
             sent_tasks.append(
                 (

@@ -12,3 +12,4 @@ services:
       - ./scripts:/app/scripts
       - ./tests:/app/tests
       - ./logs:/app/logs
+      - ./avatars:/app/avatars

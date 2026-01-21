@@ -40,6 +40,7 @@ WORKDIR /app
 # Copy application code (after venv to leverage layer caching)
 COPY lattice/ ./lattice/
 COPY scripts/ ./scripts/
+COPY avatars/ ./avatars/
 COPY pyproject.toml ./
 
 # Create directories for logs
