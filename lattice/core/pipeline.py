@@ -91,7 +91,7 @@ class UnifiedPipeline:
             return AGENT_WEBHOOKS[cache_key]
 
         webhook = None
-        for wh in channel.webhooks:
+        for wh in await channel.webhooks():
             if wh.name == agent_name:
                 webhook = wh
                 break

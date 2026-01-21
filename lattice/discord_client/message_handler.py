@@ -297,6 +297,10 @@ class MessageHandler:
         if message.author == self.bot.user:
             return
 
+        # Ignore messages sent via webhook (including our own agent webhooks)
+        if message.webhook_id is not None:
+            return
+
         # CRITICAL: Dream channel is for meta discussion only
         # Never process as conversation
         if message.channel.id == self.dream_channel_id:

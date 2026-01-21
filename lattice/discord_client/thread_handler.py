@@ -134,6 +134,9 @@ class ThreadPromptHandler:
         if message.author == self.bot.user:
             return
 
+        if message.webhook_id is not None:
+            return
+
         channel = message.channel
         if not isinstance(channel, discord.Thread):
             return
