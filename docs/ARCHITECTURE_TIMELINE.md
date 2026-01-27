@@ -2,7 +2,7 @@
 
 This document summarizes the observable architecture evolution from the repository's git history. The repository currently contains a **grafted root commit**, so the timeline is necessarily short and reflects only what is visible in this repo.
 
-## High Line-Count Commits
+## High-Line-Count Commits
 
 | Date (UTC) | Commit | Lines | Summary |
 | --- | --- | ---: | --- |
